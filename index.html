@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NBME Self-Assessment Suite</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ═══ TOP BAR ═══ -->
+  <div id="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-brand-logo">NB</div>
+      <div class="topbar-brand-text">
+        <strong>NBME Self-Assessment Suite</strong>
+        <span>Computer-Based Testing Practice</span>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span id="sync-indicator" style="font-size:11px;color:#9ab0c8;">● Local</span>
+      <button class="topbar-btn" onclick="App.exportBackup()" title="Export backup JSON">⬇ Export</button>
+      <label class="topbar-btn" style="cursor:pointer;" title="Import backup JSON">
+        ⬆ Import<input type="file" accept=".json" style="display:none" onchange="App.importBackup(this)">
+      </label>
+      <button class="topbar-btn" onclick="App.openSettings()" title="Settings">⚙ Settings</button>
+    </div>
+  </div>
+
+  <!-- ═══ MAIN ═══ -->
+  <div id="main">
+
+    <!-- SIDEBAR -->
+    <div id="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-item" onclick="App.showHome()" id="nav-home">
+          <span class="item-icon">🏠</span>
+          <span class="item-label">Home</span>
+        </div>
+        <div class="sidebar-item" onclick="App.showFlagged(null)" id="nav-flagged">
+          <span class="item-icon">🚩</span>
+          <span class="item-label">All Flagged</span>
+        </div>
+        <div class="sidebar-item" onclick="App.showTrash()" id="nav-trash">
+          <span class="item-icon">🗑</span>
+          <span class="item-label">Trash</span>
+        </div>
+      </div>
+
+      <div class="sidebar-section" id="sidebar-folders">
+        <div class="sidebar-section-title">Folders</div>
+        <div id="folder-list"></div>
+        <div class="sidebar-add-folder" onclick="App.promptNewFolder()">
+          <span>＋</span> New Folder
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTENT -->
+    <div id="content">
+
+      <!-- ─── HOME SCREEN ─── -->
+      <div id="screen-home" style="display:flex;flex-direction:column;flex:1;padding:24px;">
+        <div class="home-header">
+          <h2 id="home-title">Welcome</h2>
+          <div class="home-header-actions">
+            <button class="btn-generate" onclick="App.openGenerateModal()">
+              ＋ Generate Test
+            </button>
+          </div>
+        </div>
+        <div id="home-content">
+          <div class="no-tests">
+            Select a folder from the sidebar, or create a new one to get started.
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── QUIZ SCREEN ─── -->
+      <div id="screen-quiz" style="display:none;flex-direction:row;height:calc(100vh - 52px);overflow:hidden;">
+
+        <!-- Nav panel -->
+        <div id="quiz-nav-panel">
+          <div class="qnp-header">Navigation</div>
+          <div id="nav-panel"></div>
+          <div class="qnp-legend" style="margin-top:14px;">
+            <div class="legend-row"><div class="legend-dot leg-correct"></div> Correct</div>
+            <div class="legend-row"><div class="legend-dot leg-wrong"></div> Incorrect</div>
+            <div class="legend-row"><div class="legend-dot leg-current"></div> Current</div>
+            <div class="legend-row"><div class="legend-dot leg-marked"></div> Marked</div>
+          </div>
+        </div>
+
+        <!-- Main quiz area -->
+        <div id="quiz-main">
+          <!-- Quiz top bar -->
+          <div class="quiz-topbar">
+            <div class="quiz-topbar-left">
+              <span class="quiz-test-name" id="quiz-test-name">—</span>
+              <span class="quiz-q-counter" id="quiz-q-num">Item 1</span>
+              <span class="quiz-score-live" id="score-live">0/0 (0%)</span>
+            </div>
+            <div class="quiz-topbar-right">
+              <div class="timer-block">
+                <span class="timer-val" id="timer-q">0:00</span>
+                <span class="timer-lbl">This Q</span>
+              </div>
+              <div class="timer-block">
+                <span class="timer-val" id="timer-total">00:00</span>
+                <span class="timer-lbl">Total</span>
+              </div>
+              <button class="quiz-btn btn-mode" id="btn-mode-toggle" onclick="App.toggleMode()">📖 Tutor</button>
+              <button class="quiz-btn" id="btn-flag" onclick="Quiz.toggleFlag(Quiz.getState()?.qIdx)">🏳 Flag</button>
+              <button class="quiz-btn" id="btn-mark" onclick="Quiz.toggleMark(Quiz.getState()?.qIdx)">📌 Mark</button>
+              <button class="quiz-btn btn-pause" onclick="Quiz.pauseTest()">⏸ Pause</button>
+              <button class="quiz-btn" onclick="App.openEditCurrentQuestion()" title="Edit question">✏️</button>
+            </div>
+          </div>
+          <div class="quiz-progress">
+            <div class="quiz-progress-fill" id="quiz-prog" style="width:2%"></div>
+          </div>
+
+          <!-- Question content -->
+          <div class="quiz-content-area">
+            <!-- Question card -->
+            <div class="q-card">
+              <div class="q-card-header">
+                <div class="q-num-badge" id="q-num-badge">Item 1</div>
+                <div id="q-tags" style="display:none;flex-wrap:wrap;gap:4px;flex:1;padding:0 8px;"></div>
+              </div>
+              <div id="q-stem" onmouseup="App.onStemSelect(event)"></div>
+            </div>
+
+            <!-- Options -->
+            <div class="options-card">
+              <div id="options-list"></div>
+            </div>
+
+            <!-- Explanation -->
+            <div class="exp-panel" id="exp-panel" style="display:none;">
+              <div class="exp-panel-title">📖 Answer Explanation</div>
+              <div id="exp-body"></div>
+            </div>
+          </div>
+
+          <!-- Bottom nav bar -->
+          <div class="quiz-bottom-bar no-sidebar">
+            <div class="score-info" id="bottom-score">Score: 0 / 0</div>
+            <div style="display:flex;gap:8px;">
+              <button class="quiz-btn" id="btn-prev" onclick="Quiz.prevQ()" disabled>◀ Prev</button>
+              <button class="quiz-btn primary" id="btn-next" onclick="Quiz.nextQ()">Next ▶</button>
+              <button class="quiz-btn btn-finish" id="btn-finish" style="display:none;" onclick="App.confirmFinish()">Finish ✓</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── RESULTS SCREEN ─── -->
+      <div id="screen-results" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
+
+        <!-- Report panel -->
+        <div id="panel-report" style="flex:1;overflow-y:auto;padding:20px;">
+          <div class="res-header">
+            <h2 id="res-test-name">Score Report</h2>
+            <p id="res-attempt"></p>
+          </div>
+          <div class="res-body">
+            <div class="res-score-hero">
+              <div class="res-score-circle">
+                <div class="res-score-num" id="res-score-num">—</div>
+                <div class="res-score-den" id="res-score-den">/ 0</div>
+                <div class="res-score-pct" id="res-score-pct">—%</div>
+              </div>
+              <div>
+                <div class="res-grade" id="res-grade">—</div>
+                <div class="res-grade-desc" id="res-grade-desc">—</div>
+              </div>
+            </div>
+            <div class="res-stats-grid" id="res-stats"></div>
+            <div class="res-analysis-grid">
+              <div class="analysis-card ac-str">
+                <h4>✅ Strengths</h4>
+                <div id="res-strengths"></div>
+              </div>
+              <div class="analysis-card ac-wk">
+                <h4>⚠️ Needs Review</h4>
+                <div id="res-weaknesses"></div>
+              </div>
+            </div>
+          </div>
+          <div class="res-body" style="margin-top:0;border-top:none;">
+            <div class="res-section-title">Item-by-Item Review</div>
+            <div class="res-nav-dots" id="res-nav-dots"></div>
+            <div style="overflow-x:auto;">
+              <table class="res-table">
+                <thead><tr><th>#</th><th>Result</th><th>Your Answer</th><th>Correct Answer</th><th>Time</th><th>Flag</th><th>Review</th></tr></thead>
+                <tbody id="res-tbody"></tbody>
+              </table>
+            </div>
+            <div class="res-actions">
+              <button class="btn-rev primary" onclick="App.retakeTest()">Retake This Form</button>
+              <button class="btn-rev" onclick="App.showHome()">Return Home</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Review panel (single question) -->
+        <div id="panel-review" style="flex:1;overflow-y:auto;display:none;flex-direction:column;padding:16px 20px;">
+          <div class="rev-topbar">
+            <div class="rev-topbar-left">
+              <button class="btn-rev" onclick="Results.closeReview()">← Back to Report</button>
+              <span class="rev-test-name" id="rev-test-name"></span>
+              <span class="rev-counter" id="rev-counter"></span>
+            </div>
+            <div class="rev-topbar-right">
+              <button class="btn-rev" id="rev-btn-flag" onclick="Results.toggleFlagReview(Results._reviewIdx||0)">🏳 Flag</button>
+              <button class="btn-rev" id="rev-btn-edit" onclick="">✏️ Edit</button>
+              <button class="btn-rev" id="rev-btn-prev" onclick="Results.reviewPrev()" disabled>◀ Prev</button>
+              <button class="btn-rev primary" id="rev-btn-next" onclick="Results.reviewNext()">Next ▶</button>
+            </div>
+          </div>
+          <div class="q-card" style="margin-bottom:12px;">
+            <div id="rev-tags" style="display:none;flex-wrap:wrap;gap:4px;margin-bottom:8px;"></div>
+            <div id="rev-stem" style="font-size:13.5px;line-height:1.72;"></div>
+          </div>
+          <div class="options-card" style="margin-bottom:12px;">
+            <div id="rev-options"></div>
+          </div>
+          <div class="exp-panel">
+            <div class="exp-panel-title">📖 Answer Explanation</div>
+            <div id="rev-exp-body"></div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- end #content -->
+  </div><!-- end #main -->
+</div><!-- end #app -->
+
+<!-- ═══ HIGHLIGHT TOOLBAR ═══ -->
+<div id="hl-toolbar">
+  <div class="hl-swatch hl-yellow" onclick="App.applyHighlight('hl-yellow')" title="Yellow"></div>
+  <div class="hl-swatch hl-blue"   onclick="App.applyHighlight('hl-blue')"   title="Blue"></div>
+  <div class="hl-swatch hl-green"  onclick="App.applyHighlight('hl-green')"  title="Green"></div>
+  <div class="hl-swatch hl-pink"   onclick="App.applyHighlight('hl-pink')"   title="Pink"></div>
+  <div class="hl-erase"            onclick="App.eraseHighlight()"            title="Erase">✕</div>
+</div>
+
+<!-- ═══ TOAST ═══ -->
+<div id="toast"></div>
+
+<!-- ═══ PAUSE OVERLAY ═══ -->
+<div id="overlay-pause" style="display:none;position:fixed;inset:0;background:rgba(26,58,92,.97);z-index:500;align-items:center;justify-content:center;">
+  <div class="modal-box" style="text-align:center;max-width:400px;">
+    <div style="font-size:36px;margin-bottom:12px;">⏸</div>
+    <h3 style="font-size:18px;margin-bottom:8px;">Test Paused</h3>
+    <p id="pause-info" style="font-size:12px;color:#5a6a7a;margin-bottom:20px;"></p>
+    <p style="font-size:12px;color:#5a6a7a;margin-bottom:20px;">Your progress is saved. You can safely close this window and resume later.</p>
+    <div class="modal-actions" style="justify-content:center;">
+      <button class="btn-modal primary" onclick="Quiz.unpauseTest()">▶ Resume</button>
+      <button class="btn-modal danger"  onclick="App.confirmFinishFromPause()">Score Now</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ RESUME MODAL ═══ -->
+<div id="modal-resume" class="modal-overlay">
+  <div class="modal-box">
+    <h3>Resume Test?</h3>
+    <p class="resume-test-name" style="font-weight:700;color:#1a3a5c;font-size:13px;margin-bottom:4px;"></p>
+    <p class="resume-q-info" style="font-size:12px;color:#5a6a7a;margin-bottom:16px;"></p>
+    <div class="modal-actions">
+      <button class="btn-modal btn-restart">↺ Start Over</button>
+      <button class="btn-modal primary btn-resume">▶ Resume</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ GENERATE TEST MODAL ═══ -->
+<div id="modal-generate" class="modal-overlay">
+  <div class="modal-box">
+    <h3>Generate New Test</h3>
+    <div class="form-group">
+      <label class="form-label">Test Name</label>
+      <input type="text" class="form-input" id="gen-test-name" placeholder="e.g. Psychiatry Block 8">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Save to Folder</label>
+      <select class="form-input" id="gen-folder-select"></select>
+    </div>
+    <div class="upload-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+      <label class="upload-zone" id="uz-qb" ondragover="App.onDrag(event,'qb')" ondragleave="App.offDrag('qb')" ondrop="App.onDrop(event,'qb')">
+        <input type="file" id="inp-qb" accept=".pdf" onchange="App.onFile('qb',this)">
+        <div class="uz-icon">📋</div>
+        <div class="uz-title">Question Bank</div>
+        <div class="uz-desc">Upload Questions PDF</div>
+        <div class="uz-name" id="nm-qb"></div>
+      </label>
+      <label class="upload-zone" id="uz-ak" ondragover="App.onDrag(event,'ak')" ondragleave="App.offDrag('ak')" ondrop="App.onDrop(event,'ak')">
+        <input type="file" id="inp-ak" accept=".pdf" onchange="App.onFile('ak',this)">
+        <div class="uz-icon">🗝️</div>
+        <div class="uz-title">Answer Key</div>
+        <div class="uz-desc">Upload Answers PDF</div>
+        <div class="uz-name" id="nm-ak"></div>
+      </label>
+    </div>
+    <div id="ocr-status-area" style="display:none;">
+      <div class="ocr-status" id="ocr-status-msg">Initializing…</div>
+      <div class="ocr-progress-bar"><div class="ocr-progress-fill" id="ocr-progress-fill" style="width:0%"></div></div>
+    </div>
+    <div id="gen-parse-note" style="display:none;font-size:11px;color:#27ae60;margin-bottom:8px;">✓ Ready to save!</div>
+    <div class="modal-actions">
+      <button class="btn-modal" onclick="App.closeGenerateModal()">Cancel</button>
+      <button class="btn-modal primary" id="btn-gen-start" onclick="App.startOCR()">Extract &amp; Generate →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ EDIT QUESTION MODAL ═══ -->
+<div id="modal-edit" class="modal-overlay">
+  <div class="modal-box" style="max-width:640px;">
+    <h3>Edit Question</h3>
+    <div class="form-group">
+      <label class="form-label">Question Stem</label>
+      <textarea class="form-textarea" id="edit-stem" rows="5" style="min-height:100px;"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Answer Choices</label>
+      <div id="edit-options"></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Explanations</label>
+      <div id="edit-explanations"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal" onclick="document.getElementById('modal-edit').style.display='none'">Cancel</button>
+      <button class="btn-modal primary" onclick="Results.saveEditQuestion()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ NEW FOLDER MODAL ═══ -->
+<div id="modal-new-folder" class="modal-overlay">
+  <div class="modal-box" style="max-width:380px;">
+    <h3>New Folder</h3>
+    <div class="form-group">
+      <label class="form-label">Folder Name</label>
+      <input type="text" class="form-input" id="new-folder-name" placeholder="e.g. Psychiatry" onkeydown="if(event.key==='Enter')App.createFolder()">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal" onclick="document.getElementById('modal-new-folder').style.display='none'">Cancel</button>
+      <button class="btn-modal primary" onclick="App.createFolder()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ CONFIRM FINISH MODAL ═══ -->
+<div id="modal-confirm-finish" class="modal-overlay">
+  <div class="modal-box" style="max-width:380px;text-align:center;">
+    <div style="font-size:32px;margin-bottom:10px;">🏁</div>
+    <h3>Submit Test?</h3>
+    <p id="confirm-finish-info" style="font-size:12px;color:#5a6a7a;margin-bottom:16px;"></p>
+    <div class="modal-actions" style="justify-content:center;">
+      <button class="btn-modal" onclick="document.getElementById('modal-confirm-finish').style.display='none'">Keep Going</button>
+      <button class="btn-modal primary" onclick="App.doFinish()">Submit &amp; Score</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SETTINGS MODAL ═══ -->
+<div id="modal-settings" class="modal-overlay">
+  <div class="modal-box" style="max-width:500px;">
+    <h3>Settings</h3>
+    <div class="form-group">
+      <label class="form-label">Google Drive Sync</label>
+      <p style="font-size:12px;color:#5a6a7a;margin-bottom:8px;">Sync your tests across devices via Google Drive.</p>
+      <div id="gdrive-status" style="font-size:12px;margin-bottom:10px;"></div>
+      <button class="btn-modal primary" id="btn-gdrive-setup" onclick="App.openSetupWizard()">Configure Google Drive</button>
+      <button class="btn-modal" id="btn-gdrive-signin" onclick="App.googleSignIn()" style="margin-left:6px;">Sign In</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal primary" onclick="document.getElementById('modal-settings').style.display='none'">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ GOOGLE DRIVE SETUP WIZARD ═══ -->
+<div id="modal-wizard" class="modal-overlay">
+  <div class="modal-box" style="max-width:540px;">
+    <h3>Google Drive Setup</h3>
+    <div class="wizard-steps-indicator" id="wizard-steps"></div>
+    <div id="wizard-content"></div>
+  </div>
+</div>
+
+<!-- Scripts -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="js/db.js"></script>
+<script src="js/ocr.js"></script>
+<script src="js/quiz.js"></script>
+<script src="js/results.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
