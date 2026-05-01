@@ -533,6 +533,106 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
   #quiz-nav-panel { width: 160px; min-width: 160px; }
 }
 
+
+/* ── Explanation layout v2 ─────────────────────────────── */
+.exp-blurb { font-style: normal; line-height: 1.65; }
+.exp-incorrect-summary {
+  margin: 10px 0 6px;
+  font-size: 12px; font-weight: 700;
+  color: #7a0000;
+  background: #fff0f0;
+  border-left: 3px solid #e74c3c;
+  padding: 6px 10px;
+  border-radius: 2px;
+}
+.exp-wrong { background: #fafafa; border: 1px solid #e8ecf2; }
+.exp-wrong-chosen { background: #ffebee; border: 1px solid #ef9a9a; }
+.exp-badge-chosen {
+  background: #e3f2fd; color: #0d47a1;
+  font-size: 10px; font-weight: 700;
+  padding: 1px 6px; border-radius: 10px;
+  margin-left: 4px;
+}
+.exp-no-exp { color: #aaa; font-style: italic; }
+.exp-educational-objective {
+  margin-top: 14px;
+  padding: 10px 14px;
+  background: #f0f4ff;
+  border: 1px solid #b3c6f7;
+  border-left: 4px solid #1a3a5c;
+  border-radius: 3px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #1a1a2e;
+}
+.exp-educational-objective strong {
+  color: #1a3a5c;
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: .06em;
+  display: block;
+  margin-bottom: 3px;
+}
+
+/* ── PIN screen ─────────────────────────────────────────── */
+#pin-screen {
+  position: fixed; inset: 0;
+  background: #1a3a5c;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 9999;
+  flex-direction: column;
+}
+.pin-box {
+  background: white; border-radius: 8px;
+  padding: 36px 40px; text-align: center;
+  max-width: 340px; width: 90%;
+  box-shadow: 0 8px 40px rgba(0,0,0,.4);
+}
+.pin-logo {
+  width: 52px; height: 52px;
+  background: #1a3a5c; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; font-weight: 900; color: white;
+  margin: 0 auto 14px; letter-spacing: -1px;
+}
+.pin-title { font-size: 16px; font-weight: 700; color: #1a3a5c; margin-bottom: 4px; }
+.pin-subtitle { font-size: 12px; color: #7a8a9a; margin-bottom: 22px; }
+.pin-dots {
+  display: flex; justify-content: center; gap: 12px;
+  margin-bottom: 22px;
+}
+.pin-dot {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid #c8d0da; background: white;
+  transition: all .15s;
+}
+.pin-dot.filled { background: #1a3a5c; border-color: #1a3a5c; }
+.pin-dot.error  { background: #e74c3c; border-color: #e74c3c; animation: shake .3s; }
+.pin-keypad {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 10px; margin-bottom: 14px;
+}
+.pin-key {
+  height: 52px; border-radius: 6px;
+  border: 1px solid #e0e6ec; background: #f8fafc;
+  font-size: 18px; font-weight: 600; color: #1a3a5c;
+  cursor: pointer; transition: all .1s;
+  display: flex; align-items: center; justify-content: center;
+}
+.pin-key:hover  { background: #e8f0f8; border-color: #1a3a5c; }
+.pin-key:active { background: #1a3a5c; color: white; transform: scale(.95); }
+.pin-key.del    { font-size: 14px; color: #e74c3c; }
+.pin-key.empty  { background: transparent; border: none; cursor: default; }
+.pin-key.enter  { background: #1a3a5c; color: white; font-size: 13px; font-weight: 700; }
+.pin-key.enter:hover { background: #244d73; }
+.pin-error-msg  { font-size: 11px; color: #e74c3c; height: 16px; }
+.pin-setup-hint { font-size: 11px; color: #7a8a9a; margin-top: 8px; }
+@keyframes shake {
+  0%,100%{transform:translateX(0)}
+  25%{transform:translateX(-6px)}
+  75%{transform:translateX(6px)}
+}
+
 </style>
 </head>
 <body>
@@ -1155,307 +1255,407 @@ window.DB = DB;
 </script>
 <script>
 /* ============================================================
-   OCR.JS — Tesseract-based PDF extraction + question parser
-   Handles image-based PDFs, fuzzy matching, auto-tagging
+   OCR.JS v2 — Robust NBME PDF extraction engine
+   - Uses "Exam Section: Item X of 50" as primary Q anchor
+   - Multi-page explanation merging
+   - NBME UI noise filtering
+   - Correct answer + per-choice explanation parser
+   - Educational Objective extraction
+   - Auto-tagging
 ============================================================ */
 const OCR = (() => {
 
-  // ── PDF → Images using PDF.js ───────────────────────────────
+  // ── NBME UI Noise patterns to strip ───────────────────────
+  const NOISE_PATTERNS = [
+    /exam\s+section\s*:\s*item\s+\d+\s+of\s+\d+/gi,
+    /national\s+board\s+of\s+medical\s+examiners®?/gi,
+    /psychiatry\s+self-?assessment/gi,
+    /time\s+remaining\s*:\s*\d+\s*hr?\s*\d+\s*min\s*\d+\s*sec/gi,
+    /time\s+remaining\s*:\s*[\d:]+/gi,
+    /\d+\s*hr?\s*\d+\s*min\s*\d+\s*sec/gi,
+    /https?:\/\/[^\s]+/gi,          // any URL
+    /t\.me\/[^\s]+/gi,
+    /www\.[^\s]+/gi,
+    /^mark$/gim,
+    /^previous$/gim,
+    /^next$/gim,
+    /^pause$/gim,
+    /^help$/gim,
+    /^review$/gim,
+    /^calculator$/gim,
+    /^lab\s+values$/gim,
+    /^score\s+report$/gim,
+    /^please\s+wait$/gim,
+    /waiting\s+for\s+www\.[^\s]*/gi,
+    /starttest\.com[^\s]*/gi,
+    /usmle[^\s]*/gi,
+    /nbme[^\s]*/gi,
+    /□\s*mark/gi,
+    /☐\s*mark/gi,
+    /▶|◀|⏸|①|②|③/g,
+    /item\s+\d+\s+of\s+\d+/gi,
+  ];
+
+  function cleanText(text) {
+    let t = text;
+    for (const pat of NOISE_PATTERNS) {
+      t = t.replace(pat, ' ');
+    }
+    // Collapse multiple spaces/newlines
+    t = t.replace(/[ \t]{2,}/g, ' ');
+    t = t.replace(/\n{3,}/g, '\n\n');
+    return t.trim();
+  }
+
+  // ── PDF → Images ──────────────────────────────────────────
   async function pdfToImages(file, onProgress) {
     const buf = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
     const images = [];
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
-      const scale = 2.0; // higher = better OCR accuracy
+      const scale = 2.2;
       const viewport = page.getViewport({ scale });
       const canvas = document.createElement('canvas');
       canvas.width = viewport.width;
       canvas.height = viewport.height;
-      const ctx = canvas.getContext('2d');
-      await page.render({ canvasContext: ctx, viewport }).promise;
-      images.push({ pageNum: i, dataUrl: canvas.toDataURL('image/png') });
-      if (onProgress) onProgress(i, pdf.numPages, 'Rendering PDF pages');
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+      images.push({ pageNum: i, dataUrl: canvas.toDataURL('image/png'), total: pdf.numPages });
+      if (onProgress) onProgress(i, pdf.numPages);
     }
     return images;
   }
 
-  // ── OCR a single image with Tesseract ──────────────────────
-  async function ocrImage(dataUrl, worker) {
-    const result = await worker.recognize(dataUrl);
-    return result.data.text;
-  }
-
-  // ── Full PDF OCR pipeline ───────────────────────────────────
-  async function extractTextFromPDF(file, onProgress) {
-    if (onProgress) onProgress(0, 100, 'Loading PDF…');
-    const images = await pdfToImages(file, (i, total) => {
-      if (onProgress) onProgress(Math.round((i/total)*40), 100, `Rendering page ${i}/${total}…`);
-    });
-
-    // Init Tesseract worker
-    if (onProgress) onProgress(42, 100, 'Initializing OCR engine…');
-    const worker = await Tesseract.createWorker('eng', 1, {
-      logger: m => {
-        if (onProgress && m.status === 'recognizing text') {
-          // m.progress is 0-1 per page; we scale to remaining 50%
-        }
-      }
-    });
-
+  // ── OCR all pages ─────────────────────────────────────────
+  async function ocrAllPages(images, worker, onProgress) {
     const pages = [];
     for (let i = 0; i < images.length; i++) {
-      if (onProgress) onProgress(42 + Math.round((i/images.length)*50), 100, `OCR page ${i+1}/${images.length}…`);
-      const text = await ocrImage(images[i].dataUrl, worker);
-      pages.push({ pageNum: images[i].pageNum, text });
+      if (onProgress) onProgress(i + 1, images.length);
+      const result = await worker.recognize(images[i].dataUrl);
+      const rawText = result.data.text;
+      const cleaned = cleanText(rawText);
+      // Extract item number from NBME header
+      const itemMatch = rawText.match(/(?:exam\s+section\s*:\s*)?item\s+(\d+)\s+of\s+(\d+)/i);
+      pages.push({
+        pageNum: images[i].pageNum,
+        text: cleaned,
+        rawText,
+        itemNum: itemMatch ? parseInt(itemMatch[1]) : null,
+        totalItems: itemMatch ? parseInt(itemMatch[2]) : null
+      });
     }
-
-    await worker.terminate();
-    if (onProgress) onProgress(95, 100, 'Parsing questions…');
     return pages;
   }
 
-  // ── Parse question bank pages ──────────────────────────────
-  function parseQuestionBank(pages) {
-    const fullText = pages.map(p => p.text).join('\n\n--- PAGE BREAK ---\n\n');
+  // ── Merge multi-page content ──────────────────────────────
+  // Pages with no itemNum header = continuation of previous question
+  function mergePagesByItem(pages) {
+    const itemPages = {}; // itemNum → array of text blocks
+
+    let lastItemNum = null;
+    for (const page of pages) {
+      if (page.itemNum !== null) {
+        lastItemNum = page.itemNum;
+        if (!itemPages[lastItemNum]) itemPages[lastItemNum] = [];
+        itemPages[lastItemNum].push(page.text);
+      } else if (lastItemNum !== null) {
+        // Continuation page — append to last known item
+        itemPages[lastItemNum].push(page.text);
+      }
+    }
+
+    // Merge text blocks per item
+    const merged = {};
+    for (const [num, blocks] of Object.entries(itemPages)) {
+      merged[parseInt(num)] = blocks.join('\n\n');
+    }
+    return merged;
+  }
+
+  // ── Parse Question Bank ───────────────────────────────────
+  // Input: merged page map {itemNum → fullText}
+  function parseQuestionBank(mergedPages) {
     const questions = [];
 
-    // Split on question number patterns: "1.", "1)", "Question 1", etc.
-    const qPattern = /(?:^|\n)\s*(\d{1,3})[.)]\s+([\s\S]*?)(?=\n\s*\d{1,3}[.)]\s+|\n\s*(?:Question\s+\d)|$)/gi;
-    const optPattern = /^\s*([A-Ga-g])[.)]\s+(.+)/;
-
-    let match;
-    while ((match = qPattern.exec(fullText)) !== null) {
-      const num = parseInt(match[1]);
-      const block = match[2].trim();
-      const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
-
-      let stemLines = [];
-      let options = [];
-      let inOptions = false;
-
-      for (const line of lines) {
-        const optMatch = line.match(optPattern);
-        if (optMatch) {
-          inOptions = true;
-          options.push({ l: optMatch[1].toUpperCase(), t: optMatch[2].trim() });
-        } else if (!inOptions) {
-          stemLines.push(line);
-        } else if (options.length > 0) {
-          // Continuation of previous option
-          options[options.length - 1].t += ' ' + line;
-        }
-      }
-
-      if (options.length >= 2) {
-        questions.push({
-          n: num,
-          t: stemLines.join(' ').replace(/^\d+[.)]\s*/, '').trim(),
-          o: options,
-          c: '', // filled by answer key
-          e: {},
-          tags: [],
-          highlights: {},
-          strikethrough: []
-        });
-      }
+    for (const [itemNum, text] of Object.entries(mergedPages)) {
+      const q = parseOneQuestion(parseInt(itemNum), text);
+      if (q) questions.push(q);
     }
 
     return questions.sort((a, b) => a.n - b.n);
   }
 
-  // ── Parse answer key pages ─────────────────────────────────
-  function parseAnswerKey(pages) {
-    const fullText = pages.map(p => p.text).join('\n\n--- PAGE BREAK ---\n\n');
+  function parseOneQuestion(num, text) {
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    const optPattern = /^([A-Ia-i])\s*[)\.]\s+(.+)/;
+
+    let stemLines = [];
+    let options = [];
+    let inOptions = false;
+
+    for (const line of lines) {
+      // Stop collecting if we hit answer-key-style content
+      if (/correct\s+answer/i.test(line)) break;
+      if (/incorrect\s+answers?/i.test(line)) break;
+      if (/educational\s+objective/i.test(line)) break;
+
+      const optMatch = line.match(optPattern);
+      if (optMatch) {
+        inOptions = true;
+        options.push({ l: optMatch[1].toUpperCase(), t: optMatch[2].trim() });
+      } else if (!inOptions) {
+        // Part of stem — skip if it looks like a question number label
+        if (/^\d+\.\s/.test(line)) {
+          stemLines.push(line.replace(/^\d+\.\s*/, '').trim());
+        } else {
+          stemLines.push(line);
+        }
+      } else if (options.length > 0 && line.length > 3) {
+        // Continuation of last option
+        options[options.length - 1].t += ' ' + line;
+      }
+    }
+
+    if (!options.length) return null;
+
+    // Clean up stem
+    const stem = stemLines
+      .join(' ')
+      .replace(/\s{2,}/g, ' ')
+      .replace(/^\d+[.)]\s*/, '')
+      .trim();
+
+    if (stem.length < 20) return null; // too short to be a real question
+
+    return {
+      n: num,
+      t: stem,
+      o: options,
+      c: '',      // filled from answer key
+      e: {},      // per-choice explanations
+      correctBlurb: '',
+      incorrectSummary: '',
+      educationalObjective: '',
+      tags: [],
+      highlights: {},
+      strikethrough: []
+    };
+  }
+
+  // ── Parse Answer Key ──────────────────────────────────────
+  function parseAnswerKey(mergedPages) {
     const answers = {};
 
-    // Pattern: question block with "Correct Answer: X" or highlighted answer
-    const qPattern = /(?:^|\n)\s*(\d{1,3})[.)]\s+([\s\S]*?)(?=\n\s*\d{1,3}[.)]\s+|$)/gi;
-    const optPattern = /^\s*([A-Ga-g])[.)]\s+(.+)/;
-    const correctPattern = /correct\s+answer[:\s]+([A-Ga-g])/i;
-    const expPattern = /^\s*([A-Ga-g])[.)]\s*[-–:]\s*(.+)/;
-
-    let match;
-    while ((match = qPattern.exec(fullText)) !== null) {
-      const num = parseInt(match[1]);
-      const block = match[2];
-      const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
-
-      let correct = null;
-      const explanations = {};
-      const options = [];
-
-      // Find explicit "Correct Answer: X"
-      const caMatch = block.match(correctPattern);
-      if (caMatch) correct = caMatch[1].toUpperCase();
-
-      let inExplanations = false;
-      let lastOptLetter = null;
-
-      for (const line of lines) {
-        // Skip "Correct Answer: X" lines
-        if (/correct\s+answer/i.test(line)) continue;
-
-        const optMatch = line.match(optPattern);
-        const expMatch = line.match(expPattern);
-
-        if (optMatch) {
-          const letter = optMatch[1].toUpperCase();
-          options.push({ l: letter, t: optMatch[2].trim() });
-          lastOptLetter = letter;
-          inExplanations = true;
-        } else if (expMatch && inExplanations) {
-          const letter = expMatch[1].toUpperCase();
-          explanations[letter] = expMatch[2].trim();
-          lastOptLetter = letter;
-        } else if (inExplanations && lastOptLetter && line.length > 5) {
-          // Continuation of last explanation
-          explanations[lastOptLetter] = ((explanations[lastOptLetter] || '') + ' ' + line).trim();
-        }
-      }
-
-      // Strategy to find correct answer if not explicit
-      if (!correct) {
-        // S1: Check for "This is correct" / "Correct." in explanations
-        for (const [letter, exp] of Object.entries(explanations)) {
-          if (/^(correct[.!]|this is (the )?correct|right[.!]|yes[.!])/i.test(exp.trim())) {
-            correct = letter; break;
-          }
-        }
-      }
-      if (!correct) {
-        // S2: Longest explanation heuristic
-        let maxLen = -1;
-        for (const [letter, exp] of Object.entries(explanations)) {
-          if (exp.length > maxLen) { maxLen = exp.length; correct = letter; }
-        }
-      }
-      if (!correct && options.length > 0) correct = options[0].l;
-
-      answers[num] = { correct, explanations };
+    for (const [itemNum, text] of Object.entries(mergedPages)) {
+      const parsed = parseOneAnswer(parseInt(itemNum), text);
+      if (parsed) answers[parseInt(itemNum)] = parsed;
     }
 
     return answers;
   }
 
-  // ── Fuzzy string similarity ────────────────────────────────
-  function similarity(a, b) {
-    a = a.toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 100);
-    b = b.toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 100);
-    if (a === b) return 1;
-    if (a.length === 0 || b.length === 0) return 0;
+  function parseOneAnswer(num, text) {
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
-    // Levenshtein distance
-    const m = a.length, n = b.length;
-    const dp = Array.from({length: m+1}, (_, i) => Array.from({length: n+1}, (_, j) => i === 0 ? j : j === 0 ? i : 0));
-    for (let i = 1; i <= m; i++)
-      for (let j = 1; j <= n; j++)
-        dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+    let correct = null;
+    let correctBlurb = '';
+    let incorrectSummary = '';
+    let educationalObjective = '';
+    const choiceExplanations = {}; // letter → explanation text
 
-    return 1 - dp[m][n] / Math.max(m, n);
-  }
-
-  // ── Match questions to answers ─────────────────────────────
-  function matchQuestionsToAnswers(questions, answerMap) {
-    const matched = [];
-
-    for (const q of questions) {
-      // Primary: exact number match
-      if (answerMap[q.n]) {
-        matched.push({ ...q, c: answerMap[q.n].correct || q.o[0].l, e: answerMap[q.n].explanations || {} });
-        continue;
+    // ── Step 1: Find "Correct Answer: X" ──────────────────
+    let correctAnswerLineIdx = -1;
+    for (let i = 0; i < lines.length; i++) {
+      const m = lines[i].match(/correct\s+answer\s*[:\-]\s*([A-Ia-i])/i);
+      if (m) {
+        correct = m[1].toUpperCase();
+        correctAnswerLineIdx = i;
+        break;
       }
-
-      // Fallback: find best matching answer by question stem similarity
-      let best = null, bestScore = 0;
-      for (const [num, ans] of Object.entries(answerMap)) {
-        // We don't have the Q text in answerMap, so skip fuzzy for now
-        // Just use the number
-      }
-
-      // No match found — use first option as correct placeholder
-      matched.push({ ...q, c: q.o[0]?.l || 'A', e: {}, _needsReview: true });
     }
 
-    return matched;
+    if (!correct || correctAnswerLineIdx === -1) {
+      // Fallback: look for highlighted answer pattern in options area
+      for (const line of lines) {
+        const m = line.match(/^([A-Ia-i])\s*[)\.]\s+.{5,}/);
+        if (m && lines.join(' ').toLowerCase().includes('correct')) {
+          // Can't determine reliably without highlight data
+        }
+      }
+      if (!correct) return null;
+    }
+
+    // ── Step 2: Extract explanation block (after "Correct Answer:") ──
+    const explanationLines = lines.slice(correctAnswerLineIdx + 1);
+    const fullExplanation = explanationLines.join('\n');
+
+    // ── Step 3: Find Educational Objective ────────────────
+    const eoMatch = fullExplanation.match(/educational\s+objective\s*[:\-]\s*([\s\S]+?)(?:\n\n|$)/i);
+    if (eoMatch) {
+      educationalObjective = eoMatch[1].replace(/\n/g, ' ').trim();
+    }
+
+    // Remove Educational Objective from main explanation
+    const withoutEO = fullExplanation
+      .replace(/educational\s+objective\s*[:\-]\s*[\s\S]+?(?:\n\n|$)/gi, '')
+      .trim();
+
+    // ── Step 4: Find "Incorrect Answers: A, B, C" summary line ──
+    const incorrectSummaryMatch = withoutEO.match(/incorrect\s+answers?\s*[:\-]\s*([A-I,\s\.and]+)/i);
+    if (incorrectSummaryMatch) {
+      incorrectSummary = 'Incorrect Answers: ' + incorrectSummaryMatch[1].trim().replace(/\.$/, '');
+    }
+
+    // ── Step 5: Split before/after "Incorrect Answers:" ──
+    const incorrectIdx = withoutEO.search(/incorrect\s+answers?/i);
+    let correctSection = incorrectIdx > -1 ? withoutEO.slice(0, incorrectIdx).trim() : withoutEO.trim();
+    let incorrectSection = incorrectIdx > -1 ? withoutEO.slice(incorrectIdx).trim() : '';
+
+    // correctBlurb = everything before "Incorrect Answers:"
+    correctBlurb = correctSection.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
+
+    // ── Step 6: Parse individual incorrect choice explanations ──
+    // Pattern: "Buspirone (Choice A) is..." or "Choice A) is..." or "A) ..."
+    // Split incorrectSection into paragraphs and attribute each to a letter
+    const paragraphs = incorrectSection
+      .split(/\n\s*\n/)
+      .map(p => p.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim())
+      .filter(p => p.length > 10);
+
+    for (const para of paragraphs) {
+      // Skip the summary line itself
+      if (/^incorrect\s+answers?\s*[:\-]/i.test(para)) continue;
+      if (/^educational\s+objective/i.test(para)) continue;
+
+      // Match letter attribution patterns:
+      // "Buspirone (Choice A)" | "Choice A)" | "Choice A is" | "(Choice A)"
+      const letterMatch =
+        para.match(/\(choice\s+([A-Ia-i])\)/i) ||
+        para.match(/^choice\s+([A-Ia-i])\s*[)\.:\-]/i) ||
+        para.match(/^([A-Ia-i])\s*\)\s+\S/i) ||
+        para.match(/\bchoice\s+([A-Ia-i])\b/i);
+
+      if (letterMatch) {
+        const letter = letterMatch[1].toUpperCase();
+        choiceExplanations[letter] = (choiceExplanations[letter]
+          ? choiceExplanations[letter] + ' ' + para
+          : para).trim();
+      }
+    }
+
+    return {
+      correct,
+      correctBlurb,
+      incorrectSummary,
+      educationalObjective,
+      choiceExplanations
+    };
   }
 
-  // ── Auto-tagging ───────────────────────────────────────────
+  // ── Match questions to answers ────────────────────────────
+  function matchAndMerge(questions, answerMap) {
+    return questions.map(q => {
+      const ak = answerMap[q.n];
+      if (!ak) return { ...q, c: q.o[0]?.l || 'A', _noAnswer: true };
+
+      return {
+        ...q,
+        c: ak.correct || q.o[0]?.l || 'A',
+        e: ak.choiceExplanations || {},
+        correctBlurb: ak.correctBlurb || '',
+        incorrectSummary: ak.incorrectSummary || '',
+        educationalObjective: ak.educationalObjective || '',
+        tags: autoTag(q.t, q.o)
+      };
+    });
+  }
+
+  // ── Auto-tagging ──────────────────────────────────────────
   const TAG_RULES = [
-    // Mood Disorders
-    { tag: 'Mood Disorders', keywords: ['depressive disorder', 'major depressive', 'depression', 'dysthymi', 'bipolar', 'manic', 'hypomania', 'cyclothymi', 'adjustment disorder', 'bereavement'] },
-    // Psychotic Disorders
-    { tag: 'Psychotic Disorders', keywords: ['schizophrenia', 'schizophreniform', 'schizoaffective', 'delusional disorder', 'brief psychotic', 'psychosis', 'hallucination', 'delusion', 'disorganized'] },
-    // Anxiety Disorders
-    { tag: 'Anxiety Disorders', keywords: ['anxiety', 'panic disorder', 'panic attack', 'generalized anxiety', 'social anxiety', 'phobia', 'agoraphobia', 'OCD', 'obsessive', 'compulsive', 'PTSD', 'post-traumatic', 'acute stress'] },
-    // Somatic / Functional
-    { tag: 'Somatic Disorders', keywords: ['somatic', 'somatization', 'hypochondria', 'illness anxiety', 'conversion disorder', 'functional neurologic', 'factitious', 'malingering', 'body dysmorphic'] },
-    // Substance Use
-    { tag: 'Substance Use', keywords: ['alcohol', 'substance', 'withdrawal', 'intoxication', 'opioid', 'heroin', 'cocaine', 'amphetamine', 'methamphetamine', 'benzodiazepine', 'marijuana', 'cannabis', 'PCP', 'LSD', 'naltrexone', 'disulfiram', 'methadone', 'buprenorphine'] },
-    // Personality Disorders
-    { tag: 'Personality Disorders', keywords: ['personality disorder', 'borderline', 'antisocial', 'narcissistic', 'histrionic', 'paranoid personality', 'schizoid', 'schizotypal', 'avoidant', 'dependent', 'obsessive-compulsive personality'] },
-    // Neurocognitive
-    { tag: 'Neurocognitive Disorders', keywords: ['dementia', 'delirium', 'alzheimer', 'vascular dementia', 'frontotemporal', 'lewy body', 'normal pressure hydrocephalus', 'cognitive impairment', 'memory loss', 'confabulation', 'korsakoff', 'wernicke'] },
-    // Pediatric / Developmental
-    { tag: 'Pediatric & Developmental', keywords: ['child', 'adolescent', 'autism', 'ADHD', 'attention deficit', 'intellectual disability', 'conduct disorder', 'oppositional', 'separation anxiety', 'enuresis', 'tic', 'Tourette', 'fragile X', 'down syndrome', 'developmental'] },
-    // Sleep Disorders
-    { tag: 'Sleep Disorders', keywords: ['insomnia', 'sleep apnea', 'narcolepsy', 'polysomnography', 'REM sleep', 'nightmare disorder', 'sleepwalking', 'parasomnia', 'circadian'] },
-    // Sexual & Gender
-    { tag: 'Sexual Disorders', keywords: ['sexual dysfunction', 'erectile', 'premature ejaculation', 'vaginismus', 'vulvodynia', 'paraphilia', 'gender dysphoria', 'libido'] },
-    // Pharmacology
-    { tag: 'Pharmacology', keywords: ['SSRI', 'SNRI', 'TCA', 'tricyclic', 'MAOI', 'antidepressant', 'antipsychotic', 'haloperidol', 'risperidone', 'olanzapine', 'clozapine', 'quetiapine', 'aripiprazole', 'lithium', 'valproate', 'carbamazepine', 'benzodiazepine', 'lorazepam', 'diazepam', 'buspirone', 'sertraline', 'fluoxetine', 'paroxetine', 'bupropion', 'mirtazapine', 'venlafaxine', 'duloxetine', 'naltrexone', 'disulfiram', 'methadone', 'methylphenidate', 'amphetamine salts'] },
-    // Mechanisms
-    { tag: 'Mechanisms & Neuroscience', keywords: ['dopamine', 'serotonin', 'norepinephrine', 'GABA', 'glutamate', 'receptor', 'reuptake', 'monoamine', 'limbic', 'prefrontal', 'neurotransmitter', 'synapse', 'pharmacokinetic'] },
-    // Ethics & Legal
-    { tag: 'Ethics & Legal', keywords: ['capacity', 'competence', 'informed consent', 'autonomy', 'confidentiality', 'tarasoff', 'duty to warn', 'involuntary', 'power of attorney', 'advance directive', 'ethics', 'beneficence', 'maleficence', 'justice', 'mandatory report'] },
-    // Eating Disorders
-    { tag: 'Eating Disorders', keywords: ['anorexia', 'bulimia', 'binge eating', 'purging', 'laxative', 'BMI', 'eating disorder', 'amenorrhea secondary to'] },
+    { tag: 'Mood Disorders',           keywords: ['depressive disorder','major depressive','depression','dysthymi','bipolar','manic','hypomania','cyclothymi','adjustment disorder','bereavement','anhedonia'] },
+    { tag: 'Psychotic Disorders',      keywords: ['schizophrenia','schizophreniform','schizoaffective','delusional disorder','brief psychotic','psychosis','hallucination','delusion','disorganized speech'] },
+    { tag: 'Anxiety Disorders',        keywords: ['anxiety','panic disorder','panic attack','generalized anxiety','social anxiety','phobia','agoraphobia','obsessive','compulsive','PTSD','post-traumatic','acute stress disorder'] },
+    { tag: 'Somatic Disorders',        keywords: ['somatic','somatization','hypochondria','illness anxiety','conversion disorder','functional neurologic','factitious','malingering','body dysmorphic'] },
+    { tag: 'Substance Use',            keywords: ['alcohol','substance','withdrawal','intoxication','opioid','heroin','cocaine','amphetamine','methamphetamine','benzodiazepine','marijuana','cannabis','PCP','LSD','naltrexone','disulfiram','methadone','buprenorphine'] },
+    { tag: 'Personality Disorders',    keywords: ['personality disorder','borderline','antisocial','narcissistic','histrionic','paranoid personality','schizoid','schizotypal','avoidant','dependent'] },
+    { tag: 'Neurocognitive Disorders', keywords: ['dementia','delirium','alzheimer','vascular dementia','frontotemporal','lewy body','normal pressure hydrocephalus','cognitive impairment','korsakoff','wernicke'] },
+    { tag: 'Pediatric & Developmental',keywords: ['child','adolescent','autism','ADHD','attention deficit','intellectual disability','conduct disorder','oppositional','separation anxiety','fragile X','developmental'] },
+    { tag: 'Sleep Disorders',          keywords: ['insomnia','sleep apnea','narcolepsy','polysomnography','REM sleep','nightmare disorder','sleepwalking','parasomnia','circadian'] },
+    { tag: 'Sexual Disorders',         keywords: ['sexual dysfunction','erectile','premature ejaculation','vaginismus','vulvodynia','paraphilia','gender dysphoria','libido'] },
+    { tag: 'Pharmacology',             keywords: ['SSRI','SNRI','TCA','tricyclic','MAOI','antidepressant','antipsychotic','haloperidol','risperidone','olanzapine','clozapine','quetiapine','aripiprazole','lithium','valproate','carbamazepine','benzodiazepine','lorazepam','diazepam','buspirone','sertraline','fluoxetine','paroxetine','bupropion','mirtazapine','venlafaxine','duloxetine','naltrexone','disulfiram','methylphenidate'] },
+    { tag: 'Mechanisms & Neuroscience',keywords: ['dopamine','serotonin','norepinephrine','GABA','glutamate','receptor','reuptake','monoamine','limbic','neurotransmitter','synapse','D2','serotonin syndrome'] },
+    { tag: 'Ethics & Legal',           keywords: ['capacity','competence','informed consent','autonomy','confidentiality','tarasoff','duty to warn','involuntary','power of attorney','advance directive','ethics','beneficence','mandatory report','decisional'] },
+    { tag: 'Eating Disorders',         keywords: ['anorexia','bulimia','binge eating','purging','laxative','eating disorder'] },
   ];
 
   function autoTag(questionText, options) {
-    const text = (questionText + ' ' + options.map(o => o.t).join(' ')).toLowerCase();
+    const text = (questionText + ' ' + (options||[]).map(o => o.t).join(' ')).toLowerCase();
     const tags = [];
     for (const rule of TAG_RULES) {
-      if (rule.keywords.some(kw => text.includes(kw.toLowerCase()))) {
-        tags.push(rule.tag);
-      }
+      if (rule.keywords.some(kw => text.includes(kw.toLowerCase()))) tags.push(rule.tag);
     }
-    return [...new Set(tags)]; // deduplicate
+    return [...new Set(tags)];
   }
 
-  // ── Main pipeline entry point ──────────────────────────────
+  // ── Main pipeline ─────────────────────────────────────────
   async function processTestPDFs(questionFile, answerFile, onProgress) {
-    // Step 1: OCR both PDFs
-    onProgress && onProgress(0, 100, 'Reading Question Bank…');
-    const qPages = await extractTextFromPDF(questionFile, (p, t, msg) => {
-      onProgress && onProgress(Math.round(p * 0.45), 100, msg);
+    const report = (pct, msg) => onProgress && onProgress(pct, 100, msg);
+
+    // Init Tesseract
+    report(2, 'Initializing OCR engine…');
+    const worker = await Tesseract.createWorker('eng', 1, {
+      logger: () => {} // suppress internal logs
     });
 
-    onProgress && onProgress(45, 100, 'Reading Answer Key…');
-    const aPages = await extractTextFromPDF(answerFile, (p, t, msg) => {
-      onProgress && onProgress(45 + Math.round(p * 0.45), 100, msg);
-    });
+    try {
+      // ── OCR Question Bank ──────────────────────────────
+      report(5, 'Rendering Question Bank pages…');
+      const qImages = await pdfToImages(questionFile, (i, total) => {
+        report(5 + Math.round((i/total) * 20), `Rendering Q page ${i}/${total}…`);
+      });
 
-    // Step 2: Parse
-    onProgress && onProgress(91, 100, 'Parsing questions…');
-    const questions = parseQuestionBank(qPages);
+      report(26, 'Running OCR on Question Bank…');
+      const qPages = await ocrAllPages(qImages, worker, (i, total) => {
+        report(26 + Math.round((i/total) * 20), `OCR Q page ${i}/${total}…`);
+      });
 
-    onProgress && onProgress(93, 100, 'Parsing answer key…');
-    const answerMap = parseAnswerKey(aPages);
+      // ── OCR Answer Key ────────────────────────────────
+      report(47, 'Rendering Answer Key pages…');
+      const aImages = await pdfToImages(answerFile, (i, total) => {
+        report(47 + Math.round((i/total) * 10), `Rendering AK page ${i}/${total}…`);
+      });
 
-    // Step 3: Match
-    onProgress && onProgress(95, 100, 'Matching questions to answers…');
-    const matched = matchQuestionsToAnswers(questions, answerMap);
+      report(58, 'Running OCR on Answer Key…');
+      const aPages = await ocrAllPages(aImages, worker, (i, total) => {
+        report(58 + Math.round((i/total) * 22), `OCR AK page ${i}/${total}…`);
+      });
 
-    // Step 4: Auto-tag
-    onProgress && onProgress(97, 100, 'Auto-tagging topics…');
-    matched.forEach(q => { q.tags = autoTag(q.t, q.o); });
+      // ── Parse ─────────────────────────────────────────
+      report(81, 'Merging multi-page content…');
+      const qMerged = mergePagesByItem(qPages);
+      const aMerged = mergePagesByItem(aPages);
 
-    onProgress && onProgress(100, 100, 'Done!');
-    return matched;
+      report(85, 'Parsing questions…');
+      const questions = parseQuestionBank(qMerged);
+
+      report(90, 'Parsing answer key…');
+      const answerMap = parseAnswerKey(aMerged);
+
+      report(94, 'Matching questions to answers…');
+      const matched = matchAndMerge(questions, answerMap);
+
+      report(98, 'Auto-tagging topics…');
+      // tags already applied in matchAndMerge
+
+      report(100, `Done! Extracted ${matched.length} questions.`);
+      return matched;
+
+    } finally {
+      await worker.terminate();
+    }
   }
 
-  return { processTestPDFs, autoTag, similarity };
+  return { processTestPDFs, autoTag };
 })();
 window.OCR = OCR;
 
@@ -1839,28 +2039,62 @@ const Quiz = (() => {
     if (!panel) return;
     const q = getQuestion();
     const r = state.results[state.qIdx];
-
-    // Show explanations: in tutor mode if answered, in exam mode NEVER during test (only in review)
     const showExp = state.mode === 'tutor' && r.answered;
     panel.style.display = showExp ? 'block' : 'none';
     if (!showExp) return;
+    buildExplanationHTML(q, r, document.getElementById('exp-body'));
+  }
 
-    const body = document.getElementById('exp-body');
-    body.innerHTML = '';
-    q.o.forEach(opt => {
-      const isCorrect = q.c === opt.l;
-      const isChosen  = r.chosen === opt.l;
-      const div = document.createElement('div');
-      div.className = 'exp-item' + (isCorrect ? ' exp-correct' : '');
-      div.innerHTML = `
-        <div class="exp-header">
-          <strong>${opt.l}) ${opt.t}</strong>
-          ${isCorrect ? '<span class="exp-badge-correct">✓ Correct</span>' : ''}
-          ${isChosen && !isCorrect ? '<span class="exp-badge-wrong">✗ Your Answer</span>' : ''}
-        </div>
-        ${q.e && q.e[opt.l] ? `<div class="exp-text">${q.e[opt.l]}</div>` : ''}`;
-      body.appendChild(div);
-    });
+  function buildExplanationHTML(q, r, container) {
+    container.innerHTML = '';
+
+    // Correct answer block
+    const correctOpt = q.o ? q.o.find(o => o.l === q.c) : null;
+    const chosenCorrect = r && r.chosen === q.c;
+    const correctDiv = document.createElement('div');
+    correctDiv.className = 'exp-item exp-correct';
+    correctDiv.innerHTML =
+      '<div class="exp-header">' +
+        '<strong>' + q.c + ') ' + (correctOpt ? correctOpt.t : '') + '</strong>' +
+        '<span class="exp-badge-correct">&#10003; Correct Answer</span>' +
+        (chosenCorrect ? '<span class="exp-badge-chosen">&#8592; Your Answer</span>' : '') +
+      '</div>' +
+      (q.correctBlurb ? '<div class="exp-text exp-blurb">' + q.correctBlurb + '</div>' : '');
+    container.appendChild(correctDiv);
+
+    // Incorrect summary line
+    if (q.incorrectSummary) {
+      const sumDiv = document.createElement('div');
+      sumDiv.className = 'exp-incorrect-summary';
+      sumDiv.textContent = q.incorrectSummary;
+      container.appendChild(sumDiv);
+    }
+
+    // Per-choice wrong answer explanations
+    if (q.o) {
+      q.o.forEach(function(opt) {
+        if (opt.l === q.c) return;
+        const chosen  = r && r.chosen === opt.l;
+        const expText = (q.e && q.e[opt.l]) ? q.e[opt.l] : '';
+        const div = document.createElement('div');
+        div.className = 'exp-item' + (chosen ? ' exp-wrong-chosen' : ' exp-wrong');
+        div.innerHTML =
+          '<div class="exp-header">' +
+            '<strong>' + opt.l + ') ' + opt.t + '</strong>' +
+            (chosen ? '<span class="exp-badge-wrong">&#10007; Your Answer</span>' : '') +
+          '</div>' +
+          (expText ? '<div class="exp-text">' + expText + '</div>' : '<div class="exp-text exp-no-exp">No explanation available.</div>');
+        container.appendChild(div);
+      });
+    }
+
+    // Educational Objective at the bottom
+    if (q.educationalObjective) {
+      const eoDiv = document.createElement('div');
+      eoDiv.className = 'exp-educational-objective';
+      eoDiv.innerHTML = '<strong>Educational Objective:</strong> ' + q.educationalObjective;
+      container.appendChild(eoDiv);
+    }
   }
 
   function renderFlagButton() {
@@ -1930,6 +2164,55 @@ const Quiz = (() => {
   };
 })();
 window.Quiz = Quiz;
+// Expose explanation builder globally for use by Results review screen
+window.buildExplanationHTML = function(q, r, container) {
+  // Reconstruct inline since it's in Quiz closure
+  container.innerHTML = '';
+  var correctOpt = q.o ? q.o.find(function(o){return o.l===q.c;}) : null;
+  var chosenCorrect = r && r.chosen === q.c;
+  var correctDiv = document.createElement('div');
+  correctDiv.className = 'exp-item exp-correct';
+  correctDiv.innerHTML =
+    '<div class="exp-header">' +
+      '<strong>' + q.c + ') ' + (correctOpt ? correctOpt.t : '') + '</strong>' +
+      '<span class="exp-badge-correct">&#10003; Correct Answer</span>' +
+      (chosenCorrect ? '<span class="exp-badge-chosen">&#8592; Your Answer</span>' : '') +
+    '</div>' +
+    (q.correctBlurb ? '<div class="exp-text exp-blurb">' + q.correctBlurb + '</div>' : '');
+  container.appendChild(correctDiv);
+
+  if (q.incorrectSummary) {
+    var sumDiv = document.createElement('div');
+    sumDiv.className = 'exp-incorrect-summary';
+    sumDiv.textContent = q.incorrectSummary;
+    container.appendChild(sumDiv);
+  }
+
+  if (q.o) {
+    q.o.forEach(function(opt) {
+      if (opt.l === q.c) return;
+      var chosen  = r && r.chosen === opt.l;
+      var expText = (q.e && q.e[opt.l]) ? q.e[opt.l] : '';
+      var div = document.createElement('div');
+      div.className = 'exp-item' + (chosen ? ' exp-wrong-chosen' : ' exp-wrong');
+      div.innerHTML =
+        '<div class="exp-header">' +
+          '<strong>' + opt.l + ') ' + opt.t + '</strong>' +
+          (chosen ? '<span class="exp-badge-wrong">&#10007; Your Answer</span>' : '') +
+        '</div>' +
+        (expText ? '<div class="exp-text">' + expText + '</div>' :
+          '<div class="exp-text exp-no-exp">No explanation available.</div>');
+      container.appendChild(div);
+    });
+  }
+
+  if (q.educationalObjective) {
+    var eoDiv = document.createElement('div');
+    eoDiv.className = 'exp-educational-objective';
+    eoDiv.innerHTML = '<strong>Educational Objective:</strong> ' + q.educationalObjective;
+    container.appendChild(eoDiv);
+  }
+};
 
 </script>
 <script>
@@ -2121,23 +2404,23 @@ const Results = (() => {
       optContainer.appendChild(div);
     });
 
-    // Always show explanations in review
+    // Always show explanations in review using shared builder
     const expBody = document.getElementById('rev-exp-body');
-    expBody.innerHTML = '';
-    q.o.forEach(opt => {
-      const isCorrect = q.c === opt.l;
-      const isChosen  = r.chosen === opt.l;
-      const div = document.createElement('div');
-      div.className = 'exp-item' + (isCorrect ? ' exp-correct' : '');
-      div.innerHTML = `
-        <div class="exp-header">
-          <strong>${opt.l}) ${opt.t}</strong>
-          ${isCorrect ? '<span class="exp-badge-correct">✓ Correct</span>' : ''}
-          ${isChosen && !isCorrect ? '<span class="exp-badge-wrong">✗ Your Answer</span>' : ''}
-        </div>
-        ${q.e && q.e[opt.l] ? `<div class="exp-text">${q.e[opt.l]}</div>` : ''}`;
-      expBody.appendChild(div);
-    });
+    if (typeof buildExplanationHTML === 'function') {
+      buildExplanationHTML(q, r, expBody);
+    } else {
+      // fallback
+      expBody.innerHTML = '';
+      q.o.forEach(opt => {
+        const isCorrect = q.c === opt.l;
+        const div = document.createElement('div');
+        div.className = 'exp-item' + (isCorrect ? ' exp-correct' : '');
+        div.innerHTML = '<div class="exp-header"><strong>' + opt.l + ') ' + opt.t + '</strong>' +
+          (isCorrect ? '<span class="exp-badge-correct">&#10003; Correct</span>' : '') + '</div>' +
+          (q.e && q.e[opt.l] ? '<div class="exp-text">' + q.e[opt.l] + '</div>' : '');
+        expBody.appendChild(div);
+      });
+    }
 
     // Flag button
     const flagBtn = document.getElementById('rev-btn-flag');
@@ -3139,9 +3422,192 @@ const App = (() => {
   };
 })();
 
+
+/* ============================================================
+   PIN.JS — 4-digit passcode protection
+============================================================ */
+const PIN = (() => {
+  const STORAGE_KEY = 'nbme_pin_v1';
+  let _buffer = '';
+  let _mode = 'enter'; // 'enter' | 'setup' | 'confirm'
+  let _firstPin = '';
+
+  function getStored() {
+    return localStorage.getItem(STORAGE_KEY) || null;
+  }
+  function setStored(pin) {
+    localStorage.setItem(STORAGE_KEY, pin);
+  }
+
+  function init() {
+    const stored = getStored();
+    const screen = document.getElementById('pin-screen');
+    if (!stored) {
+      // First launch — setup mode
+      _mode = 'setup';
+      document.getElementById('pin-subtitle').textContent = 'Create a 4-digit PIN';
+      document.getElementById('pin-setup-hint').textContent = 'You will be asked to confirm your PIN.';
+      screen.style.display = 'flex';
+    } else {
+      // Normal entry mode
+      _mode = 'enter';
+      document.getElementById('pin-subtitle').textContent = 'Enter your 4-digit PIN';
+      document.getElementById('pin-setup-hint').textContent = '';
+      screen.style.display = 'flex';
+    }
+    // Keyboard support
+    document.addEventListener('keydown', onKey);
+  }
+
+  function onKey(e) {
+    const screen = document.getElementById('pin-screen');
+    if (screen.style.display === 'none') return;
+    if (e.key >= '0' && e.key <= '9') press(e.key);
+    else if (e.key === 'Backspace') del();
+    else if (e.key === 'Enter') enter();
+  }
+
+  function press(digit) {
+    if (_buffer.length >= 4) return;
+    _buffer += digit;
+    updateDots();
+    if (_buffer.length === 4) {
+      setTimeout(enter, 120);
+    }
+  }
+
+  function del() {
+    _buffer = _buffer.slice(0, -1);
+    updateDots();
+    clearError();
+  }
+
+  function enter() {
+    if (_buffer.length < 4) {
+      showError('Enter all 4 digits');
+      return;
+    }
+
+    if (_mode === 'setup') {
+      _firstPin = _buffer;
+      _buffer = '';
+      _mode = 'confirm';
+      document.getElementById('pin-subtitle').textContent = 'Confirm your PIN';
+      document.getElementById('pin-setup-hint').textContent = 'Enter the same PIN again to confirm.';
+      updateDots();
+      return;
+    }
+
+    if (_mode === 'confirm') {
+      if (_buffer === _firstPin) {
+        setStored(_buffer);
+        unlock();
+      } else {
+        shakeError('PINs do not match. Start over.');
+        _buffer = ''; _firstPin = '';
+        _mode = 'setup';
+        document.getElementById('pin-subtitle').textContent = 'Create a 4-digit PIN';
+        document.getElementById('pin-setup-hint').textContent = 'You will be asked to confirm your PIN.';
+        updateDots();
+      }
+      return;
+    }
+
+    if (_mode === 'enter') {
+      if (_buffer === getStored()) {
+        unlock();
+      } else {
+        shakeError('Incorrect PIN. Try again.');
+        _buffer = '';
+        updateDots();
+      }
+    }
+  }
+
+  function unlock() {
+    const screen = document.getElementById('pin-screen');
+    screen.style.opacity = '0';
+    screen.style.transition = 'opacity .3s';
+    setTimeout(() => {
+      screen.style.display = 'none';
+      document.removeEventListener('keydown', onKey);
+    }, 300);
+    _buffer = '';
+  }
+
+  function updateDots() {
+    for (let i = 0; i < 4; i++) {
+      const dot = document.getElementById('pd' + i);
+      if (!dot) continue;
+      dot.classList.remove('error');
+      dot.classList.toggle('filled', i < _buffer.length);
+    }
+  }
+
+  function showError(msg) {
+    document.getElementById('pin-error').textContent = msg;
+  }
+
+  function clearError() {
+    document.getElementById('pin-error').textContent = '';
+  }
+
+  function shakeError(msg) {
+    for (let i = 0; i < 4; i++) {
+      const dot = document.getElementById('pd' + i);
+      if (dot) dot.classList.add('error');
+    }
+    showError(msg);
+    setTimeout(() => {
+      for (let i = 0; i < 4; i++) {
+        const dot = document.getElementById('pd' + i);
+        if (dot) dot.classList.remove('error');
+      }
+    }, 600);
+  }
+
+  return { init, press, del, enter };
+})();
+window.PIN = PIN;
+
 // ── Bootstrap ──────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => App.init());
+document.addEventListener('DOMContentLoaded', () => {
+  PIN.init();
+  App.init();
+});
 
 </script>
+
+<!-- ═══ PIN SCREEN ═══ -->
+<div id="pin-screen" style="display:none;">
+  <div class="pin-box">
+    <div class="pin-logo">NB</div>
+    <div class="pin-title">NBME Self-Assessment Suite</div>
+    <div class="pin-subtitle" id="pin-subtitle">Enter your 4-digit PIN</div>
+    <div class="pin-dots">
+      <div class="pin-dot" id="pd0"></div>
+      <div class="pin-dot" id="pd1"></div>
+      <div class="pin-dot" id="pd2"></div>
+      <div class="pin-dot" id="pd3"></div>
+    </div>
+    <div class="pin-keypad">
+      <button class="pin-key" onclick="PIN.press('1')">1</button>
+      <button class="pin-key" onclick="PIN.press('2')">2</button>
+      <button class="pin-key" onclick="PIN.press('3')">3</button>
+      <button class="pin-key" onclick="PIN.press('4')">4</button>
+      <button class="pin-key" onclick="PIN.press('5')">5</button>
+      <button class="pin-key" onclick="PIN.press('6')">6</button>
+      <button class="pin-key" onclick="PIN.press('7')">7</button>
+      <button class="pin-key" onclick="PIN.press('8')">8</button>
+      <button class="pin-key" onclick="PIN.press('9')">9</button>
+      <button class="pin-key del" onclick="PIN.del()">&#9003;</button>
+      <button class="pin-key" onclick="PIN.press('0')">0</button>
+      <button class="pin-key enter" onclick="PIN.enter()">OK</button>
+    </div>
+    <div class="pin-error-msg" id="pin-error"></div>
+    <div class="pin-setup-hint" id="pin-setup-hint"></div>
+  </div>
+</div>
+
 </body>
 </html>
