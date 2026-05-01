@@ -4,7 +4,536 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NBME Self-Assessment Suite</title>
-<link rel="stylesheet" href="css/style.css">
+<style>
+/* ============================================================
+   STYLE.CSS — NBME/UWorld-inspired interface
+============================================================ */
+
+/* ── Reset & Base ─────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; font-size: 13px; background: #f0f2f5; color: #1a1a2e; line-height: 1.5; }
+button { font-family: inherit; cursor: pointer; }
+input, textarea, select { font-family: inherit; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #f0f2f5; }
+::-webkit-scrollbar-thumb { background: #b8c4d0; border-radius: 3px; }
+
+/* ── Variables ───────────────────────────────────────────── */
+:root {
+  --navy:     #1a3a5c;
+  --blue:     #1e5799;
+  --ltblue:   #2980b9;
+  --teal:     #0077b6;
+  --bg:       #f0f2f5;
+  --white:    #ffffff;
+  --border:   #c8d0da;
+  --text:     #1a1a2e;
+  --muted:    #5a6a7a;
+  --green:    #27ae60;
+  --red:      #c0392b;
+  --amber:    #f0a500;
+  --sidebar-w: 240px;
+  --topbar-h:  52px;
+}
+
+/* ── Layout ───────────────────────────────────────────────── */
+#app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+/* ── Top Bar ─────────────────────────────────────────────── */
+#topbar {
+  height: var(--topbar-h); min-height: var(--topbar-h);
+  background: var(--navy); color: white;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 16px; z-index: 100;
+  box-shadow: 0 2px 8px rgba(0,0,0,.25);
+  flex-shrink: 0;
+}
+.topbar-brand { display: flex; align-items: center; gap: 10px; }
+.topbar-brand-logo {
+  width: 32px; height: 32px; background: rgba(255,255,255,.15);
+  border-radius: 4px; display: flex; align-items: center; justify-content: center;
+  font-weight: 900; font-size: 14px; letter-spacing: -.5px;
+}
+.topbar-brand-text { line-height: 1.2; }
+.topbar-brand-text strong { font-size: 13px; display: block; }
+.topbar-brand-text span   { font-size: 10px; color: #9ab0c8; }
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+#sync-indicator { font-size: 11px; color: #9ab0c8; }
+.topbar-btn {
+  padding: 5px 12px; font-size: 11px; font-weight: 600;
+  border-radius: 3px; border: 1px solid rgba(255,255,255,.25);
+  background: rgba(255,255,255,.1); color: white;
+  transition: background .15s;
+}
+.topbar-btn:hover { background: rgba(255,255,255,.2); }
+
+/* ── Main body ────────────────────────────────────────────── */
+#main { display: flex; flex: 1; overflow: hidden; }
+
+/* ── Sidebar ─────────────────────────────────────────────── */
+#sidebar {
+  width: var(--sidebar-w); min-width: var(--sidebar-w);
+  background: #1e2d3d; color: #c8d8e8;
+  display: flex; flex-direction: column;
+  overflow-y: auto; overflow-x: hidden;
+  border-right: 1px solid #162333;
+  flex-shrink: 0;
+}
+.sidebar-section { padding: 8px 0; border-bottom: 1px solid #162333; }
+.sidebar-section-title {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .08em; color: #5a7a9a;
+  padding: 6px 14px 4px;
+}
+.sidebar-item {
+  display: flex; align-items: center; gap: 7px;
+  padding: 7px 14px; font-size: 12px; color: #9ab8d0;
+  cursor: pointer; transition: background .12s, color .12s;
+  border-left: 3px solid transparent;
+  position: relative;
+}
+.sidebar-item:hover { background: rgba(255,255,255,.06); color: #dde8f0; }
+.sidebar-item.active { background: rgba(255,255,255,.1); color: white; border-left-color: #4fc3f7; }
+.sidebar-item .item-icon { font-size: 14px; flex-shrink: 0; }
+.sidebar-item .item-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-item .item-count { font-size: 10px; background: rgba(255,255,255,.15); border-radius: 10px; padding: 1px 6px; flex-shrink: 0; }
+.sidebar-folder { }
+.sidebar-folder-header { display: flex; align-items: center; gap: 6px; padding: 7px 8px 7px 14px; font-size: 12px; font-weight: 600; color: #9ab8d0; cursor: pointer; }
+.sidebar-folder-header:hover { background: rgba(255,255,255,.05); color: #dde8f0; }
+.sidebar-folder-header .folder-arrow { font-size: 10px; transition: transform .15s; flex-shrink: 0; }
+.sidebar-folder-header.open .folder-arrow { transform: rotate(90deg); }
+.sidebar-folder-tests { padding-left: 10px; display: none; }
+.sidebar-folder-tests.open { display: block; }
+.sidebar-test-item { display: flex; align-items: center; gap: 6px; padding: 5px 8px 5px 14px; font-size: 11.5px; color: #7a9ab8; cursor: pointer; border-left: 3px solid transparent; }
+.sidebar-test-item:hover { background: rgba(255,255,255,.05); color: #c8d8e8; }
+.sidebar-test-item.active { color: #4fc3f7; border-left-color: #4fc3f7; background: rgba(79,195,247,.08); }
+.sidebar-test-item .test-status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.dot-not-started { background: #5a7a9a; }
+.dot-in-progress { background: #f0a500; }
+.dot-completed   { background: #27ae60; }
+.sidebar-add-folder {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 14px; font-size: 11px; color: #5a7a9a;
+  cursor: pointer; transition: color .12s;
+}
+.sidebar-add-folder:hover { color: #9ab8d0; }
+
+/* ── Content area ────────────────────────────────────────── */
+#content { flex: 1; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; }
+
+/* ── Screen: Home ─────────────────────────────────────────── */
+#screen-home { flex: 1; padding: 24px; }
+.home-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+.home-header h2 { font-size: 18px; font-weight: 700; color: var(--navy); }
+.home-header-actions { display: flex; gap: 8px; }
+.btn-generate {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 16px; font-size: 12px; font-weight: 700;
+  background: var(--navy); color: white; border: none; border-radius: 4px;
+  transition: background .15s;
+}
+.btn-generate:hover { background: #244d73; }
+
+/* Test grid */
+.test-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+.test-card {
+  background: white; border: 1px solid var(--border); border-radius: 6px;
+  padding: 16px; cursor: pointer;
+  transition: box-shadow .15s, transform .15s; position: relative;
+  box-shadow: 0 1px 3px rgba(0,0,0,.07);
+}
+.test-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.12); transform: translateY(-1px); }
+.test-card-status {
+  position: absolute; top: 12px; right: 12px;
+  font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px;
+}
+.status-not-started { background: #edf1f5; color: #5a6a7a; }
+.status-in-progress { background: #fff3cd; color: #856404; }
+.status-completed   { background: #d4edda; color: #155724; }
+.test-card-name { font-size: 13px; font-weight: 700; color: var(--navy); margin-bottom: 4px; margin-right: 60px; }
+.test-card-meta { font-size: 11px; color: var(--muted); margin-bottom: 10px; }
+.test-card-progress { height: 4px; background: #e8ecf0; border-radius: 2px; margin-bottom: 8px; overflow: hidden; }
+.test-card-progress-fill { height: 100%; border-radius: 2px; background: var(--blue); transition: width .3s; }
+.test-card-footer { display: flex; justify-content: space-between; align-items: center; }
+.test-card-prog-label { font-size: 11px; color: var(--muted); }
+.test-card-score { font-size: 12px; font-weight: 700; color: var(--navy); }
+.test-card-actions { display: flex; gap: 4px; margin-top: 10px; }
+.btn-card { padding: 5px 10px; font-size: 11px; border-radius: 3px; border: 1px solid var(--border); background: white; color: var(--navy); transition: background .12s; }
+.btn-card:hover { background: #f5f7fa; }
+.btn-card.primary { background: var(--navy); color: white; border-color: var(--navy); }
+.btn-card.primary:hover { background: #244d73; }
+.btn-card.danger { color: var(--red); border-color: #f5c0bc; }
+.btn-card.danger:hover { background: #fef5f5; }
+.no-tests { text-align: center; padding: 48px 20px; color: var(--muted); font-style: italic; }
+
+/* Folder tab for flagged questions */
+.flagged-tab-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.flagged-tab-header h3 { font-size: 15px; font-weight: 700; color: var(--navy); }
+.flagged-item {
+  background: white; border: 1px solid var(--border); border-radius: 4px;
+  padding: 14px 16px; margin-bottom: 10px;
+}
+.flagged-item-source { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--ltblue); margin-bottom: 6px; }
+.flagged-item-q { font-size: 12.5px; color: var(--text); margin-bottom: 8px; line-height: 1.55; }
+.flagged-item-answer { font-size: 11.5px; margin-bottom: 8px; }
+.flagged-item-exp { font-size: 11.5px; color: #444; background: #f8fafc; border-radius: 3px; padding: 8px 10px; margin-bottom: 8px; line-height: 1.55; }
+.flagged-item-footer { display: flex; justify-content: flex-end; }
+.btn-unflag { font-size: 11px; color: var(--red); background: none; border: 1px solid #f5c0bc; border-radius: 3px; padding: 3px 10px; }
+.btn-unflag:hover { background: #fef5f5; }
+
+/* ── Screen: Quiz ─────────────────────────────────────────── */
+#screen-quiz {
+  display: none; flex-direction: row;
+  height: calc(100vh - var(--topbar-h));
+  overflow: hidden;
+}
+
+/* Quiz left: nav panel */
+#quiz-nav-panel {
+  width: 200px; min-width: 200px;
+  background: #1e2d3d; overflow-y: auto; padding: 12px;
+  border-right: 1px solid #162333; flex-shrink: 0;
+}
+.qnp-header { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #5a7a9a; margin-bottom: 10px; }
+#nav-panel { display: flex; flex-wrap: wrap; gap: 4px; }
+.nav-dot {
+  width: 28px; height: 28px; border-radius: 3px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700; cursor: pointer;
+  background: #2a3d52; color: #7a9ab8; border: 1px solid #324a62;
+  transition: all .12s;
+}
+.nav-dot:hover   { background: #3a5570; color: white; }
+.nav-dot.nav-current { outline: 2px solid #4fc3f7; }
+.nav-dot.nav-correct { background: #1a4a2a; color: #4caf50; border-color: #2e7d32; }
+.nav-dot.nav-wrong   { background: #4a1a1a; color: #ef5350; border-color: #c62828; }
+.nav-dot.nav-marked  { outline: 2px solid #f0a500; }
+.nav-dot.nav-flagged::after { content: '🏳'; position: absolute; font-size: 8px; top: -2px; right: -2px; }
+
+.qnp-legend { margin-top: 14px; }
+.legend-row { display: flex; align-items: center; gap: 6px; font-size: 10px; color: #5a7a9a; margin-bottom: 4px; }
+.legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+.leg-correct { background: #1a4a2a; border: 1px solid #2e7d32; }
+.leg-wrong   { background: #4a1a1a; border: 1px solid #c62828; }
+.leg-current { background: #2a3d52; border: 2px solid #4fc3f7; }
+.leg-marked  { background: #2a3d52; border: 2px solid #f0a500; }
+
+/* Quiz center: question */
+#quiz-main {
+  flex: 1; overflow-y: auto; display: flex; flex-direction: column;
+  background: var(--bg);
+}
+.quiz-topbar {
+  background: var(--navy); color: white; padding: 8px 16px;
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 8px; flex-shrink: 0;
+}
+.quiz-topbar-left  { display: flex; align-items: center; gap: 14px; }
+.quiz-topbar-right { display: flex; align-items: center; gap: 8px; }
+.quiz-test-name  { font-size: 13px; font-weight: 700; color: white; }
+.quiz-q-counter  { font-size: 11px; color: #9ab0c8; }
+.quiz-score-live { font-size: 11px; color: #9ab0c8; }
+.timer-block { text-align: center; }
+.timer-val {
+  font-size: 14px; font-weight: 700; color: white;
+  display: block; font-family: 'Courier New', monospace;
+}
+.timer-val.timer-warn { color: #ffd54f; }
+.timer-val.timer-red  { color: #ff6b6b; animation: blink .8s infinite; }
+.timer-lbl { font-size: 9px; color: #7a9ab8; text-transform: uppercase; letter-spacing: .05em; }
+
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+.quiz-progress { height: 3px; background: rgba(255,255,255,.15); flex-shrink: 0; }
+.quiz-progress-fill { height: 100%; background: #4fc3f7; transition: width .4s; }
+
+.quiz-btn {
+  padding: 5px 12px; font-size: 11px; font-weight: 600;
+  border-radius: 3px; border: 1px solid rgba(255,255,255,.25);
+  background: rgba(255,255,255,.1); color: white; transition: background .12s;
+}
+.quiz-btn:hover:not(:disabled) { background: rgba(255,255,255,.2); }
+.quiz-btn:disabled { opacity: .4; cursor: not-allowed; }
+.quiz-btn.btn-pause { background: rgba(240,165,0,.3); border-color: rgba(240,165,0,.5); }
+.quiz-btn.btn-pause:hover { background: rgba(240,165,0,.4); }
+.quiz-btn.btn-finish { background: rgba(39,174,96,.35); border-color: rgba(39,174,96,.6); }
+.quiz-btn.btn-finish:hover { background: rgba(39,174,96,.5); }
+.quiz-btn.btn-mode { font-size: 11px; }
+.quiz-btn.mode-exam { background: rgba(30,87,153,.4); border-color: rgba(30,87,153,.7); }
+#btn-flag { }
+#btn-flag.flagged { color: #ffd54f; border-color: rgba(255,213,79,.5); }
+
+.quiz-content-area { flex: 1; padding: 16px 20px 80px; max-width: 900px; width: 100%; margin: 0 auto; }
+
+/* Question card */
+.q-card {
+  background: white; border: 1px solid var(--border); border-radius: 4px;
+  padding: 18px 20px; margin-bottom: 12px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+}
+.q-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #edf1f5; flex-wrap: wrap; gap: 6px; }
+.q-num-badge { background: var(--navy); color: white; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 2px; }
+#q-tags { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; padding: 0 8px; }
+.q-tag { font-size: 9px; background: #e3f2fd; color: #0d47a1; border-radius: 10px; padding: 1px 7px; font-weight: 600; }
+.q-card-actions { display: flex; gap: 6px; }
+.btn-q-action {
+  padding: 3px 9px; font-size: 11px; border-radius: 3px;
+  border: 1px solid var(--border); background: white; color: var(--muted);
+  transition: all .12s;
+}
+.btn-q-action:hover { background: #f5f7fa; color: var(--text); }
+.btn-q-action.flagged { background: #fff9c4; border-color: #f9a825; color: #7a5c00; }
+#q-stem {
+  font-size: 13.5px; line-height: 1.72; color: var(--text);
+  user-select: text; cursor: text;
+}
+
+/* Highlight toolbar */
+#hl-toolbar {
+  position: fixed; background: #1a3a5c; border: 1px solid rgba(255,255,255,.2);
+  border-radius: 4px; padding: 5px 8px; display: none; gap: 5px;
+  z-index: 9999; box-shadow: 0 3px 12px rgba(0,0,0,.3);
+}
+#hl-toolbar.show { display: flex; align-items: center; }
+.hl-swatch { width: 20px; height: 20px; border-radius: 3px; cursor: pointer; border: 2px solid transparent; transition: transform .1s; }
+.hl-swatch:hover { transform: scale(1.2); border-color: white; }
+.hl-yellow { background: #ffeb3b; }
+.hl-blue   { background: #81d4fa; }
+.hl-green  { background: #a5d6a7; }
+.hl-pink   { background: #f48fb1; }
+.hl-erase  { width: 20px; height: 20px; border-radius: 3px; cursor: pointer; background: rgba(255,255,255,.15); color: white; font-size: 12px; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,.3); }
+mark.hl-yellow { background: #ffeb3b; color: inherit; }
+mark.hl-blue   { background: #81d4fa; color: inherit; }
+mark.hl-green  { background: #a5d6a7; color: inherit; }
+mark.hl-pink   { background: #f48fb1; color: inherit; }
+
+/* Options */
+.options-card { background: white; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.07); }
+.opt-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 11px 16px; border-bottom: 1px solid #edf1f5;
+  transition: background .1s; position: relative;
+}
+.opt-row:last-child { border-bottom: none; }
+.opt-row:hover:not(.opt-correct):not(.opt-wrong) { background: #f7f9fc; }
+.opt-row.opt-selected { background: #e3f2fd; }
+.opt-row.opt-correct  { background: #e8f5e9; }
+.opt-row.opt-wrong    { background: #ffebee; }
+.opt-row.opt-striken  .opt-text { text-decoration: line-through; opacity: .55; }
+.opt-selector { display: flex; align-items: center; gap: 6px; cursor: pointer; flex-shrink: 0; }
+.opt-radio {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid #9ab0c8; background: white;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; transition: border-color .1s;
+}
+.opt-row.opt-selected .opt-radio,
+.opt-row.opt-correct  .opt-radio { border-color: var(--blue); }
+.opt-row.opt-wrong    .opt-radio { border-color: var(--red); }
+.opt-radio-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--blue); }
+.opt-row.opt-wrong .opt-radio-dot { background: var(--red); }
+.opt-letter { font-weight: 700; font-size: 12.5px; color: var(--navy); flex-shrink: 0; }
+.opt-text { font-size: 13px; line-height: 1.55; flex: 1; cursor: pointer; }
+.opt-indicator { margin-left: auto; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+.ind-correct { color: var(--green); }
+.ind-wrong   { color: var(--red); }
+
+/* Explanation */
+.exp-panel { background: white; border: 1px solid var(--border); border-left: 4px solid var(--blue); border-radius: 4px; padding: 16px 18px; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.07); }
+.exp-panel-title { font-size: 11px; font-weight: 700; color: var(--navy); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px; padding-bottom: 7px; border-bottom: 1px solid #edf1f5; }
+.exp-item { padding: 9px 12px; border-radius: 3px; margin-bottom: 8px; background: #f8fafc; border: 1px solid #e8ecf2; font-size: 12.5px; }
+.exp-item.exp-correct { background: #f0f9f0; border-color: #a5d6a7; }
+.exp-header { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; }
+.exp-header strong { font-size: 12.5px; flex: 1; }
+.exp-badge-correct { background: #d4edda; color: #155724; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; white-space: nowrap; }
+.exp-badge-wrong   { background: #f8d7da; color: #721c24; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; white-space: nowrap; }
+.exp-text { font-size: 12px; color: #444; line-height: 1.6; padding-left: 4px; }
+
+/* Quiz bottom nav */
+.quiz-bottom-bar {
+  position: fixed; bottom: 0; left: var(--sidebar-w);
+  right: 0; background: var(--navy); padding: 8px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+  z-index: 50; border-top: 1px solid rgba(255,255,255,.1);
+}
+.quiz-bottom-bar.no-sidebar { left: 200px; } /* quiz nav panel */
+.score-info { font-size: 11px; color: #9ab0c8; }
+
+/* ── Screen: Results ─────────────────────────────────────── */
+#screen-results { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+#panel-report { flex: 1; overflow-y: auto; padding: 20px; }
+#panel-review { flex: 1; overflow-y: auto; display: none; flex-direction: column; padding: 16px 20px; }
+
+.res-header { background: var(--navy); color: white; padding: 16px 20px; border-radius: 4px 4px 0 0; margin-bottom: 0; }
+.res-header h2 { font-size: 16px; margin-bottom: 2px; }
+.res-header p  { font-size: 11px; color: #9ab0c8; }
+.res-body { background: white; border: 1px solid var(--border); border-top: none; padding: 18px 20px; margin-bottom: 12px; border-radius: 0 0 4px 4px; }
+.res-score-hero { display: flex; align-items: center; gap: 20px; padding-bottom: 14px; border-bottom: 1px solid #edf1f5; margin-bottom: 14px; }
+.res-score-circle { text-align: center; }
+.res-score-num { font-size: 44px; font-weight: 900; color: var(--navy); line-height: 1; }
+.res-score-den { font-size: 16px; color: var(--muted); }
+.res-score-pct { font-size: 20px; font-weight: 700; margin-top: 2px; }
+.res-grade     { font-size: 16px; font-weight: 700; color: var(--navy); }
+.res-grade-desc { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.res-stats-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(100px,1fr)); gap: 10px; margin-bottom: 14px; }
+.res-stat { background: #f5f7fa; border: 1px solid #e0e6ec; border-radius: 3px; padding: 10px; text-align: center; }
+.res-stat-val { font-size: 18px; font-weight: 700; color: var(--navy); display: block; }
+.res-stat-lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.res-analysis-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+@media(max-width:600px) { .res-analysis-grid { grid-template-columns: 1fr; } }
+.analysis-card { border: 1px solid var(--border); border-radius: 3px; overflow: hidden; }
+.analysis-card h4 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 7px 12px; border-bottom: 1px solid var(--border); }
+.ac-str h4 { background: #e8f5e9; color: #1b5e20; }
+.ac-wk  h4 { background: #ffebee; color: #b71c1c; }
+.topic-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; border-bottom: 1px solid #edf1f5; font-size: 11.5px; }
+.topic-row:last-child { border-bottom: none; }
+.topic-name { color: var(--text); flex: 1; }
+.topic-pct  { font-weight: 700; font-size: 11px; }
+.topic-pct.good { color: var(--green); }
+.topic-pct.bad  { color: var(--red); }
+.topic-empty { padding: 10px 12px; font-size: 11px; color: var(--muted); font-style: italic; }
+
+.res-section-title { font-size: 12px; font-weight: 700; color: var(--navy); text-transform: uppercase; letter-spacing: .05em; padding: 8px 0; border-bottom: 2px solid var(--navy); margin-bottom: 10px; }
+.res-nav-dots { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; }
+.res-dot { width: 24px; height: 24px; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; cursor: pointer; background: #edf1f5; color: var(--muted); border: 1px solid #d0d8e0; transition: all .1s; }
+.res-dot:hover { background: #d8e4f0; }
+.res-dot.dot-c { background: #c8e6c9; color: var(--green); border-color: #a5d6a7; }
+.res-dot.dot-w { background: #ffcdd2; color: var(--red);   border-color: #ef9a9a; }
+.res-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.res-table th { background: var(--navy); color: white; padding: 7px 10px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+.res-table td { padding: 7px 10px; border-bottom: 1px solid #edf1f5; vertical-align: middle; }
+.res-table tr.tr-c { background: #f9fff9; }
+.res-table tr.tr-w { background: #fff9f9; }
+.td-text { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.td-time { font-family: monospace; color: var(--muted); }
+.tag-ok   { color: var(--green); font-weight: 700; }
+.tag-bad  { color: var(--red);   font-weight: 700; }
+.tag-skip { color: var(--muted); font-weight: 700; }
+.btn-review-item { padding: 3px 8px; font-size: 10px; border: 1px solid var(--border); border-radius: 2px; background: white; color: var(--navy); }
+.btn-review-item:hover { background: var(--navy); color: white; }
+.btn-flag-review { padding: 3px 8px; font-size: 10px; border: 1px solid var(--border); border-radius: 2px; background: white; }
+.btn-flag-review.flagged { background: #fff9c4; border-color: #f9a825; }
+.res-actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+
+/* Review panel */
+.rev-topbar { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; margin-bottom: 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; gap: 8px; }
+.rev-topbar-left  { display: flex; align-items: center; gap: 10px; }
+.rev-topbar-right { display: flex; gap: 6px; }
+.rev-counter { font-size: 12px; color: var(--muted); }
+.rev-test-name { font-size: 13px; font-weight: 700; color: var(--navy); }
+.btn-rev { padding: 5px 12px; font-size: 11px; border-radius: 3px; border: 1px solid var(--border); background: white; color: var(--navy); font-weight: 600; }
+.btn-rev:hover:not(:disabled) { background: var(--navy); color: white; }
+.btn-rev:disabled { opacity: .4; cursor: not-allowed; }
+.btn-rev.primary { background: var(--navy); color: white; border-color: var(--navy); }
+.btn-rev.primary:hover { background: #244d73; }
+
+/* ── Modals ────────────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.5);
+  display: none; align-items: center; justify-content: center;
+  z-index: 1000; padding: 20px;
+}
+.modal-overlay.show, .modal-overlay[style*="flex"] { display: flex; }
+.modal-box {
+  background: white; border-radius: 6px; padding: 24px;
+  max-width: 560px; width: 100%; max-height: 90vh; overflow-y: auto;
+  box-shadow: 0 8px 40px rgba(0,0,0,.25);
+}
+.modal-box h3 { font-size: 15px; font-weight: 700; color: var(--navy); margin-bottom: 14px; }
+.modal-box p  { font-size: 12.5px; color: var(--muted); margin-bottom: 12px; line-height: 1.6; }
+.modal-actions { display: flex; gap: 8px; margin-top: 18px; justify-content: flex-end; flex-wrap: wrap; }
+.btn-modal { padding: 7px 18px; font-size: 12px; font-weight: 600; border-radius: 3px; border: 1px solid var(--border); background: white; color: var(--navy); }
+.btn-modal:hover { background: #f5f7fa; }
+.btn-modal.primary { background: var(--navy); color: white; border-color: var(--navy); }
+.btn-modal.primary:hover { background: #244d73; }
+.btn-modal.danger  { background: var(--red);  color: white; border-color: var(--red); }
+.btn-modal.danger:hover { background: #a93226; }
+
+/* Form fields in modals */
+.form-group { margin-bottom: 12px; }
+.form-label { display: block; font-size: 11px; font-weight: 600; color: var(--navy); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em; }
+.form-input {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 3px;
+  font-size: 12.5px; outline: none; transition: border-color .12s;
+}
+.form-input:focus { border-color: var(--blue); }
+.form-hint { font-size: 10px; color: var(--muted); margin-top: 3px; }
+.form-textarea { width: 100%; min-height: 70px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 3px; font-size: 12px; outline: none; resize: vertical; }
+.form-textarea:focus { border-color: var(--blue); }
+
+/* OCR progress */
+.ocr-progress-bar { height: 8px; background: #e0e6ec; border-radius: 4px; overflow: hidden; margin: 12px 0; }
+.ocr-progress-fill { height: 100%; background: var(--blue); border-radius: 4px; transition: width .3s; }
+.ocr-status { font-size: 11px; color: var(--muted); text-align: center; margin-bottom: 4px; }
+.upload-zone {
+  border: 2px dashed var(--border); border-radius: 4px; padding: 18px;
+  text-align: center; background: #f8fafc; cursor: pointer;
+  transition: all .15s; margin-bottom: 8px;
+}
+.upload-zone:hover, .upload-zone.dragover { border-color: var(--blue); background: #f0f7ff; }
+.upload-zone.loaded { border-style: solid; border-color: var(--green); background: #f0f9f0; }
+.upload-zone input[type=file] { display: none; }
+.uz-icon  { font-size: 22px; margin-bottom: 5px; }
+.uz-title { font-size: 12px; font-weight: 700; color: var(--navy); margin-bottom: 2px; }
+.uz-desc  { font-size: 11px; color: var(--muted); }
+.uz-name  { font-size: 11px; color: var(--green); margin-top: 5px; font-style: italic; }
+
+/* Setup wizard */
+.wizard-step { display: none; }
+.wizard-step.active { display: block; }
+.wizard-steps-indicator { display: flex; gap: 6px; margin-bottom: 18px; }
+.wstep { flex: 1; height: 4px; background: #e0e6ec; border-radius: 2px; }
+.wstep.done { background: var(--green); }
+.wstep.active { background: var(--blue); }
+.wizard-step-title { font-size: 13px; font-weight: 700; color: var(--navy); margin-bottom: 8px; }
+.wizard-instruction { font-size: 12px; color: var(--text); line-height: 1.65; margin-bottom: 10px; }
+.wizard-instruction ol, .wizard-instruction ul { padding-left: 18px; }
+.wizard-instruction li { margin-bottom: 4px; }
+.wizard-instruction code { background: #e8ecf0; padding: 1px 5px; border-radius: 2px; font-family: monospace; font-size: 11px; }
+.wizard-instruction a { color: var(--blue); text-decoration: underline; }
+.wizard-note { background: #e3f2fd; border: 1px solid #90caf9; border-radius: 3px; padding: 8px 12px; font-size: 11px; color: #0d47a1; margin-bottom: 10px; line-height: 1.6; }
+
+/* Edit question modal */
+.edit-opt-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.edit-opt-letter { font-weight: 700; font-size: 12px; color: var(--navy); min-width: 20px; }
+.edit-opt-text { flex: 1; padding: 5px 8px; border: 1px solid var(--border); border-radius: 3px; font-size: 12px; outline: none; }
+.edit-opt-text:focus { border-color: var(--blue); }
+.edit-correct-lbl { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 3px; white-space: nowrap; }
+.edit-exp-row { margin-bottom: 8px; }
+.edit-exp-label { display: block; font-size: 11px; font-weight: 600; color: var(--navy); margin-bottom: 3px; }
+.edit-exp-text { width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 3px; font-size: 11.5px; outline: none; resize: vertical; }
+.edit-exp-text:focus { border-color: var(--blue); }
+
+/* Inline rename */
+.rename-input {
+  background: transparent; border: none; border-bottom: 1px solid var(--blue);
+  font-size: 12px; color: inherit; outline: none; width: 100%; padding: 1px 2px;
+}
+
+/* Toast */
+#toast {
+  position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%);
+  background: #263238; color: white; padding: 9px 18px;
+  border-radius: 4px; font-size: 12px; opacity: 0; pointer-events: none;
+  transition: opacity .25s; z-index: 9998;
+  box-shadow: 0 3px 12px rgba(0,0,0,.3);
+}
+#toast.show { opacity: 1; }
+
+/* Trash screen */
+.trash-item { display: flex; align-items: center; justify-content: space-between; background: white; border: 1px solid var(--border); border-radius: 3px; padding: 10px 14px; margin-bottom: 8px; }
+.trash-item-info .trash-name { font-size: 12px; font-weight: 700; color: var(--navy); }
+.trash-item-info .trash-meta { font-size: 11px; color: var(--muted); }
+.trash-item-actions { display: flex; gap: 6px; }
+
+/* Responsive */
+@media(max-width:700px) {
+  :root { --sidebar-w: 0px; }
+  #sidebar { display: none; }
+  #quiz-nav-panel { width: 160px; min-width: 160px; }
+}
+
+</style>
 </head>
 <body>
 <div id="app">
@@ -214,8 +743,8 @@
               <span class="rev-counter" id="rev-counter"></span>
             </div>
             <div class="rev-topbar-right">
-              <button class="btn-rev" id="rev-btn-flag" onclick="Results.toggleFlagReview(Results._reviewIdx||0)">🏳 Flag</button>
-              <button class="btn-rev" id="rev-btn-edit" onclick="">✏️ Edit</button>
+              <button class="btn-rev" id="rev-btn-flag" onclick="Results.toggleCurrentFlag()">🏳 Flag</button>
+              <button class="btn-rev" id="rev-btn-edit" onclick="Results.openEditFromReview()">✏️ Edit</button>
               <button class="btn-rev" id="rev-btn-prev" onclick="Results.reviewPrev()" disabled>◀ Prev</button>
               <button class="btn-rev primary" id="rev-btn-next" onclick="Results.reviewNext()">Next ▶</button>
             </div>
@@ -398,10 +927,2221 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-<script src="js/db.js"></script>
-<script src="js/ocr.js"></script>
-<script src="js/quiz.js"></script>
-<script src="js/results.js"></script>
-<script src="js/app.js"></script>
+<script>
+/* ============================================================
+   DB.JS — Storage Layer
+   Handles localStorage (primary) + Google Drive (sync)
+============================================================ */
+const DB = (() => {
+  const LOCAL_KEY = 'nbme_app_v1';
+
+  function defaultDB() {
+    return {
+      version: 1,
+      settings: {
+        googleClientId: null,
+        googleAccessToken: null,
+        googleTokenExpiry: null,
+        driveFileId: null,
+        setupComplete: false
+      },
+      folders: [],
+      tests: [],
+      trash: [],
+      flags: [],
+      history: []
+    };
+  }
+
+  function loadLocal() {
+    try {
+      const raw = localStorage.getItem(LOCAL_KEY);
+      if (!raw) return defaultDB();
+      return Object.assign(defaultDB(), JSON.parse(raw));
+    } catch(e) { return defaultDB(); }
+  }
+
+  function saveLocal(db) {
+    try { localStorage.setItem(LOCAL_KEY, JSON.stringify(db)); }
+    catch(e) {
+      if (e.name === 'QuotaExceededError' && typeof window.toast === 'function')
+        window.toast('⚠️ Storage almost full. Please export a backup.', 5000);
+    }
+  }
+
+  let _db = null;
+  function get() { if (!_db) _db = loadLocal(); return _db; }
+  function save() { if (_db) { saveLocal(_db); scheduleDriveSync(); } }
+
+  // ── Drive sync ─────────────────────────────────────────────
+  let _syncTimer = null;
+  function scheduleDriveSync() {
+    if (_syncTimer) clearTimeout(_syncTimer);
+    _syncTimer = setTimeout(() => syncToDrive(), 3000);
+  }
+
+  async function syncToDrive() {
+    const db = get();
+    if (!db.settings.setupComplete || !db.settings.googleAccessToken) return;
+    if (Date.now() > (db.settings.googleTokenExpiry || 0)) { updateSyncIndicator('offline'); return; }
+    try {
+      updateSyncIndicator('syncing');
+      const content = JSON.stringify(db);
+      if (db.settings.driveFileId) {
+        await fetch(`https://www.googleapis.com/upload/drive/v3/files/${db.settings.driveFileId}?uploadType=media`,
+          { method: 'PATCH', headers: { Authorization: `Bearer ${db.settings.googleAccessToken}`, 'Content-Type': 'application/json' }, body: content });
+      } else {
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify({ name: 'nbme_quiz_data.json', mimeType: 'application/json' })], { type: 'application/json' }));
+        form.append('file', new Blob([content], { type: 'application/json' }));
+        const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+          { method: 'POST', headers: { Authorization: `Bearer ${db.settings.googleAccessToken}` }, body: form });
+        const data = await resp.json();
+        db.settings.driveFileId = data.id;
+        saveLocal(db);
+      }
+      updateSyncIndicator('synced');
+    } catch(e) { updateSyncIndicator('error'); }
+  }
+
+  async function loadFromDrive(accessToken) {
+    const db = get();
+    if (!db.settings.driveFileId) return null;
+    try {
+      const resp = await fetch(`https://www.googleapis.com/drive/v3/files/${db.settings.driveFileId}?alt=media`,
+        { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (!resp.ok) return null;
+      const remote = await resp.json();
+      const localSettings = Object.assign({}, db.settings);
+      _db = Object.assign(defaultDB(), remote);
+      _db.settings = Object.assign(_db.settings, localSettings);
+      saveLocal(_db);
+      return _db;
+    } catch(e) { return null; }
+  }
+
+  async function googleSignIn() {
+    const db = get();
+    const clientId = db.settings.googleClientId;
+    if (!clientId) return false;
+    return new Promise(resolve => {
+      const redirectUri = window.location.href.split('?')[0].split('#')[0];
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${encodeURIComponent('https://www.googleapis.com/auth/drive.file')}&prompt=consent`;
+      const popup = window.open(authUrl, 'google_auth', 'width=500,height=600');
+      const iv = setInterval(() => {
+        try {
+          if (!popup || popup.closed) { clearInterval(iv); resolve(false); return; }
+          const hash = popup.location.hash;
+          if (hash && hash.includes('access_token')) {
+            popup.close(); clearInterval(iv);
+            const p = new URLSearchParams(hash.substring(1));
+            const token = p.get('access_token');
+            db.settings.googleAccessToken = token;
+            db.settings.googleTokenExpiry = Date.now() + parseInt(p.get('expires_in') || '3600') * 1000;
+            save(); resolve(true);
+          }
+        } catch(e) {}
+      }, 500);
+    });
+  }
+
+  function updateSyncIndicator(state) {
+    const el = document.getElementById('sync-indicator');
+    if (!el) return;
+    const s = { syncing: ['↻ Syncing…','#f0a500'], synced: ['✓ Synced','#27ae60'], error: ['⚠ Sync error','#e74c3c'], offline: ['● Local','#95a5a6'] }[state] || ['● Local','#95a5a6'];
+    el.textContent = s[0]; el.style.color = s[1];
+  }
+
+  function exportBackup() {
+    const blob = new Blob([JSON.stringify(get(), null, 2)], { type: 'application/json' });
+    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `nbme_backup_${new Date().toISOString().slice(0,10)}.json` });
+    a.click();
+  }
+
+  function importBackup(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => {
+        try { _db = Object.assign(defaultDB(), JSON.parse(e.target.result)); saveLocal(_db); resolve(_db); }
+        catch(err) { reject(err); }
+      };
+      reader.readAsText(file);
+    });
+  }
+
+  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+  // ── Folders ─────────────────────────────────────────────────
+  function getFolders() { return get().folders.sort((a,b) => (a.order||0) - (b.order||0)); }
+  function createFolder(name) {
+    const db = get();
+    const f = { id: uid(), name, createdAt: Date.now(), order: db.folders.length };
+    db.folders.push(f); save(); return f;
+  }
+  function renameFolder(id, name) { const f = get().folders.find(f=>f.id===id); if(f){f.name=name;save();} }
+  function deleteFolder(id) {
+    const db = get();
+    db.tests.filter(t=>t.folderId===id).forEach(t=>trashTest(t.id));
+    db.folders = db.folders.filter(f=>f.id!==id); save();
+  }
+
+  // ── Tests ────────────────────────────────────────────────────
+  function getTests(folderId) { return get().tests.filter(t=>t.folderId===folderId); }
+  function getTest(id) { return get().tests.find(t=>t.id===id) || null; }
+  function createTest(folderId, name, questions) {
+    const db = get();
+    const test = { id: uid(), folderId, name, status: 'not_started', questions, attempts: 0, currentAttempt: null, createdAt: Date.now() };
+    db.tests.push(test); save(); return test;
+  }
+  function updateTest(id, updates) {
+    const db = get(); const idx = db.tests.findIndex(t=>t.id===id);
+    if(idx>=0) { Object.assign(db.tests[idx], updates); save(); }
+  }
+  function renameTest(id, name) { updateTest(id, {name}); }
+  function trashTest(id) {
+    const db = get(); const idx = db.tests.findIndex(t=>t.id===id);
+    if(idx<0) return;
+    const test = db.tests.splice(idx,1)[0];
+    test.deletedAt = Date.now(); db.trash.push(test);
+    db.flags = db.flags.filter(f=>f.testId!==id); save();
+  }
+  function restoreTest(id) {
+    const db = get(); const idx = db.trash.findIndex(t=>t.id===id);
+    if(idx<0) return;
+    const test = db.trash.splice(idx,1)[0]; delete test.deletedAt;
+    if(!db.folders.find(f=>f.id===test.folderId) && db.folders.length) test.folderId = db.folders[0].id;
+    db.tests.push(test); save();
+  }
+  function emptyTrash() { get().trash = []; save(); }
+  function permanentDelete(id) { const db=get(); db.trash=db.trash.filter(t=>t.id!==id); save(); }
+
+  // ── Attempts ─────────────────────────────────────────────────
+  function saveAttempt(testId, attempt) {
+    const db = get(); const test = db.tests.find(t=>t.id===testId);
+    if(!test) return;
+    test.currentAttempt = attempt;
+    test.status = attempt ? 'in_progress' : 'not_started'; save();
+  }
+  function finishAttempt(testId, results, totSecs, mode) {
+    const db = get(); const test = db.tests.find(t=>t.id===testId);
+    if(!test) return;
+    test.attempts = (test.attempts||0)+1; test.status = 'completed'; test.currentAttempt = null;
+    const score = results.filter(r=>r.correct).length;
+    const entry = { id:uid(), testId, attemptNum:test.attempts, date:Date.now(), mode, score, total:test.questions.length, totSecs, results };
+    db.history.push(entry); save(); return entry;
+  }
+  function getHistory(testId) { return get().history.filter(h=>h.testId===testId).sort((a,b)=>b.date-a.date); }
+
+  // ── Flags ─────────────────────────────────────────────────────
+  function getFlags(folderId) {
+    const db=get(); const ids=db.tests.filter(t=>t.folderId===folderId).map(t=>t.id);
+    return db.flags.filter(f=>ids.includes(f.testId));
+  }
+  function addFlag(testId, questionId) {
+    const db=get();
+    if(db.flags.find(f=>f.testId===testId&&f.questionId===questionId)) return;
+    db.flags.push({id:uid(),testId,questionId,createdAt:Date.now()}); save();
+  }
+  function removeFlag(testId, questionId) { const db=get(); db.flags=db.flags.filter(f=>!(f.testId===testId&&f.questionId===questionId)); save(); }
+  function isFlagged(testId, questionId) { return !!get().flags.find(f=>f.testId===testId&&f.questionId===questionId); }
+
+  return { get, save, uid, googleSignIn, loadFromDrive, syncToDrive, updateSyncIndicator,
+    exportBackup, importBackup, getFolders, createFolder, renameFolder, deleteFolder,
+    getTests, getTest, createTest, updateTest, renameTest, trashTest, restoreTest, emptyTrash, permanentDelete,
+    saveAttempt, finishAttempt, getHistory, getFlags, addFlag, removeFlag, isFlagged };
+})();
+window.DB = DB;
+
+</script>
+<script>
+/* ============================================================
+   OCR.JS — Tesseract-based PDF extraction + question parser
+   Handles image-based PDFs, fuzzy matching, auto-tagging
+============================================================ */
+const OCR = (() => {
+
+  // ── PDF → Images using PDF.js ───────────────────────────────
+  async function pdfToImages(file, onProgress) {
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    const images = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const scale = 2.0; // higher = better OCR accuracy
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d');
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      images.push({ pageNum: i, dataUrl: canvas.toDataURL('image/png') });
+      if (onProgress) onProgress(i, pdf.numPages, 'Rendering PDF pages');
+    }
+    return images;
+  }
+
+  // ── OCR a single image with Tesseract ──────────────────────
+  async function ocrImage(dataUrl, worker) {
+    const result = await worker.recognize(dataUrl);
+    return result.data.text;
+  }
+
+  // ── Full PDF OCR pipeline ───────────────────────────────────
+  async function extractTextFromPDF(file, onProgress) {
+    if (onProgress) onProgress(0, 100, 'Loading PDF…');
+    const images = await pdfToImages(file, (i, total) => {
+      if (onProgress) onProgress(Math.round((i/total)*40), 100, `Rendering page ${i}/${total}…`);
+    });
+
+    // Init Tesseract worker
+    if (onProgress) onProgress(42, 100, 'Initializing OCR engine…');
+    const worker = await Tesseract.createWorker('eng', 1, {
+      logger: m => {
+        if (onProgress && m.status === 'recognizing text') {
+          // m.progress is 0-1 per page; we scale to remaining 50%
+        }
+      }
+    });
+
+    const pages = [];
+    for (let i = 0; i < images.length; i++) {
+      if (onProgress) onProgress(42 + Math.round((i/images.length)*50), 100, `OCR page ${i+1}/${images.length}…`);
+      const text = await ocrImage(images[i].dataUrl, worker);
+      pages.push({ pageNum: images[i].pageNum, text });
+    }
+
+    await worker.terminate();
+    if (onProgress) onProgress(95, 100, 'Parsing questions…');
+    return pages;
+  }
+
+  // ── Parse question bank pages ──────────────────────────────
+  function parseQuestionBank(pages) {
+    const fullText = pages.map(p => p.text).join('\n\n--- PAGE BREAK ---\n\n');
+    const questions = [];
+
+    // Split on question number patterns: "1.", "1)", "Question 1", etc.
+    const qPattern = /(?:^|\n)\s*(\d{1,3})[.)]\s+([\s\S]*?)(?=\n\s*\d{1,3}[.)]\s+|\n\s*(?:Question\s+\d)|$)/gi;
+    const optPattern = /^\s*([A-Ga-g])[.)]\s+(.+)/;
+
+    let match;
+    while ((match = qPattern.exec(fullText)) !== null) {
+      const num = parseInt(match[1]);
+      const block = match[2].trim();
+      const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+
+      let stemLines = [];
+      let options = [];
+      let inOptions = false;
+
+      for (const line of lines) {
+        const optMatch = line.match(optPattern);
+        if (optMatch) {
+          inOptions = true;
+          options.push({ l: optMatch[1].toUpperCase(), t: optMatch[2].trim() });
+        } else if (!inOptions) {
+          stemLines.push(line);
+        } else if (options.length > 0) {
+          // Continuation of previous option
+          options[options.length - 1].t += ' ' + line;
+        }
+      }
+
+      if (options.length >= 2) {
+        questions.push({
+          n: num,
+          t: stemLines.join(' ').replace(/^\d+[.)]\s*/, '').trim(),
+          o: options,
+          c: '', // filled by answer key
+          e: {},
+          tags: [],
+          highlights: {},
+          strikethrough: []
+        });
+      }
+    }
+
+    return questions.sort((a, b) => a.n - b.n);
+  }
+
+  // ── Parse answer key pages ─────────────────────────────────
+  function parseAnswerKey(pages) {
+    const fullText = pages.map(p => p.text).join('\n\n--- PAGE BREAK ---\n\n');
+    const answers = {};
+
+    // Pattern: question block with "Correct Answer: X" or highlighted answer
+    const qPattern = /(?:^|\n)\s*(\d{1,3})[.)]\s+([\s\S]*?)(?=\n\s*\d{1,3}[.)]\s+|$)/gi;
+    const optPattern = /^\s*([A-Ga-g])[.)]\s+(.+)/;
+    const correctPattern = /correct\s+answer[:\s]+([A-Ga-g])/i;
+    const expPattern = /^\s*([A-Ga-g])[.)]\s*[-–:]\s*(.+)/;
+
+    let match;
+    while ((match = qPattern.exec(fullText)) !== null) {
+      const num = parseInt(match[1]);
+      const block = match[2];
+      const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+
+      let correct = null;
+      const explanations = {};
+      const options = [];
+
+      // Find explicit "Correct Answer: X"
+      const caMatch = block.match(correctPattern);
+      if (caMatch) correct = caMatch[1].toUpperCase();
+
+      let inExplanations = false;
+      let lastOptLetter = null;
+
+      for (const line of lines) {
+        // Skip "Correct Answer: X" lines
+        if (/correct\s+answer/i.test(line)) continue;
+
+        const optMatch = line.match(optPattern);
+        const expMatch = line.match(expPattern);
+
+        if (optMatch) {
+          const letter = optMatch[1].toUpperCase();
+          options.push({ l: letter, t: optMatch[2].trim() });
+          lastOptLetter = letter;
+          inExplanations = true;
+        } else if (expMatch && inExplanations) {
+          const letter = expMatch[1].toUpperCase();
+          explanations[letter] = expMatch[2].trim();
+          lastOptLetter = letter;
+        } else if (inExplanations && lastOptLetter && line.length > 5) {
+          // Continuation of last explanation
+          explanations[lastOptLetter] = ((explanations[lastOptLetter] || '') + ' ' + line).trim();
+        }
+      }
+
+      // Strategy to find correct answer if not explicit
+      if (!correct) {
+        // S1: Check for "This is correct" / "Correct." in explanations
+        for (const [letter, exp] of Object.entries(explanations)) {
+          if (/^(correct[.!]|this is (the )?correct|right[.!]|yes[.!])/i.test(exp.trim())) {
+            correct = letter; break;
+          }
+        }
+      }
+      if (!correct) {
+        // S2: Longest explanation heuristic
+        let maxLen = -1;
+        for (const [letter, exp] of Object.entries(explanations)) {
+          if (exp.length > maxLen) { maxLen = exp.length; correct = letter; }
+        }
+      }
+      if (!correct && options.length > 0) correct = options[0].l;
+
+      answers[num] = { correct, explanations };
+    }
+
+    return answers;
+  }
+
+  // ── Fuzzy string similarity ────────────────────────────────
+  function similarity(a, b) {
+    a = a.toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 100);
+    b = b.toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 100);
+    if (a === b) return 1;
+    if (a.length === 0 || b.length === 0) return 0;
+
+    // Levenshtein distance
+    const m = a.length, n = b.length;
+    const dp = Array.from({length: m+1}, (_, i) => Array.from({length: n+1}, (_, j) => i === 0 ? j : j === 0 ? i : 0));
+    for (let i = 1; i <= m; i++)
+      for (let j = 1; j <= n; j++)
+        dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+
+    return 1 - dp[m][n] / Math.max(m, n);
+  }
+
+  // ── Match questions to answers ─────────────────────────────
+  function matchQuestionsToAnswers(questions, answerMap) {
+    const matched = [];
+
+    for (const q of questions) {
+      // Primary: exact number match
+      if (answerMap[q.n]) {
+        matched.push({ ...q, c: answerMap[q.n].correct || q.o[0].l, e: answerMap[q.n].explanations || {} });
+        continue;
+      }
+
+      // Fallback: find best matching answer by question stem similarity
+      let best = null, bestScore = 0;
+      for (const [num, ans] of Object.entries(answerMap)) {
+        // We don't have the Q text in answerMap, so skip fuzzy for now
+        // Just use the number
+      }
+
+      // No match found — use first option as correct placeholder
+      matched.push({ ...q, c: q.o[0]?.l || 'A', e: {}, _needsReview: true });
+    }
+
+    return matched;
+  }
+
+  // ── Auto-tagging ───────────────────────────────────────────
+  const TAG_RULES = [
+    // Mood Disorders
+    { tag: 'Mood Disorders', keywords: ['depressive disorder', 'major depressive', 'depression', 'dysthymi', 'bipolar', 'manic', 'hypomania', 'cyclothymi', 'adjustment disorder', 'bereavement'] },
+    // Psychotic Disorders
+    { tag: 'Psychotic Disorders', keywords: ['schizophrenia', 'schizophreniform', 'schizoaffective', 'delusional disorder', 'brief psychotic', 'psychosis', 'hallucination', 'delusion', 'disorganized'] },
+    // Anxiety Disorders
+    { tag: 'Anxiety Disorders', keywords: ['anxiety', 'panic disorder', 'panic attack', 'generalized anxiety', 'social anxiety', 'phobia', 'agoraphobia', 'OCD', 'obsessive', 'compulsive', 'PTSD', 'post-traumatic', 'acute stress'] },
+    // Somatic / Functional
+    { tag: 'Somatic Disorders', keywords: ['somatic', 'somatization', 'hypochondria', 'illness anxiety', 'conversion disorder', 'functional neurologic', 'factitious', 'malingering', 'body dysmorphic'] },
+    // Substance Use
+    { tag: 'Substance Use', keywords: ['alcohol', 'substance', 'withdrawal', 'intoxication', 'opioid', 'heroin', 'cocaine', 'amphetamine', 'methamphetamine', 'benzodiazepine', 'marijuana', 'cannabis', 'PCP', 'LSD', 'naltrexone', 'disulfiram', 'methadone', 'buprenorphine'] },
+    // Personality Disorders
+    { tag: 'Personality Disorders', keywords: ['personality disorder', 'borderline', 'antisocial', 'narcissistic', 'histrionic', 'paranoid personality', 'schizoid', 'schizotypal', 'avoidant', 'dependent', 'obsessive-compulsive personality'] },
+    // Neurocognitive
+    { tag: 'Neurocognitive Disorders', keywords: ['dementia', 'delirium', 'alzheimer', 'vascular dementia', 'frontotemporal', 'lewy body', 'normal pressure hydrocephalus', 'cognitive impairment', 'memory loss', 'confabulation', 'korsakoff', 'wernicke'] },
+    // Pediatric / Developmental
+    { tag: 'Pediatric & Developmental', keywords: ['child', 'adolescent', 'autism', 'ADHD', 'attention deficit', 'intellectual disability', 'conduct disorder', 'oppositional', 'separation anxiety', 'enuresis', 'tic', 'Tourette', 'fragile X', 'down syndrome', 'developmental'] },
+    // Sleep Disorders
+    { tag: 'Sleep Disorders', keywords: ['insomnia', 'sleep apnea', 'narcolepsy', 'polysomnography', 'REM sleep', 'nightmare disorder', 'sleepwalking', 'parasomnia', 'circadian'] },
+    // Sexual & Gender
+    { tag: 'Sexual Disorders', keywords: ['sexual dysfunction', 'erectile', 'premature ejaculation', 'vaginismus', 'vulvodynia', 'paraphilia', 'gender dysphoria', 'libido'] },
+    // Pharmacology
+    { tag: 'Pharmacology', keywords: ['SSRI', 'SNRI', 'TCA', 'tricyclic', 'MAOI', 'antidepressant', 'antipsychotic', 'haloperidol', 'risperidone', 'olanzapine', 'clozapine', 'quetiapine', 'aripiprazole', 'lithium', 'valproate', 'carbamazepine', 'benzodiazepine', 'lorazepam', 'diazepam', 'buspirone', 'sertraline', 'fluoxetine', 'paroxetine', 'bupropion', 'mirtazapine', 'venlafaxine', 'duloxetine', 'naltrexone', 'disulfiram', 'methadone', 'methylphenidate', 'amphetamine salts'] },
+    // Mechanisms
+    { tag: 'Mechanisms & Neuroscience', keywords: ['dopamine', 'serotonin', 'norepinephrine', 'GABA', 'glutamate', 'receptor', 'reuptake', 'monoamine', 'limbic', 'prefrontal', 'neurotransmitter', 'synapse', 'pharmacokinetic'] },
+    // Ethics & Legal
+    { tag: 'Ethics & Legal', keywords: ['capacity', 'competence', 'informed consent', 'autonomy', 'confidentiality', 'tarasoff', 'duty to warn', 'involuntary', 'power of attorney', 'advance directive', 'ethics', 'beneficence', 'maleficence', 'justice', 'mandatory report'] },
+    // Eating Disorders
+    { tag: 'Eating Disorders', keywords: ['anorexia', 'bulimia', 'binge eating', 'purging', 'laxative', 'BMI', 'eating disorder', 'amenorrhea secondary to'] },
+  ];
+
+  function autoTag(questionText, options) {
+    const text = (questionText + ' ' + options.map(o => o.t).join(' ')).toLowerCase();
+    const tags = [];
+    for (const rule of TAG_RULES) {
+      if (rule.keywords.some(kw => text.includes(kw.toLowerCase()))) {
+        tags.push(rule.tag);
+      }
+    }
+    return [...new Set(tags)]; // deduplicate
+  }
+
+  // ── Main pipeline entry point ──────────────────────────────
+  async function processTestPDFs(questionFile, answerFile, onProgress) {
+    // Step 1: OCR both PDFs
+    onProgress && onProgress(0, 100, 'Reading Question Bank…');
+    const qPages = await extractTextFromPDF(questionFile, (p, t, msg) => {
+      onProgress && onProgress(Math.round(p * 0.45), 100, msg);
+    });
+
+    onProgress && onProgress(45, 100, 'Reading Answer Key…');
+    const aPages = await extractTextFromPDF(answerFile, (p, t, msg) => {
+      onProgress && onProgress(45 + Math.round(p * 0.45), 100, msg);
+    });
+
+    // Step 2: Parse
+    onProgress && onProgress(91, 100, 'Parsing questions…');
+    const questions = parseQuestionBank(qPages);
+
+    onProgress && onProgress(93, 100, 'Parsing answer key…');
+    const answerMap = parseAnswerKey(aPages);
+
+    // Step 3: Match
+    onProgress && onProgress(95, 100, 'Matching questions to answers…');
+    const matched = matchQuestionsToAnswers(questions, answerMap);
+
+    // Step 4: Auto-tag
+    onProgress && onProgress(97, 100, 'Auto-tagging topics…');
+    matched.forEach(q => { q.tags = autoTag(q.t, q.o); });
+
+    onProgress && onProgress(100, 100, 'Done!');
+    return matched;
+  }
+
+  return { processTestPDFs, autoTag, similarity };
+})();
+window.OCR = OCR;
+
+</script>
+<script>
+/* ============================================================
+   QUIZ.JS — Test-taking engine
+   Handles state, timers, mode switching, navigation
+============================================================ */
+const Quiz = (() => {
+
+  // ── State ──────────────────────────────────────────────────
+  let state = null;
+  /*
+  state = {
+    testId, mode ('tutor'|'exam'), qIdx,
+    results: [{answered, correct, chosen, time, highlights, strikethrough}],
+    marks: Set of indices,
+    totSecs, qSecs, paused,
+    totTimerRef, qTimerRef
+  }
+  */
+
+  // ── Timer helpers ──────────────────────────────────────────
+  function startTotalTimer() {
+    if (state.totTimerRef) clearInterval(state.totTimerRef);
+    const base = Date.now() - state.totSecs * 1000;
+    state.totTimerRef = setInterval(() => {
+      state.totSecs = Math.floor((Date.now() - base) / 1000);
+      renderTotalTimer();
+    }, 500);
+  }
+
+  function startQTimer() {
+    stopQTimer();
+    state.qSecs = 0;
+    const start = Date.now();
+    state.qTimerRef = setInterval(() => {
+      state.qSecs = Math.floor((Date.now() - start) / 1000);
+      renderQTimer();
+    }, 500);
+  }
+
+  function stopQTimer() {
+    if (state.qTimerRef) { clearInterval(state.qTimerRef); state.qTimerRef = null; }
+    return state.qSecs || 0;
+  }
+
+  function stopAllTimers() {
+    if (state.totTimerRef) { clearInterval(state.totTimerRef); state.totTimerRef = null; }
+    stopQTimer();
+  }
+
+  function renderTotalTimer() {
+    const el = document.getElementById('timer-total');
+    if (el) el.textContent = fmtTime(state.totSecs);
+  }
+
+  function renderQTimer() {
+    const el = document.getElementById('timer-q');
+    if (!el) return;
+    const s = state.qSecs || 0;
+    el.textContent = fmtTime(s);
+    el.classList.toggle('timer-warn', s >= 90);
+    el.classList.toggle('timer-red', s >= 120);
+  }
+
+  function fmtTime(s) {
+    const m = Math.floor(s / 60);
+    return `${String(m).padStart(2,'0')}:${String(s % 60).padStart(2,'0')}`;
+  }
+
+  // ── Start / Resume ─────────────────────────────────────────
+  function startTest(testId) {
+    const test = DB.getTest(testId);
+    if (!test) return;
+
+    // Check if there's a saved in-progress attempt
+    if (test.status === 'in_progress' && test.currentAttempt) {
+      showResumeDialog(testId, test.currentAttempt);
+      return;
+    }
+
+    initState(testId, test.questions, 'tutor');
+  }
+
+  function showResumeDialog(testId, saved) {
+    const test = DB.getTest(testId);
+    const modal = document.getElementById('modal-resume');
+    if (modal) {
+      modal.querySelector('.resume-test-name').textContent = test.name;
+      modal.querySelector('.resume-q-info').textContent =
+        `Question ${saved.qIdx + 1} of ${test.questions.length} · ${fmtTime(saved.totSecs || 0)} elapsed`;
+      modal.style.display = 'flex';
+      modal.querySelector('.btn-resume').onclick = () => { modal.style.display = 'none'; resumeTest(testId, saved); };
+      modal.querySelector('.btn-restart').onclick = () => { modal.style.display = 'none'; initState(testId, test.questions, saved.mode || 'tutor'); };
+    } else {
+      if (confirm(`Resume from Question ${saved.qIdx + 1}?`)) resumeTest(testId, saved);
+      else initState(testId, test.questions, saved.mode || 'tutor');
+    }
+  }
+
+  function initState(testId, questions, mode) {
+    state = {
+      testId, mode, qIdx: 0,
+      results: questions.map(() => ({ answered: false, correct: false, chosen: null, time: 0, highlights: {}, strikethrough: [] })),
+      marks: new Set(),
+      totSecs: 0, qSecs: 0,
+      totTimerRef: null, qTimerRef: null,
+      paused: false
+    };
+    startTotalTimer();
+    renderQuiz();
+  }
+
+  function resumeTest(testId, saved) {
+    const test = DB.getTest(testId);
+    state = {
+      testId, mode: saved.mode || 'tutor', qIdx: saved.qIdx || 0,
+      results: saved.results || test.questions.map(() => ({ answered: false, correct: false, chosen: null, time: 0, highlights: {}, strikethrough: [] })),
+      marks: new Set(saved.marks || []),
+      totSecs: saved.totSecs || 0, qSecs: 0,
+      totTimerRef: null, qTimerRef: null,
+      paused: false
+    };
+    startTotalTimer();
+    renderQuiz();
+    window.toast('Test resumed ✓', 2000);
+  }
+
+  // ── Persist current state ──────────────────────────────────
+  function persistState() {
+    if (!state) return;
+    DB.saveAttempt(state.testId, {
+      mode: state.mode, qIdx: state.qIdx,
+      results: state.results,
+      marks: [...state.marks],
+      totSecs: state.totSecs
+    });
+  }
+
+  // ── Pause ──────────────────────────────────────────────────
+  function pauseTest() {
+    if (!state) return;
+    stopAllTimers();
+    state.paused = true;
+    persistState();
+    document.getElementById('overlay-pause').style.display = 'flex';
+    document.getElementById('pause-info').textContent =
+      `Q${state.qIdx + 1} of ${getTest().questions.length} · Score: ${getScore()}/${getAnswered()} · ${fmtTime(state.totSecs)}`;
+  }
+
+  function unpauseTest() {
+    if (!state) return;
+    document.getElementById('overlay-pause').style.display = 'none';
+    state.paused = false;
+    startTotalTimer();
+    if (!state.results[state.qIdx].answered) startQTimer();
+    else stopQTimer();
+  }
+
+  // ── Answer selection ───────────────────────────────────────
+  function selectAnswer(letter) {
+    if (!state) return;
+    const r = state.results[state.qIdx];
+    if (r.answered) return;
+    const elapsed = stopQTimer();
+    const q = getQuestion();
+    const ok = letter === q.c;
+    r.answered = true; r.correct = ok; r.chosen = letter; r.time = elapsed;
+    persistState();
+
+    if (state.mode === 'tutor') {
+      renderOptions(); renderExplanation();
+    } else {
+      renderOptions(); // show selection + right/wrong in nav
+    }
+    updateNavPanel();
+    renderScoreLive();
+  }
+
+  // ── Navigation ─────────────────────────────────────────────
+  function goTo(idx) {
+    if (!state) return;
+    const q_count = getTest().questions.length;
+    if (idx < 0 || idx >= q_count) return;
+    // Save time for current if unanswered
+    if (!state.results[state.qIdx].answered) {
+      state.results[state.qIdx].time = state.qSecs;
+    }
+    stopQTimer();
+    state.qIdx = idx;
+    renderQuestion();
+    persistState();
+  }
+
+  function nextQ() { goTo(state.qIdx + 1); }
+  function prevQ() { goTo(state.qIdx - 1); }
+
+  // ── Mode toggle ────────────────────────────────────────────
+  function setMode(newMode) {
+    if (!state || state.mode === newMode) return;
+    state.mode = newMode;
+    // If switching Exam→Tutor and current Q is answered → show explanation
+    // If switching Tutor→Exam → hide explanations (renderExplanation handles this)
+    renderQuestion();
+    persistState();
+  }
+
+  // ── Finish test ────────────────────────────────────────────
+  function finishTest() {
+    if (!state) return;
+    stopAllTimers();
+    const entry = DB.finishAttempt(state.testId, state.results, state.totSecs, state.mode);
+    window.Results && window.Results.show(state.testId, entry, state.results, getTest().questions);
+    state = null;
+  }
+
+  // ── Flag / Mark ────────────────────────────────────────────
+  function toggleFlag(qIdx) {
+    if (!state) return;
+    const q = getTest().questions[qIdx];
+    if (DB.isFlagged(state.testId, q.n)) DB.removeFlag(state.testId, q.n);
+    else DB.addFlag(state.testId, q.n);
+    updateNavPanel();
+    renderFlagButton();
+  }
+
+  function toggleMark(qIdx) {
+    if (!state) return;
+    if (state.marks.has(qIdx)) state.marks.delete(qIdx);
+    else state.marks.add(qIdx);
+    updateNavPanel();
+    persistState();
+  }
+
+  // ── Strikethrough ──────────────────────────────────────────
+  function toggleStrike(qIdx, letter) {
+    if (!state) return;
+    const st = state.results[qIdx].strikethrough;
+    const i = st.indexOf(letter);
+    if (i >= 0) st.splice(i, 1); else st.push(letter);
+    persistState();
+    renderOptions();
+  }
+
+  // ── Highlight ──────────────────────────────────────────────
+  function saveHighlight(qIdx, htmlContent) {
+    if (!state) return;
+    state.results[qIdx].highlights = { html: htmlContent };
+    persistState();
+  }
+
+  // ── Helpers ────────────────────────────────────────────────
+  function getTest()     { return DB.getTest(state.testId); }
+  function getQuestion() { return getTest().questions[state.qIdx]; }
+  function getScore()    { return state.results.filter(r => r.correct).length; }
+  function getAnswered() { return state.results.filter(r => r.answered).length; }
+
+  // ── Render: full question screen ───────────────────────────
+  function renderQuiz() {
+    const screen = document.getElementById('screen-quiz');
+    if (!screen) return;
+    screen.style.display = 'flex';
+    document.getElementById('screen-home').style.display = 'none';
+    document.getElementById('screen-results') && (document.getElementById('screen-results').style.display = 'none');
+
+    updateTestHeader();
+    renderQuestion();
+    updateNavPanel();
+    startQTimer();
+  }
+
+  function renderQuestion() {
+    const q = getQuestion();
+    const r = state.results[state.qIdx];
+    const test = getTest();
+
+    // Header info
+    document.getElementById('quiz-test-name').textContent = test.name;
+    document.getElementById('quiz-q-num').textContent = `Item ${state.qIdx + 1} of ${test.questions.length}`;
+
+    // Stem
+    const stemEl = document.getElementById('q-stem');
+    if (r.highlights && r.highlights.html) {
+      stemEl.innerHTML = r.highlights.html;
+    } else {
+      stemEl.textContent = q.t;
+    }
+
+    // Tags
+    const tagEl = document.getElementById('q-tags');
+    if (tagEl && q.tags && q.tags.length) {
+      tagEl.innerHTML = q.tags.map(t => `<span class="q-tag">${t}</span>`).join('');
+      tagEl.style.display = 'flex';
+    } else if (tagEl) {
+      tagEl.style.display = 'none';
+    }
+
+    renderOptions();
+    renderExplanation();
+    renderFlagButton();
+    updateModeToggle();
+
+    // Restart Q timer only if unanswered
+    if (!r.answered) {
+      startQTimer();
+    } else {
+      stopQTimer();
+      renderQTimer();
+    }
+
+    // Prev/Next buttons
+    const prevBtn = document.getElementById('btn-prev');
+    const nextBtn = document.getElementById('btn-next');
+    const finBtn  = document.getElementById('btn-finish');
+    if (prevBtn) prevBtn.disabled = state.qIdx === 0;
+    if (nextBtn) nextBtn.style.display = state.qIdx < test.questions.length - 1 ? 'inline-flex' : 'none';
+    if (finBtn)  finBtn.style.display  = state.qIdx === test.questions.length - 1 ? 'inline-flex' : 'none';
+
+    renderScoreLive();
+  }
+
+  function renderOptions() {
+    if (!state) return;
+    const q = getQuestion();
+    const r = state.results[state.qIdx];
+    const container = document.getElementById('options-list');
+    if (!container) return;
+    container.innerHTML = '';
+
+    q.o.forEach(opt => {
+      const isChosen  = r.chosen === opt.l;
+      const isCorrect = q.c === opt.l;
+      const isStriken = r.strikethrough.includes(opt.l);
+
+      const div = document.createElement('div');
+      div.className = 'opt-row';
+      div.dataset.letter = opt.l;
+
+      // State classes
+      if (r.answered) {
+        if (isCorrect)         div.classList.add('opt-correct');
+        else if (isChosen)     div.classList.add('opt-wrong');
+      } else if (isChosen)     div.classList.add('opt-selected');
+      if (isStriken)           div.classList.add('opt-striken');
+
+      div.innerHTML = `
+        <div class="opt-selector" data-letter="${opt.l}">
+          <div class="opt-radio">${isChosen || (r.answered && isCorrect) ? '<div class="opt-radio-dot"></div>' : ''}</div>
+          <span class="opt-letter">${opt.l})</span>
+        </div>
+        <div class="opt-text" data-letter="${opt.l}">${opt.t}</div>
+        <div class="opt-indicator">
+          ${r.answered && isCorrect ? '<span class="ind-correct">✓</span>' : ''}
+          ${r.answered && isChosen && !isCorrect ? '<span class="ind-wrong">✗</span>' : ''}
+        </div>`;
+
+      // Click selector (radio + letter) → select answer
+      div.querySelector('.opt-selector').addEventListener('click', () => {
+        if (!r.answered) selectAnswer(opt.l);
+      });
+
+      // Right-click or click text body → strikethrough
+      div.querySelector('.opt-text').addEventListener('click', e => {
+        e.preventDefault();
+        toggleStrike(state.qIdx, opt.l);
+      });
+      div.querySelector('.opt-text').addEventListener('contextmenu', e => {
+        e.preventDefault();
+        toggleStrike(state.qIdx, opt.l);
+      });
+
+      container.appendChild(div);
+    });
+  }
+
+  function renderExplanation() {
+    if (!state) return;
+    const panel = document.getElementById('exp-panel');
+    if (!panel) return;
+    const q = getQuestion();
+    const r = state.results[state.qIdx];
+
+    // Show explanations: in tutor mode if answered, in exam mode NEVER during test (only in review)
+    const showExp = state.mode === 'tutor' && r.answered;
+    panel.style.display = showExp ? 'block' : 'none';
+    if (!showExp) return;
+
+    const body = document.getElementById('exp-body');
+    body.innerHTML = '';
+    q.o.forEach(opt => {
+      const isCorrect = q.c === opt.l;
+      const isChosen  = r.chosen === opt.l;
+      const div = document.createElement('div');
+      div.className = 'exp-item' + (isCorrect ? ' exp-correct' : '');
+      div.innerHTML = `
+        <div class="exp-header">
+          <strong>${opt.l}) ${opt.t}</strong>
+          ${isCorrect ? '<span class="exp-badge-correct">✓ Correct</span>' : ''}
+          ${isChosen && !isCorrect ? '<span class="exp-badge-wrong">✗ Your Answer</span>' : ''}
+        </div>
+        ${q.e && q.e[opt.l] ? `<div class="exp-text">${q.e[opt.l]}</div>` : ''}`;
+      body.appendChild(div);
+    });
+  }
+
+  function renderFlagButton() {
+    if (!state) return;
+    const btn = document.getElementById('btn-flag');
+    if (!btn) return;
+    const q = getQuestion();
+    const flagged = DB.isFlagged(state.testId, q.n);
+    btn.classList.toggle('flagged', flagged);
+    btn.title = flagged ? 'Remove flag' : 'Flag for review';
+    btn.textContent = flagged ? '🚩 Flagged' : '🏳 Flag';
+  }
+
+  function updateNavPanel() {
+    if (!state) return;
+    const panel = document.getElementById('nav-panel');
+    if (!panel) return;
+    const test = getTest();
+    panel.innerHTML = '';
+    test.questions.forEach((q, i) => {
+      const r = state.results[i];
+      const div = document.createElement('div');
+      div.className = 'nav-dot';
+      div.textContent = i + 1;
+      div.title = `Q${i+1}`;
+      if (i === state.qIdx) div.classList.add('nav-current');
+      if (r.answered) {
+        div.classList.add(r.correct ? 'nav-correct' : 'nav-wrong');
+      }
+      if (state.marks.has(i)) div.classList.add('nav-marked');
+      if (DB.isFlagged(state.testId, q.n)) div.classList.add('nav-flagged');
+      div.addEventListener('click', () => goTo(i));
+      panel.appendChild(div);
+    });
+  }
+
+  function renderScoreLive() {
+    const el = document.getElementById('score-live');
+    if (!el || !state) return;
+    const ans = getAnswered(), sc = getScore();
+    const pct = ans > 0 ? Math.round(sc/ans*100) : 0;
+    el.textContent = `${sc}/${ans} (${pct}%)`;
+  }
+
+  function updateTestHeader() {
+    const test = getTest();
+    const el = document.getElementById('quiz-test-name');
+    if (el) el.textContent = test.name;
+  }
+
+  function updateModeToggle() {
+    const btn = document.getElementById('btn-mode-toggle');
+    if (!btn || !state) return;
+    btn.textContent = state.mode === 'tutor' ? '📖 Tutor' : '📝 Exam';
+    btn.classList.toggle('mode-exam', state.mode === 'exam');
+  }
+
+  // ── Public API ─────────────────────────────────────────────
+  return {
+    startTest, pauseTest, unpauseTest, finishTest,
+    goTo, nextQ, prevQ, setMode,
+    toggleFlag, toggleMark, toggleStrike, saveHighlight,
+    renderQuestion, renderOptions, renderExplanation,
+    updateNavPanel, renderScoreLive,
+    getState: () => state,
+    getScore, getAnswered, fmtTime
+  };
+})();
+window.Quiz = Quiz;
+
+</script>
+<script>
+/* ============================================================
+   RESULTS.JS — Score report, analytics, review mode
+============================================================ */
+const Results = (() => {
+
+  let _testId = null;
+  let _entry  = null;
+  let _results = null;
+  let _questions = null;
+  let _reviewIdx = 0;
+  let _inReview  = false;
+
+  function show(testId, entry, results, questions) {
+    _testId = testId; _entry = entry; _results = results; _questions = questions;
+    _inReview = false;
+    document.getElementById('screen-quiz').style.display    = 'none';
+    document.getElementById('screen-home').style.display    = 'none';
+    const s = document.getElementById('screen-results');
+    s.style.display = 'flex';
+    buildReport();
+  }
+
+  function buildReport() {
+    const total   = _questions.length;
+    const score   = _entry.score;
+    const pct     = Math.round(score / total * 100);
+    const skipped = _results.filter(r => r.chosen === null).length;
+    const wrong   = _results.filter(r => r.answered && !r.correct).length;
+    const avgTime = Math.round(_results.reduce((a,r) => a + r.time, 0) / total);
+    const test    = DB.getTest(_testId);
+
+    // Header
+    document.getElementById('res-test-name').textContent = test.name;
+    document.getElementById('res-attempt').textContent =
+      `Attempt ${_entry.attemptNum} · ${new Date(_entry.date).toLocaleString()} · ${Quiz.fmtTime(_entry.totSecs)}`;
+    document.getElementById('res-score-num').textContent  = score;
+    document.getElementById('res-score-den').textContent  = `/ ${total}`;
+    document.getElementById('res-score-pct').textContent  = `${pct}%`;
+    document.getElementById('res-score-pct').style.color  = pct>=80?'#27ae60':pct>=70?'#2980b9':pct>=60?'#f0a500':'#e74c3c';
+    document.getElementById('res-grade').textContent      = grade(pct);
+    document.getElementById('res-grade-desc').textContent = gradeDesc(pct);
+
+    // Stats grid
+    document.getElementById('res-stats').innerHTML = [
+      {v:`${pct}%`,         l:'Accuracy'},
+      {v:Quiz.fmtTime(_entry.totSecs), l:'Total Time'},
+      {v:`${avgTime}s`,     l:'Avg / Question'},
+      {v:score,             l:'Correct'},
+      {v:wrong,             l:'Incorrect'},
+      {v:skipped,           l:'Skipped'}
+    ].map(s => `<div class="res-stat"><span class="res-stat-val">${s.v}</span><span class="res-stat-lbl">${s.l}</span></div>`).join('');
+
+    // Topic breakdown
+    buildTopicAnalysis();
+
+    // Navigation dots
+    buildNavDots();
+
+    // Review table
+    buildReviewTable();
+  }
+
+  function buildTopicAnalysis() {
+    const tagStats = {};
+    _questions.forEach((q, i) => {
+      const r = _results[i];
+      (q.tags || []).forEach(tag => {
+        if (!tagStats[tag]) tagStats[tag] = { correct: 0, total: 0 };
+        tagStats[tag].total++;
+        if (r.correct) tagStats[tag].correct++;
+      });
+    });
+
+    const sorted = Object.entries(tagStats)
+      .map(([tag, s]) => ({ tag, pct: Math.round(s.correct/s.total*100), correct: s.correct, total: s.total }))
+      .sort((a,b) => a.pct - b.pct);
+
+    const strengths = sorted.filter(s => s.pct >= 70).reverse().slice(0, 5);
+    const weaknesses = sorted.filter(s => s.pct < 70).slice(0, 5);
+
+    document.getElementById('res-strengths').innerHTML =
+      strengths.length ? strengths.map(s =>
+        `<div class="topic-row"><span class="topic-name">${s.tag}</span><span class="topic-pct good">${s.pct}% (${s.correct}/${s.total})</span></div>`
+      ).join('') : '<div class="topic-empty">No data yet</div>';
+
+    document.getElementById('res-weaknesses').innerHTML =
+      weaknesses.length ? weaknesses.map(s =>
+        `<div class="topic-row"><span class="topic-name">${s.tag}</span><span class="topic-pct bad">${s.pct}% (${s.correct}/${s.total})</span></div>`
+      ).join('') : '<div class="topic-empty">No weaknesses identified 🎉</div>';
+  }
+
+  function buildNavDots() {
+    const nav = document.getElementById('res-nav-dots');
+    if (!nav) return;
+    nav.innerHTML = '';
+    _questions.forEach((q, i) => {
+      const r = _results[i];
+      const d = document.createElement('div');
+      d.className = 'res-dot ' + (r.chosen===null ? '' : r.correct ? 'dot-c' : 'dot-w');
+      d.textContent = i + 1;
+      d.title = `Q${i+1}: ${r.correct ? '✓ Correct' : r.chosen ? '✗ Wrong' : 'Skipped'}`;
+      d.addEventListener('click', () => openReview(i));
+      nav.appendChild(d);
+    });
+  }
+
+  function buildReviewTable() {
+    const tbody = document.getElementById('res-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    _questions.forEach((q, i) => {
+      const r = _results[i];
+      const tr = document.createElement('tr');
+      tr.className = r.chosen===null ? '' : r.correct ? 'tr-c' : 'tr-w';
+      tr.id = `res-row-${i}`;
+      const tag = r.chosen===null
+        ? '<span class="tag-skip">SKIP</span>'
+        : r.correct ? '<span class="tag-ok">✓</span>' : '<span class="tag-bad">✗</span>';
+      const chosen = r.chosen ? `${r.chosen}) ${q.o.find(o=>o.l===r.chosen)?.t?.slice(0,40)||''}…` : '—';
+      const correct = `${q.c}) ${q.o.find(o=>o.l===q.c)?.t?.slice(0,40)||''}…`;
+      const flagBtn = `<button class="btn-flag-review ${DB.isFlagged(_testId,q.n)?'flagged':''}"
+        onclick="toggleFlagReview(${i})" title="Flag for review">🏳</button>`;
+      tr.innerHTML = `
+        <td>${i+1}</td>
+        <td>${tag}</td>
+        <td class="td-text">${chosen}</td>
+        <td class="td-text">${correct}</td>
+        <td class="td-time">${r.time}s</td>
+        <td>${flagBtn}</td>
+        <td><button class="btn-review-item" onclick="openReview(${i})">Review</button></td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  // ── Review mode ────────────────────────────────────────────
+  function openReview(idx) {
+    _reviewIdx = idx;
+    _inReview = true;
+    document.getElementById('panel-report').style.display    = 'none';
+    document.getElementById('panel-review').style.display    = 'flex';
+    renderReviewQuestion();
+  }
+
+  function renderReviewQuestion() {
+    const q = _questions[_reviewIdx];
+    const r = _results[_reviewIdx];
+    const test = DB.getTest(_testId);
+
+    document.getElementById('rev-counter').textContent = `Item ${_reviewIdx+1} of ${_questions.length}`;
+    document.getElementById('rev-test-name').textContent = test.name;
+
+    // Stem with saved highlights
+    const stemEl = document.getElementById('rev-stem');
+    if (r.highlights && r.highlights.html) stemEl.innerHTML = r.highlights.html;
+    else stemEl.textContent = q.t;
+
+    // Tags
+    const tagEl = document.getElementById('rev-tags');
+    if (tagEl) {
+      tagEl.innerHTML = (q.tags||[]).map(t=>`<span class="q-tag">${t}</span>`).join('');
+      tagEl.style.display = q.tags && q.tags.length ? 'flex' : 'none';
+    }
+
+    // Options
+    const optContainer = document.getElementById('rev-options');
+    optContainer.innerHTML = '';
+    q.o.forEach(opt => {
+      const isCorrect = q.c === opt.l;
+      const isChosen  = r.chosen === opt.l;
+      const isStriken = r.strikethrough && r.strikethrough.includes(opt.l);
+      const div = document.createElement('div');
+      div.className = 'opt-row opt-row-review' +
+        (isCorrect ? ' opt-correct' : '') +
+        (isChosen && !isCorrect ? ' opt-wrong' : '') +
+        (isStriken ? ' opt-striken' : '');
+      div.innerHTML = `
+        <div class="opt-selector">
+          <div class="opt-radio">${isChosen || isCorrect ? '<div class="opt-radio-dot"></div>':''}</div>
+          <span class="opt-letter">${opt.l})</span>
+        </div>
+        <div class="opt-text">${opt.t}</div>
+        <div class="opt-indicator">
+          ${isCorrect ? '<span class="ind-correct">✓ Correct</span>' : ''}
+          ${isChosen && !isCorrect ? '<span class="ind-wrong">✗ Your Answer</span>' : ''}
+        </div>`;
+      optContainer.appendChild(div);
+    });
+
+    // Always show explanations in review
+    const expBody = document.getElementById('rev-exp-body');
+    expBody.innerHTML = '';
+    q.o.forEach(opt => {
+      const isCorrect = q.c === opt.l;
+      const isChosen  = r.chosen === opt.l;
+      const div = document.createElement('div');
+      div.className = 'exp-item' + (isCorrect ? ' exp-correct' : '');
+      div.innerHTML = `
+        <div class="exp-header">
+          <strong>${opt.l}) ${opt.t}</strong>
+          ${isCorrect ? '<span class="exp-badge-correct">✓ Correct</span>' : ''}
+          ${isChosen && !isCorrect ? '<span class="exp-badge-wrong">✗ Your Answer</span>' : ''}
+        </div>
+        ${q.e && q.e[opt.l] ? `<div class="exp-text">${q.e[opt.l]}</div>` : ''}`;
+      expBody.appendChild(div);
+    });
+
+    // Flag button
+    const flagBtn = document.getElementById('rev-btn-flag');
+    if (flagBtn) {
+      const flagged = DB.isFlagged(_testId, q.n);
+      flagBtn.textContent = flagged ? '🚩 Flagged' : '🏳 Flag';
+      flagBtn.classList.toggle('flagged', flagged);
+    }
+
+    // Edit button
+    const editBtn = document.getElementById('rev-btn-edit');
+    if (editBtn) editBtn.onclick = () => openEditQuestion(_testId, q.n, _reviewIdx);
+
+    // Prev/Next
+    document.getElementById('rev-btn-prev').disabled = _reviewIdx === 0;
+    document.getElementById('rev-btn-next').disabled = _reviewIdx === _questions.length - 1;
+  }
+
+  function reviewPrev() { if (_reviewIdx > 0) { _reviewIdx--; renderReviewQuestion(); } }
+  function reviewNext() { if (_reviewIdx < _questions.length-1) { _reviewIdx++; renderReviewQuestion(); } }
+  function closeReview() {
+    document.getElementById('panel-report').style.display = 'flex';
+    document.getElementById('panel-review').style.display = 'none';
+    _inReview = false;
+    // Scroll to row
+    const row = document.getElementById(`res-row-${_reviewIdx}`);
+    if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function toggleFlagReview(idx) {
+    const q = _questions[idx];
+    if (DB.isFlagged(_testId, q.n)) DB.removeFlag(_testId, q.n);
+    else DB.addFlag(_testId, q.n);
+    buildReviewTable();
+    buildNavDots();
+    if (_inReview && _reviewIdx === idx) {
+      const flagBtn = document.getElementById('rev-btn-flag');
+      if (flagBtn) {
+        const flagged = DB.isFlagged(_testId, q.n);
+        flagBtn.textContent = flagged ? '🚩 Flagged' : '🏳 Flag';
+        flagBtn.classList.toggle('flagged', flagged);
+      }
+    }
+  }
+
+  // ── Edit question ──────────────────────────────────────────
+  function openEditQuestion(testId, qNum, displayIdx) {
+    const test = DB.getTest(testId);
+    const q = test.questions.find(q => q.n === qNum);
+    if (!q) return;
+    const modal = document.getElementById('modal-edit');
+    if (!modal) return;
+
+    modal.querySelector('#edit-stem').value = q.t;
+    const optContainer = modal.querySelector('#edit-options');
+    optContainer.innerHTML = '';
+    q.o.forEach(opt => {
+      const row = document.createElement('div');
+      row.className = 'edit-opt-row';
+      row.innerHTML = `
+        <span class="edit-opt-letter">${opt.l})</span>
+        <input type="text" class="edit-opt-text" data-letter="${opt.l}" value="${opt.t.replace(/"/g,'&quot;')}">
+        <label class="edit-correct-lbl">
+          <input type="radio" name="correct-ans" value="${opt.l}" ${q.c===opt.l?'checked':''}> Correct
+        </label>`;
+      optContainer.appendChild(row);
+    });
+
+    // Explanations
+    const expContainer = modal.querySelector('#edit-explanations');
+    expContainer.innerHTML = '';
+    q.o.forEach(opt => {
+      const row = document.createElement('div');
+      row.className = 'edit-exp-row';
+      row.innerHTML = `<label class="edit-exp-label">${opt.l}) Explanation:</label>
+        <textarea class="edit-exp-text" data-letter="${opt.l}" rows="2">${(q.e && q.e[opt.l])||''}</textarea>`;
+      expContainer.appendChild(row);
+    });
+
+    modal.style.display = 'flex';
+    modal.dataset.testId = testId;
+    modal.dataset.qNum   = qNum;
+    modal.dataset.displayIdx = displayIdx || '';
+  }
+
+  function saveEditQuestion() {
+    const modal = document.getElementById('modal-edit');
+    const testId = modal.dataset.testId;
+    const qNum   = parseInt(modal.dataset.qNum);
+    const test   = DB.getTest(testId);
+    const q      = test.questions.find(q => q.n === qNum);
+    if (!q) return;
+
+    q.t = modal.querySelector('#edit-stem').value.trim();
+    modal.querySelectorAll('.edit-opt-text').forEach(inp => {
+      const opt = q.o.find(o => o.l === inp.dataset.letter);
+      if (opt) opt.t = inp.value.trim();
+    });
+    const correctInput = modal.querySelector('input[name="correct-ans"]:checked');
+    if (correctInput) q.c = correctInput.value;
+    modal.querySelectorAll('.edit-exp-text').forEach(ta => {
+      q.e = q.e || {};
+      q.e[ta.dataset.letter] = ta.value.trim();
+    });
+    q.tags = OCR.autoTag(q.t, q.o);
+    DB.updateTest(testId, { questions: test.questions });
+    window.toast('Question saved ✓', 2000);
+    // Re-render if in review
+    if (_inReview) renderReviewQuestion();
+    const qst = Quiz.getState(); if (qst) { Quiz.renderQuestion(); Quiz.renderOptions(); }
+  }
+
+  function grade(p)     { return p>=90?'Excellent':p>=80?'Proficient':p>=70?'Satisfactory':p>=60?'Borderline Pass':'Below Passing'; }
+  function gradeDesc(p) { return p>=90?'Outstanding performance.':p>=80?'Strong command of material.':p>=70?'Passing — targeted review recommended.':p>=60?'Marginal — additional study required.':'Comprehensive review needed.'; }
+
+  function toggleCurrentFlag() { toggleFlagReview(_reviewIdx); }
+  function openEditFromReview() { const q = _questions[_reviewIdx]; Results.openEditQuestion(_testId, q.n, _reviewIdx); }
+  return { show, openReview, reviewPrev, reviewNext, closeReview, toggleFlagReview, toggleCurrentFlag, openEditFromReview, openEditQuestion, saveEditQuestion };
+})();
+window.Results = Results;
+window.openReview        = Results.openReview;
+window.toggleFlagReview  = Results.toggleFlagReview;
+
+</script>
+<script>
+/* ============================================================
+   APP.JS — Main controller
+   Handles UI, routing, sidebar, modals, highlights
+============================================================ */
+
+const App = (() => {
+
+  // ── State ──────────────────────────────────────────────────
+  let _currentFolder = null;
+  let _currentView   = 'home'; // 'home'|'quiz'|'results'|'flagged'|'trash'
+  let _genQBFile = null, _genAKFile = null;
+  let _genParsed = null;
+  let _hlSelection = null;
+
+  // ── Init ───────────────────────────────────────────────────
+  function init() {
+    window.toast = toast;
+    renderSidebar();
+    showHome();
+    checkSetupWizard();
+    checkGoogleToken();
+
+    // Close modals on overlay click
+    document.querySelectorAll('.modal-overlay').forEach(m => {
+      m.addEventListener('click', e => { if (e.target === m) m.style.display = 'none'; });
+    });
+
+    // Hide highlight toolbar on outside click
+    document.addEventListener('mousedown', e => {
+      if (!document.getElementById('hl-toolbar').contains(e.target) &&
+          !document.getElementById('q-stem')?.contains(e.target)) {
+        hideHlToolbar();
+      }
+    });
+
+    // Auto-save on visibility change (tab switch / close)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        const st = Quiz.getState();
+        if (st) {
+          st.results[st.qIdx].time = st.qSecs || 0;
+          DB.saveAttempt(st.testId, {
+            mode: st.mode, qIdx: st.qIdx, results: st.results,
+            marks: [...st.marks], totSecs: st.totSecs
+          });
+        }
+      }
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', onKeydown);
+  }
+
+  function onKeydown(e) {
+    if (document.querySelector('.modal-overlay[style*="flex"]')) return; // modal open
+    const st = Quiz.getState();
+    if (!st) return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    const q = DB.getTest(st.testId)?.questions[st.qIdx];
+    if (!q) return;
+
+    // A–I select answer choices
+    const letter = e.key.toUpperCase();
+    if (/^[A-I]$/.test(letter) && q.o.find(o => o.l === letter)) {
+      if (!st.results[st.qIdx].answered) Quiz.selectAnswer ? Quiz.selectAnswer(letter) : null;
+      // selectAnswer is called via the module but exposed via closure; trigger click
+      const opts = document.querySelectorAll('.opt-selector');
+      opts.forEach(el => { if (el.dataset.letter === letter) el.click(); });
+      return;
+    }
+
+    switch(e.key) {
+      case 'ArrowRight': case 'Enter': Quiz.nextQ(); break;
+      case 'ArrowLeft':                Quiz.prevQ(); break;
+      case 'p': case 'P':              Quiz.pauseTest(); break;
+      case 'f': case 'F':              Quiz.toggleFlag(st.qIdx); break;
+      case 'm': case 'M':              Quiz.toggleMark(st.qIdx); break;
+    }
+  }
+
+  // ── Toast ──────────────────────────────────────────────────
+  function toast(msg, ms = 2500) {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), ms);
+  }
+
+  // ── Sidebar ────────────────────────────────────────────────
+  function renderSidebar() {
+    const container = document.getElementById('folder-list');
+    const folders = DB.getFolders();
+    container.innerHTML = '';
+
+    folders.forEach(folder => {
+      const tests = DB.getTests(folder.id);
+      const wrap = document.createElement('div');
+      wrap.className = 'sidebar-folder';
+
+      const header = document.createElement('div');
+      header.className = 'sidebar-folder-header' + (_currentFolder === folder.id ? ' open' : '');
+      header.innerHTML = `
+        <span class="folder-arrow">▶</span>
+        <span class="item-icon">📁</span>
+        <span class="item-label" id="folder-label-${folder.id}" style="flex:1;">${folder.name}</span>
+        <span class="item-count">${tests.length}</span>`;
+
+      header.addEventListener('click', e => {
+        if (e.target.classList.contains('item-label') && e.detail === 2) {
+          startRenameFolder(folder.id); return;
+        }
+        toggleFolder(folder.id, header, testsDiv);
+        if (_currentFolder !== folder.id) showFolderHome(folder.id);
+      });
+
+      header.addEventListener('contextmenu', e => {
+        e.preventDefault();
+        showFolderContextMenu(e, folder);
+      });
+
+      const testsDiv = document.createElement('div');
+      testsDiv.className = 'sidebar-folder-tests' + (_currentFolder === folder.id ? ' open' : '');
+
+      tests.forEach(test => {
+        const item = document.createElement('div');
+        item.className = 'sidebar-test-item' + (isCurrentTest(test.id) ? ' active' : '');
+        const dotClass = { not_started: 'dot-not-started', in_progress: 'dot-in-progress', completed: 'dot-completed' }[test.status] || 'dot-not-started';
+        item.innerHTML = `<div class="test-status-dot ${dotClass}"></div>
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${test.name}</span>`;
+        item.addEventListener('click', () => showFolderHome(folder.id, test.id));
+        item.addEventListener('contextmenu', e => { e.preventDefault(); showTestContextMenu(e, test); });
+        item.addEventListener('dblclick', () => startRenameTest(test.id));
+        testsDiv.appendChild(item);
+      });
+
+      // Flagged tab for folder
+      const flagItem = document.createElement('div');
+      flagItem.className = 'sidebar-test-item';
+      const flagCount = DB.getFlags(folder.id).length;
+      flagItem.innerHTML = `<span>🚩</span><span style="flex:1;">Flagged (${flagCount})</span>`;
+      flagItem.addEventListener('click', () => showFlagged(folder.id));
+      testsDiv.appendChild(flagItem);
+
+      wrap.appendChild(header); wrap.appendChild(testsDiv);
+      container.appendChild(wrap);
+    });
+  }
+
+  function toggleFolder(folderId, header, testsDiv) {
+    const isOpen = testsDiv.classList.contains('open');
+    testsDiv.classList.toggle('open', !isOpen);
+    header.classList.toggle('open', !isOpen);
+  }
+
+  function isCurrentTest(testId) {
+    const st = Quiz.getState();
+    return st && st.testId === testId;
+  }
+
+  // ── Context menus ──────────────────────────────────────────
+  function showFolderContextMenu(e, folder) {
+    removeContextMenus();
+    const menu = document.createElement('div');
+    menu.id = 'ctx-menu';
+    menu.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;background:white;border:1px solid #c8d0da;border-radius:4px;box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:9000;min-width:150px;`;
+    menu.innerHTML = `
+      <div class="ctx-item" onclick="App.startRenameFolder('${folder.id}')">✏️ Rename</div>
+      <div class="ctx-item" onclick="App.generateInFolder('${folder.id}')">＋ New Test</div>
+      <div class="ctx-item ctx-danger" onclick="App.deleteFolder('${folder.id}')">🗑 Delete Folder</div>`;
+    styleContextMenu(menu);
+    document.body.appendChild(menu);
+    setTimeout(() => document.addEventListener('click', removeContextMenus, { once: true }), 10);
+  }
+
+  function showTestContextMenu(e, test) {
+    removeContextMenus();
+    const menu = document.createElement('div');
+    menu.id = 'ctx-menu';
+    menu.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;background:white;border:1px solid #c8d0da;border-radius:4px;box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:9000;min-width:160px;`;
+    menu.innerHTML = `
+      <div class="ctx-item" onclick="Quiz.startTest('${test.id}')">▶ Start / Resume</div>
+      <div class="ctx-item" onclick="App.startRenameTest('${test.id}')">✏️ Rename</div>
+      <div class="ctx-item" onclick="App.viewHistory('${test.id}')">📊 History</div>
+      <div class="ctx-item ctx-danger" onclick="App.trashTest('${test.id}')">🗑 Move to Trash</div>`;
+    styleContextMenu(menu);
+    document.body.appendChild(menu);
+    setTimeout(() => document.addEventListener('click', removeContextMenus, { once: true }), 10);
+  }
+
+  function styleContextMenu(menu) {
+    const style = document.createElement('style');
+    style.textContent = `.ctx-item{padding:8px 14px;font-size:12px;cursor:pointer;color:#1a1a2e;}.ctx-item:hover{background:#f0f2f5;}.ctx-danger{color:#c0392b;}`;
+    menu.prepend(style);
+  }
+
+  function removeContextMenus() {
+    document.getElementById('ctx-menu')?.remove();
+  }
+
+  // ── Views ──────────────────────────────────────────────────
+  function showHome(folderId) {
+    _currentView = 'home';
+    if (folderId) _currentFolder = folderId;
+    document.getElementById('screen-home').style.display    = 'flex';
+    document.getElementById('screen-quiz').style.display    = 'none';
+    document.getElementById('screen-results').style.display = 'none';
+    renderSidebar();
+    renderHomeGrid();
+    setActiveNav('nav-home');
+  }
+
+  function showFolderHome(folderId, highlightTestId) {
+    _currentFolder = folderId;
+    showHome(folderId);
+    if (highlightTestId) {
+      // Scroll to card
+      setTimeout(() => {
+        document.getElementById(`card-${highlightTestId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    }
+  }
+
+  function renderHomeGrid() {
+    const titleEl = document.getElementById('home-title');
+    const contentEl = document.getElementById('home-content');
+
+    if (!_currentFolder) {
+      titleEl.textContent = 'Welcome';
+      contentEl.innerHTML = '<div class="no-tests">Select a folder from the sidebar, or create a new one to get started.</div>';
+      return;
+    }
+
+    const db = DB.get();
+    const folder = db.folders.find(f => f.id === _currentFolder);
+    if (!folder) return;
+
+    titleEl.textContent = folder.name;
+    const tests = DB.getTests(_currentFolder);
+
+    if (!tests.length) {
+      contentEl.innerHTML = `<div class="no-tests">No tests in this folder yet.<br><br>
+        <button class="btn-generate" onclick="App.generateInFolder('${_currentFolder}')">＋ Generate Test</button></div>`;
+      return;
+    }
+
+    let html = '<div class="test-grid">';
+    tests.forEach(test => {
+      const history = DB.getHistory(test.id);
+      const latest  = history[0];
+      const prog    = test.currentAttempt
+        ? Math.round(((test.currentAttempt.qIdx || 0) / test.questions.length) * 100)
+        : latest ? 100 : 0;
+      const statusClass = { not_started: 'status-not-started', in_progress: 'status-in-progress', completed: 'status-completed' }[test.status] || 'status-not-started';
+      const statusText  = { not_started: 'Not Started', in_progress: `Q${(test.currentAttempt?.qIdx||0)+1}/${test.questions.length}`, completed: `${latest ? Math.round(latest.score/latest.total*100)+'%' : ''}` }[test.status] || 'Not Started';
+      const scoreLabel  = latest ? `Best: ${latest.score}/${latest.total}` : '';
+
+      html += `<div class="test-card" id="card-${test.id}">
+        <div class="test-card-status ${statusClass}">${statusText}</div>
+        <div class="test-card-name">${test.name}</div>
+        <div class="test-card-meta">${test.questions.length} questions · ${test.attempts} attempt${test.attempts!==1?'s':''}</div>
+        <div class="test-card-progress"><div class="test-card-progress-fill" style="width:${prog}%"></div></div>
+        <div class="test-card-footer">
+          <span class="test-card-prog-label">${test.status==='in_progress'?'In progress':'Progress'}: ${prog}%</span>
+          <span class="test-card-score">${scoreLabel}</span>
+        </div>
+        <div class="test-card-actions">
+          <button class="btn-card primary" onclick="Quiz.startTest('${test.id}')">▶ ${test.status==='in_progress'?'Resume':'Start'}</button>
+          <button class="btn-card" onclick="App.viewHistory('${test.id}')">📊</button>
+          <button class="btn-card" onclick="App.startRenameTest('${test.id}')">✏️</button>
+          <button class="btn-card danger" onclick="App.trashTest('${test.id}')">🗑</button>
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+    contentEl.innerHTML = html;
+  }
+
+  function showFlagged(folderId) {
+    _currentView = 'flagged';
+    document.getElementById('screen-home').style.display    = 'flex';
+    document.getElementById('screen-quiz').style.display    = 'none';
+    document.getElementById('screen-results').style.display = 'none';
+
+    document.getElementById('home-title').textContent = folderId
+      ? `Flagged — ${DB.getFolders().find(f=>f.id===folderId)?.name || ''}`
+      : 'All Flagged Questions';
+
+    const flags = folderId ? DB.getFlags(folderId) : DB.get().flags;
+    const content = document.getElementById('home-content');
+
+    if (!flags.length) {
+      content.innerHTML = '<div class="no-tests">No flagged questions yet.</div>';
+      return;
+    }
+
+    let html = '';
+    flags.forEach(flag => {
+      const test = DB.getTest(flag.testId);
+      if (!test) return;
+      const q = test.questions.find(q => q.n === flag.questionId);
+      if (!q) return;
+      const history = DB.getHistory(flag.testId);
+      // Find last answer for this question
+      let lastAnswer = null;
+      for (const h of history) {
+        const r = h.results?.find(r => r.qNum === q.n || h.results?.indexOf(r) === q.n - 1);
+        if (r) { lastAnswer = r; break; }
+      }
+      const correctOpt = q.o.find(o => o.l === q.c);
+
+      html += `<div class="flagged-item">
+        <div class="flagged-item-source">📋 ${test.name}</div>
+        <div class="flagged-item-q">${q.t.slice(0, 200)}${q.t.length > 200 ? '…' : ''}</div>
+        ${lastAnswer ? `<div class="flagged-item-answer">
+          <strong>Your Answer:</strong> ${lastAnswer.chosen || 'Skipped'}
+          ${lastAnswer.correct ? ' <span style="color:#27ae60">✓</span>' : ' <span style="color:#c0392b">✗</span>'}
+          &nbsp;|&nbsp; <strong>Correct:</strong> ${q.c}) ${correctOpt?.t || ''}
+        </div>` : ''}
+        ${q.e && q.e[q.c] ? `<div class="flagged-item-exp"><strong>${q.c}) </strong>${q.e[q.c]}</div>` : ''}
+        <div class="flagged-item-footer">
+          <button class="btn-unflag" onclick="App.unflag('${flag.testId}',${flag.questionId})">Remove Flag</button>
+        </div>
+      </div>`;
+    });
+    content.innerHTML = html;
+    setActiveNav('nav-flagged');
+  }
+
+  function unflag(testId, questionId) {
+    DB.removeFlag(testId, questionId);
+    renderSidebar();
+    showFlagged(_currentFolder);
+    toast('Flag removed.');
+  }
+
+  function showTrash() {
+    _currentView = 'trash';
+    document.getElementById('home-title').textContent = '🗑 Trash';
+    const db = DB.get();
+    const content = document.getElementById('home-content');
+    if (!db.trash.length) {
+      content.innerHTML = '<div class="no-tests">Trash is empty.</div>';
+      return;
+    }
+    let html = `<div style="margin-bottom:12px;display:flex;justify-content:flex-end;">
+      <button class="btn-card danger" onclick="if(confirm('Permanently delete all?')){DB.emptyTrash();App.showTrash();}">Empty Trash</button>
+    </div>`;
+    db.trash.forEach(t => {
+      html += `<div class="trash-item">
+        <div class="trash-item-info">
+          <div class="trash-name">${t.name}</div>
+          <div class="trash-meta">${t.questions?.length||0} questions · Deleted ${new Date(t.deletedAt).toLocaleDateString()}</div>
+        </div>
+        <div class="trash-item-actions">
+          <button class="btn-card" onclick="DB.restoreTest('${t.id}');App.showHome();App.renderSidebar();toast('Restored!')">↩ Restore</button>
+          <button class="btn-card danger" onclick="if(confirm('Permanently delete?')){DB.permanentDelete('${t.id}');App.showTrash();}">✕ Delete</button>
+        </div>
+      </div>`;
+    });
+    content.innerHTML = html;
+    setActiveNav('nav-trash');
+  }
+
+  function setActiveNav(id) {
+    document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
+    document.getElementById(id)?.classList.add('active');
+  }
+
+  // ── Folders & Tests management ─────────────────────────────
+  function promptNewFolder() {
+    document.getElementById('new-folder-name').value = '';
+    document.getElementById('modal-new-folder').style.display = 'flex';
+    setTimeout(() => document.getElementById('new-folder-name').focus(), 100);
+  }
+
+  function createFolder() {
+    const name = document.getElementById('new-folder-name').value.trim();
+    if (!name) { toast('Please enter a folder name.'); return; }
+    DB.createFolder(name);
+    document.getElementById('modal-new-folder').style.display = 'none';
+    renderSidebar();
+    toast(`Folder "${name}" created.`);
+  }
+
+  function startRenameFolder(id) {
+    const label = document.getElementById(`folder-label-${id}`);
+    if (!label) return;
+    const folder = DB.getFolders().find(f => f.id === id);
+    const input = document.createElement('input');
+    input.className = 'rename-input';
+    input.value = folder.name;
+    label.replaceWith(input);
+    input.focus(); input.select();
+    const done = () => {
+      const name = input.value.trim() || folder.name;
+      DB.renameFolder(id, name);
+      renderSidebar();
+      if (_currentFolder === id) document.getElementById('home-title').textContent = name;
+    };
+    input.addEventListener('blur', done);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') { done(); } if (e.key === 'Escape') renderSidebar(); });
+  }
+
+  function startRenameTest(id) {
+    const test = DB.getTest(id);
+    if (!test) return;
+    const name = prompt('Rename test:', test.name);
+    if (name && name.trim()) { DB.renameTest(id, name.trim()); renderSidebar(); renderHomeGrid(); toast('Renamed.'); }
+  }
+
+  function deleteFolder(id) {
+    if (!confirm('Delete folder and move all tests to Trash?')) return;
+    DB.deleteFolder(id);
+    _currentFolder = null;
+    renderSidebar(); showHome(); toast('Folder deleted.');
+  }
+
+  function trashTest(id) {
+    if (!confirm('Move this test to Trash?')) return;
+    DB.trashTest(id);
+    renderSidebar(); renderHomeGrid(); toast('Moved to Trash.');
+  }
+
+  function generateInFolder(folderId) {
+    _currentFolder = folderId;
+    openGenerateModal();
+  }
+
+  function viewHistory(testId) {
+    const test = DB.getTest(testId);
+    const history = DB.getHistory(testId);
+    const content = document.getElementById('home-content');
+    const titleEl  = document.getElementById('home-title');
+    titleEl.textContent = `History — ${test.name}`;
+    if (!history.length) { content.innerHTML = '<div class="no-tests">No attempts yet.</div>'; return; }
+    let html = `<button class="btn-card" onclick="App.showFolderHome('${test.folderId}')" style="margin-bottom:12px;">← Back</button>`;
+    history.forEach(h => {
+      const pct = Math.round(h.score/h.total*100);
+      html += `<div class="test-card" style="cursor:default;">
+        <div class="test-card-name">Attempt #${h.attemptNum} · ${new Date(h.date).toLocaleString()}</div>
+        <div class="test-card-meta">${h.mode==='tutor'?'📖 Tutor':'📝 Exam'} · ${Quiz.fmtTime(h.totSecs)} total</div>
+        <div class="test-card-score" style="font-size:20px;margin:8px 0;">${h.score}/${h.total} <span style="font-size:14px;color:${pct>=80?'#27ae60':pct>=70?'#2980b9':'#c0392b'};">(${pct}%)</span></div>
+      </div>`;
+    });
+    content.innerHTML = html;
+  }
+
+  // ── Generate Test Modal ────────────────────────────────────
+  function openGenerateModal() {
+    _genQBFile = null; _genAKFile = null; _genParsed = null;
+    ['inp-qb','inp-ak'].forEach(id => document.getElementById(id).value = '');
+    ['nm-qb','nm-ak'].forEach(id => document.getElementById(id).textContent = '');
+    ['uz-qb','uz-ak'].forEach(id => document.getElementById(id).classList.remove('loaded','dragover'));
+    document.getElementById('ocr-status-area').style.display = 'none';
+    document.getElementById('gen-parse-note').style.display  = 'none';
+    document.getElementById('btn-gen-start').textContent = 'Extract & Generate →';
+    document.getElementById('btn-gen-start').disabled = false;
+
+    // Populate folder select
+    const sel = document.getElementById('gen-folder-select');
+    sel.innerHTML = '';
+    const folders = DB.getFolders();
+    if (_currentFolder) {
+      const f = folders.find(f => f.id === _currentFolder);
+      if (f) sel.innerHTML += `<option value="${f.id}" selected>${f.name}</option>`;
+    }
+    folders.filter(f => f.id !== _currentFolder).forEach(f => {
+      sel.innerHTML += `<option value="${f.id}">${f.name}</option>`;
+    });
+    if (!sel.options.length) sel.innerHTML = '<option value="">— No folders yet —</option>';
+
+    document.getElementById('modal-generate').style.display = 'flex';
+    document.getElementById('gen-test-name').focus();
+  }
+
+  function closeGenerateModal() {
+    document.getElementById('modal-generate').style.display = 'none';
+  }
+
+  function onDrag(e, id)  { e.preventDefault(); document.getElementById('uz-'+id).classList.add('dragover'); }
+  function offDrag(id)    { document.getElementById('uz-'+id).classList.remove('dragover'); }
+  function onDrop(e, id)  { e.preventDefault(); offDrag(id); const f = e.dataTransfer.files[0]; if (f) processFileDrop(id, f); }
+  function onFile(id, inp) { const f = inp.files[0]; if (f) processFileDrop(id, f); }
+
+  function processFileDrop(id, file) {
+    if (!file.name.toLowerCase().endsWith('.pdf')) { toast('Please upload a PDF file.'); return; }
+    if (id === 'qb') _genQBFile = file; else _genAKFile = file;
+    document.getElementById('nm-'+id).textContent = '📄 ' + file.name;
+    document.getElementById('uz-'+id).classList.add('loaded');
+    document.getElementById('gen-parse-note').style.display = 'none';
+    _genParsed = null;
+  }
+
+  async function startOCR() {
+    const name     = document.getElementById('gen-test-name').value.trim();
+    const folderId = document.getElementById('gen-folder-select').value;
+
+    if (!name)       { toast('Please enter a test name.'); return; }
+    if (!folderId)   { toast('Please create a folder first.'); return; }
+    if (!_genQBFile) { toast('Please upload the Question Bank PDF.'); return; }
+    if (!_genAKFile) { toast('Please upload the Answer Key PDF.'); return; }
+
+    document.getElementById('ocr-status-area').style.display = 'block';
+    document.getElementById('btn-gen-start').disabled = true;
+    document.getElementById('btn-gen-start').textContent = 'Processing…';
+
+    try {
+      const questions = await OCR.processTestPDFs(_genQBFile, _genAKFile, (pct, total, msg) => {
+        document.getElementById('ocr-status-msg').textContent = msg;
+        document.getElementById('ocr-progress-fill').style.width = pct + '%';
+      });
+
+      if (!questions.length) throw new Error('No questions found. Try the manual paste option.');
+
+      _genParsed = { name, folderId, questions };
+      document.getElementById('ocr-status-msg').textContent = `✓ Extracted ${questions.length} questions!`;
+      document.getElementById('ocr-progress-fill').style.width = '100%';
+      document.getElementById('gen-parse-note').textContent   = `✓ ${questions.length} questions ready. Click Save to create the test.`;
+      document.getElementById('gen-parse-note').style.display = 'block';
+      document.getElementById('btn-gen-start').textContent    = '💾 Save Test';
+      document.getElementById('btn-gen-start').disabled       = false;
+      document.getElementById('btn-gen-start').onclick        = saveGeneratedTest;
+    } catch(err) {
+      document.getElementById('ocr-status-msg').textContent = '✗ Error: ' + err.message;
+      document.getElementById('btn-gen-start').disabled     = false;
+      document.getElementById('btn-gen-start').textContent  = 'Try Again →';
+      toast('OCR failed. Try manual text entry if the PDF is still unreadable.', 4000);
+    }
+  }
+
+  function saveGeneratedTest() {
+    if (!_genParsed) return;
+    const test = DB.createTest(_genParsed.folderId, _genParsed.name, _genParsed.questions);
+    document.getElementById('modal-generate').style.display = 'none';
+    _currentFolder = _genParsed.folderId;
+    renderSidebar(); renderHomeGrid();
+    toast(`✓ "${test.name}" created with ${test.questions.length} questions!`);
+    _genParsed = null;
+  }
+
+  // ── Mode toggle ────────────────────────────────────────────
+  function toggleMode() {
+    const st = Quiz.getState();
+    if (!st) return;
+    const newMode = st.mode === 'tutor' ? 'exam' : 'tutor';
+    Quiz.setMode(newMode);
+    document.getElementById('btn-mode-toggle').textContent = newMode === 'tutor' ? '📖 Tutor' : '📝 Exam';
+    document.getElementById('btn-mode-toggle').classList.toggle('mode-exam', newMode === 'exam');
+    toast(newMode === 'tutor' ? 'Switched to Tutor Mode — explanations visible' : 'Switched to Exam Mode — explanations hidden', 2000);
+  }
+
+  // ── Finish ─────────────────────────────────────────────────
+  function confirmFinish() {
+    const st = Quiz.getState();
+    if (!st) return;
+    const test = DB.getTest(st.testId);
+    const answered = st.results.filter(r => r.answered).length;
+    const unanswered = test.questions.length - answered;
+    document.getElementById('confirm-finish-info').textContent =
+      `${answered} of ${test.questions.length} answered.${unanswered > 0 ? ` ${unanswered} unanswered questions will be marked as skipped.` : ''}`;
+    document.getElementById('modal-confirm-finish').style.display = 'flex';
+  }
+
+  function confirmFinishFromPause() {
+    document.getElementById('overlay-pause').style.display = 'none';
+    document.getElementById('modal-confirm-finish').style.display = 'flex';
+  }
+
+  function doFinish() {
+    document.getElementById('modal-confirm-finish').style.display = 'none';
+    Quiz.finishTest();
+  }
+
+  function retakeTest() {
+    // Called from results screen
+    const st = Quiz.getState(); // may be null
+    // Find last viewed test from results
+    const resTitle = document.getElementById('res-test-name').textContent.replace(' — Score Report','');
+    const db = DB.get();
+    const test = db.tests.find(t => t.name === resTitle) || db.tests[db.tests.length - 1];
+    if (test) {
+      document.getElementById('screen-results').style.display = 'none';
+      Quiz.startTest(test.id);
+    }
+  }
+
+  // ── Edit question ──────────────────────────────────────────
+  function openEditCurrentQuestion() {
+    const st = Quiz.getState();
+    if (!st) return;
+    const test = DB.getTest(st.testId);
+    const q = test.questions[st.qIdx];
+    Results.openEditQuestion(st.testId, q.n, st.qIdx);
+  }
+
+  // ── Highlighting ───────────────────────────────────────────
+  let _hlSel = null;
+
+  function onStemSelect(e) {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.toString().trim()) { hideHlToolbar(); return; }
+    _hlSel = sel.getRangeAt(0).cloneRange();
+    const rect = sel.getRangeAt(0).getBoundingClientRect();
+    const tb = document.getElementById('hl-toolbar');
+    tb.style.left = Math.max(0, rect.left + rect.width/2 - 65) + 'px';
+    tb.style.top  = (rect.top + window.scrollY - 44) + 'px';
+    tb.classList.add('show');
+  }
+
+  function hideHlToolbar() {
+    document.getElementById('hl-toolbar')?.classList.remove('show');
+    _hlSel = null;
+  }
+
+  function applyHighlight(cls) {
+    if (!_hlSel) { hideHlToolbar(); return; }
+    try {
+      const mark = document.createElement('mark');
+      mark.className = cls; mark.setAttribute('data-hl', cls);
+      _hlSel.surroundContents(mark);
+    } catch(e) {
+      try {
+        const frag = _hlSel.extractContents();
+        const mark = document.createElement('mark');
+        mark.className = cls; mark.setAttribute('data-hl', cls);
+        mark.appendChild(frag); _hlSel.insertNode(mark);
+      } catch(_) {}
+    }
+    const stemEl = document.getElementById('q-stem');
+    const st = Quiz.getState();
+    if (st) Quiz.saveHighlight(st.qIdx, stemEl.innerHTML);
+    hideHlToolbar();
+    window.getSelection()?.removeAllRanges();
+  }
+
+  function eraseHighlight() {
+    const stemEl = document.getElementById('q-stem');
+    stemEl.querySelectorAll('mark[data-hl]').forEach(mark => {
+      const sel = window.getSelection();
+      const range = sel?.rangeCount ? sel.getRangeAt(0) : null;
+      if (!range || range.intersectsNode(mark)) {
+        const parent = mark.parentNode;
+        while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+        parent.removeChild(mark);
+      }
+    });
+    const st = Quiz.getState();
+    if (st) Quiz.saveHighlight(st.qIdx, stemEl.innerHTML);
+    hideHlToolbar();
+  }
+
+  // ── Settings & Google Drive ────────────────────────────────
+  function openSettings() {
+    const db = DB.get();
+    const statusEl = document.getElementById('gdrive-status');
+    if (db.settings.setupComplete && db.settings.googleClientId) {
+      statusEl.innerHTML = `<span style="color:#27ae60;">✓ Configured</span> · Client ID: ${db.settings.googleClientId.slice(0,20)}…`;
+    } else {
+      statusEl.innerHTML = '<span style="color:#f0a500;">Not configured</span>';
+    }
+    document.getElementById('modal-settings').style.display = 'flex';
+  }
+
+  async function googleSignIn() {
+    const success = await DB.googleSignIn();
+    if (success) {
+      toast('✓ Signed in to Google Drive!');
+      const db = DB.get();
+      await DB.loadFromDrive(db.settings.googleAccessToken);
+      renderSidebar(); renderHomeGrid();
+      DB.updateSyncIndicator('synced');
+    } else {
+      toast('Sign-in failed or cancelled.');
+    }
+  }
+
+  function checkGoogleToken() {
+    const db = DB.get();
+    if (db.settings.googleAccessToken && Date.now() < (db.settings.googleTokenExpiry || 0)) {
+      DB.updateSyncIndicator('synced');
+      DB.loadFromDrive(db.settings.googleAccessToken).then(remote => {
+        if (remote) { renderSidebar(); renderHomeGrid(); }
+      });
+    } else {
+      DB.updateSyncIndicator('offline');
+    }
+  }
+
+  // ── Setup Wizard ───────────────────────────────────────────
+  function checkSetupWizard() {
+    const db = DB.get();
+    if (!db.settings.setupComplete) {
+      // Show welcome hint in home
+      const content = document.getElementById('home-content');
+      content.innerHTML = `<div style="background:#e3f2fd;border:1px solid #90caf9;border-radius:4px;padding:16px 20px;max-width:500px;">
+        <div style="font-size:13px;font-weight:700;color:#0d47a1;margin-bottom:6px;">👋 Welcome to NBME Self-Assessment Suite</div>
+        <div style="font-size:12px;color:#1565c0;margin-bottom:12px;line-height:1.6;">
+          To sync across devices, set up Google Drive in <strong>⚙ Settings</strong> above.<br>
+          To get started, create a folder in the sidebar, then click <strong>+ Generate Test</strong>.
+        </div>
+        <button class="btn-generate" onclick="App.openSetupWizard()">Set Up Google Drive →</button>
+      </div>`;
+    }
+  }
+
+  const WIZARD_STEPS = [
+    {
+      title: 'Create a Google Cloud Project',
+      content: `<div class="wizard-instruction">
+        <ol>
+          <li>Go to <a href="https://console.cloud.google.com" target="_blank">console.cloud.google.com</a></li>
+          <li>Click <strong>"Select a project"</strong> → <strong>"New Project"</strong></li>
+          <li>Name it <code>NBME Quiz App</code> → click <strong>Create</strong></li>
+          <li>Make sure the new project is selected in the top bar</li>
+        </ol>
+      </div>
+      <div class="wizard-note">💡 This is completely free. Google Cloud has no cost for this usage.</div>`
+    },
+    {
+      title: 'Enable Google Drive API',
+      content: `<div class="wizard-instruction">
+        <ol>
+          <li>In the left menu, go to <strong>APIs & Services → Library</strong></li>
+          <li>Search for <strong>"Google Drive API"</strong></li>
+          <li>Click it, then click <strong>Enable</strong></li>
+        </ol>
+      </div>`
+    },
+    {
+      title: 'Create OAuth Credentials',
+      content: `<div class="wizard-instruction">
+        <ol>
+          <li>Go to <strong>APIs & Services → Credentials</strong></li>
+          <li>Click <strong>+ Create Credentials → OAuth client ID</strong></li>
+          <li>If prompted, configure the consent screen first:
+            <ul>
+              <li>Choose <strong>External</strong> → Create</li>
+              <li>Fill in App name: <code>NBME Quiz</code>, support email: your email</li>
+              <li>Click Save and Continue through all steps</li>
+            </ul>
+          </li>
+          <li>Back on Create OAuth client ID:
+            <ul>
+              <li>Application type: <strong>Web application</strong></li>
+              <li>Name: <code>NBME Quiz</code></li>
+              <li>Authorized JavaScript origins: add <code>${window.location.origin}</code></li>
+              <li>Click <strong>Create</strong></li>
+            </ul>
+          </li>
+        </ol>
+      </div>`
+    },
+    {
+      title: 'Add Test User',
+      content: `<div class="wizard-instruction">
+        <ol>
+          <li>Go to <strong>APIs & Services → OAuth consent screen</strong></li>
+          <li>Scroll to <strong>Test users</strong> → click <strong>+ Add users</strong></li>
+          <li>Add: <code>shuvoli8@gmail.com</code></li>
+          <li>Click Save</li>
+        </ol>
+      </div>
+      <div class="wizard-note">This lets your account use the app while it's in development mode.</div>`
+    },
+    {
+      title: 'Enter Your Client ID',
+      content: `<div class="wizard-instruction">
+        <p>Copy your <strong>Client ID</strong> (looks like: <code>123456789-abc.apps.googleusercontent.com</code>) and paste it below.</p>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Client ID</label>
+        <input type="text" class="form-input" id="wizard-client-id" placeholder="123…apps.googleusercontent.com">
+      </div>`
+    }
+  ];
+
+  let _wizardStep = 0;
+
+  function openSetupWizard() {
+    _wizardStep = 0;
+    document.getElementById('modal-settings').style.display = 'none';
+    renderWizard();
+    document.getElementById('modal-wizard').style.display = 'flex';
+  }
+
+  function renderWizard() {
+    const steps = WIZARD_STEPS;
+    // Progress indicator
+    document.getElementById('wizard-steps').innerHTML =
+      steps.map((_, i) => `<div class="wstep ${i < _wizardStep ? 'done' : i === _wizardStep ? 'active' : ''}"></div>`).join('');
+
+    const step = steps[_wizardStep];
+    const isLast = _wizardStep === steps.length - 1;
+    document.getElementById('wizard-content').innerHTML = `
+      <div class="wizard-step-title">Step ${_wizardStep + 1} of ${steps.length}: ${step.title}</div>
+      ${step.content}
+      <div class="modal-actions">
+        ${_wizardStep > 0 ? '<button class="btn-modal" onclick="App.wizardBack()">← Back</button>' : ''}
+        <button class="btn-modal" onclick="document.getElementById(\'modal-wizard\').style.display=\'none\'">Skip</button>
+        <button class="btn-modal primary" onclick="App.wizardNext()">${isLast ? 'Finish Setup' : 'Next →'}</button>
+      </div>`;
+  }
+
+  function wizardNext() {
+    if (_wizardStep === WIZARD_STEPS.length - 1) {
+      const clientId = document.getElementById('wizard-client-id')?.value?.trim();
+      if (!clientId || !clientId.includes('.apps.googleusercontent.com')) {
+        toast('Please enter a valid Client ID.'); return;
+      }
+      const db = DB.get();
+      db.settings.googleClientId = clientId;
+      db.settings.setupComplete  = true;
+      DB.save();
+      document.getElementById('modal-wizard').style.display = 'none';
+      toast('✓ Google Drive configured! Click Settings → Sign In to connect.', 4000);
+      return;
+    }
+    _wizardStep++;
+    renderWizard();
+  }
+
+  function wizardBack() {
+    if (_wizardStep > 0) { _wizardStep--; renderWizard(); }
+  }
+
+  // ── Backup ─────────────────────────────────────────────────
+  function exportBackup() { DB.exportBackup(); toast('Backup exported to Downloads.'); }
+  function importBackup(inp) {
+    const file = inp.files[0];
+    if (!file) return;
+    DB.importBackup(file).then(() => {
+      renderSidebar(); showHome(); toast('✓ Backup imported!');
+    }).catch(() => toast('Import failed — invalid file.'));
+  }
+
+  // ── Public API ─────────────────────────────────────────────
+  return {
+    init,
+    toast,
+    renderSidebar,
+    showHome,
+    showFolderHome,
+    showFlagged,
+    showTrash,
+    unflag,
+    promptNewFolder,
+    createFolder,
+    startRenameFolder,
+    startRenameTest,
+    deleteFolder,
+    trashTest,
+    generateInFolder,
+    viewHistory,
+    retakeTest,
+    openGenerateModal,
+    closeGenerateModal,
+    onDrag, offDrag, onDrop, onFile,
+    startOCR,
+    toggleMode,
+    confirmFinish,
+    confirmFinishFromPause,
+    doFinish,
+    openEditCurrentQuestion,
+    onStemSelect,
+    applyHighlight,
+    eraseHighlight,
+    openSettings,
+    googleSignIn,
+    openSetupWizard,
+    wizardNext,
+    wizardBack,
+    exportBackup,
+    importBackup
+  };
+})();
+
+// ── Bootstrap ──────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => App.init());
+
+</script>
 </body>
 </html>
