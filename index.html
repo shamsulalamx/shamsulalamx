@@ -1699,7 +1699,7 @@ const Quiz = (() => {
     const el = document.getElementById('timer-q');
     if (!el) return;
     const s = state.qSecs || 0;
-    el.textContent = fmtTime(s);
+    el.textContent = fmtQTime(s);
     el.classList.toggle('timer-warn', s >= 90);
     el.classList.toggle('timer-red', s >= 120);
   }
@@ -1707,6 +1707,10 @@ const Quiz = (() => {
   function fmtTime(s) {
     const m = Math.floor(s / 60);
     return `${String(m).padStart(2,'0')}:${String(s % 60).padStart(2,'0')}`;
+  }
+  function fmtQTime(s) {
+    const m = Math.floor(s / 60);
+    return `${m}:${String(s % 60).padStart(2,'0')}`;
   }
 
   // ── Start / Resume ─────────────────────────────────────────
@@ -1794,8 +1798,7 @@ const Quiz = (() => {
     document.getElementById('overlay-pause').style.display = 'none';
     state.paused = false;
     startTotalTimer();
-    if (!state.results[state.qIdx].answered) startQTimer();
-    else stopQTimer();
+    startQTimer();
   }
 
   // ── Answer selection ───────────────────────────────────────
@@ -1803,7 +1806,7 @@ const Quiz = (() => {
     if (!state) return;
     const r = state.results[state.qIdx];
     if (r.answered) return;
-    const elapsed = stopQTimer();
+    const elapsed = state.qSecs || 0;
     const q = getQuestion();
     const ok = letter === q.c;
     r.answered = true; r.correct = ok; r.chosen = letter; r.time = elapsed;
@@ -1941,13 +1944,8 @@ const Quiz = (() => {
     renderFlagButton();
     updateModeToggle();
 
-    // Restart Q timer only if unanswered
-    if (!r.answered) {
-      startQTimer();
-    } else {
-      stopQTimer();
-      renderQTimer();
-    }
+    // Q timer always counts up from 0 — informational only
+    startQTimer();
 
     // Prev/Next buttons
     const prevBtn = document.getElementById('btn-prev');
