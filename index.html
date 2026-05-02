@@ -288,20 +288,7 @@ input, textarea, select { font-family: inherit; }
   user-select: text; cursor: text;
 }
 
-/* Highlight toolbar */
-#hl-toolbar {
-  position: fixed; background: #1a3a5c; border: 1px solid rgba(255,255,255,.2);
-  border-radius: 4px; padding: 5px 8px; display: none; gap: 5px;
-  z-index: 9999; box-shadow: 0 3px 12px rgba(0,0,0,.3);
-}
-#hl-toolbar.show { display: flex; align-items: center; }
-.hl-swatch { width: 20px; height: 20px; border-radius: 3px; cursor: pointer; border: 2px solid transparent; transition: transform .1s; }
-.hl-swatch:hover { transform: scale(1.2); border-color: white; }
-.hl-yellow { background: #ffeb3b; }
-.hl-blue   { background: #81d4fa; }
-.hl-green  { background: #a5d6a7; }
-.hl-pink   { background: #f48fb1; }
-.hl-erase  { width: 20px; height: 20px; border-radius: 3px; cursor: pointer; background: rgba(255,255,255,.15); color: white; font-size: 12px; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,.3); }
+/* Highlight */
 mark.hl-yellow { background: #ffeb3b; color: inherit; }
 mark.hl-blue   { background: #81d4fa; color: inherit; }
 mark.hl-green  { background: #a5d6a7; color: inherit; }
@@ -864,14 +851,6 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
   </div><!-- end #main -->
 </div><!-- end #app -->
 
-<!-- ═══ HIGHLIGHT TOOLBAR ═══ -->
-<div id="hl-toolbar">
-  <div class="hl-swatch hl-yellow" onclick="App.applyHighlight('hl-yellow')" title="Yellow"></div>
-  <div class="hl-swatch hl-blue"   onclick="App.applyHighlight('hl-blue')"   title="Blue"></div>
-  <div class="hl-swatch hl-green"  onclick="App.applyHighlight('hl-green')"  title="Green"></div>
-  <div class="hl-swatch hl-pink"   onclick="App.applyHighlight('hl-pink')"   title="Pink"></div>
-  <div class="hl-erase"            onclick="App.eraseHighlight()"            title="Erase">✕</div>
-</div>
 
 <!-- ═══ TOAST ═══ -->
 <div id="toast"></div>
@@ -2537,8 +2516,6 @@ const App = (() => {
   let _currentView   = 'home'; // 'home'|'quiz'|'results'|'flagged'|'trash'
   let _genQBFile = null, _genAKFile = null;
   let _genParsed = null;
-  let _hlSelection = null;
-
   // ── Init ───────────────────────────────────────────────────
   function init() {
     window.toast = toast;
@@ -2552,13 +2529,6 @@ const App = (() => {
       m.addEventListener('click', e => { if (e.target === m) m.style.display = 'none'; });
     });
 
-    // Hide highlight toolbar on outside click
-    document.addEventListener('mousedown', e => {
-      if (!document.getElementById('hl-toolbar').contains(e.target) &&
-          !document.getElementById('q-stem')?.contains(e.target)) {
-        hideHlToolbar();
-      }
-    });
 
     // Auto-save on visibility change (tab switch / close)
     document.addEventListener('visibilitychange', () => {
@@ -3121,59 +3091,37 @@ const App = (() => {
   }
 
   // ── Highlighting ───────────────────────────────────────────
-  let _hlSel = null;
-
   function onStemSelect(e) {
     const sel = window.getSelection();
-    if (!sel || sel.isCollapsed || !sel.toString().trim()) { hideHlToolbar(); return; }
-    _hlSel = sel.getRangeAt(0).cloneRange();
-    const rect = sel.getRangeAt(0).getBoundingClientRect();
-    const tb = document.getElementById('hl-toolbar');
-    tb.style.left = Math.max(0, rect.left + rect.width/2 - 65) + 'px';
-    tb.style.top  = (rect.top + window.scrollY - 44) + 'px';
-    tb.classList.add('show');
-  }
-
-  function hideHlToolbar() {
-    document.getElementById('hl-toolbar')?.classList.remove('show');
-    _hlSel = null;
-  }
-
-  function applyHighlight(cls) {
-    if (!_hlSel) { hideHlToolbar(); return; }
-    try {
-      const mark = document.createElement('mark');
-      mark.className = cls; mark.setAttribute('data-hl', cls);
-      _hlSel.surroundContents(mark);
-    } catch(e) {
+    if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
+    const range = sel.getRangeAt(0).cloneRange();
+    const stemEl = document.getElementById('q-stem');
+    if (!stemEl) return;
+    const overlapping = Array.from(stemEl.querySelectorAll('mark[data-hl]'))
+                             .filter(m => range.intersectsNode(m));
+    if (overlapping.length > 0) {
+      overlapping.forEach(m => {
+        const parent = m.parentNode;
+        while (m.firstChild) parent.insertBefore(m.firstChild, m);
+        parent.removeChild(m);
+      });
+    } else {
       try {
-        const frag = _hlSel.extractContents();
         const mark = document.createElement('mark');
-        mark.className = cls; mark.setAttribute('data-hl', cls);
-        mark.appendChild(frag); _hlSel.insertNode(mark);
-      } catch(_) {}
-    }
-    const stemEl = document.getElementById('q-stem');
-    const st = Quiz.getState();
-    if (st) Quiz.saveHighlight(st.qIdx, stemEl.innerHTML);
-    hideHlToolbar();
-    window.getSelection()?.removeAllRanges();
-  }
-
-  function eraseHighlight() {
-    const stemEl = document.getElementById('q-stem');
-    stemEl.querySelectorAll('mark[data-hl]').forEach(mark => {
-      const sel = window.getSelection();
-      const range = sel?.rangeCount ? sel.getRangeAt(0) : null;
-      if (!range || range.intersectsNode(mark)) {
-        const parent = mark.parentNode;
-        while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
-        parent.removeChild(mark);
+        mark.className = 'hl-yellow'; mark.setAttribute('data-hl', 'hl-yellow');
+        range.surroundContents(mark);
+      } catch(_) {
+        try {
+          const frag = range.extractContents();
+          const mark = document.createElement('mark');
+          mark.className = 'hl-yellow'; mark.setAttribute('data-hl', 'hl-yellow');
+          mark.appendChild(frag); range.insertNode(mark);
+        } catch(_) {}
       }
-    });
+    }
     const st = Quiz.getState();
     if (st) Quiz.saveHighlight(st.qIdx, stemEl.innerHTML);
-    hideHlToolbar();
+    sel.removeAllRanges();
   }
 
   // ── Settings & Google Drive ────────────────────────────────
@@ -3379,8 +3327,6 @@ const App = (() => {
     doFinish,
     openEditCurrentQuestion,
     onStemSelect,
-    applyHighlight,
-    eraseHighlight,
     openSettings,
     googleSignIn,
     openSetupWizard,
