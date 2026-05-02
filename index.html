@@ -1615,9 +1615,11 @@ const OCR = (() => {
     /time\s+remaining\s*:\s*\d+\s*hr?\s*\d+\s*min\s*\d+\s*sec/gi,
     /time\s+remaining\s*:\s*[\d:]+/gi,
     /\d+\s*hr?\s*\d+\s*min\s*\d+\s*sec/gi,
-    /https?:\/\/[^\s]+/gi,          // any URL
+    /https?:\/\/[^\s]+/gi,
+    /http?:\/\/[^\s]+/gi,
     /t\.me\/[^\s]+/gi,
     /www\.[^\s]+/gi,
+    /@[A-Za-z0-9_.]{2,}/g,          // @username handles (Telegram, social media)
     /^mark$/gim,
     /^previous$/gim,
     /^next$/gim,
@@ -1638,15 +1640,87 @@ const OCR = (() => {
     /item\s+\d+\s+of\s+\d+/gi,
   ];
 
+  function removeWatermarks(text) {
+    // Remove short tokens (4-25 chars) that repeat 3+ times consecutively
+    // — typical of margin/header watermarks OCR captures in sequence
+    text = text.replace(/\b(\S{4,25})\b(?:[ \t]+\1\b){2,}/gi, '');
+    // Also remove standalone tokens appearing 5+ times on the page
+    // that look like branded names: mixed letters+digits or CamelCase
+    const freq = {};
+    text.replace(/\b([A-Za-z0-9]{5,20})\b/g, (_, tok) => {
+      freq[tok] = (freq[tok] || 0) + 1;
+    });
+    for (const [tok, count] of Object.entries(freq)) {
+      if (count >= 5) {
+        const hasMixed = /[A-Za-z]/.test(tok) && /\d/.test(tok);
+        const hasCamel = /[a-z][A-Z]/.test(tok);
+        if (hasMixed || hasCamel) {
+          const esc = tok.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          text = text.replace(new RegExp('\\b' + esc + '\\b', 'g'), ' ');
+        }
+      }
+    }
+    return text;
+  }
+
   function cleanText(text) {
     let t = text;
     for (const pat of NOISE_PATTERNS) {
       t = t.replace(pat, ' ');
     }
+    t = removeWatermarks(t);
     // Collapse multiple spaces/newlines
     t = t.replace(/[ \t]{2,}/g, ' ');
     t = t.replace(/\n{3,}/g, '\n\n');
     return t.trim();
+  }
+
+  // ── Smart blue bar detection and cropping ─────────────────
+  function cropBlueBars(canvas) {
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width;
+    const h = canvas.height;
+    const data = ctx.getImageData(0, 0, w, h).data;
+    const SAFETY = 3;
+
+    function isBlueBarRow(y) {
+      let sumR = 0, sumG = 0, sumB = 0;
+      const base = y * w * 4;
+      for (let x = 0; x < w; x++) {
+        const i = base + x * 4;
+        sumR += data[i]; sumG += data[i+1]; sumB += data[i+2];
+      }
+      const avgR = sumR / w, avgG = sumG / w, avgB = sumB / w;
+      const brightness = (avgR + avgG + avgB) / 3;
+      return brightness < 80 && avgB > avgR + 20 && avgB > avgG + 20;
+    }
+
+    // Scan down from top — stop at first non-bar row
+    let topEnd = 0;
+    for (let y = 0; y < h; y++) {
+      if (isBlueBarRow(y)) topEnd = y + 1;
+      else break;
+    }
+    // Scan up from bottom — stop at first non-bar row
+    let bottomStart = h;
+    for (let y = h - 1; y >= 0; y--) {
+      if (isBlueBarRow(y)) bottomStart = y;
+      else break;
+    }
+
+    // Apply safety buffer only where a bar was actually detected
+    const top    = topEnd    > 0 ? Math.min(topEnd    + SAFETY, h) : 0;
+    const bottom = bottomStart < h ? Math.max(bottomStart - SAFETY, 0) : h;
+
+    // Nothing to crop
+    if (top === 0 && bottom === h) return canvas;
+    if (top >= bottom) return canvas;
+
+    const out = document.createElement('canvas');
+    out.width  = w;
+    out.height = bottom - top;
+    out.getContext('2d').drawImage(canvas, 0, top, w, bottom - top, 0, 0, w, bottom - top);
+    return out;
   }
 
   // ── PDF → Images ──────────────────────────────────────────
@@ -1662,7 +1736,8 @@ const OCR = (() => {
       canvas.width = viewport.width;
       canvas.height = viewport.height;
       await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-      images.push({ pageNum: i, dataUrl: canvas.toDataURL('image/png'), total: pdf.numPages });
+      const cropped = cropBlueBars(canvas);
+      images.push({ pageNum: i, dataUrl: cropped.toDataURL('image/png'), total: pdf.numPages });
       if (onProgress) onProgress(i, pdf.numPages);
     }
     return images;
@@ -1689,6 +1764,38 @@ const OCR = (() => {
     return pages;
   }
 
+  // ── Seam overlap deduplication ────────────────────────────
+  function levenshteinSim(a, b) {
+    const m = a.length, n = b.length;
+    if (!m && !n) return 1;
+    if (!m || !n) return 0;
+    let prev = Array.from({ length: n + 1 }, (_, j) => j);
+    let curr = new Array(n + 1);
+    for (let i = 1; i <= m; i++) {
+      curr[0] = i;
+      for (let j = 1; j <= n; j++) {
+        curr[j] = a[i-1] === b[j-1]
+          ? prev[j-1]
+          : 1 + Math.min(prev[j], curr[j-1], prev[j-1]);
+      }
+      [prev, curr] = [curr, prev];
+    }
+    return 1 - prev[n] / Math.max(m, n);
+  }
+
+  function deduplicateSeam(prevText, nextText) {
+    const WINDOW = 150;
+    const THRESHOLD = 0.70;
+    if (!prevText || !nextText) return nextText;
+    const tail = prevText.slice(-WINDOW).replace(/\s+/g, ' ').trim();
+    const head = nextText.slice(0, WINDOW).replace(/\s+/g, ' ').trim();
+    if (tail.length < 30 || head.length < 30) return nextText;
+    if (levenshteinSim(tail, head) >= THRESHOLD) {
+      return nextText.slice(WINDOW).trimStart();
+    }
+    return nextText;
+  }
+
   // ── Merge multi-page content ──────────────────────────────
   // Pages with no itemNum header = continuation of previous question
   function mergePagesByItem(pages) {
@@ -1706,10 +1813,19 @@ const OCR = (() => {
       }
     }
 
-    // Merge text blocks per item
+    // Merge text blocks per item, deduplicating seams between consecutive pages
     const merged = {};
     for (const [num, blocks] of Object.entries(itemPages)) {
-      merged[parseInt(num)] = blocks.join('\n\n');
+      if (blocks.length === 1) {
+        merged[parseInt(num)] = blocks[0];
+      } else {
+        let result = blocks[0];
+        for (let i = 1; i < blocks.length; i++) {
+          const deduped = deduplicateSeam(result, blocks[i]);
+          result = result + '\n\n' + deduped;
+        }
+        merged[parseInt(num)] = result;
+      }
     }
     return merged;
   }
