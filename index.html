@@ -607,6 +607,21 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
   margin-bottom: 3px;
 }
 
+/* ── Explanation block (single card) ───────────────────── */
+.exp-explanation-block {
+  margin-top: 10px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--navy);
+  border-radius: 4px;
+  padding: 12px 14px;
+  font-size: 12.5px;
+  color: var(--text);
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* ── PIN screen ─────────────────────────────────────────── */
 #pin-screen {
   position: fixed; inset: 0;
@@ -1759,10 +1774,7 @@ const OCR = (() => {
       t: stem,
       o: options,
       c: '',      // filled from answer key
-      e: {},      // per-choice explanations
-      correctBlurb: '',
-      incorrectSummary: '',
-      educationalObjective: '',
+      explanation: '',
       tags: [],
       highlights: {},
       strikethrough: []
@@ -1785,13 +1797,9 @@ const OCR = (() => {
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
     let correct = null;
-    let correctBlurb = '';
-    let incorrectSummary = '';
-    let educationalObjective = '';
-    const choiceExplanations = {}; // letter → explanation text
-
-    // ── Step 1: Find "Correct Answer: X" ──────────────────
     let correctAnswerLineIdx = -1;
+
+    // Find "Correct Answer: X"
     for (let i = 0; i < lines.length; i++) {
       const m = lines[i].match(/correct\s+answer\s*[:\-]\s*([A-Ia-i])/i);
       if (m) {
@@ -1801,82 +1809,12 @@ const OCR = (() => {
       }
     }
 
-    if (!correct || correctAnswerLineIdx === -1) {
-      // Fallback: look for highlighted answer pattern in options area
-      for (const line of lines) {
-        const m = line.match(/^([A-Ia-i])\s*[)\.]\s+.{5,}/);
-        if (m && lines.join(' ').toLowerCase().includes('correct')) {
-          // Can't determine reliably without highlight data
-        }
-      }
-      if (!correct) return null;
-    }
+    if (!correct || correctAnswerLineIdx === -1) return null;
 
-    // ── Step 2: Extract explanation block (after "Correct Answer:") ──
-    const explanationLines = lines.slice(correctAnswerLineIdx + 1);
-    const fullExplanation = explanationLines.join('\n');
+    // Everything after "Correct Answer: X" is the explanation — stored as-is
+    const explanation = lines.slice(correctAnswerLineIdx + 1).join('\n').trim();
 
-    // ── Step 3: Find Educational Objective ────────────────
-    const eoMatch = fullExplanation.match(/educational\s+objective\s*[:\-]\s*([\s\S]+?)(?:\n\n|$)/i);
-    if (eoMatch) {
-      educationalObjective = eoMatch[1].replace(/\n/g, ' ').trim();
-    }
-
-    // Remove Educational Objective from main explanation
-    const withoutEO = fullExplanation
-      .replace(/educational\s+objective\s*[:\-]\s*[\s\S]+?(?:\n\n|$)/gi, '')
-      .trim();
-
-    // ── Step 4: Find "Incorrect Answers: A, B, C" summary line ──
-    const incorrectSummaryMatch = withoutEO.match(/incorrect\s+answers?\s*[:\-]\s*([A-I,\s\.and]+)/i);
-    if (incorrectSummaryMatch) {
-      incorrectSummary = 'Incorrect Answers: ' + incorrectSummaryMatch[1].trim().replace(/\.$/, '');
-    }
-
-    // ── Step 5: Split before/after "Incorrect Answers:" ──
-    const incorrectIdx = withoutEO.search(/incorrect\s+answers?/i);
-    let correctSection = incorrectIdx > -1 ? withoutEO.slice(0, incorrectIdx).trim() : withoutEO.trim();
-    let incorrectSection = incorrectIdx > -1 ? withoutEO.slice(incorrectIdx).trim() : '';
-
-    // correctBlurb = everything before "Incorrect Answers:"
-    correctBlurb = correctSection.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
-
-    // ── Step 6: Parse individual incorrect choice explanations ──
-    // Pattern: "Buspirone (Choice A) is..." or "Choice A) is..." or "A) ..."
-    // Split incorrectSection into paragraphs and attribute each to a letter
-    const paragraphs = incorrectSection
-      .split(/\n\s*\n/)
-      .map(p => p.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim())
-      .filter(p => p.length > 10);
-
-    for (const para of paragraphs) {
-      // Skip the summary line itself
-      if (/^incorrect\s+answers?\s*[:\-]/i.test(para)) continue;
-      if (/^educational\s+objective/i.test(para)) continue;
-
-      // Match letter attribution patterns:
-      // "Buspirone (Choice A)" | "Choice A)" | "Choice A is" | "(Choice A)"
-      const letterMatch =
-        para.match(/\(choice\s+([A-Ia-i])\)/i) ||
-        para.match(/^choice\s+([A-Ia-i])\s*[)\.:\-]/i) ||
-        para.match(/^([A-Ia-i])\s*\)\s+\S/i) ||
-        para.match(/\bchoice\s+([A-Ia-i])\b/i);
-
-      if (letterMatch) {
-        const letter = letterMatch[1].toUpperCase();
-        choiceExplanations[letter] = (choiceExplanations[letter]
-          ? choiceExplanations[letter] + ' ' + para
-          : para).trim();
-      }
-    }
-
-    return {
-      correct,
-      correctBlurb,
-      incorrectSummary,
-      educationalObjective,
-      choiceExplanations
-    };
+    return { correct, explanation };
   }
 
   // ── Match questions to answers ────────────────────────────
@@ -1888,10 +1826,7 @@ const OCR = (() => {
       return {
         ...q,
         c: ak.correct || q.o[0]?.l || 'A',
-        e: ak.choiceExplanations || {},
-        correctBlurb: ak.correctBlurb || '',
-        incorrectSummary: ak.incorrectSummary || '',
-        educationalObjective: ak.educationalObjective || '',
+        explanation: ak.explanation || '',
         tags: autoTag(q.t, q.o)
       };
     });
@@ -2383,42 +2318,15 @@ const Quiz = (() => {
         '<strong>' + q.c + ') ' + (correctOpt ? correctOpt.t : '') + '</strong>' +
         '<span class="exp-badge-correct">&#10003; Correct Answer</span>' +
         (chosenCorrect ? '<span class="exp-badge-chosen">&#8592; Your Answer</span>' : '') +
-      '</div>' +
-      (q.correctBlurb ? '<div class="exp-text exp-blurb">' + q.correctBlurb + '</div>' : '');
+      '</div>';
     container.appendChild(correctDiv);
 
-    // Incorrect summary line
-    if (q.incorrectSummary) {
-      const sumDiv = document.createElement('div');
-      sumDiv.className = 'exp-incorrect-summary';
-      sumDiv.textContent = q.incorrectSummary;
-      container.appendChild(sumDiv);
-    }
-
-    // Per-choice wrong answer explanations
-    if (q.o) {
-      q.o.forEach(function(opt) {
-        if (opt.l === q.c) return;
-        const chosen  = r && r.chosen === opt.l;
-        const expText = (q.e && q.e[opt.l]) ? q.e[opt.l] : '';
-        const div = document.createElement('div');
-        div.className = 'exp-item' + (chosen ? ' exp-wrong-chosen' : ' exp-wrong');
-        div.innerHTML =
-          '<div class="exp-header">' +
-            '<strong>' + opt.l + ') ' + opt.t + '</strong>' +
-            (chosen ? '<span class="exp-badge-wrong">&#10007; Your Answer</span>' : '') +
-          '</div>' +
-          (expText ? '<div class="exp-text">' + expText + '</div>' : '<div class="exp-text exp-no-exp">No explanation available.</div>');
-        container.appendChild(div);
-      });
-    }
-
-    // Educational Objective at the bottom
-    if (q.educationalObjective) {
-      const eoDiv = document.createElement('div');
-      eoDiv.className = 'exp-educational-objective';
-      eoDiv.innerHTML = '<strong>Educational Objective:</strong> ' + q.educationalObjective;
-      container.appendChild(eoDiv);
+    // Single explanation block
+    if (q.explanation) {
+      const expDiv = document.createElement('div');
+      expDiv.className = 'exp-explanation-block';
+      expDiv.textContent = q.explanation;
+      container.appendChild(expDiv);
     }
   }
 
@@ -2491,7 +2399,6 @@ const Quiz = (() => {
 window.Quiz = Quiz;
 // Expose explanation builder globally for use by Results review screen
 window.buildExplanationHTML = function(q, r, container) {
-  // Reconstruct inline since it's in Quiz closure
   container.innerHTML = '';
   var correctOpt = q.o ? q.o.find(function(o){return o.l===q.c;}) : null;
   var chosenCorrect = r && r.chosen === q.c;
@@ -2502,40 +2409,14 @@ window.buildExplanationHTML = function(q, r, container) {
       '<strong>' + q.c + ') ' + (correctOpt ? correctOpt.t : '') + '</strong>' +
       '<span class="exp-badge-correct">&#10003; Correct Answer</span>' +
       (chosenCorrect ? '<span class="exp-badge-chosen">&#8592; Your Answer</span>' : '') +
-    '</div>' +
-    (q.correctBlurb ? '<div class="exp-text exp-blurb">' + q.correctBlurb + '</div>' : '');
+    '</div>';
   container.appendChild(correctDiv);
 
-  if (q.incorrectSummary) {
-    var sumDiv = document.createElement('div');
-    sumDiv.className = 'exp-incorrect-summary';
-    sumDiv.textContent = q.incorrectSummary;
-    container.appendChild(sumDiv);
-  }
-
-  if (q.o) {
-    q.o.forEach(function(opt) {
-      if (opt.l === q.c) return;
-      var chosen  = r && r.chosen === opt.l;
-      var expText = (q.e && q.e[opt.l]) ? q.e[opt.l] : '';
-      var div = document.createElement('div');
-      div.className = 'exp-item' + (chosen ? ' exp-wrong-chosen' : ' exp-wrong');
-      div.innerHTML =
-        '<div class="exp-header">' +
-          '<strong>' + opt.l + ') ' + opt.t + '</strong>' +
-          (chosen ? '<span class="exp-badge-wrong">&#10007; Your Answer</span>' : '') +
-        '</div>' +
-        (expText ? '<div class="exp-text">' + expText + '</div>' :
-          '<div class="exp-text exp-no-exp">No explanation available.</div>');
-      container.appendChild(div);
-    });
-  }
-
-  if (q.educationalObjective) {
-    var eoDiv = document.createElement('div');
-    eoDiv.className = 'exp-educational-objective';
-    eoDiv.innerHTML = '<strong>Educational Objective:</strong> ' + q.educationalObjective;
-    container.appendChild(eoDiv);
+  if (q.explanation) {
+    var expDiv = document.createElement('div');
+    expDiv.className = 'exp-explanation-block';
+    expDiv.textContent = q.explanation;
+    container.appendChild(expDiv);
   }
 };
 
@@ -2735,16 +2616,7 @@ const Results = (() => {
       buildExplanationHTML(q, r, expBody);
     } else {
       // fallback
-      expBody.innerHTML = '';
-      q.o.forEach(opt => {
-        const isCorrect = q.c === opt.l;
-        const div = document.createElement('div');
-        div.className = 'exp-item' + (isCorrect ? ' exp-correct' : '');
-        div.innerHTML = '<div class="exp-header"><strong>' + opt.l + ') ' + opt.t + '</strong>' +
-          (isCorrect ? '<span class="exp-badge-correct">&#10003; Correct</span>' : '') + '</div>' +
-          (q.e && q.e[opt.l] ? '<div class="exp-text">' + q.e[opt.l] + '</div>' : '');
-        expBody.appendChild(div);
-      });
+      window.buildExplanationHTML(q, r, expBody);
     }
 
     // Flag button
@@ -2814,16 +2686,14 @@ const Results = (() => {
       optContainer.appendChild(row);
     });
 
-    // Explanations
+    // Explanation
     const expContainer = modal.querySelector('#edit-explanations');
     expContainer.innerHTML = '';
-    q.o.forEach(opt => {
-      const row = document.createElement('div');
-      row.className = 'edit-exp-row';
-      row.innerHTML = `<label class="edit-exp-label">${opt.l}) Explanation:</label>
-        <textarea class="edit-exp-text" data-letter="${opt.l}" rows="2">${(q.e && q.e[opt.l])||''}</textarea>`;
-      expContainer.appendChild(row);
-    });
+    const expRow = document.createElement('div');
+    expRow.className = 'edit-exp-row';
+    expRow.innerHTML = `<label class="edit-exp-label">Explanation:</label>
+      <textarea class="edit-exp-text" data-field="explanation" rows="5">${q.explanation || ''}</textarea>`;
+    expContainer.appendChild(expRow);
 
     modal.style.display = 'flex';
     modal.dataset.testId = testId;
@@ -2846,10 +2716,8 @@ const Results = (() => {
     });
     const correctInput = modal.querySelector('input[name="correct-ans"]:checked');
     if (correctInput) q.c = correctInput.value;
-    modal.querySelectorAll('.edit-exp-text').forEach(ta => {
-      q.e = q.e || {};
-      q.e[ta.dataset.letter] = ta.value.trim();
-    });
+    const expTa = modal.querySelector('.edit-exp-text[data-field="explanation"]');
+    if (expTa) q.explanation = expTa.value.trim();
     q.tags = OCR.autoTag(q.t, q.o);
     DB.updateTest(testId, { questions: test.questions });
     window.toast('Question saved ✓', 2000);
@@ -3180,7 +3048,7 @@ const App = (() => {
           ${lastAnswer.correct ? ' <span style="color:#27ae60">✓</span>' : ' <span style="color:#c0392b">✗</span>'}
           &nbsp;|&nbsp; <strong>Correct:</strong> ${q.c}) ${correctOpt?.t || ''}
         </div>` : ''}
-        ${q.e && q.e[q.c] ? `<div class="flagged-item-exp"><strong>${q.c}) </strong>${q.e[q.c]}</div>` : ''}
+        ${q.explanation ? `<div class="flagged-item-exp">${q.explanation.slice(0, 300)}${q.explanation.length > 300 ? '…' : ''}</div>` : ''}
         <div class="flagged-item-footer">
           <button class="btn-unflag" onclick="App.unflag('${flag.testId}',${flag.questionId})">Remove Flag</button>
         </div>
