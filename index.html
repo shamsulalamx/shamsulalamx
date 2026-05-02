@@ -406,6 +406,10 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 }
 .quiz-bottom-bar.no-sidebar { left: 200px; transition: left .22s ease; }
 .score-info { font-size: 11px; color: #9ab0c8; }
+.block-timer-display {
+  font-size: 11px; font-weight: 700; color: #9ab0c8;
+  font-family: 'Courier New', monospace; letter-spacing: .04em;
+}
 
 /* ── Screen: Results ─────────────────────────────────────── */
 #screen-results { display: none; flex-direction: column; flex: 1; overflow: hidden; }
@@ -959,6 +963,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
           <div class="quiz-bottom-bar no-sidebar">
             <div style="display:flex;align-items:center;gap:12px;">
               <div class="score-info" id="bottom-score">Score: 0 / 0</div>
+              <div class="block-timer-display" id="block-timer">00:00</div>
               <button class="quiz-btn" id="btn-calc-toggle" onclick="toggleCalc()" title="Calculator">🖩 Calc</button>
             </div>
             <div style="display:flex;gap:8px;">
@@ -2329,6 +2334,7 @@ const Quiz = (() => {
   function startTotalTimer() {
     if (state.totTimerRef) clearInterval(state.totTimerRef);
     const base = Date.now() - state.totSecs * 1000;
+    renderTotalTimer(); // immediate render so display is correct from tick 0
     state.totTimerRef = setInterval(() => {
       state.totSecs = Math.floor((Date.now() - base) / 1000);
       renderTotalTimer();
@@ -2355,9 +2361,20 @@ const Quiz = (() => {
     stopQTimer();
   }
 
+  function fmtBlockTime(s) {
+    const h   = Math.floor(s / 3600);
+    const m   = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+    return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+  }
+
   function renderTotalTimer() {
-    const el = document.getElementById('timer-total');
-    if (el) el.textContent = fmtTime(state.totSecs);
+    const s = state.totSecs;
+    const topbar = document.getElementById('timer-total');
+    if (topbar) topbar.textContent = fmtTime(s);
+    const bottom = document.getElementById('block-timer');
+    if (bottom) bottom.textContent = fmtBlockTime(s);
   }
 
   function renderQTimer() {
