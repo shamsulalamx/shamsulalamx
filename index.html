@@ -1021,6 +1021,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
               <button class="btn-rev primary" onclick="App.retakeTest()">Retake This Form</button>
               <button class="btn-rev" onclick="App.showHome()">Return Home</button>
               <button class="btn-rev" onclick="App.showHome()">⌂ Return to Dashboard</button>
+              <button class="btn-rev" onclick="Results.downloadTestReport()">⬇ Download PDF Report</button>
             </div>
           </div>
         </div>
@@ -1474,6 +1475,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 /* ============================================================
    DB.JS — Storage Layer
@@ -3180,7 +3182,248 @@ const Results = (() => {
 
   function toggleCurrentFlag() { toggleFlagReview(_reviewIdx); }
   function openEditFromReview() { const q = _questions[_reviewIdx]; Results.openEditQuestion(_testId, q.n, _reviewIdx); }
-  return { show, openReview, reviewPrev, reviewNext, closeReview, toggleFlagReview, toggleCurrentFlag, openEditFromReview, openEditQuestion, saveEditQuestion };
+
+  function downloadTestReport() {
+    if (!window.jspdf) { alert('PDF library not loaded. Check your internet connection.'); return; }
+    const jsPDF = window.jspdf.jsPDF;
+    const doc   = new jsPDF({ unit: 'mm', format: 'a4' });
+    const PW = 210, PH = 297, ML = 14, MR = 14, MT = 14, MB = 14;
+    const CW = PW - ML - MR;
+    let y = MT;
+    let pageNum = 1;
+
+    const test    = DB.getTest(_testId);
+    const total   = _questions.length;
+    const score   = _entry.score;
+    const pct     = Math.round(score / total * 100);
+    const skipped = _results.filter(r => r.chosen === null).length;
+    const wrong   = _results.filter(r => r.answered && !r.correct).length;
+    const avgTime = Math.round(_results.reduce((a,r) => a + r.time, 0) / total);
+
+    const NAVY = [30, 58, 95], BLUE = [41, 128, 185], WHITE = [255,255,255],
+          LGRAY = [240, 242, 245], DGRAY = [80, 100, 120], BLACK = [20, 30, 45],
+          GREEN = [39, 174, 96], RED = [192, 57, 43], AMBER = [240, 165, 0];
+
+    function setColor(rgb)  { doc.setTextColor(...rgb); }
+    function setFill(rgb)   { doc.setFillColor(...rgb); }
+    function setDraw(rgb)   { doc.setDrawColor(...rgb); }
+    function setFont(style, sz) { doc.setFont('helvetica', style); doc.setFontSize(sz); }
+
+    function addPage() {
+      doc.addPage();
+      pageNum++;
+      y = MT;
+      // subtle page footer
+      doc.setFont('helvetica','normal'); doc.setFontSize(8);
+      doc.setTextColor(160,170,185);
+      doc.text(`${test.name} — Page ${pageNum}`, PW/2, PH - 6, { align: 'center' });
+      y = MT;
+    }
+
+    function checkY(needed) { if (y + needed > PH - MB - 8) addPage(); }
+
+    function hRule(color) {
+      setDraw(color || LGRAY); doc.setLineWidth(0.3);
+      doc.line(ML, y, PW - MR, y); y += 3;
+    }
+
+    // ── HEADER ─────────────────────────────────────────────────────────────
+    setFill(NAVY); doc.rect(0, 0, PW, 22, 'F');
+    setFont('bold', 15); setColor(WHITE);
+    doc.text('NBME Self-Assessment Report', ML, 10);
+    setFont('normal', 8); setColor([180, 200, 220]);
+    doc.text(new Date(_entry.date).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' }), PW - MR, 10, { align:'right' });
+    doc.text(`Attempt ${_entry.attemptNum} · Duration: ${Quiz.fmtTime(_entry.totSecs)}`, PW - MR, 15.5, { align:'right' });
+    y = 28;
+
+    // Test name
+    setFont('bold', 14); setColor(NAVY);
+    doc.text(test.name, ML, y); y += 7;
+
+    // Grade ribbon
+    const ribbonColor = pct>=80?GREEN:pct>=70?BLUE:pct>=60?AMBER:RED;
+    setFill(ribbonColor); doc.roundedRect(ML, y, 50, 14, 2, 2, 'F');
+    setFont('bold', 18); setColor(WHITE);
+    doc.text(`${pct}%`, ML + 25, y + 7.5, { align:'center' });
+    setFont('bold', 8); setColor(WHITE);
+    doc.text(grade(pct).toUpperCase(), ML + 25, y + 12, { align:'center' });
+
+    // Stats block
+    const stats = [
+      { l:'Correct',    v: String(score) },
+      { l:'Incorrect',  v: String(wrong) },
+      { l:'Skipped',    v: String(skipped) },
+      { l:'Avg / Q',    v: `${avgTime}s` },
+    ];
+    const sx0 = ML + 58, sw = (CW - 58) / stats.length;
+    stats.forEach((s, i) => {
+      const bx = sx0 + i * sw;
+      setFill(LGRAY); doc.roundedRect(bx, y, sw - 3, 14, 2, 2, 'F');
+      setFont('bold', 12); setColor(NAVY);
+      doc.text(s.v, bx + (sw-3)/2, y + 6.5, { align:'center' });
+      setFont('normal', 7); setColor(DGRAY);
+      doc.text(s.l, bx + (sw-3)/2, y + 11.5, { align:'center' });
+    });
+    y += 20;
+    hRule(LGRAY);
+
+    // ── TOPIC ANALYSIS ──────────────────────────────────────────────────────
+    setFont('bold', 10); setColor(NAVY);
+    doc.text('TOPIC ANALYSIS', ML, y); y += 5;
+
+    const tagStats = {};
+    _questions.forEach((q, i) => {
+      (q.tags || []).forEach(tag => {
+        if (!tagStats[tag]) tagStats[tag] = { correct:0, total:0 };
+        tagStats[tag].total++;
+        if (_results[i].correct) tagStats[tag].correct++;
+      });
+    });
+    const sorted = Object.entries(tagStats)
+      .map(([tag, s]) => ({ tag, pct: Math.round(s.correct/s.total*100), correct: s.correct, total: s.total }))
+      .sort((a,b) => a.pct - b.pct);
+
+    if (sorted.length === 0) {
+      setFont('italic', 9); setColor(DGRAY);
+      doc.text('No topic data available.', ML, y); y += 6;
+    } else {
+      const colW = (CW - 4) / 2;
+      // two columns: weaknesses left, strengths right
+      const weak = sorted.filter(s => s.pct < 70).slice(0, 8);
+      const strong = sorted.filter(s => s.pct >= 70).reverse().slice(0, 8);
+
+      setFont('bold', 8); setColor(RED);
+      doc.text('Areas to Improve', ML, y);
+      setFont('bold', 8); setColor(GREEN);
+      doc.text('Strengths', ML + colW + 4, y);
+      y += 4;
+
+      const maxRows = Math.max(weak.length, strong.length, 1);
+      for (let r = 0; r < maxRows; r++) {
+        checkY(6);
+        // weak col
+        if (weak[r]) {
+          const wpct = weak[r].pct;
+          const barW = colW * 0.45, filledW = barW * wpct / 100;
+          setFill([235,240,245]); doc.rect(ML, y - 3, barW, 4, 'F');
+          setFill(wpct < 50 ? RED : AMBER); doc.rect(ML, y - 3, filledW, 4, 'F');
+          setFont('normal', 7.5); setColor(BLACK);
+          doc.text(weak[r].tag, ML + barW + 2, y);
+          setColor(DGRAY); doc.text(`${wpct}% (${weak[r].correct}/${weak[r].total})`, ML + colW - 1, y, { align:'right' });
+        }
+        // strong col
+        if (strong[r]) {
+          const spct = strong[r].pct;
+          const bx = ML + colW + 4;
+          const barW = colW * 0.45, filledW = barW * spct / 100;
+          setFill([235,240,245]); doc.rect(bx, y - 3, barW, 4, 'F');
+          setFill(GREEN); doc.rect(bx, y - 3, filledW, 4, 'F');
+          setFont('normal', 7.5); setColor(BLACK);
+          doc.text(strong[r].tag, bx + barW + 2, y);
+          setColor(DGRAY); doc.text(`${spct}% (${strong[r].correct}/${strong[r].total})`, bx + colW - 1, y, { align:'right' });
+        }
+        y += 6;
+      }
+    }
+    y += 2; hRule(LGRAY);
+
+    // ── QUESTION REVIEW ─────────────────────────────────────────────────────
+    setFont('bold', 10); setColor(NAVY);
+    doc.text('QUESTION REVIEW', ML, y); y += 6;
+
+    _questions.forEach((q, i) => {
+      const r   = _results[i];
+      const cor = r.answered && r.correct;
+      const wrg = r.answered && !r.correct;
+      const skp = !r.answered;
+      const flg = DB.isFlagged(_testId, q.n);
+
+      // Estimate height needed: header + stem (variable) + options + explanation
+      const stemLines = doc.splitTextToSize(q.t || '', CW - 12).length;
+      const optLines  = (q.o || []).reduce((s, o) => s + doc.splitTextToSize(`${o.l}) ${o.t}`, CW - 20).length, 0);
+      const expLines  = q.explanation ? doc.splitTextToSize(q.explanation, CW - 12).length : 0;
+      const estH      = 8 + stemLines * 4.2 + optLines * 3.8 + (expLines ? expLines * 3.8 + 6 : 0) + 6;
+      if (estH > PH - 2 * MB) {
+        // very long question — just start a new page if needed
+        checkY(30);
+      } else {
+        checkY(estH);
+      }
+
+      // Question header bar
+      const barColor = cor ? GREEN : wrg ? RED : skp ? AMBER : LGRAY;
+      setFill(barColor); doc.rect(ML, y, CW, 6.5, 'F');
+      setFont('bold', 8); setColor(WHITE);
+      const qLabel = `Q${i+1}${flg ? ' 🏳' : ''}`;
+      doc.text(qLabel, ML + 2, y + 4.5);
+      const resultLabel = cor ? '✓ Correct' : wrg ? '✗ Incorrect' : skp ? '— Skipped' : '';
+      if (resultLabel) doc.text(resultLabel, PW - MR - 2, y + 4.5, { align:'right' });
+      y += 7.5;
+
+      // Tags
+      if (q.tags && q.tags.length) {
+        setFont('italic', 7); setColor(DGRAY);
+        doc.text(q.tags.join(' · '), ML + 2, y); y += 4;
+      }
+
+      // Stem
+      setFont('normal', 9); setColor(BLACK);
+      const stemTxt = doc.splitTextToSize(q.t || '(No stem)', CW - 4);
+      doc.text(stemTxt, ML + 2, y);
+      y += stemTxt.length * 4.2 + 2;
+
+      // Options
+      (q.o || []).forEach(opt => {
+        checkY(5);
+        const isCorrect = opt.l === q.c;
+        const isChosen  = r.chosen === opt.l;
+        let prefix = '  ';
+        if (isCorrect && isChosen) { setColor(GREEN);  prefix = '✓ '; }
+        else if (isCorrect)        { setColor(GREEN);  prefix = '✓ '; }
+        else if (isChosen)         { setColor(RED);    prefix = '✗ '; }
+        else                       { setColor(DGRAY); }
+        setFont(isCorrect ? 'bold' : 'normal', 8.5);
+        const optLines = doc.splitTextToSize(`${prefix}${opt.l}) ${opt.t}`, CW - 10);
+        doc.text(optLines, ML + 6, y);
+        y += optLines.length * 3.8 + 0.5;
+      });
+      setColor(BLACK);
+
+      // Explanation
+      if (q.explanation) {
+        checkY(10);
+        y += 1;
+        setFill([245, 247, 250]); setDraw([200, 210, 225]);
+        // draw background — estimate height
+        const expT = doc.splitTextToSize(q.explanation, CW - 12);
+        const expH = expT.length * 3.8 + 5;
+        checkY(expH);
+        doc.setFillColor(245, 247, 250); doc.rect(ML, y, CW, expH, 'F');
+        doc.setDrawColor(30, 58, 95); doc.setLineWidth(0.8);
+        doc.line(ML, y, ML, y + expH);
+        doc.setLineWidth(0.3);
+        setFont('bold', 7.5); setColor(NAVY);
+        doc.text('Explanation', ML + 3, y + 3.5);
+        setFont('normal', 8); setColor(BLACK);
+        doc.text(expT, ML + 3, y + 7);
+        y += expH + 2;
+      }
+      y += 4;
+    });
+
+    // ── PAGE FOOTERS for page 1 ──────────────────────────────────────────────
+    doc.setPage(1);
+    doc.setFont('helvetica','normal'); doc.setFontSize(8);
+    doc.setTextColor(160,170,185);
+    doc.text(`${test.name} — Page 1`, PW/2, PH - 6, { align:'center' });
+
+    // ── SAVE ────────────────────────────────────────────────────────────────
+    const dateStr = new Date(_entry.date).toISOString().slice(0,10);
+    const safeName = (test.name || 'Report').replace(/[^a-zA-Z0-9_\-]/g, '_');
+    doc.save(`${safeName}_${dateStr}.pdf`);
+  }
+
+  return { show, openReview, reviewPrev, reviewNext, closeReview, toggleFlagReview, toggleCurrentFlag, openEditFromReview, openEditQuestion, saveEditQuestion, downloadTestReport };
 })();
 window.Results = Results;
 window.openReview        = Results.openReview;
