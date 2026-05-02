@@ -189,34 +189,95 @@ input, textarea, select { font-family: inherit; }
 }
 
 /* Quiz left: nav panel */
-#quiz-nav-panel {
-  width: 200px; min-width: 200px;
-  background: #1e2d3d; overflow-y: auto; padding: 12px;
-  border-right: 1px solid #162333; flex-shrink: 0;
+/* ── Collapsible quiz navigator sidebar ─────────────────── */
+#quiz-nav-sidebar {
+  display: flex; flex-direction: row;
+  width: 200px; min-width: 200px; flex-shrink: 0;
+  background: #141f2b;
+  border-right: 1px solid #0c1520;
+  overflow: hidden;
+  transition: width .22s ease, min-width .22s ease;
 }
-.qnp-header { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #5a7a9a; margin-bottom: 10px; }
-#nav-panel { display: flex; flex-wrap: wrap; gap: 4px; }
-.nav-dot {
-  width: 28px; height: 28px; border-radius: 3px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 10px; font-weight: 700; cursor: pointer;
-  background: #2a3d52; color: #7a9ab8; border: 1px solid #324a62;
-  transition: all .12s;
-}
-.nav-dot:hover   { background: #3a5570; color: white; }
-.nav-dot.nav-current { outline: 2px solid #4fc3f7; }
-.nav-dot.nav-correct { background: #1a4a2a; color: #4caf50; border-color: #2e7d32; }
-.nav-dot.nav-wrong   { background: #4a1a1a; color: #ef5350; border-color: #c62828; }
-.nav-dot.nav-marked  { outline: 2px solid #f0a500; }
-.nav-dot.nav-flagged::after { content: '🏳'; position: absolute; font-size: 8px; top: -2px; right: -2px; }
+#quiz-nav-sidebar.qns-collapsed { width: 36px; min-width: 36px; }
 
-.qnp-legend { margin-top: 14px; }
-.legend-row { display: flex; align-items: center; gap: 6px; font-size: 10px; color: #5a7a9a; margin-bottom: 4px; }
-.legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
-.leg-correct { background: #1a4a2a; border: 1px solid #2e7d32; }
-.leg-wrong   { background: #4a1a1a; border: 1px solid #c62828; }
-.leg-current { background: #2a3d52; border: 2px solid #4fc3f7; }
-.leg-marked  { background: #2a3d52; border: 2px solid #f0a500; }
+/* Rail — always-visible 36px strip */
+.qns-rail {
+  width: 36px; min-width: 36px; flex-shrink: 0;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 10px 0; gap: 12px;
+  background: #0f1a25; border-right: 1px solid #0c1520;
+}
+.qns-rail-toggle {
+  background: none; border: none; color: #4a6a82;
+  cursor: pointer; font-size: 13px; padding: 4px 5px;
+  border-radius: 3px; line-height: 1;
+  transition: color .12s, background .12s;
+}
+.qns-rail-toggle:hover { color: #8ab0cc; background: rgba(255,255,255,.07); }
+.qns-rail-count {
+  font-size: 9px; color: #2e4560; letter-spacing: .05em;
+  writing-mode: vertical-lr; transform: rotate(180deg);
+  white-space: nowrap; user-select: none;
+}
+
+/* Panel — the 164px collapsible question list */
+.qns-panel {
+  flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0;
+}
+.qns-panel-header {
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .09em; color: #2e4560;
+  padding: 10px 10px 8px; border-bottom: 1px solid #0c1520;
+  flex-shrink: 0; white-space: nowrap;
+}
+.qns-panel-body {
+  flex: 1; overflow-y: auto; overflow-x: hidden; padding: 3px 0;
+}
+.qns-panel-body::-webkit-scrollbar       { width: 3px; }
+.qns-panel-body::-webkit-scrollbar-track { background: transparent; }
+.qns-panel-body::-webkit-scrollbar-thumb { background: #1e3045; border-radius: 2px; }
+.qns-panel-body::-webkit-scrollbar-thumb:hover { background: #2a4060; }
+
+/* Section label */
+.qns-section-lbl {
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: #1e3045;
+  padding: 8px 10px 4px; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Question rows */
+.qns-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 8px 4px 6px; height: 26px; cursor: pointer;
+  border-left: 3px solid transparent; position: relative;
+  transition: background .1s;
+}
+.qns-item:hover { background: rgba(255,255,255,.04); }
+.qns-item.qns-current { background: rgba(41,128,185,.14); border-left-color: #2980b9; }
+.qns-item.qns-correct { border-left-color: #27ae60; }
+.qns-item.qns-wrong   { border-left-color: #c0392b; }
+.qns-item.qns-marked  { box-shadow: inset 0 0 0 1px rgba(240,165,0,.45); }
+
+.qns-num {
+  font-size: 11px; font-weight: 600; color: #3a5570;
+  min-width: 22px; text-align: right; flex-shrink: 0;
+}
+.qns-item.qns-current .qns-num { color: #5bb8f5; }
+.qns-item.qns-correct .qns-num { color: #5dbb70; }
+.qns-item.qns-wrong   .qns-num { color: #e05555; }
+
+.qns-dot {
+  width: 13px; height: 13px; border-radius: 50%; flex-shrink: 0;
+  border: 1.5px solid #1e3045; background: transparent;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 8px; font-weight: 900; color: transparent;
+}
+.qns-item.qns-current .qns-dot { background: #2368a0; border-color: #4fc3f7; color: #d0eeff; }
+.qns-item.qns-correct .qns-dot { background: #163824; border-color: #27ae60; color: #5dbb70; }
+.qns-item.qns-wrong   .qns-dot { background: #3c1414; border-color: #c0392b; color: #e05555; }
+
+.qns-flag { font-size: 9px; margin-left: auto; flex-shrink: 0; line-height: 1; }
 
 /* Quiz center: question */
 #quiz-main {
@@ -343,7 +404,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
   display: flex; align-items: center; justify-content: space-between;
   z-index: 50; border-top: 1px solid rgba(255,255,255,.1);
 }
-.quiz-bottom-bar.no-sidebar { left: 200px; } /* quiz nav panel */
+.quiz-bottom-bar.no-sidebar { left: 200px; transition: left .22s ease; }
 .score-info { font-size: 11px; color: #9ab0c8; }
 
 /* ── Screen: Results ─────────────────────────────────────── */
@@ -563,7 +624,9 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 @media(max-width:700px) {
   :root { --sidebar-w: 0px; }
   #sidebar { display: none; }
-  #quiz-nav-panel { width: 160px; min-width: 160px; }
+  #quiz-nav-sidebar { width: 36px !important; min-width: 36px !important; }
+  #quiz-nav-sidebar .qns-panel { display: none; }
+  .quiz-bottom-bar.no-sidebar { left: 36px !important; }
 }
 
 
@@ -824,15 +887,16 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
       <!-- ─── QUIZ SCREEN ─── -->
       <div id="screen-quiz" style="display:none;flex-direction:row;height:calc(100vh - 52px);overflow:hidden;">
 
-        <!-- Nav panel -->
-        <div id="quiz-nav-panel">
-          <div class="qnp-header">Navigation</div>
-          <div id="nav-panel"></div>
-          <div class="qnp-legend" style="margin-top:14px;">
-            <div class="legend-row"><div class="legend-dot leg-correct"></div> Correct</div>
-            <div class="legend-row"><div class="legend-dot leg-wrong"></div> Incorrect</div>
-            <div class="legend-row"><div class="legend-dot leg-current"></div> Current</div>
-            <div class="legend-row"><div class="legend-dot leg-marked"></div> Marked</div>
+        <!-- Question navigator sidebar -->
+        <div id="quiz-nav-sidebar">
+          <div class="qns-rail">
+            <button class="qns-rail-toggle" id="qns-rail-toggle"
+                    onclick="toggleNavSidebar()" title="Toggle navigator">❮</button>
+            <span class="qns-rail-count" id="qns-rail-count"></span>
+          </div>
+          <div class="qns-panel">
+            <div class="qns-panel-header">Navigator</div>
+            <div class="qns-panel-body" id="qns-list"></div>
           </div>
         </div>
 
@@ -2190,6 +2254,37 @@ const OCR = (() => {
 })();
 window.OCR = OCR;
 
+// ── Quiz navigator sidebar toggle ───────────────────────────
+const _QNS_W_EXPANDED  = 200;
+const _QNS_W_COLLAPSED = 36;
+
+function toggleNavSidebar() {
+  const sidebar   = document.getElementById('quiz-nav-sidebar');
+  const bottomBar = document.querySelector('.quiz-bottom-bar.no-sidebar');
+  const toggle    = document.getElementById('qns-rail-toggle');
+  if (!sidebar) return;
+  const collapsed = sidebar.classList.toggle('qns-collapsed');
+  const w = collapsed ? _QNS_W_COLLAPSED : _QNS_W_EXPANDED;
+  sidebar.style.width    = w + 'px';
+  sidebar.style.minWidth = w + 'px';
+  if (bottomBar) bottomBar.style.left = w + 'px';
+  if (toggle) toggle.textContent = collapsed ? '❯' : '❮';
+  localStorage.setItem('nbme_nav_collapsed', collapsed ? '1' : '0');
+}
+
+function restoreNavSidebarState() {
+  if (localStorage.getItem('nbme_nav_collapsed') !== '1') return;
+  const sidebar   = document.getElementById('quiz-nav-sidebar');
+  const bottomBar = document.querySelector('.quiz-bottom-bar.no-sidebar');
+  const toggle    = document.getElementById('qns-rail-toggle');
+  if (!sidebar) return;
+  sidebar.classList.add('qns-collapsed');
+  sidebar.style.width    = _QNS_W_COLLAPSED + 'px';
+  sidebar.style.minWidth = _QNS_W_COLLAPSED + 'px';
+  if (bottomBar) bottomBar.style.left = _QNS_W_COLLAPSED + 'px';
+  if (toggle) toggle.textContent = '❯';
+}
+
 // ── Shared image renderer (used by Quiz and Results) ────────
 function renderImages(q, topElId, bottomElId) {
   const topEl    = document.getElementById(topElId);
@@ -2633,27 +2728,69 @@ const Quiz = (() => {
     btn.textContent = flagged ? '🚩 Flagged' : '🏳 Flag';
   }
 
+  // Build sidebar DOM once; subsequent calls only update classes
+  function _buildNavSidebar() {
+    if (!state) return;
+    const list = document.getElementById('qns-list');
+    if (!list) return;
+    const test = getTest();
+    list.innerHTML = '';
+    const lbl = document.createElement('div');
+    lbl.className = 'qns-section-lbl';
+    lbl.textContent = test.name || 'Block';
+    lbl.title = test.name || 'Block';
+    list.appendChild(lbl);
+    test.questions.forEach((q, i) => {
+      const item = document.createElement('div');
+      item.className = 'qns-item';
+      item.dataset.idx = i;
+      item.title = `Question ${i + 1}`;
+      const num  = document.createElement('span'); num.className  = 'qns-num';  num.textContent = i + 1;
+      const dot  = document.createElement('span'); dot.className  = 'qns-dot';
+      const flag = document.createElement('span'); flag.className = 'qns-flag';
+      item.appendChild(num); item.appendChild(dot); item.appendChild(flag);
+      item.addEventListener('click', () => goTo(i));
+      list.appendChild(item);
+    });
+    const countEl = document.getElementById('qns-rail-count');
+    if (countEl) countEl.textContent = test.questions.length + ' Q';
+    _applyNavStates();
+  }
+
+  function _applyNavStates() {
+    if (!state) return;
+    const test = getTest();
+    const list = document.getElementById('qns-list');
+    if (!list) return;
+    test.questions.forEach((q, i) => {
+      const item = list.querySelector(`[data-idx="${i}"]`);
+      if (!item) return;
+      const r    = state.results[i];
+      const cur  = i === state.qIdx;
+      const corr = r.answered &&  r.correct;
+      const wrng = r.answered && !r.correct;
+      const mrkd = state.marks.has(i);
+      const flgd = DB.isFlagged(state.testId, q.n);
+      item.className = 'qns-item' +
+        (cur  ? ' qns-current' : '') +
+        (corr ? ' qns-correct' : '') +
+        (wrng ? ' qns-wrong'   : '') +
+        (mrkd ? ' qns-marked'  : '');
+      const dot = item.querySelector('.qns-dot');
+      if (dot) dot.textContent = corr ? '✓' : wrng ? '✗' : cur ? '●' : '';
+      const flagEl = item.querySelector('.qns-flag');
+      if (flagEl) flagEl.textContent = flgd ? '🏳' : '';
+    });
+    const cur = list.querySelector('.qns-item.qns-current');
+    if (cur) cur.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+
   function updateNavPanel() {
     if (!state) return;
-    const panel = document.getElementById('nav-panel');
-    if (!panel) return;
-    const test = getTest();
-    panel.innerHTML = '';
-    test.questions.forEach((q, i) => {
-      const r = state.results[i];
-      const div = document.createElement('div');
-      div.className = 'nav-dot';
-      div.textContent = i + 1;
-      div.title = `Q${i+1}`;
-      if (i === state.qIdx) div.classList.add('nav-current');
-      if (r.answered) {
-        div.classList.add(r.correct ? 'nav-correct' : 'nav-wrong');
-      }
-      if (state.marks.has(i)) div.classList.add('nav-marked');
-      if (DB.isFlagged(state.testId, q.n)) div.classList.add('nav-flagged');
-      div.addEventListener('click', () => goTo(i));
-      panel.appendChild(div);
-    });
+    const list = document.getElementById('qns-list');
+    if (!list) return;
+    if (!list.querySelector('.qns-item')) { _buildNavSidebar(); return; }
+    _applyNavStates();
   }
 
   function renderScoreLive() {
@@ -4096,6 +4233,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.body.style.zoom = saved / 14;
   PIN.init();
   App.init();
+  restoreNavSidebarState();
   // Close calculator popup when leaving the quiz screen
   const _qs = document.getElementById('screen-quiz');
   if (_qs) {
