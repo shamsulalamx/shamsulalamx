@@ -636,6 +636,8 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
     </div>
     <div class="topbar-right">
       <span id="sync-indicator" style="font-size:11px;color:#9ab0c8;">● Local</span>
+      <button class="topbar-btn" onclick="adjFontSize(-1)" title="Decrease font size">A-</button>
+      <button class="topbar-btn" onclick="adjFontSize(1)"  title="Increase font size">A+</button>
       <button class="topbar-btn" onclick="App.openSettings()" title="Settings">⚙ Settings</button>
     </div>
   </div>
@@ -3484,7 +3486,16 @@ const PIN = (() => {
 window.PIN = PIN;
 
 // ── Bootstrap ──────────────────────────────────────────────
+function adjFontSize(delta) {
+  const current = parseInt(localStorage.getItem('nbme_fontSize')) || 14;
+  const next = Math.min(20, Math.max(12, current + delta));
+  document.body.style.zoom = next / 14;
+  localStorage.setItem('nbme_fontSize', next);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  const saved = parseInt(localStorage.getItem('nbme_fontSize')) || 14;
+  document.body.style.zoom = saved / 14;
   PIN.init();
   App.init();
 });
