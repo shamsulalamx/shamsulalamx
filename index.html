@@ -513,6 +513,52 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 .trash-item-info .trash-meta { font-size: 11px; color: var(--muted); }
 .trash-item-actions { display: flex; gap: 6px; }
 
+/* ── Calculator popup ─────────────────────────────────────── */
+#calc-popup {
+  display: none; position: fixed;
+  bottom: 56px; right: 20px;
+  width: 224px; border-radius: 10px;
+  background: #162333;
+  box-shadow: 0 12px 40px rgba(0,0,0,.5);
+  z-index: 200; overflow: hidden;
+  border: 1px solid rgba(255,255,255,.12);
+}
+#calc-popup.open { display: block; }
+#calc-screen {
+  background: #0d1b26; padding: 14px 14px 10px;
+  text-align: right; user-select: none;
+}
+#calc-expr {
+  font-size: 11px; color: #5a7a9a; min-height: 15px;
+  font-family: 'Courier New', monospace;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+#calc-result {
+  font-size: 30px; font-weight: 700; color: #ffffff;
+  font-family: 'Courier New', monospace; line-height: 1.2;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+#calc-buttons {
+  display: grid; grid-template-columns: repeat(4,1fr);
+  gap: 1px; background: rgba(0,0,0,.4); padding: 1px;
+}
+.cb {
+  background: #1e2d3d; color: #ffffff;
+  border: none; padding: 15px 0;
+  font-size: 15px; font-weight: 600;
+  cursor: pointer; transition: background .1s;
+}
+.cb:hover  { background: #2a3f55; }
+.cb:active { background: #1a3a5c; }
+.cb.cb-op  { color: #ffd54f; background: #1a2c3e; }
+.cb.cb-op:hover { background: #243d52; }
+.cb.cb-fn  { color: #81d4fa; background: #1a2c3e; }
+.cb.cb-fn:hover { background: #243d52; }
+.cb.cb-eq  { background: var(--navy); color: #ffffff; }
+.cb.cb-eq:hover { background: #2870d0; }
+.cb.cb-clr { color: #ef5350; }
+.cb.cb-zero { grid-column: span 2; }
+
 /* Responsive */
 @media(max-width:700px) {
   :root { --sidebar-w: 0px; }
@@ -760,7 +806,10 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 
           <!-- Bottom nav bar -->
           <div class="quiz-bottom-bar no-sidebar">
-            <div class="score-info" id="bottom-score">Score: 0 / 0</div>
+            <div style="display:flex;align-items:center;gap:12px;">
+              <div class="score-info" id="bottom-score">Score: 0 / 0</div>
+              <button class="quiz-btn" id="btn-calc-toggle" onclick="toggleCalc()" title="Calculator">🖩 Calc</button>
+            </div>
             <div style="display:flex;gap:8px;">
               <button class="quiz-btn" id="btn-prev" onclick="Quiz.prevQ()" disabled>◀ Prev</button>
               <button class="quiz-btn primary" id="btn-next" onclick="Quiz.nextQ()">Next ▶</button>
@@ -856,6 +905,35 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 
 <!-- ═══ TOAST ═══ -->
 <div id="toast"></div>
+
+<!-- ═══ CALCULATOR POPUP ═══ -->
+<div id="calc-popup">
+  <div id="calc-screen">
+    <div id="calc-expr"></div>
+    <div id="calc-result">0</div>
+  </div>
+  <div id="calc-buttons">
+    <button class="cb cb-clr" onclick="calcPress('C')">C</button>
+    <button class="cb cb-fn"  onclick="calcPress('back')">⌫</button>
+    <button class="cb cb-fn"  onclick="calcPress('sqrt')">√</button>
+    <button class="cb cb-op"  onclick="calcPress('/')">÷</button>
+    <button class="cb" onclick="calcPress('7')">7</button>
+    <button class="cb" onclick="calcPress('8')">8</button>
+    <button class="cb" onclick="calcPress('9')">9</button>
+    <button class="cb cb-op" onclick="calcPress('*')">×</button>
+    <button class="cb" onclick="calcPress('4')">4</button>
+    <button class="cb" onclick="calcPress('5')">5</button>
+    <button class="cb" onclick="calcPress('6')">6</button>
+    <button class="cb cb-op" onclick="calcPress('-')">−</button>
+    <button class="cb" onclick="calcPress('1')">1</button>
+    <button class="cb" onclick="calcPress('2')">2</button>
+    <button class="cb" onclick="calcPress('3')">3</button>
+    <button class="cb cb-op" onclick="calcPress('+')">+</button>
+    <button class="cb cb-zero" onclick="calcPress('0')">0</button>
+    <button class="cb" onclick="calcPress('.')">.</button>
+    <button class="cb cb-eq"  onclick="calcPress('=')">=</button>
+  </div>
+</div>
 
 <!-- ═══ PAUSE OVERLAY ═══ -->
 <div id="overlay-pause" style="display:none;position:fixed;inset:0;background:rgba(26,58,92,.97);z-index:500;align-items:center;justify-content:center;">
@@ -3486,6 +3564,59 @@ const PIN = (() => {
 window.PIN = PIN;
 
 // ── Bootstrap ──────────────────────────────────────────────
+// ── Calculator ──────────────────────────────────────────────
+let _calcVal = '0', _calcOperand = null, _calcOp = null, _calcAwait = false, _calcExpr = '';
+const _opSym = {'+':'+', '-':'−', '*':'×', '/':'÷'};
+
+function calcPress(v) {
+  if (v === 'C') {
+    _calcVal = '0'; _calcOperand = null; _calcOp = null; _calcAwait = false; _calcExpr = '';
+  } else if (v === 'back') {
+    if (_calcVal.length > 1 && _calcVal !== 'Err') _calcVal = _calcVal.slice(0,-1);
+    else _calcVal = '0';
+  } else if (v === 'sqrt') {
+    const n = parseFloat(_calcVal);
+    _calcExpr = `√(${_calcVal})`;
+    _calcVal = n < 0 ? 'Err' : String(parseFloat(Math.sqrt(n).toFixed(10)));
+    _calcAwait = false;
+  } else if (v === '=') {
+    if (_calcOp !== null && _calcOperand !== null) {
+      const a = parseFloat(_calcOperand), b = parseFloat(_calcVal);
+      _calcExpr = `${_calcOperand} ${_opSym[_calcOp]} ${_calcVal} =`;
+      let r;
+      if      (_calcOp === '+') r = a + b;
+      else if (_calcOp === '-') r = a - b;
+      else if (_calcOp === '*') r = a * b;
+      else if (_calcOp === '/') r = b === 0 ? NaN : a / b;
+      _calcVal = isNaN(r) ? 'Err' : String(parseFloat(r.toFixed(10)));
+      _calcOperand = null; _calcOp = null; _calcAwait = false;
+    }
+  } else if (['+','-','*','/'].includes(v)) {
+    _calcExpr = `${_calcVal} ${_opSym[v]}`;
+    _calcOperand = _calcVal; _calcOp = v; _calcAwait = true;
+  } else if (v === '.') {
+    if (_calcAwait) { _calcVal = '0.'; _calcAwait = false; }
+    else if (!_calcVal.includes('.')) _calcVal += '.';
+  } else {
+    if (_calcAwait || _calcVal === '0' || _calcVal === 'Err') {
+      _calcVal = v; _calcAwait = false;
+    } else if (_calcVal.replace(/[^0-9]/g,'').length < 12) {
+      _calcVal += v;
+    }
+  }
+  const res  = document.getElementById('calc-result');
+  const expr = document.getElementById('calc-expr');
+  if (res)  res.textContent  = _calcVal;
+  if (expr) expr.textContent = _calcExpr;
+}
+
+function toggleCalc() {
+  const popup = document.getElementById('calc-popup');
+  const btn   = document.getElementById('btn-calc-toggle');
+  const open  = popup.classList.toggle('open');
+  if (btn) btn.style.background = open ? 'rgba(255,255,255,.22)' : '';
+}
+
 function adjFontSize(delta) {
   const current = parseInt(localStorage.getItem('nbme_fontSize')) || 14;
   const next = Math.min(20, Math.max(12, current + delta));
@@ -3498,6 +3629,18 @@ document.addEventListener('DOMContentLoaded', () => {
   document.body.style.zoom = saved / 14;
   PIN.init();
   App.init();
+  // Close calculator popup when leaving the quiz screen
+  const _qs = document.getElementById('screen-quiz');
+  if (_qs) {
+    new MutationObserver(() => {
+      if (_qs.style.display !== 'flex') {
+        const p = document.getElementById('calc-popup');
+        const b = document.getElementById('btn-calc-toggle');
+        if (p) p.classList.remove('open');
+        if (b) b.style.background = '';
+      }
+    }).observe(_qs, { attributes: true, attributeFilter: ['style'] });
+  }
 });
 
 </script>
