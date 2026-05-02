@@ -666,6 +666,60 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
   75%{transform:translateX(6px)}
 }
 
+/* ── Lab Values Modal ── */
+#modal-lab {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,.55); z-index: 600;
+  align-items: center; justify-content: center;
+}
+#modal-lab.open { display: flex; }
+.lab-panel {
+  background: #fff; border-radius: 10px;
+  width: min(820px, 96vw); max-height: 88vh;
+  display: flex; flex-direction: column;
+  box-shadow: 0 16px 48px rgba(0,0,0,.35);
+  overflow: hidden;
+}
+.lab-header {
+  background: var(--navy); color: #fff;
+  padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0;
+}
+.lab-header h2 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: .3px; }
+.lab-close {
+  background: none; border: none; color: #fff; font-size: 20px;
+  cursor: pointer; line-height: 1; padding: 0 4px; opacity: .8;
+}
+.lab-close:hover { opacity: 1; }
+.lab-tabs {
+  display: flex; gap: 0; background: #f0f2f5; border-bottom: 2px solid var(--border);
+  flex-shrink: 0;
+}
+.lab-tab {
+  padding: 9px 18px; font-size: 12px; font-weight: 600; color: var(--muted);
+  background: none; border: none; cursor: pointer; border-bottom: 2px solid transparent;
+  margin-bottom: -2px; transition: color .15s;
+}
+.lab-tab:hover { color: var(--navy); }
+.lab-tab.active { color: var(--navy); border-bottom-color: var(--blue); background: #fff; }
+.lab-body { overflow-y: auto; padding: 16px 20px; flex: 1; }
+.lab-pane { display: none; }
+.lab-pane.active { display: block; }
+.lab-section-head {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .6px; color: var(--blue); margin: 14px 0 4px;
+  padding-bottom: 4px; border-bottom: 1px solid var(--border);
+}
+.lab-section-head:first-child { margin-top: 0; }
+.lab-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.lab-table th {
+  text-align: left; padding: 5px 8px; background: #e8edf3;
+  color: var(--navy); font-weight: 600; font-size: 11px;
+}
+.lab-table td { padding: 5px 8px; border-bottom: 1px solid #eef0f3; color: var(--text); }
+.lab-table tr:last-child td { border-bottom: none; }
+.lab-table tr:nth-child(even) td { background: #f8f9fb; }
+
 </style>
 </head>
 <body>
@@ -773,6 +827,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
               <button class="quiz-btn btn-mode" id="btn-mode-toggle" onclick="App.toggleMode()">📖 Tutor</button>
               <button class="quiz-btn" id="btn-flag" onclick="Quiz.toggleFlag(Quiz.getState()?.qIdx)">🏳 Flag</button>
               <button class="quiz-btn" id="btn-mark" onclick="Quiz.toggleMark(Quiz.getState()?.qIdx)">📌 Mark</button>
+              <button class="quiz-btn" onclick="openLabValues()" title="Lab Values">🧪 Lab</button>
               <button class="quiz-btn btn-pause" onclick="Quiz.pauseTest()">⏸ Pause</button>
               <button class="quiz-btn" onclick="App.openEditCurrentQuestion()" title="Edit question">✏️</button>
             </div>
@@ -934,6 +989,238 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
     <button class="cb cb-eq"  onclick="calcPress('=')">=</button>
   </div>
 </div>
+
+<!-- ═══ LAB VALUES MODAL ═══ -->
+<div id="modal-lab">
+  <div class="lab-panel">
+    <div class="lab-header">
+      <h2>Laboratory Reference Values</h2>
+      <button class="lab-close" onclick="closeLabValues()" title="Close">✕</button>
+    </div>
+    <div class="lab-tabs">
+      <button class="lab-tab active" onclick="labTab('serum',this)">Serum</button>
+      <button class="lab-tab" onclick="labTab('csf',this)">CSF</button>
+      <button class="lab-tab" onclick="labTab('heme',this)">Hematologic</button>
+      <button class="lab-tab" onclick="labTab('urine',this)">Urine &amp; BMI</button>
+    </div>
+    <div class="lab-body">
+
+      <!-- SERUM -->
+      <div class="lab-pane active" id="lab-serum">
+        <div class="lab-section-head">Basic Metabolic / Electrolytes</div>
+        <table class="lab-table"><thead><tr><th>Test</th><th>Reference Range</th></tr></thead><tbody>
+          <tr><td>Sodium (Na⁺)</td><td>136–145 mEq/L</td></tr>
+          <tr><td>Potassium (K⁺)</td><td>3.5–5.0 mEq/L</td></tr>
+          <tr><td>Chloride (Cl⁻)</td><td>98–106 mEq/L</td></tr>
+          <tr><td>Bicarbonate (HCO₃⁻)</td><td>22–28 mEq/L</td></tr>
+          <tr><td>Calcium (Ca²⁺)</td><td>8.5–10.2 mg/dL</td></tr>
+          <tr><td>Phosphate</td><td>2.5–4.5 mg/dL</td></tr>
+          <tr><td>Magnesium</td><td>1.5–2.0 mEq/L</td></tr>
+        </tbody></table>
+
+        <div class="lab-section-head">Renal Function</div>
+        <table class="lab-table"><thead><tr><th>Test</th><th>Reference Range</th></tr></thead><tbody>
+          <tr><td>BUN</td><td>7–20 mg/dL</td></tr>
+          <tr><td>Creatinine</td><td>0.6–1.2 mg/dL</td></tr>
+          <tr><td>BUN/Creatinine ratio</td><td>10–20</td></tr>
+          <tr><td>Uric acid</td><td>3.0–7.0 mg/dL</td></tr>
+          <tr><td>GFR (estimated)</td><td>&gt;60 mL/min/1.73 m²</td></tr>
+        </tbody></table>
+
+        <div class="lab-section-head">Glucose / Metabolic</div>
+        <table class="lab-table"><thead><tr><th>Test</th><th>Reference Range</th></tr></thead><tbody>
+          <tr><td>Glucose (fasting)</td><td>70–100 mg/dL</td></tr>
+          <tr><td>HbA1c</td><td>&lt;5.7% (normal); ≥6.5% (diabetes)</td></tr>
+          <tr><td>Osmolality</td><td>275–295 mOsm/kg</td></tr>
+        </tbody></table>
+
+        <div class="lab-section-head">Liver Function</div>
+        <table class="lab-table"><thead><tr><th>Test</th><th>Reference Range</th></tr></thead><tbody>
+          <tr><td>Total bilirubin</td><td>0.1–1.0 mg/dL</td></tr>
+          <tr><td>Direct bilirubin</td><td>0.0–0.3 mg/dL</td></tr>
+          <tr><td>AST (SGOT)</td><td>10–40 U/L</td></tr>
+          <tr><td>ALT (SGPT)</td><td>7–40 U/L</td></tr>
+          <tr><td>ALP</td><td>44–147 U/L</td></tr>
+          <tr><td>GGT</td><td>8–61 U/L</td></tr>
+          <tr><td>Albumin</td><td>3.5–5.0 g/dL</td></tr>
+          <tr><td>Total protein</td><td>6.0–8.0 g/dL</td></tr>
+        </tbody></table>
+
+        <div class="lab-section-head">Cardiac Markers</div>
+        <table class="lab-table"><thead><tr><th>Test</th><th>Reference Range</th></tr></thead><tbody>
+          <tr><td>Troponin I</td><td>&lt;0.04 ng/mL</td></tr>
+          <tr><td>CK-MB</td><td>&lt;3% of total CK</td></tr>
+          <tr><td>BNP</td><td>&lt;100 pg/mL</td></tr>
+          <tr><td>NT-proBNP</td><td>&lt;125 pg/mL (&lt;75 y); &lt;450 pg/mL (≥75 y)</td></tr>
+        </tbody></table>
+
+        <div class="lab-section-head">Lipids</div>
+        <table class="lab-table"><thead><tr><th>Test</th><th>Reference Range</th></tr></thead><tbody>
+          <tr><td>Total cholesterol</td><td>&lt;200 mg/dL (desirable)</td></tr>
+          <tr><td>LDL</td><td>&lt;100 mg/dL (optimal)</td></tr>
+          <tr><td>HDL</td><td>≥60 mg/dL (protective); &lt;40 mg/dL (low)</td></tr>
+          <tr><td>Triglycerides</td><td>&lt;150 mg/dL</td></tr>
+        </tbody></table>
+
+        <div class="lab-section-head">Thyroid</div>
+        <table class="lab-table"><thead><tr><th>Test</th><th>Reference Range</th></tr></thead><tbody>
+          <tr><td>TSH</td><td>0.4–4.0 mIU/L</td></tr>
+          <tr><td>Free T4</td><td>0.8–1.8 ng/dL</td></tr>
+          <tr><td>Free T3</td><td>2.3–4.2 pg/mL</td></tr>
+        </tbody></table>
+
+        <div class="lab-section-head">Coagulation</div>
+        <table class="lab-table"><thead><tr><th>Test</th><th>Reference Range</th></tr></thead><tbody>
+          <tr><td>PT</td><td>11–13.5 sec</td></tr>
+          <tr><td>INR</td><td>0.8–1.1 (therapeutic 2–3)</td></tr>
+          <tr><td>aPTT</td><td>25–35 sec</td></tr>
+          <tr><td>Fibrinogen</td><td>200–400 mg/dL</td></tr>
+          <tr><td>D-dimer</td><td>&lt;0.5 mg/L</td></tr>
+          <tr><td>Bleeding time</td><td>2–9 min</td></tr>
+        </tbody></table>
+
+        <div class="lab-section-head">Iron Studies</div>
+        <table class="lab-table"><thead><tr><th>Test</th><th>Reference Range</th></tr></thead><tbody>
+          <tr><td>Serum iron</td><td>60–170 mcg/dL</td></tr>
+          <tr><td>TIBC</td><td>240–370 mcg/dL</td></tr>
+          <tr><td>Transferrin saturation</td><td>20–50%</td></tr>
+          <tr><td>Ferritin (M)</td><td>12–300 ng/mL</td></tr>
+          <tr><td>Ferritin (F)</td><td>12–150 ng/mL</td></tr>
+        </tbody></table>
+
+        <div class="lab-section-head">Other</div>
+        <table class="lab-table"><thead><tr><th>Test</th><th>Reference Range</th></tr></thead><tbody>
+          <tr><td>CRP</td><td>&lt;1.0 mg/dL (high-sensitivity &lt;3 mg/L)</td></tr>
+          <tr><td>ESR (M)</td><td>0–15 mm/hr</td></tr>
+          <tr><td>ESR (F)</td><td>0–20 mm/hr</td></tr>
+          <tr><td>LDH</td><td>100–190 U/L</td></tr>
+          <tr><td>Amylase</td><td>25–125 U/L</td></tr>
+          <tr><td>Lipase</td><td>0–160 U/L</td></tr>
+          <tr><td>PSA (total)</td><td>&lt;4.0 ng/mL</td></tr>
+          <tr><td>β-hCG (non-pregnant)</td><td>&lt;5 mIU/mL</td></tr>
+          <tr><td>Cortisol (8 AM)</td><td>6–23 mcg/dL</td></tr>
+          <tr><td>Prolactin (M)</td><td>2–18 ng/mL</td></tr>
+          <tr><td>Prolactin (F)</td><td>2–29 ng/mL</td></tr>
+          <tr><td>Testosterone (M)</td><td>300–1000 ng/dL</td></tr>
+          <tr><td>Testosterone (F)</td><td>15–70 ng/dL</td></tr>
+        </tbody></table>
+      </div>
+
+      <!-- CSF -->
+      <div class="lab-pane" id="lab-csf">
+        <div class="lab-section-head">Cerebrospinal Fluid</div>
+        <table class="lab-table"><thead><tr><th>Test</th><th>Reference Range</th></tr></thead><tbody>
+          <tr><td>Opening pressure</td><td>70–180 mm H₂O</td></tr>
+          <tr><td>Appearance</td><td>Clear, colorless</td></tr>
+          <tr><td>WBC</td><td>0–5 cells/mm³ (lymphocytes)</td></tr>
+          <tr><td>RBC</td><td>0 (none)</td></tr>
+          <tr><td>Protein</td><td>15–45 mg/dL</td></tr>
+          <tr><td>Glucose</td><td>50–75 mg/dL (or &gt;60% serum glucose)</td></tr>
+          <tr><td>Glucose (CSF:serum ratio)</td><td>≥0.6</td></tr>
+          <tr><td>Lactate</td><td>&lt;2.2 mmol/L</td></tr>
+          <tr><td>IgG index</td><td>&lt;0.7</td></tr>
+        </tbody></table>
+
+        <div class="lab-section-head">CSF Interpretation Patterns</div>
+        <table class="lab-table"><thead><tr><th>Condition</th><th>WBC</th><th>Protein</th><th>Glucose</th></tr></thead><tbody>
+          <tr><td>Bacterial meningitis</td><td>↑↑ PMNs</td><td>↑↑</td><td>↓↓</td></tr>
+          <tr><td>Viral meningitis</td><td>↑ lymphocytes</td><td>Normal/↑</td><td>Normal</td></tr>
+          <tr><td>TB/fungal meningitis</td><td>↑ lymphocytes</td><td>↑↑</td><td>↓</td></tr>
+          <tr><td>Guillain-Barré</td><td>Normal</td><td>↑↑</td><td>Normal</td></tr>
+          <tr><td>MS</td><td>Normal/↑ lymph</td><td>Normal/↑</td><td>Normal</td></tr>
+          <tr><td>Subarachnoid hemorrhage</td><td>RBCs / xanthochromia</td><td>↑</td><td>Normal</td></tr>
+        </tbody></table>
+      </div>
+
+      <!-- HEMATOLOGIC -->
+      <div class="lab-pane" id="lab-heme">
+        <div class="lab-section-head">Complete Blood Count</div>
+        <table class="lab-table"><thead><tr><th>Test</th><th>Male</th><th>Female</th></tr></thead><tbody>
+          <tr><td>Hemoglobin</td><td>13.5–17.5 g/dL</td><td>12.0–15.5 g/dL</td></tr>
+          <tr><td>Hematocrit</td><td>41–53%</td><td>36–46%</td></tr>
+          <tr><td>RBC count</td><td>4.5–5.9 ×10⁶/mm³</td><td>4.1–5.1 ×10⁶/mm³</td></tr>
+          <tr><td>MCV</td><td colspan="2">80–100 fL</td></tr>
+          <tr><td>MCH</td><td colspan="2">27–33 pg</td></tr>
+          <tr><td>MCHC</td><td colspan="2">32–36 g/dL</td></tr>
+          <tr><td>RDW</td><td colspan="2">11.5–14.5%</td></tr>
+          <tr><td>WBC count</td><td colspan="2">4,500–11,000/mm³</td></tr>
+          <tr><td>Platelets</td><td colspan="2">150,000–400,000/mm³</td></tr>
+          <tr><td>Reticulocytes</td><td colspan="2">0.5–1.5%</td></tr>
+        </tbody></table>
+
+        <div class="lab-section-head">WBC Differential</div>
+        <table class="lab-table"><thead><tr><th>Cell Type</th><th>% of WBC</th><th>Absolute</th></tr></thead><tbody>
+          <tr><td>Neutrophils (total)</td><td>54–62%</td><td>1,800–7,700/mm³</td></tr>
+          <tr><td>— Segmented</td><td>50–62%</td><td>—</td></tr>
+          <tr><td>— Bands</td><td>3–5%</td><td>—</td></tr>
+          <tr><td>Lymphocytes</td><td>25–33%</td><td>1,000–4,800/mm³</td></tr>
+          <tr><td>Monocytes</td><td>3–7%</td><td>200–800/mm³</td></tr>
+          <tr><td>Eosinophils</td><td>1–4%</td><td>50–400/mm³</td></tr>
+          <tr><td>Basophils</td><td>0–0.75%</td><td>0–100/mm³</td></tr>
+        </tbody></table>
+
+        <div class="lab-section-head">Coagulation</div>
+        <table class="lab-table"><thead><tr><th>Test</th><th>Reference Range</th></tr></thead><tbody>
+          <tr><td>PT</td><td>11–13.5 sec</td></tr>
+          <tr><td>INR</td><td>0.8–1.1</td></tr>
+          <tr><td>aPTT</td><td>25–35 sec</td></tr>
+          <tr><td>Thrombin time</td><td>14–19 sec</td></tr>
+          <tr><td>Fibrinogen</td><td>200–400 mg/dL</td></tr>
+          <tr><td>D-dimer</td><td>&lt;0.5 mg/L FEU</td></tr>
+        </tbody></table>
+
+        <div class="lab-section-head">Erythrocyte Indices &amp; Special Tests</div>
+        <table class="lab-table"><thead><tr><th>Test</th><th>Reference Range</th></tr></thead><tbody>
+          <tr><td>ESR (Westergren, M)</td><td>0–15 mm/hr</td></tr>
+          <tr><td>ESR (Westergren, F)</td><td>0–20 mm/hr</td></tr>
+          <tr><td>Direct Coombs</td><td>Negative</td></tr>
+          <tr><td>Indirect Coombs</td><td>Negative</td></tr>
+          <tr><td>Haptoglobin</td><td>41–165 mg/dL</td></tr>
+          <tr><td>Serum B12</td><td>200–900 pg/mL</td></tr>
+          <tr><td>Folate (RBC)</td><td>140–628 ng/mL</td></tr>
+          <tr><td>G6PD</td><td>5–14 U/g Hgb</td></tr>
+        </tbody></table>
+      </div>
+
+      <!-- URINE & BMI -->
+      <div class="lab-pane" id="lab-urine">
+        <div class="lab-section-head">Urinalysis</div>
+        <table class="lab-table"><thead><tr><th>Test</th><th>Reference Range</th></tr></thead><tbody>
+          <tr><td>pH</td><td>4.5–8.0</td></tr>
+          <tr><td>Specific gravity</td><td>1.001–1.030</td></tr>
+          <tr><td>Protein</td><td>&lt;150 mg/day (dipstick: negative)</td></tr>
+          <tr><td>Glucose</td><td>Negative (threshold ~180 mg/dL serum)</td></tr>
+          <tr><td>Ketones</td><td>Negative</td></tr>
+          <tr><td>Blood / RBCs</td><td>Negative (≤2 RBC/hpf)</td></tr>
+          <tr><td>WBCs</td><td>≤5 WBC/hpf</td></tr>
+          <tr><td>Nitrites</td><td>Negative</td></tr>
+          <tr><td>Leukocyte esterase</td><td>Negative</td></tr>
+          <tr><td>Bilirubin</td><td>Negative</td></tr>
+          <tr><td>Urobilinogen</td><td>0.1–1.0 EU/dL</td></tr>
+          <tr><td>Osmolality</td><td>50–1200 mOsm/kg</td></tr>
+          <tr><td>Creatinine clearance (M)</td><td>97–137 mL/min</td></tr>
+          <tr><td>Creatinine clearance (F)</td><td>88–128 mL/min</td></tr>
+          <tr><td>Microalbumin (spot)</td><td>&lt;30 mg/g creatinine</td></tr>
+          <tr><td>24-hr protein</td><td>&lt;150 mg/day</td></tr>
+          <tr><td>24-hr creatinine (M)</td><td>15–25 mg/kg/day</td></tr>
+          <tr><td>24-hr creatinine (F)</td><td>10–20 mg/kg/day</td></tr>
+        </tbody></table>
+
+        <div class="lab-section-head">Body Mass Index (BMI)</div>
+        <table class="lab-table"><thead><tr><th>BMI (kg/m²)</th><th>Category</th></tr></thead><tbody>
+          <tr><td>&lt;18.5</td><td>Underweight</td></tr>
+          <tr><td>18.5–24.9</td><td>Normal weight</td></tr>
+          <tr><td>25.0–29.9</td><td>Overweight</td></tr>
+          <tr><td>30.0–34.9</td><td>Obese — Class I</td></tr>
+          <tr><td>35.0–39.9</td><td>Obese — Class II</td></tr>
+          <tr><td>≥40.0</td><td>Obese — Class III (morbid)</td></tr>
+        </tbody></table>
+        <p style="font-size:11px;color:var(--muted);margin-top:8px;">BMI = weight(kg) / height(m)²</p>
+      </div>
+
+    </div><!-- lab-body -->
+  </div><!-- lab-panel -->
+</div><!-- modal-lab -->
 
 <!-- ═══ PAUSE OVERLAY ═══ -->
 <div id="overlay-pause" style="display:none;position:fixed;inset:0;background:rgba(26,58,92,.97);z-index:500;align-items:center;justify-content:center;">
@@ -3622,6 +3909,23 @@ function adjFontSize(delta) {
   const next = Math.min(20, Math.max(12, current + delta));
   document.body.style.zoom = next / 14;
   localStorage.setItem('nbme_fontSize', next);
+}
+
+// ── Lab Values ──────────────────────────────────────────────
+function openLabValues() {
+  const m = document.getElementById('modal-lab');
+  if (m) m.classList.add('open');
+}
+function closeLabValues() {
+  const m = document.getElementById('modal-lab');
+  if (m) m.classList.remove('open');
+}
+function labTab(id, btn) {
+  document.querySelectorAll('.lab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.lab-tab').forEach(t => t.classList.remove('active'));
+  const pane = document.getElementById('lab-' + id);
+  if (pane) pane.classList.add('active');
+  if (btn) btn.classList.add('active');
 }
 
 document.addEventListener('DOMContentLoaded', () => {
