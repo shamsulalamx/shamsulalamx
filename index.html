@@ -622,6 +622,21 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
   word-break: break-word;
 }
 
+/* ── Question images ───────────────────────────────────── */
+.q-images-top, .q-images-bottom,
+.rev-images-top, .rev-images-bottom {
+  display: flex; flex-wrap: wrap; gap: 10px;
+  margin: 6px 0;
+}
+.q-images-top:empty, .q-images-bottom:empty,
+.rev-images-top:empty, .rev-images-bottom:empty { display: none; }
+.q-img-wrap { display: inline-block; }
+.q-img {
+  max-width: 100%; height: auto;
+  border: 1px solid var(--border); border-radius: 4px;
+  display: block;
+}
+
 /* ── PIN screen ─────────────────────────────────────────── */
 #pin-screen {
   position: fixed; inset: 0;
@@ -859,7 +874,9 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
                 <div class="q-num-badge" id="q-num-badge">Item 1</div>
                 <div id="q-tags" style="display:none;flex-wrap:wrap;gap:4px;flex:1;padding:0 8px;"></div>
               </div>
+              <div class="q-images-top" id="q-images-top"></div>
               <div id="q-stem" onmouseup="App.onStemSelect(event)"></div>
+              <div class="q-images-bottom" id="q-images-bottom"></div>
             </div>
 
             <!-- Options -->
@@ -956,7 +973,9 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
           </div>
           <div class="q-card" style="margin-bottom:12px;">
             <div id="rev-tags" style="display:none;flex-wrap:wrap;gap:4px;margin-bottom:8px;"></div>
+            <div class="rev-images-top" id="rev-images-top"></div>
             <div id="rev-stem" style="font-size:13.5px;line-height:1.72;"></div>
+            <div class="rev-images-bottom" id="rev-images-bottom"></div>
           </div>
           <div class="options-card" style="margin-bottom:12px;">
             <div id="rev-options"></div>
@@ -1723,6 +1742,120 @@ const OCR = (() => {
     return out;
   }
 
+  // ── Lab table detection ───────────────────────────────────
+  function detectLabTable(canvas) {
+    try {
+      const ctx = canvas.getContext('2d');
+      const W = canvas.width, H = canvas.height;
+      const data = ctx.getImageData(0, 0, W, H).data;
+      let lineRows = 0;
+      for (let y = 0; y < H; y++) {
+        let dark = 0;
+        for (let x = 0; x < W; x++) {
+          const i = (y * W + x) * 4;
+          if ((data[i] + data[i+1] + data[i+2]) / 3 < 80) dark++;
+        }
+        // Row is a solid table border if >60% of pixels across full width are dark
+        if (dark / W > 0.6) lineRows++;
+      }
+      return lineRows >= 3;
+    } catch (_) { return false; }
+  }
+
+  // ── Image region detection ────────────────────────────────
+  function detectImages(canvas) {
+    try {
+      const BLOCK       = 16;   // px — block size for variance scan
+      const VAR_THRESH  = 300;  // min brightness variance for image-like block
+      const GRAY_THRESH = 0.08; // min fraction of intermediate-brightness pixels
+      const COLOR_THRESH= 0.10; // min fraction of colorful (non-grayscale) pixels
+      const MIN_BLOCKS  = 8;    // min contiguous image-like blocks to keep a region
+      const PAD         = 10;   // pixel padding around detected region
+      const MAX_W       = 800;  // max output image width (px)
+      const MAX_H       = 600;  // max output image height (px)
+
+      const ctx = canvas.getContext('2d');
+      const W = canvas.width, H = canvas.height;
+      const data = ctx.getImageData(0, 0, W, H).data;
+
+      const cols = Math.ceil(W / BLOCK);
+      const rows = Math.ceil(H / BLOCK);
+      const grid = new Uint8Array(cols * rows); // 1 = image-like block
+
+      for (let by = 0; by < rows; by++) {
+        for (let bx = 0; bx < cols; bx++) {
+          const x0 = bx * BLOCK, y0 = by * BLOCK;
+          const x1 = Math.min(x0 + BLOCK, W);
+          const y1 = Math.min(y0 + BLOCK, H);
+          let sumB = 0, sumB2 = 0, grayPx = 0, colorPx = 0, total = 0;
+          for (let y = y0; y < y1; y++) {
+            for (let x = x0; x < x1; x++) {
+              const i = (y * W + x) * 4;
+              const r = data[i], g = data[i+1], b = data[i+2];
+              const bright = (r + g + b) / 3;
+              sumB  += bright;
+              sumB2 += bright * bright;
+              if (bright > 30 && bright < 215) grayPx++;
+              if (Math.max(r, g, b) - Math.min(r, g, b) > 25) colorPx++;
+              total++;
+            }
+          }
+          const mean = sumB / total;
+          const variance = sumB2 / total - mean * mean;
+          const grayFrac  = grayPx  / total;
+          const colorFrac = colorPx / total;
+          if (variance > VAR_THRESH && (grayFrac > GRAY_THRESH || colorFrac > COLOR_THRESH)) {
+            grid[by * cols + bx] = 1;
+          }
+        }
+      }
+
+      // BFS: find connected components of image-like blocks
+      const visited = new Uint8Array(cols * rows);
+      const regions = [];
+      for (let by = 0; by < rows; by++) {
+        for (let bx = 0; bx < cols; bx++) {
+          if (!grid[by * cols + bx] || visited[by * cols + bx]) continue;
+          const stack = [[bx, by]];
+          let minX = bx, maxX = bx, minY = by, maxY = by, count = 0;
+          while (stack.length) {
+            const [x, y] = stack.pop();
+            if (x < 0 || y < 0 || x >= cols || y >= rows) continue;
+            if (visited[y * cols + x] || !grid[y * cols + x]) continue;
+            visited[y * cols + x] = 1;
+            count++;
+            if (x < minX) minX = x; if (x > maxX) maxX = x;
+            if (y < minY) minY = y; if (y > maxY) maxY = y;
+            stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
+          }
+          if (count >= MIN_BLOCKS) {
+            regions.push({ bx: minX, by: minY, bw: maxX-minX+1, bh: maxY-minY+1 });
+          }
+        }
+      }
+
+      // Extract each detected region as a cropped, scaled canvas
+      const result = [];
+      for (const reg of regions) {
+        const x = Math.max(0, reg.bx * BLOCK - PAD);
+        const y = Math.max(0, reg.by * BLOCK - PAD);
+        const w = Math.min(W - x, reg.bw * BLOCK + PAD * 2);
+        const h = Math.min(H - y, reg.bh * BLOCK + PAD * 2);
+        if (w < 50 || h < 50) continue;
+
+        const scale = Math.min(1, MAX_W / w, MAX_H / h);
+        const outW  = Math.round(w * scale);
+        const outH  = Math.round(h * scale);
+        const out   = document.createElement('canvas');
+        out.width = outW; out.height = outH;
+        out.getContext('2d').drawImage(canvas, x, y, w, h, 0, 0, outW, outH);
+
+        result.push({ dataUrl: out.toDataURL('image/png'), isLabTable: detectLabTable(out) });
+      }
+      return result;
+    } catch (_) { return []; }
+  }
+
   // ── PDF → Images ──────────────────────────────────────────
   async function pdfToImages(file, onProgress) {
     const buf = await file.arrayBuffer();
@@ -1737,7 +1870,8 @@ const OCR = (() => {
       canvas.height = viewport.height;
       await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
       const cropped = cropBlueBars(canvas);
-      images.push({ pageNum: i, dataUrl: cropped.toDataURL('image/png'), total: pdf.numPages });
+      const pageImages = detectImages(cropped);
+      images.push({ pageNum: i, dataUrl: cropped.toDataURL('image/png'), pageImages, total: pdf.numPages });
       if (onProgress) onProgress(i, pdf.numPages);
     }
     return images;
@@ -1754,10 +1888,11 @@ const OCR = (() => {
       // Extract item number strictly from "Exam Section : Item X of 50" header only
       const itemMatch = rawText.match(/exam\s+section\s*:\s*item\s+(\d+)\s+of\s+(\d+)/i);
       pages.push({
-        pageNum: images[i].pageNum,
-        text: cleaned,
+        pageNum:    images[i].pageNum,
+        text:       cleaned,
         rawText,
-        itemNum: itemMatch ? parseInt(itemMatch[1]) : null,
+        pageImages: images[i].pageImages || [],
+        itemNum:    itemMatch ? parseInt(itemMatch[1]) : null,
         totalItems: itemMatch ? parseInt(itemMatch[2]) : null
       });
     }
@@ -1830,6 +1965,22 @@ const OCR = (() => {
     return merged;
   }
 
+  // ── Merge images per item ─────────────────────────────────
+  function mergeImagesByItem(pages) {
+    const itemImages = {};
+    let lastItemNum = null;
+    for (const page of pages) {
+      if (page.itemNum !== null) lastItemNum = page.itemNum;
+      if (lastItemNum !== null) {
+        if (!itemImages[lastItemNum]) itemImages[lastItemNum] = [];
+        if (page.pageImages && page.pageImages.length) {
+          itemImages[lastItemNum].push(...page.pageImages);
+        }
+      }
+    }
+    return itemImages;
+  }
+
   // ── Parse Question Bank ───────────────────────────────────
   // Input: merged page map {itemNum → fullText}
   function parseQuestionBank(mergedPages) {
@@ -1891,6 +2042,7 @@ const OCR = (() => {
       o: options,
       c: '',      // filled from answer key
       explanation: '',
+      images: [],
       tags: [],
       highlights: {},
       strikethrough: []
@@ -2010,8 +2162,9 @@ const OCR = (() => {
 
       // ── Parse ─────────────────────────────────────────
       report(81, 'Merging multi-page content…');
-      const qMerged = mergePagesByItem(qPages);
-      const aMerged = mergePagesByItem(aPages);
+      const qMerged    = mergePagesByItem(qPages);
+      const qImagesMap = mergeImagesByItem(qPages);
+      const aMerged    = mergePagesByItem(aPages);
 
       report(85, 'Parsing questions…');
       const questions = parseQuestionBank(qMerged);
@@ -2022,8 +2175,8 @@ const OCR = (() => {
       report(94, 'Matching questions to answers…');
       const matched = matchAndMerge(questions, answerMap);
 
-      report(98, 'Auto-tagging topics…');
-      // tags already applied in matchAndMerge
+      report(97, 'Attaching extracted images…');
+      matched.forEach(q => { q.images = qImagesMap[q.n] || []; });
 
       report(100, `Done! Extracted ${matched.length} questions.`);
       return matched;
@@ -2036,6 +2189,26 @@ const OCR = (() => {
   return { processTestPDFs, autoTag };
 })();
 window.OCR = OCR;
+
+// ── Shared image renderer (used by Quiz and Results) ────────
+function renderImages(q, topElId, bottomElId) {
+  const topEl    = document.getElementById(topElId);
+  const bottomEl = document.getElementById(bottomElId);
+  if (!topEl || !bottomEl) return;
+  topEl.innerHTML = '';
+  bottomEl.innerHTML = '';
+  if (!q || !q.images || !q.images.length) return;
+  for (const img of q.images) {
+    const wrap = document.createElement('div');
+    wrap.className = 'q-img-wrap';
+    const el = document.createElement('img');
+    el.className = 'q-img';
+    el.src = img.dataUrl;
+    el.alt = img.isLabTable ? 'Lab values table' : 'Clinical image';
+    wrap.appendChild(el);
+    (img.isLabTable ? bottomEl : topEl).appendChild(wrap);
+  }
+}
 
 </script>
 <script>
@@ -2318,6 +2491,9 @@ const Quiz = (() => {
     // Header info
     document.getElementById('quiz-test-name').textContent = test.name;
     document.getElementById('quiz-q-num').textContent = `Item ${state.qIdx + 1} of ${test.questions.length}`;
+
+    // Images (above stem for clinical images, below for lab tables)
+    if (typeof renderImages === 'function') renderImages(q, 'q-images-top', 'q-images-bottom');
 
     // Stem
     const stemEl = document.getElementById('q-stem');
@@ -2688,6 +2864,9 @@ const Results = (() => {
 
     document.getElementById('rev-counter').textContent = `Item ${_reviewIdx+1} of ${_questions.length}`;
     document.getElementById('rev-test-name').textContent = test.name;
+
+    // Images
+    if (typeof renderImages === 'function') renderImages(q, 'rev-images-top', 'rev-images-bottom');
 
     // Stem with saved highlights
     const stemEl = document.getElementById('rev-stem');
