@@ -3350,16 +3350,6 @@ const App = (() => {
     if (_wizardStep > 0) { _wizardStep--; renderWizard(); }
   }
 
-  // ── Backup ─────────────────────────────────────────────────
-  function exportBackup() { DB.exportBackup(); toast('Backup exported to Downloads.'); }
-  function importBackup(inp) {
-    const file = inp.files[0];
-    if (!file) return;
-    DB.importBackup(file).then(() => {
-      renderSidebar(); showHome(); toast('✓ Backup imported!');
-    }).catch(() => toast('Import failed — invalid file.'));
-  }
-
   // ── Public API ─────────────────────────────────────────────
   return {
     init,
@@ -3395,9 +3385,7 @@ const App = (() => {
     googleSignIn,
     openSetupWizard,
     wizardNext,
-    wizardBack,
-    exportBackup,
-    importBackup
+    wizardBack
   };
 })();
 
