@@ -386,6 +386,18 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 .ind-correct { color: var(--green); }
 .ind-wrong   { color: var(--red); }
 
+/* Hint system */
+.btn-hint { display: inline-block; margin: 8px 0 4px; padding: 5px 14px; font-size: 11.5px; font-weight: 600; color: #92400e; background: #fffbeb; border: 1px solid #f59e0b; border-radius: 4px; cursor: pointer; transition: background .12s; }
+.btn-hint:hover:not(:disabled) { background: #fef3c7; }
+.btn-hint:disabled { opacity: .5; cursor: not-allowed; }
+.hint-panel { background: #fffbeb; border: 1px solid #f59e0b; border-left: 3px solid #f59e0b; border-radius: 4px; padding: 10px 14px; margin: 4px 0 10px; }
+.hint-item { font-size: 12.5px; color: #92400e; line-height: 1.65; padding: 6px 0; border-bottom: 1px solid #fde68a; }
+.hint-item:last-child { border-bottom: none; padding-bottom: 0; }
+.hint-item:first-child { padding-top: 0; }
+.hint-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #b45309; margin-bottom: 3px; }
+.hint-error-btn { margin-left: 6px; padding: 2px 8px; font-size: 11px; font-weight: 600; color: #92400e; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 3px; cursor: pointer; }
+.hint-error-btn:hover { background: #fde68a; }
+
 /* Explanation */
 .exp-panel { background: white; border: 1px solid var(--border); border-left: 4px solid var(--blue); border-radius: 4px; padding: 16px 18px; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.07); }
 .exp-panel-title { font-size: 11px; font-weight: 700; color: var(--navy); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px; padding-bottom: 7px; border-bottom: 1px solid #edf1f5; }
@@ -947,6 +959,12 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
               <div class="q-images-bottom" id="q-images-bottom"></div>
             </div>
 
+            <!-- Hint -->
+            <div id="hint-area">
+              <button id="btn-hint" class="btn-hint" onclick="requestHint()">💡 Hint</button>
+              <div id="hint-panel" class="hint-panel" style="display:none;"></div>
+            </div>
+
             <!-- Options -->
             <div class="options-card">
               <div id="options-list"></div>
@@ -1455,6 +1473,11 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
       <div id="gdrive-status" style="font-size:12px;margin-bottom:10px;"></div>
       <button class="btn-modal primary" id="btn-gdrive-setup" onclick="App.openSetupWizard()">Configure Google Drive</button>
       <button class="btn-modal" id="btn-gdrive-signin" onclick="App.googleSignIn()" style="margin-left:6px;">Sign In</button>
+    </div>
+    <div class="form-group" style="margin-top:14px;">
+      <label class="form-label">Gemini API Key</label>
+      <p style="font-size:12px;color:#5a6a7a;margin-bottom:8px;">Used for AI-powered question hints. Synced via Google Drive.</p>
+      <input type="password" class="form-input" id="settings-gemini-key" placeholder="AIza..." autocomplete="off" oninput="saveGeminiKey(this.value)">
     </div>
     <div class="modal-actions">
       <button class="btn-modal primary" onclick="document.getElementById('modal-settings').style.display='none'">Done</button>
@@ -2437,6 +2460,7 @@ const Quiz = (() => {
       paused: false
     };
     startTotalTimer();
+    if (typeof resetHintPanel === 'function') resetHintPanel();
     renderQuiz();
   }
 
@@ -2516,6 +2540,7 @@ const Quiz = (() => {
     }
     stopQTimer();
     state.qIdx = idx;
+    if (typeof resetHintPanel === 'function') resetHintPanel();
     renderQuestion();
     persistState();
   }
@@ -2867,6 +2892,115 @@ window.buildExplanationHTML = function(q, r, container) {
     container.appendChild(expDiv);
   }
 };
+
+/* ── HINT SYSTEM ─────────────────────────────────────────────────────────── */
+let _hintLevel = 0;
+let _hintTexts = [];
+
+function resetHintPanel() {
+  _hintLevel = 0;
+  _hintTexts = [];
+  const panel = document.getElementById('hint-panel');
+  const btn   = document.getElementById('btn-hint');
+  if (panel) { panel.style.display = 'none'; panel.innerHTML = ''; }
+  if (btn)   { btn.textContent = '💡 Hint'; btn.disabled = false; }
+}
+
+function _renderHints() {
+  const panel = document.getElementById('hint-panel');
+  if (!panel) return;
+  if (!_hintTexts.length) { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  panel.innerHTML = _hintTexts.map((text, i) =>
+    `<div class="hint-item"><div class="hint-label">Hint ${i + 1}</div>${text}</div>`
+  ).join('');
+}
+
+function _updateHintButton() {
+  const btn = document.getElementById('btn-hint');
+  if (!btn) return;
+  if (_hintLevel === 0)      { btn.textContent = '💡 Hint';       btn.disabled = false; }
+  else if (_hintLevel === 1) { btn.textContent = '💡 More Hint';  btn.disabled = false; }
+  else if (_hintLevel === 2) { btn.textContent = '💡 Final Hint'; btn.disabled = false; }
+  else                       { btn.disabled = true; }
+}
+
+async function requestHint() {
+  const apiKey = (localStorage.getItem('gemini_api_key') || '').replace(/['"]/g, '').trim();
+  const btn    = document.getElementById('btn-hint');
+  const panel  = document.getElementById('hint-panel');
+  if (!btn || !panel) return;
+
+  if (!apiKey) {
+    panel.style.display = 'block';
+    panel.innerHTML = `<div class="hint-item">Add your Gemini API key in Settings to use hints.<button class="hint-error-btn" onclick="App.openSettings()">Open Settings</button></div>`;
+    return;
+  }
+
+  if (_hintLevel >= 3) return;
+
+  const qs = Quiz.getState();
+  if (!qs) return;
+  const test = DB.getTest(qs.testId);
+  if (!test) return;
+  const q = test.questions[qs.qIdx];
+  if (!q) return;
+
+  const stem    = q.t || '';
+  const choices = (q.o || []).map(o => `${o.l}) ${o.t}`).join('\n');
+
+  const prompts = [
+    `You are a medical education tutor helping a student work through a multiple choice question. Give a subtle hint that points them in the right direction without revealing the answer or naming the correct choice. Focus on the key concept being tested.\nQuestion: ${stem}\nAnswer choices: ${choices}\nGive only the hint, no preamble.`,
+    `You are a medical education tutor. The student needs more guidance. Give a stronger hint that narrows down the reasoning significantly but still does not state the answer or name the correct choice directly.\nQuestion: ${stem}\nAnswer choices: ${choices}\nGive only the hint, no preamble.`,
+    `You are a medical education tutor. Give a final hint that leads the student directly to the answer through reasoning, but do not explicitly state which answer choice is correct. The student should be able to identify the answer themselves after reading this hint.\nQuestion: ${stem}\nAnswer choices: ${choices}\nGive only the hint, no preamble.`
+  ];
+
+  btn.textContent = '💡 Thinking...';
+  btn.disabled = true;
+
+  try {
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompts[_hintLevel] }] }] })
+      }
+    );
+    if (!resp.ok) throw new Error('API ' + resp.status);
+    const data = await resp.json();
+    const hintText = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    if (!hintText) throw new Error('empty');
+    _hintTexts.push(hintText);
+    _hintLevel++;
+    _renderHints();
+    _updateHintButton();
+  } catch(e) {
+    _updateHintButton();
+    panel.style.display = 'block';
+    if (!document.getElementById('hint-err')) {
+      const err = document.createElement('div');
+      err.id = 'hint-err';
+      err.className = 'hint-item';
+      err.innerHTML = `Hint unavailable. Check your API key in Settings.<button class="hint-error-btn" onclick="App.openSettings()">Open Settings</button>`;
+      panel.appendChild(err);
+    }
+  }
+}
+
+function saveGeminiKey(val) {
+  const key = val.trim();
+  localStorage.setItem('gemini_api_key', key);
+  const db = DB.get();
+  db.settings.geminiApiKey = key;
+  DB.save();
+}
+
+function loadGeminiKeyToSettings() {
+  const inp = document.getElementById('settings-gemini-key');
+  if (!inp) return;
+  inp.value = localStorage.getItem('gemini_api_key') || DB.get().settings.geminiApiKey || '';
+}
 
 </script>
 <script>
@@ -4060,6 +4194,7 @@ const App = (() => {
     } else {
       statusEl.innerHTML = '<span style="color:#f0a500;">Not configured</span>';
     }
+    loadGeminiKeyToSettings();
     document.getElementById('modal-settings').style.display = 'flex';
   }
 
