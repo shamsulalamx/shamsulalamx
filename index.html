@@ -1620,7 +1620,11 @@ window.DB = DB;
 (function() {
   const SB_URL = 'https://lmxdedepkwmilnvjcxil.supabase.co';
   const SB_KEY = 'sb_publishable_CVhmesK9VAUhAn-mMpQHYQ_yg2MMz9Q';
-  window.supabase = window.supabase.createClient(SB_URL, SB_KEY);
+  const SB_HEADERS = {
+    'apikey': SB_KEY,
+    'Authorization': 'Bearer ' + SB_KEY,
+    'Content-Type': 'application/json'
+  };
 
   // ── User code ─────────────────────────────────────────────
   const _WORDS = ['ATLAS','BLAZE','CEDAR','CRANE','DELTA','DUSK','EMBER','FALCON',
@@ -1680,11 +1684,17 @@ window.DB = DB;
     if (hash === _lastHash) { _dirty = false; return; }
     window.updateSyncIndicator('syncing');
     try {
-      const { error } = await window.supabase
-        .from('sessions')
-        .upsert({ user_id: userCode, data, updated_at: new Date().toISOString() },
-                { onConflict: 'user_id' });
-      if (error) throw error;
+      const resp = await fetch(`${SB_URL}/rest/v1/sessions`, {
+        method: 'POST',
+        headers: Object.assign({}, SB_HEADERS,
+          { 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+        body: JSON.stringify({
+          user_id: userCode,
+          data: data,
+          updated_at: new Date().toISOString()
+        })
+      });
+      if (!resp.ok) throw new Error(resp.status);
       _lastHash = hash; _dirty = false;
       window.updateSyncIndicator('synced');
     } catch(_) { window.updateSyncIndicator('offline'); }
@@ -1694,10 +1704,14 @@ window.DB = DB;
   window.loadSession = async function(userCode) {
     window.updateSyncIndicator('syncing');
     try {
-      const { data: row, error } = await window.supabase
-        .from('sessions').select('data').eq('user_id', userCode).single();
-      if (error || !row) { window.updateSyncIndicator('offline'); return null; }
-      const s = row.data;
+      const resp = await fetch(
+        `${SB_URL}/rest/v1/sessions?user_id=eq.${encodeURIComponent(userCode)}&select=data`,
+        { headers: SB_HEADERS }
+      );
+      if (!resp.ok) throw new Error(resp.status);
+      const rows = await resp.json();
+      if (!rows.length) { window.updateSyncIndicator('offline'); return null; }
+      const s = rows[0].data;
       const db = DB.get();
       if (Array.isArray(s.folders)) db.folders = s.folders;
       if (Array.isArray(s.tests))   db.tests   = s.tests;
