@@ -2189,36 +2189,49 @@ const OCR = (() => {
         ...q,
         c: ak.correct || q.o[0]?.l || 'A',
         explanation: ak.explanation || '',
-        tags: autoTag(q.t, q.o)
+        tags: []
       };
     });
   }
 
-  // ── Auto-tagging ──────────────────────────────────────────
-  const TAG_RULES = [
-    { tag: 'Mood Disorders',           keywords: ['depressive disorder','major depressive','depression','dysthymi','bipolar','manic','hypomania','cyclothymi','adjustment disorder','bereavement','anhedonia'] },
-    { tag: 'Psychotic Disorders',      keywords: ['schizophrenia','schizophreniform','schizoaffective','delusional disorder','brief psychotic','psychosis','hallucination','delusion','disorganized speech'] },
-    { tag: 'Anxiety Disorders',        keywords: ['anxiety','panic disorder','panic attack','generalized anxiety','social anxiety','phobia','agoraphobia','obsessive','compulsive','PTSD','post-traumatic','acute stress disorder'] },
-    { tag: 'Somatic Disorders',        keywords: ['somatic','somatization','hypochondria','illness anxiety','conversion disorder','functional neurologic','factitious','malingering','body dysmorphic'] },
-    { tag: 'Substance Use',            keywords: ['alcohol','substance','withdrawal','intoxication','opioid','heroin','cocaine','amphetamine','methamphetamine','benzodiazepine','marijuana','cannabis','PCP','LSD','naltrexone','disulfiram','methadone','buprenorphine'] },
-    { tag: 'Personality Disorders',    keywords: ['personality disorder','borderline','antisocial','narcissistic','histrionic','paranoid personality','schizoid','schizotypal','avoidant','dependent'] },
-    { tag: 'Neurocognitive Disorders', keywords: ['dementia','delirium','alzheimer','vascular dementia','frontotemporal','lewy body','normal pressure hydrocephalus','cognitive impairment','korsakoff','wernicke'] },
-    { tag: 'Pediatric & Developmental',keywords: ['child','adolescent','autism','ADHD','attention deficit','intellectual disability','conduct disorder','oppositional','separation anxiety','fragile X','developmental'] },
-    { tag: 'Sleep Disorders',          keywords: ['insomnia','sleep apnea','narcolepsy','polysomnography','REM sleep','nightmare disorder','sleepwalking','parasomnia','circadian'] },
-    { tag: 'Sexual Disorders',         keywords: ['sexual dysfunction','erectile','premature ejaculation','vaginismus','vulvodynia','paraphilia','gender dysphoria','libido'] },
-    { tag: 'Pharmacology',             keywords: ['SSRI','SNRI','TCA','tricyclic','MAOI','antidepressant','antipsychotic','haloperidol','risperidone','olanzapine','clozapine','quetiapine','aripiprazole','lithium','valproate','carbamazepine','benzodiazepine','lorazepam','diazepam','buspirone','sertraline','fluoxetine','paroxetine','bupropion','mirtazapine','venlafaxine','duloxetine','naltrexone','disulfiram','methylphenidate'] },
-    { tag: 'Mechanisms & Neuroscience',keywords: ['dopamine','serotonin','norepinephrine','GABA','glutamate','receptor','reuptake','monoamine','limbic','neurotransmitter','synapse','D2','serotonin syndrome'] },
-    { tag: 'Ethics & Legal',           keywords: ['capacity','competence','informed consent','autonomy','confidentiality','tarasoff','duty to warn','involuntary','power of attorney','advance directive','ethics','beneficence','mandatory report','decisional'] },
-    { tag: 'Eating Disorders',         keywords: ['anorexia','bulimia','binge eating','purging','laxative','eating disorder'] },
-  ];
-
-  function autoTag(questionText, options) {
-    const text = (questionText + ' ' + (options||[]).map(o => o.t).join(' ')).toLowerCase();
-    const tags = [];
-    for (const rule of TAG_RULES) {
-      if (rule.keywords.some(kw => text.includes(kw.toLowerCase()))) tags.push(rule.tag);
+  // ── AI Tagging ────────────────────────────────────────────
+  async function aiTagQuestions(questions, onProgress) {
+    const BATCH = 5, DELAY = 500;
+    const total = questions.length;
+    let done = 0;
+    for (let i = 0; i < total; i += BATCH) {
+      const batch = questions.slice(i, i + BATCH);
+      await Promise.all(batch.map(async q => {
+        try {
+          const apiKey = (localStorage.getItem('gemini_api_key') || '').replace(/['"]/g, '').trim();
+          const stem    = q.t || '';
+          const choices = (q.o || []).map(o => `${o.l}) ${o.t}`).join('\n');
+          const prompt  =
+            'You are a medical education expert. Analyze this USMLE-style multiple choice question and return a JSON array of topic tags describing what this question tests. ' +
+            'Include the medical subject such as Psychiatry, Surgery, Pediatrics, OB/GYN, Internal Medicine, Neurology, Cardiology, Pulmonology, Nephrology, Gastroenterology, Endocrinology, Hematology, Infectious Disease, Dermatology, Musculoskeletal, Rheumatology, Ophthalmology, ENT, Emergency Medicine, Radiology, Pathology, Pharmacology, Biochemistry, Genetics, Immunology, Ethics/Legal, Epidemiology/Biostatistics, ' +
+            'AND the specific subtopic such as Mood Disorders, Appendicitis, Preeclampsia, Atrial Fibrillation, Mechanism of Action, and so on.\n' +
+            'Return ONLY a valid JSON array of strings.\nMaximum 4 tags. No explanation. No preamble.\n' +
+            'Example: ["Psychiatry", "Mood Disorders", "Pharmacology", "SSRIs"]\n' +
+            `Question: ${stem}\nAnswer choices: ${choices}`;
+          const resp = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+            { method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) }
+          );
+          if (!resp.ok) throw new Error('API ' + resp.status);
+          const data = await resp.json();
+          const raw  = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+          const m    = raw.match(/\[[\s\S]*\]/);
+          const tags = m ? JSON.parse(m[0]) : null;
+          q.tags = Array.isArray(tags) && tags.length ? tags.slice(0, 4).map(String) : ['Untagged'];
+        } catch(_) {
+          q.tags = ['Untagged'];
+        }
+        done++;
+        if (onProgress) onProgress(done, total);
+      }));
+      if (i + BATCH < total) await new Promise(r => setTimeout(r, DELAY));
     }
-    return [...new Set(tags)];
   }
 
   // ── Main pipeline ─────────────────────────────────────────
@@ -2272,6 +2285,16 @@ const OCR = (() => {
       report(97, 'Attaching extracted images…');
       matched.forEach(q => { q.images = qImagesMap[q.n] || []; });
 
+      const _tagKey = (localStorage.getItem('gemini_api_key') || '').replace(/['"]/g, '').trim();
+      if (_tagKey) {
+        await aiTagQuestions(matched, (done, total) => {
+          report(97 + Math.round((done / total) * 2), `Tagging questions with AI... (${done}/${total})`);
+        });
+      } else {
+        matched.forEach(q => { q.tags = ['Untagged']; });
+        report(99, 'Questions saved without tags. Add a Gemini API key in Settings to enable AI topic tagging.');
+      }
+
       report(100, `Done! Extracted ${matched.length} questions.`);
       return matched;
 
@@ -2280,7 +2303,7 @@ const OCR = (() => {
     }
   }
 
-  return { processTestPDFs, autoTag };
+  return { processTestPDFs };
 })();
 window.OCR = OCR;
 
@@ -3303,7 +3326,7 @@ const Results = (() => {
     if (correctInput) q.c = correctInput.value;
     const expTa = modal.querySelector('.edit-exp-text[data-field="explanation"]');
     if (expTa) q.explanation = expTa.value.trim();
-    q.tags = OCR.autoTag(q.t, q.o);
+    q.tags = q.tags && q.tags.length ? q.tags : ['Untagged'];
     DB.updateTest(testId, { questions: test.questions });
     window.toast('Question saved ✓', 2000);
     // Re-render if in review
