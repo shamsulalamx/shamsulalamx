@@ -542,21 +542,6 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 .uz-desc  { font-size: 11px; color: var(--muted); }
 .uz-name  { font-size: 11px; color: var(--green); margin-top: 5px; font-style: italic; }
 
-/* Setup wizard */
-.wizard-step { display: none; }
-.wizard-step.active { display: block; }
-.wizard-steps-indicator { display: flex; gap: 6px; margin-bottom: 18px; }
-.wstep { flex: 1; height: 4px; background: #e0e6ec; border-radius: 2px; }
-.wstep.done { background: var(--green); }
-.wstep.active { background: var(--blue); }
-.wizard-step-title { font-size: 13px; font-weight: 700; color: var(--navy); margin-bottom: 8px; }
-.wizard-instruction { font-size: 12px; color: var(--text); line-height: 1.65; margin-bottom: 10px; }
-.wizard-instruction ol, .wizard-instruction ul { padding-left: 18px; }
-.wizard-instruction li { margin-bottom: 4px; }
-.wizard-instruction code { background: #e8ecf0; padding: 1px 5px; border-radius: 2px; font-family: monospace; font-size: 11px; }
-.wizard-instruction a { color: var(--blue); text-decoration: underline; }
-.wizard-note { background: #e3f2fd; border: 1px solid #90caf9; border-radius: 3px; padding: 8px 12px; font-size: 11px; color: #0d47a1; margin-bottom: 10px; line-height: 1.6; }
-
 /* Edit question modal */
 .edit-opt-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .edit-opt-letter { font-weight: 700; font-size: 12px; color: var(--navy); min-width: 20px; }
@@ -1468,15 +1453,24 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
   <div class="modal-box" style="max-width:500px;">
     <h3>Settings</h3>
     <div class="form-group">
-      <label class="form-label">Google Drive Sync</label>
-      <p style="font-size:12px;color:#5a6a7a;margin-bottom:8px;">Sync your tests across devices via Google Drive.</p>
-      <div id="gdrive-status" style="font-size:12px;margin-bottom:10px;"></div>
-      <button class="btn-modal primary" id="btn-gdrive-setup" onclick="App.openSetupWizard()">Configure Google Drive</button>
-      <button class="btn-modal" id="btn-gdrive-signin" onclick="App.googleSignIn()" style="margin-left:6px;">Sign In</button>
+      <label class="form-label">Your Session Code</label>
+      <p style="font-size:12px;color:#5a6a7a;margin-bottom:8px;">Use this code to restore your session on any device. Keep it safe.</p>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+        <code id="display-user-code" style="font-size:15px;font-weight:700;color:#1e3a5f;background:#e3f2fd;padding:6px 12px;border-radius:4px;letter-spacing:.08em;flex:1;text-align:center;"></code>
+        <button class="btn-modal" onclick="copyUserCode()">Copy Code</button>
+      </div>
     </div>
-    <div class="form-group" style="margin-top:14px;">
+    <div class="form-group" style="margin-top:12px;">
+      <label class="form-label">Enter Code to Resume</label>
+      <p style="font-size:12px;color:#5a6a7a;margin-bottom:8px;">Enter a code from another device to restore that session here.</p>
+      <div style="display:flex;gap:8px;">
+        <input type="text" class="form-input" id="input-resume-code" placeholder="WORD-1234" style="flex:1;text-transform:uppercase;letter-spacing:.05em;">
+        <button class="btn-modal primary" onclick="resumeFromCode()">Restore</button>
+      </div>
+    </div>
+    <div class="form-group" style="margin-top:12px;">
       <label class="form-label">Gemini API Key</label>
-      <p style="font-size:12px;color:#5a6a7a;margin-bottom:8px;">Used for AI-powered question hints. Synced via Google Drive.</p>
+      <p style="font-size:12px;color:#5a6a7a;margin-bottom:8px;">Used for AI-powered question hints. Synced automatically.</p>
       <input type="password" class="form-input" id="settings-gemini-key" placeholder="AIza..." autocomplete="off" oninput="saveGeminiKey(this.value)">
     </div>
     <div class="modal-actions">
@@ -1485,16 +1479,8 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
   </div>
 </div>
 
-<!-- ═══ GOOGLE DRIVE SETUP WIZARD ═══ -->
-<div id="modal-wizard" class="modal-overlay">
-  <div class="modal-box" style="max-width:540px;">
-    <h3>Google Drive Setup</h3>
-    <div class="wizard-steps-indicator" id="wizard-steps"></div>
-    <div id="wizard-content"></div>
-  </div>
-</div>
-
 <!-- Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
@@ -1502,7 +1488,6 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 <script>
 /* ============================================================
    DB.JS — Storage Layer
-   Handles localStorage (primary) + Google Drive (sync)
 ============================================================ */
 const DB = (() => {
   const LOCAL_KEY = 'nbme_app_v1';
@@ -1510,13 +1495,7 @@ const DB = (() => {
   function defaultDB() {
     return {
       version: 1,
-      settings: {
-        googleClientId: null,
-        googleAccessToken: null,
-        googleTokenExpiry: null,
-        driveFileId: null,
-        setupComplete: false
-      },
+      settings: {},
       folders: [],
       tests: [],
       trash: [],
@@ -1543,85 +1522,11 @@ const DB = (() => {
 
   let _db = null;
   function get() { if (!_db) _db = loadLocal(); return _db; }
-  function save() { if (_db) { saveLocal(_db); scheduleDriveSync(); } }
-
-  // ── Drive sync ─────────────────────────────────────────────
-  let _syncTimer = null;
-  function scheduleDriveSync() {
-    if (_syncTimer) clearTimeout(_syncTimer);
-    _syncTimer = setTimeout(() => syncToDrive(), 3000);
-  }
-
-  async function syncToDrive() {
-    const db = get();
-    if (!db.settings.setupComplete || !db.settings.googleAccessToken) return;
-    if (Date.now() > (db.settings.googleTokenExpiry || 0)) { updateSyncIndicator('offline'); return; }
-    try {
-      updateSyncIndicator('syncing');
-      const content = JSON.stringify(db);
-      if (db.settings.driveFileId) {
-        await fetch(`https://www.googleapis.com/upload/drive/v3/files/${db.settings.driveFileId}?uploadType=media`,
-          { method: 'PATCH', headers: { Authorization: `Bearer ${db.settings.googleAccessToken}`, 'Content-Type': 'application/json' }, body: content });
-      } else {
-        const form = new FormData();
-        form.append('metadata', new Blob([JSON.stringify({ name: 'nbme_quiz_data.json', mimeType: 'application/json' })], { type: 'application/json' }));
-        form.append('file', new Blob([content], { type: 'application/json' }));
-        const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
-          { method: 'POST', headers: { Authorization: `Bearer ${db.settings.googleAccessToken}` }, body: form });
-        const data = await resp.json();
-        db.settings.driveFileId = data.id;
-        saveLocal(db);
-      }
-      updateSyncIndicator('synced');
-    } catch(e) { updateSyncIndicator('error'); }
-  }
-
-  async function loadFromDrive(accessToken) {
-    const db = get();
-    if (!db.settings.driveFileId) return null;
-    try {
-      const resp = await fetch(`https://www.googleapis.com/drive/v3/files/${db.settings.driveFileId}?alt=media`,
-        { headers: { Authorization: `Bearer ${accessToken}` } });
-      if (!resp.ok) return null;
-      const remote = await resp.json();
-      const localSettings = Object.assign({}, db.settings);
-      _db = Object.assign(defaultDB(), remote);
-      _db.settings = Object.assign(_db.settings, localSettings);
+  function save() {
+    if (_db) {
       saveLocal(_db);
-      return _db;
-    } catch(e) { return null; }
-  }
-
-  async function googleSignIn() {
-    const db = get();
-    const clientId = db.settings.googleClientId;
-    if (!clientId) return false;
-    return new Promise(resolve => {
-      const redirectUri = window.location.href.split('?')[0].split('#')[0];
-      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${encodeURIComponent('https://www.googleapis.com/auth/drive.file')}&prompt=consent`;
-      const popup = window.open(authUrl, 'google_auth', 'width=500,height=600');
-      const iv = setInterval(() => {
-        try {
-          if (!popup || popup.closed) { clearInterval(iv); resolve(false); return; }
-          const hash = popup.location.hash;
-          if (hash && hash.includes('access_token')) {
-            popup.close(); clearInterval(iv);
-            const p = new URLSearchParams(hash.substring(1));
-            const token = p.get('access_token');
-            db.settings.googleAccessToken = token;
-            db.settings.googleTokenExpiry = Date.now() + parseInt(p.get('expires_in') || '3600') * 1000;
-            save(); resolve(true);
-          }
-        } catch(e) {}
-      }, 500);
-    });
-  }
-
-  function updateSyncIndicator(state) {
-    const el = document.getElementById('sync-indicator');
-    if (!el) return;
-    const s = { syncing: ['↻ Syncing…','#f0a500'], synced: ['✓ Synced','#27ae60'], error: ['⚠ Sync error','#e74c3c'], offline: ['● Local','#95a5a6'] }[state] || ['● Local','#95a5a6'];
-    el.textContent = s[0]; el.style.color = s[1];
+      if (typeof window.scheduleSupabaseSave === 'function') window.scheduleSupabaseSave();
+    }
   }
 
   function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
@@ -1700,13 +1605,142 @@ const DB = (() => {
   function removeFlag(testId, questionId) { const db=get(); db.flags=db.flags.filter(f=>!(f.testId===testId&&f.questionId===questionId)); save(); }
   function isFlagged(testId, questionId) { return !!get().flags.find(f=>f.testId===testId&&f.questionId===questionId); }
 
-  return { get, save, uid, googleSignIn, loadFromDrive, syncToDrive, updateSyncIndicator,
+  return { get, save, uid,
     getFolders, createFolder, renameFolder, deleteFolder,
     getTests, getTest, createTest, updateTest, renameTest, trashTest, restoreTest, emptyTrash, permanentDelete,
     saveAttempt, finishAttempt, getHistory, getFlags, addFlag, removeFlag, isFlagged };
 })();
 window.DB = DB;
 
+</script>
+<script>
+/* ============================================================
+   SUPABASE SYNC — Automatic session persistence
+============================================================ */
+(function() {
+  const SB_URL = 'https://lmxdedepkwmilnvjcxil.supabase.co';
+  const SB_KEY = 'sb_publishable_CVhmesK9VAUhAn-mMpQHYQ_yg2MMz9Q';
+  window.supabase = window.supabase.createClient(SB_URL, SB_KEY);
+
+  // ── User code ─────────────────────────────────────────────
+  const _WORDS = ['ATLAS','BLAZE','CEDAR','CRANE','DELTA','DUSK','EMBER','FALCON',
+    'FROST','GROVE','HAVEN','HERON','INDIGO','IVORY','JADE','JASPER','KNIGHT',
+    'LUNAR','MAPLE','NOBLE','OCEAN','PEARL','QUEST','RIDGE','SOLAR','STORM',
+    'TIGER','TORCH','ULTRA','VISTA','WILLOW'];
+
+  window.generateUserCode = function() {
+    const w = _WORDS[Math.floor(Math.random() * _WORDS.length)];
+    const n = String(Math.floor(1000 + Math.random() * 9000));
+    return `${w}-${n}`;
+  };
+
+  window.getUserCode = function() {
+    let c = localStorage.getItem('user_code');
+    if (!c) { c = window.generateUserCode(); localStorage.setItem('user_code', c); }
+    return c;
+  };
+
+  // ── Sync indicator ────────────────────────────────────────
+  window.updateSyncIndicator = function(state) {
+    const el = document.getElementById('sync-indicator');
+    if (!el) return;
+    const m = { syncing:['↻ Syncing…','#f0a500'], synced:['✓ Synced','#27ae60'],
+                error:['⚠ Offline','#e74c3c'], offline:['● Local','#95a5a6'] };
+    const s = m[state] || m.offline;
+    el.textContent = s[0]; el.style.color = s[1];
+  };
+
+  // ── Save session ──────────────────────────────────────────
+  let _timer = null, _lastHash = null, _dirty = false;
+
+  window.scheduleSupabaseSave = function() {
+    _dirty = true;
+    if (_timer) clearTimeout(_timer);
+    _timer = setTimeout(() => window._doSaveSession(), 500);
+  };
+
+  window._doSaveSession = async function() {
+    const userCode = window.getUserCode();
+    const db  = DB.get();
+    const qs  = (typeof Quiz !== 'undefined') ? Quiz.getState() : null;
+    const data = {
+      folders: db.folders,
+      tests:   db.tests,
+      trash:   db.trash,
+      flags:   db.flags,
+      history: db.history,
+      geminiApiKey: (localStorage.getItem('gemini_api_key') || '').replace(/['"]/g, '').trim(),
+      quizState: qs ? {
+        testId: qs.testId, qIdx: qs.qIdx, mode: qs.mode,
+        results: qs.results, marks: [...qs.marks],
+        totSecs: qs.totSecs, paused: qs.paused
+      } : null
+    };
+    const hash = JSON.stringify(data);
+    if (hash === _lastHash) { _dirty = false; return; }
+    window.updateSyncIndicator('syncing');
+    try {
+      const { error } = await window.supabase
+        .from('sessions')
+        .upsert({ user_id: userCode, data, updated_at: new Date().toISOString() },
+                { onConflict: 'user_id' });
+      if (error) throw error;
+      _lastHash = hash; _dirty = false;
+      window.updateSyncIndicator('synced');
+    } catch(_) { window.updateSyncIndicator('offline'); }
+  };
+
+  // ── Load session ──────────────────────────────────────────
+  window.loadSession = async function(userCode) {
+    window.updateSyncIndicator('syncing');
+    try {
+      const { data: row, error } = await window.supabase
+        .from('sessions').select('data').eq('user_id', userCode).single();
+      if (error || !row) { window.updateSyncIndicator('offline'); return null; }
+      const s = row.data;
+      const db = DB.get();
+      if (Array.isArray(s.folders)) db.folders = s.folders;
+      if (Array.isArray(s.tests))   db.tests   = s.tests;
+      if (Array.isArray(s.trash))   db.trash   = s.trash;
+      if (Array.isArray(s.flags))   db.flags   = s.flags;
+      if (Array.isArray(s.history)) db.history = s.history;
+      try { localStorage.setItem('nbme_app_v1', JSON.stringify(db)); } catch(_) {}
+      if (s.geminiApiKey) localStorage.setItem('gemini_api_key', s.geminiApiKey);
+      _lastHash = JSON.stringify({ folders:db.folders, tests:db.tests, trash:db.trash,
+        flags:db.flags, history:db.history, geminiApiKey:s.geminiApiKey||'', quizState:s.quizState||null });
+      window.updateSyncIndicator('synced');
+      return s;
+    } catch(_) { window.updateSyncIndicator('offline'); return null; }
+  };
+
+  // ── Settings helpers ──────────────────────────────────────
+  window.copyUserCode = function() {
+    const code = window.getUserCode();
+    navigator.clipboard.writeText(code)
+      .then(() => { if (window.toast) window.toast('Code copied!', 2000); })
+      .catch(() => prompt('Your session code:', code));
+  };
+
+  window.resumeFromCode = async function() {
+    const inp = document.getElementById('input-resume-code');
+    if (!inp) return;
+    const code = inp.value.trim().toUpperCase();
+    if (!code || !code.includes('-')) {
+      if (window.toast) window.toast('Enter a valid code (e.g. TIGER-4829)'); return;
+    }
+    const session = await window.loadSession(code);
+    if (session) {
+      localStorage.setItem('user_code', code);
+      if (window.toast) window.toast('✓ Session restored! Reloading…', 2000);
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      if (window.toast) window.toast('Code not found. Check and try again.');
+    }
+  };
+
+  // ── Background sync every 15s ─────────────────────────────
+  setInterval(() => { if (_dirty) window._doSaveSession(); }, 15000);
+})();
 </script>
 <script>
 /* ============================================================
@@ -3605,14 +3639,17 @@ const App = (() => {
     window.toast = toast;
     renderSidebar();
     showHome();
-    checkSetupWizard();
-    checkGoogleToken();
+
+    // Load session from Supabase on start
+    const userCode = window.getUserCode();
+    window.loadSession(userCode).then(session => {
+      if (session) { renderSidebar(); renderHomeGrid(); }
+    });
 
     // Close modals on overlay click
     document.querySelectorAll('.modal-overlay').forEach(m => {
       m.addEventListener('click', e => { if (e.target === m) m.style.display = 'none'; });
     });
-
 
     // Auto-save on visibility change (tab switch / close)
     document.addEventListener('visibilitychange', () => {
@@ -3625,6 +3662,7 @@ const App = (() => {
             marks: [...st.marks], totSecs: st.totSecs
           });
         }
+        window._doSaveSession();
       }
     });
 
@@ -4208,179 +4246,12 @@ const App = (() => {
     sel.removeAllRanges();
   }
 
-  // ── Settings & Google Drive ────────────────────────────────
+  // ── Settings ───────────────────────────────────────────────
   function openSettings() {
-    const db = DB.get();
-    const statusEl = document.getElementById('gdrive-status');
-    if (db.settings.setupComplete && db.settings.googleClientId) {
-      statusEl.innerHTML = `<span style="color:#27ae60;">✓ Configured</span> · Client ID: ${db.settings.googleClientId.slice(0,20)}…`;
-    } else {
-      statusEl.innerHTML = '<span style="color:#f0a500;">Not configured</span>';
-    }
+    const codeEl = document.getElementById('display-user-code');
+    if (codeEl) codeEl.textContent = window.getUserCode();
     loadGeminiKeyToSettings();
     document.getElementById('modal-settings').style.display = 'flex';
-  }
-
-  async function googleSignIn() {
-    const success = await DB.googleSignIn();
-    if (success) {
-      toast('✓ Signed in to Google Drive!');
-      const db = DB.get();
-      await DB.loadFromDrive(db.settings.googleAccessToken);
-      renderSidebar(); renderHomeGrid();
-      DB.updateSyncIndicator('synced');
-    } else {
-      toast('Sign-in failed or cancelled.');
-    }
-  }
-
-  function checkGoogleToken() {
-    const db = DB.get();
-    if (db.settings.googleAccessToken && Date.now() < (db.settings.googleTokenExpiry || 0)) {
-      DB.updateSyncIndicator('synced');
-      DB.loadFromDrive(db.settings.googleAccessToken).then(remote => {
-        if (remote) { renderSidebar(); renderHomeGrid(); }
-      });
-    } else {
-      DB.updateSyncIndicator('offline');
-    }
-  }
-
-  // ── Setup Wizard ───────────────────────────────────────────
-  function checkSetupWizard() {
-    const db = DB.get();
-    if (!db.settings.setupComplete) {
-      // Show welcome hint in home
-      const content = document.getElementById('home-content');
-      content.innerHTML = `<div style="background:#e3f2fd;border:1px solid #90caf9;border-radius:4px;padding:16px 20px;max-width:500px;">
-        <div style="font-size:13px;font-weight:700;color:#0d47a1;margin-bottom:6px;">👋 Welcome to NBME Self-Assessment Suite</div>
-        <div style="font-size:12px;color:#1565c0;margin-bottom:12px;line-height:1.6;">
-          To sync across devices, set up Google Drive in <strong>⚙ Settings</strong> above.<br>
-          To get started, create a folder in the sidebar, then click <strong>+ Generate Test</strong>.
-        </div>
-        <button class="btn-generate" onclick="App.openSetupWizard()">Set Up Google Drive →</button>
-      </div>`;
-    }
-  }
-
-  const WIZARD_STEPS = [
-    {
-      title: 'Create a Google Cloud Project',
-      content: `<div class="wizard-instruction">
-        <ol>
-          <li>Go to <a href="https://console.cloud.google.com" target="_blank">console.cloud.google.com</a></li>
-          <li>Click <strong>"Select a project"</strong> → <strong>"New Project"</strong></li>
-          <li>Name it <code>NBME Quiz App</code> → click <strong>Create</strong></li>
-          <li>Make sure the new project is selected in the top bar</li>
-        </ol>
-      </div>
-      <div class="wizard-note">💡 This is completely free. Google Cloud has no cost for this usage.</div>`
-    },
-    {
-      title: 'Enable Google Drive API',
-      content: `<div class="wizard-instruction">
-        <ol>
-          <li>In the left menu, go to <strong>APIs & Services → Library</strong></li>
-          <li>Search for <strong>"Google Drive API"</strong></li>
-          <li>Click it, then click <strong>Enable</strong></li>
-        </ol>
-      </div>`
-    },
-    {
-      title: 'Create OAuth Credentials',
-      content: `<div class="wizard-instruction">
-        <ol>
-          <li>Go to <strong>APIs & Services → Credentials</strong></li>
-          <li>Click <strong>+ Create Credentials → OAuth client ID</strong></li>
-          <li>If prompted, configure the consent screen first:
-            <ul>
-              <li>Choose <strong>External</strong> → Create</li>
-              <li>Fill in App name: <code>NBME Quiz</code>, support email: your email</li>
-              <li>Click Save and Continue through all steps</li>
-            </ul>
-          </li>
-          <li>Back on Create OAuth client ID:
-            <ul>
-              <li>Application type: <strong>Web application</strong></li>
-              <li>Name: <code>NBME Quiz</code></li>
-              <li>Authorized JavaScript origins: add <code>${window.location.origin}</code></li>
-              <li>Click <strong>Create</strong></li>
-            </ul>
-          </li>
-        </ol>
-      </div>`
-    },
-    {
-      title: 'Add Test User',
-      content: `<div class="wizard-instruction">
-        <ol>
-          <li>Go to <strong>APIs & Services → OAuth consent screen</strong></li>
-          <li>Scroll to <strong>Test users</strong> → click <strong>+ Add users</strong></li>
-          <li>Add: <code>shuvoli8@gmail.com</code></li>
-          <li>Click Save</li>
-        </ol>
-      </div>
-      <div class="wizard-note">This lets your account use the app while it's in development mode.</div>`
-    },
-    {
-      title: 'Enter Your Client ID',
-      content: `<div class="wizard-instruction">
-        <p>Copy your <strong>Client ID</strong> (looks like: <code>123456789-abc.apps.googleusercontent.com</code>) and paste it below.</p>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Client ID</label>
-        <input type="text" class="form-input" id="wizard-client-id" placeholder="123…apps.googleusercontent.com">
-      </div>`
-    }
-  ];
-
-  let _wizardStep = 0;
-
-  function openSetupWizard() {
-    _wizardStep = 0;
-    document.getElementById('modal-settings').style.display = 'none';
-    renderWizard();
-    document.getElementById('modal-wizard').style.display = 'flex';
-  }
-
-  function renderWizard() {
-    const steps = WIZARD_STEPS;
-    // Progress indicator
-    document.getElementById('wizard-steps').innerHTML =
-      steps.map((_, i) => `<div class="wstep ${i < _wizardStep ? 'done' : i === _wizardStep ? 'active' : ''}"></div>`).join('');
-
-    const step = steps[_wizardStep];
-    const isLast = _wizardStep === steps.length - 1;
-    document.getElementById('wizard-content').innerHTML = `
-      <div class="wizard-step-title">Step ${_wizardStep + 1} of ${steps.length}: ${step.title}</div>
-      ${step.content}
-      <div class="modal-actions">
-        ${_wizardStep > 0 ? '<button class="btn-modal" onclick="App.wizardBack()">← Back</button>' : ''}
-        <button class="btn-modal" onclick="document.getElementById(\'modal-wizard\').style.display=\'none\'">Skip</button>
-        <button class="btn-modal primary" onclick="App.wizardNext()">${isLast ? 'Finish Setup' : 'Next →'}</button>
-      </div>`;
-  }
-
-  function wizardNext() {
-    if (_wizardStep === WIZARD_STEPS.length - 1) {
-      const clientId = document.getElementById('wizard-client-id')?.value?.trim();
-      if (!clientId || !clientId.includes('.apps.googleusercontent.com')) {
-        toast('Please enter a valid Client ID.'); return;
-      }
-      const db = DB.get();
-      db.settings.googleClientId = clientId;
-      db.settings.setupComplete  = true;
-      DB.save();
-      document.getElementById('modal-wizard').style.display = 'none';
-      toast('✓ Google Drive configured! Click Settings → Sign In to connect.', 4000);
-      return;
-    }
-    _wizardStep++;
-    renderWizard();
-  }
-
-  function wizardBack() {
-    if (_wizardStep > 0) { _wizardStep--; renderWizard(); }
   }
 
   // ── Public API ─────────────────────────────────────────────
@@ -4412,11 +4283,7 @@ const App = (() => {
     doFinish,
     openEditCurrentQuestion,
     onStemSelect,
-    openSettings,
-    googleSignIn,
-    openSetupWizard,
-    wizardNext,
-    wizardBack
+    openSettings
   };
 })();
 
