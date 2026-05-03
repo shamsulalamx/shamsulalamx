@@ -1821,23 +1821,62 @@ const OCR = (() => {
     text = text.replace(/\bO\s+2\b/g,              'O₂');
     text = text.replace(/kg\/m\s*2\b/g,            'kg/m²');
     text = text.replace(/\bB12\b/g,                'B₁₂');
+    // Fix split apostrophes: "child 's" → "child's", "patient 's" → "patient's"
+    text = text.replace(/(\w)\s+'s\b/g, "$1's");
+    text = text.replace(/(\w)\s+'t\b/g, "$1't");  // "doesn 't" → "doesn't"
+    text = text.replace(/(\w)\s+'re\b/g, "$1're");
+    text = text.replace(/(\w)\s+'ve\b/g, "$1've");
+    text = text.replace(/(\w)\s+'ll\b/g, "$1'll");
     // Noise-only lines
     text = text.replace(/^[.,!~•\s]{1,6}$/, '');
     return text;
   }
 
-  // ── Phantom space repair — FIXED threshold ───────────────
-  // gap < 3.0pt AND both sides are word chars → no space between items
+  // ── Phantom space repair ──────────────────────────────────
+  // PDF.js item.width is unreliable (can be 0, negative, or wrong for
+  // some fonts). Instead we estimate item width from the transform matrix
+  // font-size and string length, then compare gap to that estimate.
+  //
+  // Rule: if the gap between two word-char items is less than ~40% of
+  // the estimated character width, it's a phantom split — merge without space.
+  // If the gap is larger, it's a real word boundary — insert a space.
   function joinItems(items) {
     if (!items.length) return '';
     let result = items[0].str;
     for (let i = 1; i < items.length; i++) {
-      const gap      = items[i].x0 - items[i - 1].x1;
+      const prev = items[i - 1];
+      const curr = items[i];
+
       const prevWord = /[A-Za-z0-9]$/.test(result);
-      const nextWord = /^[A-Za-z0-9]/.test(items[i].str);
-      // Phantom: gap < 3pt AND both sides are word characters
-      const phantom  = gap < PHANTOM_GAP_MAX && prevWord && nextWord;
-      result        += (phantom ? '' : ' ') + items[i].str;
+      const nextWord = /^[A-Za-z0-9]/.test(curr.str);
+
+      if (!prevWord || !nextWord) {
+        // Non-word boundary — always insert space
+        result += ' ' + curr.str;
+        continue;
+      }
+
+      // Estimate the font size from the transform matrix (index 0 = scaleX)
+      // PDF.js transform: [scaleX, skewX, skewY, scaleY, x, y]
+      const fontSize = prev.transform ? Math.abs(prev.transform[0]) : 10;
+      // Approximate char width = fontSize * 0.5 (rough average for most fonts)
+      const estCharW = fontSize * 0.5;
+
+      // Calculate gap using x0 of current and x1 of previous
+      // x1 = x0 + |width|, but width is unreliable, so also estimate it
+      const prevX1_reported = prev.x0 + Math.abs(prev.width || 0);
+      const prevX1_estimated = prev.x0 + (prev.str.length * estCharW);
+      // Use whichever is more plausible (closer to current x0)
+      const gapReported  = curr.x0 - prevX1_reported;
+      const gapEstimated = curr.x0 - prevX1_estimated;
+      // If reported width is 0 or gives a huge gap, use estimated
+      const gap = (Math.abs(prev.width || 0) < 0.1)
+        ? gapEstimated
+        : gapReported;
+
+      // Phantom if gap < 40% of estimated char width
+      const phantom = gap < estCharW * 0.4;
+      result += (phantom ? '' : ' ') + curr.str;
     }
     return result.trim();
   }
@@ -1847,9 +1886,115 @@ const OCR = (() => {
   // Only split when the boundary has a clear option letter pattern.
   function splitMergedOptions(line) {
     // Require at least one space before the option letter
-    const parts = line.split(/\s+(?=(?:[0oOQ]\s{0,3})?[A-Ha-h]\)\s{1,4}\S)/)
+    const parts = line.split(/\s+(?=(?:[0oOQ]\s{0,3})?[A-Ha-h]\s{0,2}\)\s{1,4}\S)/)
                       .map(s => s.trim()).filter(Boolean);
     return parts.length > 1 ? parts : [line];
+  }
+
+  // ── Detect if PDF has a real text layer ──────────────────
+  async function pdfHasTextLayer(pdf) {
+    // Sample first 3 pages; if total chars < 50 → image-only
+    const sample = Math.min(3, pdf.numPages);
+    let total = 0;
+    for (let p = 1; p <= sample; p++) {
+      const page = await pdf.getPage(p);
+      const tc   = await page.getTextContent({ includeMarkedContent: false });
+      total += tc.items.reduce((n, i) => n + (i.str || '').trim().length, 0);
+    }
+    return total > 50;
+  }
+
+  // ── Tesseract OCR for one rendered page ───────────────────
+  let _tWorker = null;
+  async function getTesseractWorker() {
+    if (_tWorker) return _tWorker;
+    _tWorker = await Tesseract.createWorker('eng', 1, {
+      logger: () => {}   // suppress verbose logging
+    });
+    return _tWorker;
+  }
+
+  async function ocrPageImage(page, scale) {
+    const vp     = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    canvas.width  = Math.round(vp.width);
+    canvas.height = Math.round(vp.height);
+    const ctx = canvas.getContext('2d');
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+
+    const worker = await getTesseractWorker();
+    const result = await worker.recognize(canvas);
+    return { lines: result.data.lines, width: canvas.width, height: canvas.height };
+  }
+
+  // ── Parse OCR output from image-based NBME PDF ───────────
+  // Surgery PDFs are PowerPoint screenshots — widescreen 959×523pt pages.
+  // Layout: top chrome band (~12% of height), bottom chrome band (~14%),
+  // content in the middle. Item number appears in top-left of chrome.
+  function parseOcrPage(ocrLines, imgWidth, imgHeight) {
+    // Chrome exclusion zones (as fraction of image height)
+    const TOP_FRAC    = 0.15;   // top chrome: header band
+    const BOT_FRAC    = 0.12;   // bottom chrome: nav buttons
+    const topCutoff   = imgHeight * TOP_FRAC;
+    const botCutoff   = imgHeight * (1 - BOT_FRAC);
+
+    // Gather all line texts with their y-positions
+    const contentLines = [];
+    let itemNum = null, totalItems = null;
+
+    for (const line of ocrLines) {
+      const bbox = line.bbox;       // {x0, y0, x1, y1} in pixels from top-left
+      const lineY = (bbox.y0 + bbox.y1) / 2;
+      const text  = line.text.replace(/\n/g, ' ').trim();
+      if (!text) continue;
+
+      // Check header region for item number regardless of zone
+      if (lineY < topCutoff || lineY > botCutoff) {
+        const im = text.match(/[Ii]tem\s*:?\s*(\d+)\s+of\s+(\d+)/);
+        if (im) { itemNum = parseInt(im[1]); totalItems = parseInt(im[2]); }
+        continue;  // skip chrome content
+      }
+
+      contentLines.push({ y: lineY, text });
+    }
+
+    // Sort top-to-bottom and build paragraphs
+    contentLines.sort((a, b) => a.y - b.y);
+
+    // Estimate line height from median gap
+    const gaps = [];
+    for (let i = 1; i < contentLines.length; i++) {
+      gaps.push(contentLines[i].y - contentLines[i-1].y);
+    }
+    const medianGap = gaps.length
+      ? gaps.slice().sort((a,b)=>a-b)[Math.floor(gaps.length/2)]
+      : 20;
+    const paraThresh = medianGap * 1.8;  // gap > 1.8× median → new paragraph
+
+    const paragraphs = [];
+    let cur = [];
+    let prevY = null;
+    for (const { y, text } of contentLines) {
+      if (prevY !== null && (y - prevY) > paraThresh) {
+        if (cur.length) { paragraphs.push(cur.join(' ')); cur = []; }
+      }
+      cur.push(text);
+      prevY = y;
+    }
+    if (cur.length) paragraphs.push(cur.join(' '));
+
+    // Expand merged options and normalize
+    const finalParas = [];
+    for (const para of paragraphs) {
+      const trimmed = para.trim();
+      if (!trimmed) continue;
+      for (const sub of splitMergedOptions(trimmed)) {
+        const cleaned = normalizeChars(sub.replace(/\s{2,}/g, ' ').trim());
+        if (cleaned) finalParas.push(cleaned);
+      }
+    }
+
+    return { paragraphs: finalParas, itemNum, totalItems };
   }
 
   // ── Extract text from one PDF ─────────────────────────────
@@ -1858,81 +2003,103 @@ const OCR = (() => {
     const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
     const pages = [];
 
-    for (let p = 1; p <= pdf.numPages; p++) {
-      if (onProgress) onProgress(p, pdf.numPages);
-      const page = await pdf.getPage(p);
-      const tc   = await page.getTextContent({ includeMarkedContent: false });
-      const vp   = page.getViewport({ scale: 1 });
-      const pgH  = vp.height;
-      const sc   = pgH / PAGE_HEIGHT;
-      const topY = TOP_CHROME_Y    * sc;
-      const botY = BOTTOM_CHROME_Y * sc;
+    // Detect whether this PDF has a text layer
+    const hasText = await pdfHasTextLayer(pdf);
 
-      // Detect item number from all raw text (before filtering)
-      const allText = tc.items.map(i => i.str || '').join(' ');
-      let itemNum = null, totalItems = null;
-      const im = allText.match(/[Ii]tem\s+(\d+)\s+of\s+(\d+)/);
-      if (im) { itemNum = parseInt(im[1]); totalItems = parseInt(im[2]); }
+    if (hasText) {
+      // ── Vector PDF path (original behaviour) ──────────────
+      for (let p = 1; p <= pdf.numPages; p++) {
+        if (onProgress) onProgress(p, pdf.numPages);
+        const page = await pdf.getPage(p);
+        const tc   = await page.getTextContent({ includeMarkedContent: false });
+        const vp   = page.getViewport({ scale: 1 });
+        const pgH  = vp.height;
+        const sc   = pgH / PAGE_HEIGHT;
+        const topY = TOP_CHROME_Y    * sc;
+        const botY = BOTTOM_CHROME_Y * sc;
 
-      // Collect content items — filter chrome and radio button glyphs
-      const raw = [];
-      for (const item of tc.items) {
-        if (!item.str || !item.str.trim()) continue;
-        const tx  = item.transform;
-        const x0  = tx[4];
-        const y   = tx[5];
-        const x1  = x0 + Math.abs(item.width || 0);
-        const str = item.str.trim();
-        if (y > topY || y < botY) continue;
-        // Skip radio button glyphs: lone 0/O/Q at far left
-        if (/^[0oOQ]$/.test(str) && x0 < 80 * sc) continue;
-        // Skip pure punctuation/symbol noise
-        if (/^[-~.,•!|]{1,5}$/.test(str)) continue;
-        raw.push({ x0, x1, y, str });
-      }
+        const allText = tc.items.map(i => i.str || '').join(' ');
+        let itemNum = null, totalItems = null;
+        const im = allText.match(/[Ii]tem\s*:?\s*(\d+)\s+of\s+(\d+)/);
+        if (im) { itemNum = parseInt(im[1]); totalItems = parseInt(im[2]); }
 
-      // Group into Y-buckets (3pt)
-      const lineMap = new Map();
-      for (const it of raw) {
-        const ky = Math.round(it.y / 3) * 3;
-        if (!lineMap.has(ky)) lineMap.set(ky, []);
-        lineMap.get(ky).push(it);
-      }
-
-      // Build lines with Y info, sorted top→bottom
-      const sortedYs = [...lineMap.keys()].sort((a, b) => b - a);
-      const rawLines = sortedYs.map(ky => ({
-        y:    ky,
-        text: joinItems(lineMap.get(ky).sort((a, b) => a.x0 - b.x0))
-      })).filter(l => l.text.trim());
-
-      // Merge into paragraphs by Y-gap
-      const paragraphs = [];
-      let curLines = [];
-      let prevY = null;
-      for (const line of rawLines) {
-        const gap = prevY !== null ? (prevY - line.y) : 0;
-        if (prevY !== null && gap > PARA_GAP_PT) {
-          if (curLines.length) { paragraphs.push(curLines.join(' ')); curLines = []; }
+        const raw = [];
+        for (const item of tc.items) {
+          if (!item.str || !item.str.trim()) continue;
+          const tx  = item.transform;
+          const x0  = tx[4];
+          const y   = tx[5];
+          const x1  = x0 + Math.abs(item.width || 0);
+          const str = item.str.trim();
+          if (y > topY || y < botY) continue;
+          if (/^[0oOQ]$/.test(str) && x0 < 80 * sc) continue;
+          if (/^[-~.,•!|]{1,5}$/.test(str)) continue;
+          raw.push({ x0, x1, y, str, width: item.width || 0, transform: tx });
         }
-        curLines.push(line.text);
-        prevY = line.y;
-      }
-      if (curLines.length) paragraphs.push(curLines.join(' '));
 
-      // Expand merged options and normalize
-      const finalParas = [];
-      for (const para of paragraphs) {
-        const trimmed = para.trim();
-        if (!trimmed) continue;
-        for (const sub of splitMergedOptions(trimmed)) {
-          const cleaned = normalizeChars(sub.replace(/\s{2,}/g, ' ').trim());
-          if (cleaned && cleaned.length > 0) finalParas.push(cleaned);
+        const lineMap = new Map();
+        for (const it of raw) {
+          const ky = Math.round(it.y / 3) * 3;
+          if (!lineMap.has(ky)) lineMap.set(ky, []);
+          lineMap.get(ky).push(it);
+        }
+
+        const sortedYs = [...lineMap.keys()].sort((a, b) => b - a);
+        const rawLines = sortedYs.map(ky => ({
+          y:    ky,
+          text: joinItems(lineMap.get(ky).sort((a, b) => a.x0 - b.x0))
+        })).filter(l => l.text.trim());
+
+        const paragraphs = [];
+        let curLines = [];
+        let prevY = null;
+        for (const line of rawLines) {
+          const gap = prevY !== null ? (prevY - line.y) : 0;
+          if (prevY !== null && gap > PARA_GAP_PT) {
+            if (curLines.length) { paragraphs.push(curLines.join(' ')); curLines = []; }
+          }
+          curLines.push(line.text);
+          prevY = line.y;
+        }
+        if (curLines.length) paragraphs.push(curLines.join(' '));
+
+        const finalParas = [];
+        for (const para of paragraphs) {
+          const trimmed = para.trim();
+          if (!trimmed) continue;
+          for (const sub of splitMergedOptions(trimmed)) {
+            const cleaned = normalizeChars(sub.replace(/\s{2,}/g, ' ').trim());
+            if (cleaned && cleaned.length > 0) finalParas.push(cleaned);
+          }
+        }
+
+        pages.push({ pageNum: p, paragraphs: finalParas, itemNum, totalItems });
+      }
+
+    } else {
+      // ── Image-only PDF path — use Tesseract OCR ────────────
+      // Render at 2× scale for better OCR accuracy
+      const SCALE = 2.0;
+      for (let p = 1; p <= pdf.numPages; p++) {
+        if (onProgress) onProgress(p, pdf.numPages);
+        const page = await pdf.getPage(p);
+        try {
+          const { lines, width, height } = await ocrPageImage(page, SCALE);
+          const parsed = parseOcrPage(lines, width, height);
+          pages.push({ pageNum: p, ...parsed });
+        } catch(e) {
+          // If OCR fails on a page, push empty placeholder
+          pages.push({ pageNum: p, paragraphs: [], itemNum: null, totalItems: null });
         }
       }
 
-      pages.push({ pageNum: p, paragraphs: finalParas, itemNum, totalItems });
+      // Clean up Tesseract worker after processing
+      if (_tWorker) {
+        try { await _tWorker.terminate(); } catch(_) {}
+        _tWorker = null;
+      }
     }
+
     return pages;
   }
 
@@ -1958,8 +2125,8 @@ const OCR = (() => {
 
   // ── Parse one question ────────────────────────────────────
   function parseOneQuestion(num, paragraphs) {
-    const OPT_RE = /^(?:[0oOQ]\s{0,3})?([A-Ha-h])\)\s{1,4}(.+)/;
-    const NEXT_Q_RE = /^(\d+)\.\s+\S/;  // "8.  A 62-year-old..."
+    const OPT_RE = /^(?:[0oOQ©®°]\s{0,3})?([A-Ha-h])\s{0,2}[)]\s{0,4}(.{2,})/;
+    const NEXT_Q_RE = /^(\d+)[.,]\s+\S/;  // "8.  A 62-year-old..." or OCR variant
 
     let stemParas = [];
     let options   = [];
@@ -1983,7 +2150,7 @@ const OCR = (() => {
 
       // Strip this question's number prefix
       if (!seenQNum) {
-        const nm = p.match(/^(\d+)\.\s+(.+)/);
+        const nm = p.match(/^(\d+)[.,]\s+(.+)/);
         if (nm && parseInt(nm[1]) === num) {
           seenQNum = true;
           const rest = nm[2].trim();
@@ -2070,11 +2237,32 @@ const OCR = (() => {
       return true;
     });
 
+    // Rejoin paragraphs that were split mid-sentence by the PDF renderer.
+    // Pattern: a paragraph ending with "(Choice" gets the next paragraph
+    // starting with a letter + ")" merged back into it.
+    // Also handles any paragraph ending mid-word or with an open paren.
+    const rejoined = [];
+    for (let i = 0; i < unique.length; i++) {
+      const cur  = unique[i].trim();
+      const next = unique[i + 1] ? unique[i + 1].trim() : null;
+      if (next && /\(Choice\s*$/i.test(cur)) {
+        // "(Choice" split — merge with a space and skip next
+        rejoined.push(cur + ' ' + next);
+        i++;
+      } else if (next && /\($/.test(cur)) {
+        // bare open paren at end — merge with space
+        rejoined.push(cur + next);
+        i++;
+      } else {
+        rejoined.push(cur);
+      }
+    }
+
     // Build structured explanation — ONLY \n\n between sections, never \n
     // FIX 3: no single \n inside paragraphs, so no <br> appears in rendering
     const SECTION_RE = /^(incorrect\s+answers?:?|educational\s+objective:?|[A-Za-z][a-zA-Z\s,\/()\-]{2,60}\(choice\s+[A-Ha-h]\))/i;
     const parts = [];
-    for (const para of unique) {
+    for (const para of rejoined) {
       const trimmed = para.trim();
       if (!trimmed) continue;
       if (SECTION_RE.test(trimmed)) {
@@ -2150,9 +2338,9 @@ const OCR = (() => {
   async function processTestPDFs(questionFile, answerFile, onProgress) {
     const report = (pct, msg) => onProgress && onProgress(pct, 100, msg);
 
-    report(5, 'Reading Question Bank…');
+    report(5, 'Reading Question Bank… (detecting PDF type)');
     const qPages = await extractPdfText(questionFile, (i, t) =>
-      report(5 + Math.round((i / t) * 35), `Reading Q page ${i}/${t}…`));
+      report(5 + Math.round((i / t) * 35), `Reading Q page ${i}/${t}… (${i===1?'using OCR for image PDF':''})`));
 
     report(42, 'Reading Answer Key…');
     const aPages = await extractPdfText(answerFile, (i, t) =>

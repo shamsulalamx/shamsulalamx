@@ -15,8 +15,8 @@ A single-page HTML application for medical students to take NBME-style practice 
 | Layer | Technology |
 |---|---|
 | Frontend | Pure HTML, CSS, JavaScript — no frameworks |
-| PDF text extraction | PDF.js v3.11.174 — `getTextContent()` (NOT OCR) |
-| OCR library | Tesseract.js v5 — loaded but NOT used (was replaced) |
+| PDF text extraction | PDF.js v3.11.174 — `getTextContent()` for vector PDFs |
+| OCR fallback | Tesseract.js v5 — active, used for image-only PDFs |
 | Storage primary | Browser localStorage |
 | Session sync | Supabase — fully working |
 | AI hints + tagging | Google Gemini API `gemini-2.5-flash` |
@@ -29,7 +29,7 @@ A single-page HTML application for medical students to take NBME-style practice 
 
 ```
 NBME Self-Assessment Suite/
-  index.html          ← entire app, single self-contained file (4440 lines)
+  index.html          ← entire app, single self-contained file (~4628 lines)
   css/                ← IGNORE — failed split attempt, not used
   js/                 ← IGNORE — failed split attempt, not used
   PROJECT_CONTEXT.md  ← this file
@@ -46,12 +46,12 @@ NBME Self-Assessment Suite/
 |---|---|---|
 | DB | 1494–1615 | Storage layer: localStorage + Supabase sync |
 | Supabase | 1616–1760 | Session sync, user code generation |
-| OCR | 1761–2189 | PDF extraction engine v7 (see full details below) |
-| Quiz | 2252–2790 | Test-taking engine: state, timers, navigation, modes |
-| Results | 2936–3488 | Score report, analytics, review mode |
-| App | 3499–4162 | Main controller, UI, routing, sidebar, modals |
-| PIN | 4163–4305 | 4-digit passcode protection |
-| Bootstrap | 4306+ | App initialization on DOMContentLoaded |
+| OCR | 1761–2310 | PDF extraction engine v8 (see full details below) |
+| Quiz | 2330–2870 | Test-taking engine: state, timers, navigation, modes |
+| Results | 2940–3490 | Score report, analytics, review mode |
+| App | 3500–4170 | Main controller, UI, routing, sidebar, modals |
+| PIN | 4170–4310 | 4-digit passcode protection |
+| Bootstrap | 4310+ | App initialization on DOMContentLoaded |
 
 ---
 
@@ -88,10 +88,11 @@ Status: Working for hints. AI auto-tagging working.
 | Trash folder | Working |
 | Timer (per-question, counts up) | Working |
 | Auto yellow highlight | Working |
-| Font size A+ A- buttons | Partially working |
+| Font size A+ A- buttons | Partially working (zooms whole page — not yet fixed) |
 | Calculator strip | Working |
 | Lab Values panel | Working |
-| PDF extraction (OCR v7) | Mostly working — see known issues below |
+| PDF extraction — vector PDFs | Working (OCR v8) |
+| PDF extraction — image-only PDFs | Working via Tesseract fallback (slow: ~3–8 min for 50 pages) |
 | Explanation display | Working |
 | Navigation panel collapsible | Working |
 | PDF report download | Working |
@@ -101,147 +102,188 @@ Status: Working for hints. AI auto-tagging working.
 
 ---
 
-## OCR Engine — Current Version: v7
+## OCR Engine — Current Version: v8
 
 ### Architecture
 
-The app uses **PDF.js `getTextContent()`** (native vector text extraction), NOT Tesseract image OCR. NBME PDFs contain selectable text — OCR was causing all original noise issues and was replaced in v3.
+The engine has two paths selected automatically:
 
-### PDF Structure (NBME format)
+1. **Vector PDF path** (fast): PDF.js `getTextContent()` — used when the PDF has a real text layer (>50 chars detected in first 3 pages). This is the path used for all standard NBME Psych/Medicine/Surgery Shelf PDFs downloaded from the NBME website.
 
-Each question PDF page has:
-- **Top chrome** (y > 700pt): `Exam Section: Item X of N`, `National Board of Medical Examiners`, `Time Remaining:`
-- **Bottom chrome** (y < 48pt): `Previous`, `Next`, `Lab Values`, `Calculator`, `Review`, `Help`, `Pause`, plus glyph noise (`~ ~ , r ,`)
+2. **Image-only PDF path** (slow): Tesseract.js v5 OCR — used when PDF.js finds no text. Triggered for PDFs created from PowerPoint screenshots or scanned documents. Each page is rendered to canvas at 2× scale and OCR'd. Expect 3–8 minutes for 50 pages.
+
+### PDF Format — NBME Standard (vector, used for Psych)
+
+Each question PDF page:
+- **Top chrome** (y > 700pt): `Exam Section : Item X of N`, `National Board of Medical Examiners`, `Time Remaining:`
+- **Bottom chrome** (y < 48pt): `Previous`, `Next`, `Lab Values`, `Calculator`, `Review`, `Help`, `Pause`, glyph noise
 - **Content band** (48pt < y < 700pt): question stem + answer choices
 - **Radio buttons**: separate text items at x < 80, rendered as `0` or `O` — filtered out
+- **Answer choices**: format `A )  text` (space before paren) or `A)  text`
 
-Each answer PDF page has:
+Each answer PDF page:
 - Same chrome bands
-- Question stem (repeated from question PDF)
-- Answer choices (repeated)
 - `Correct Answer: X.` line
-- Full explanation paragraphs (17pt line spacing within, 33pt gap between)
-- Each answer item spans **2 PDF pages** — page 2 contains a full repeat of the explanation
+- Full explanation paragraphs
+- Each answer item spans **2 PDF pages** — page 2 repeats full explanation (deduplication handles this)
+
+### PDF Format — Surgery (image-only, PowerPoint screenshots)
+
+- Page size: 959×523pt (widescreen 16:9)
+- Created by: Microsoft PowerPoint → Export as PDF
+- No text layer — Tesseract OCR path is used
+- Top 15% of image = header chrome (item number extracted here)
+- Bottom 12% = navigation buttons (excluded)
+- Middle 73% = question content
 
 ### Key Constants (in OCR module)
 
 ```javascript
-PAGE_HEIGHT      = 752   // pt — consistent across all NBME pages
-TOP_CHROME_Y     = 700   // filter rows above this
-BOTTOM_CHROME_Y  = 48    // filter rows below this
-PARA_GAP_PT      = 25    // Y gap (pt) → paragraph break
-PHANTOM_GAP_MAX  = 3.0   // gap < 3pt AND both word chars → phantom space
+PAGE_HEIGHT      = 752    // pt — NBME vector PDF standard page height
+TOP_CHROME_Y     = 700    // filter rows above this (vector path)
+BOTTOM_CHROME_Y  = 48     // filter rows below this (vector path)
+PARA_GAP_PT      = 25     // Y gap (pt) → paragraph break (vector path)
+// PHANTOM_GAP_MAX removed — replaced by font-size-relative threshold in joinItems
 ```
 
-### Critical Regex Fixes
+### All Regex Patterns (current, authoritative)
 
 ```javascript
-// CORRECT — requires colon + single letter grade
+// Item header — handles both "Item 1 of 50" and "Item: 1 of 50" (Surgery answers format)
+/[Ii]tem\s*:?\s*(\d+)\s+of\s+(\d+)/
+
+// Correct answer — requires colon + single letter, won't match "Incorrect Answers: A, B"
 CA_RE = /correct\s+answer\s*[:\-.]\s*([A-Ha-h])(?:[.\s,]|$)/i
 
-// WHY: "Incorrect Answers: A, B, D" was falsely matching /correct\s+answer/i
-// because "In-CORRECT ANSWER-s" contains both substrings.
-// The CA_RE fix requires a single letter after the colon, so "Incorrect Answers: A, B"
-// never matches (it has "s: A, B" not ": A" alone).
+// Answer option — handles "A) text", "A ) text", "A )  text" (space before paren)
+OPT_RE = /^(?:[0oOQ©®°]\s{0,3})?([A-Ha-h])\s{0,2}[)]\s{0,4}(.{2,})/
+
+// Next question boundary (stops option parsing when new question starts)
+NEXT_Q_RE = /^(\d+)[.,]\s+\S/
+
+// Question number prefix (handles OCR period/comma variants)
+/^(\d+)[.,]\s+(.+)/
+
+// splitMergedOptions — two-column layout detection
+/\s+(?=(?:[0oOQ]\s{0,3})?[A-Ha-h]\s{0,2}\)\s{1,4}\S)/
 ```
 
 ### Key Pipeline Functions
 
 ```
-extractPdfText(file)        → pages[]  {pageNum, paragraphs[], itemNum, totalItems}
-groupPagesByItem(pages)     → itemMap  {itemNum → paragraphs[]}
-parseQuestionBank(itemMap)  → questions[]
-parseAnswerKey(itemMap)     → answers{}
+extractPdfText(file)              → pages[]  {pageNum, paragraphs[], itemNum, totalItems}
+  └─ pdfHasTextLayer(pdf)         → bool  (samples 3 pages, checks char count > 50)
+  └─ [vector path] joinItems()    → merges PDF.js text items on same line
+  └─ [image path] ocrPageImage()  → renders page to canvas, runs Tesseract
+  └─ [image path] parseOcrPage()  → extracts item number + content from OCR lines
+groupPagesByItem(pages)           → itemMap  {itemNum → paragraphs[]}
+parseQuestionBank(itemMap)        → questions[]
+parseAnswerKey(itemMap)           → answers{}
 matchAndMerge(questions, answers) → matched[]
-aiTagQuestions(matched)     → tags added in-place
+aiTagQuestions(matched)           → tags added in-place
 processTestPDFs(qFile, aFile, onProgress) → matched[]  ← main entry point
 ```
 
-### Phantom Space Fix
-
-**Problem:** PDF ligature encoding splits words across text items with tiny gaps.  
-Example: `"Catatonia"` → PDF.js emits `"Cataton"` item (x1=141.98) then `"ia"` item (x0=143.49).  
-Gap = 1.51pt. Real word-space minimum = 3.36pt (Helvetica-Bold).
-
-**Fix:** `PHANTOM_GAP_MAX = 3.0pt` — if gap < 3pt AND both sides are word chars → merge without space.  
-Previous approach (median-based 60% threshold) failed because kerning-after-space gaps (1.4–2.2pt) polluted the median.
-
-### Duplicate Explanation Fix
-
-**Problem:** Each answer item spans 2 PDF pages. Page 2 REPEATS the entire explanation from `"Correct Answer: X."` onward. Old code merged both pages → double explanations.  
-**Fix:** Use `lastIdx = correctIndices[correctIndices.length - 1]` — always use the last true "Correct Answer: X" occurrence. Take only `paragraphs[lastIdx + 1:]`.
-
-### Item 8 Boundary Fix
-
-**Problem:** Item 7's last choice E was on the same page as item 8's question text. The parser appended `"8.  A 62-year-old..."` to item 7's choice E as "continuation text".  
-**Fix:** `NEXT_Q_RE = /^(\d+)\.\s+\S/` — while in options mode, if a line matches a DIFFERENT question number → stop immediately.
-
 ---
 
-## Known Remaining Issues (as of last session)
+## Fixes Applied This Session (v7 → v8)
 
-### OCR / Extraction Issues
+### Fix A — Item header regex handles Surgery answers format
+**Problem:** Surgery answers PDF uses `Exam Section Item: 1 of 50` (colon after "Item"), old regex required `Item 1` (space before number).
+**Fix:** `/[Ii]tem\s*:?\s*(\d+)\s+of\s+(\d+)/` — `\s*:?\s*` allows optional colon.
 
-1. **49 questions extracted instead of 50** — Item 8 still missing from Psych Shelf 4 PDF. The `NEXT_Q_RE` fix was applied but not yet verified with a re-extraction. Item 8 uses extended matching (two-column answer choices).
+### Fix B — Answer option regex handles space before paren
+**Problem:** Surgery/Psych PDFs render choices as `A )  text` — old `OPT_RE` required `A)` with no space.
+**Fix:** `([A-Ha-h])\s{0,2}[)]\s{0,4}` — allows 0–2 spaces before `)`.
 
-2. **Trailing digits after some answer choices** — Radio button glyphs not fully filtered in all PDF layouts. Filter threshold is x < 80, may need widening further.
+### Fix C — Tesseract OCR fallback for image-only PDFs
+**Problem:** Surgery PDFs are PowerPoint screenshot images — PDF.js returns zero text, causing "No questions found".
+**Fix:** `pdfHasTextLayer()` detects image-only PDFs; OCR path renders each page to canvas at 2× and runs Tesseract.js. `parseOcrPage()` uses bounding boxes + median-gap paragraph detection + chrome zone exclusion.
 
-3. **Some phantom spaces still persist** — `PHANTOM_GAP_MAX = 3.0pt` should catch all cases (confirmed max phantom gap = 2.62pt, min real space = 3.36pt) but not yet re-verified against full PDF.
+### Fix D — Phantom space fix rewritten (font-size-relative threshold)
+**Problem:** `PHANTOM_GAP_MAX = 3.0pt` fixed threshold failed for many words (`serotonin` → `seroton in`, `Progression` → `Prog ression`, `wife's` → `w ife's`) because `item.width` from PDF.js is often 0 or wrong, making gap calculations incorrect.
+**Fix:** `joinItems()` now:
+1. Stores `transform` and `width` from PDF.js item (raw item now includes these fields)
+2. Reads font size from `transform[0]` (scaleX of the PDF.js transform matrix)
+3. Estimates char width as `fontSize × 0.5`
+4. When `width = 0`, estimates x1 from string length × estCharW instead
+5. Merges items when gap < `estCharW × 0.4` (40% of avg char width)
 
-4. **Two-column answer layout edge cases** — Items like 8, 13, 16 with extended matching (8+ choices, two columns) sometimes have choices rendered out of order or merged. `splitMergedOptions()` handles most cases.
-
-5. **"No questions found" error on new PDFs** — New PDFs with different structure (different item header format, different fonts, different question numbering scheme) return zero questions. **THIS IS THE CURRENT BLOCKER for the next session.** New PDFs need to be uploaded and analyzed before the OCR pipeline can be extended.
-
-### UI Issues (lower priority)
-
-6. **Timer has a visual glitch** — Two timers visible; Fix 1 from PROJECT_CONTEXT describes the intended fix (not yet done).
-
-7. **Font size A+/A- zooms whole page** — Fix 2 from PROJECT_CONTEXT describes the intended fix (not yet done).
-
-8. **Lab values spacing** — Fix 3 from PROJECT_CONTEXT (not yet done).
-
-9. **Navigation panel width** — Fix 4 from PROJECT_CONTEXT (not yet done).
-
-10. **Search in navigation panel** — Fix 5 from PROJECT_CONTEXT (not yet done).
-
----
-
-## PRIORITY FOR NEXT SESSION
-
-**Goal: Fix "No questions found" error for new PDFs**
-
-The user is trying to upload a different questions PDF and answers PDF. The error means `parseQuestionBank()` returned zero items.
-
-**Steps needed:**
-1. Upload the new questions PDF and answers PDF to the chat
-2. Run `pdfminer` analysis to extract all text items with positions (same analysis done for Psych Shelf 4)
-3. Identify:
-   - Does the header say `"Exam Section: Item X of N"` or something different?
-   - Are item numbers in the same format?
-   - Are Y coordinates similar (page height 752pt)?
-   - Are answer choices formatted the same way?
-4. Modify `extractPdfText()` / `parseOneQuestion()` as needed to handle the new format
-5. The fix may be as simple as a different item-header regex, or may require more structural changes
-
-**Key diagnostic command for new PDFs:**
-```python
-from pdfminer.high_level import extract_pages
-from pdfminer.layout import LTTextBox, LTTextLine
-
-for pg_idx, page in enumerate(extract_pages('new_questions.pdf')):
-    elements = []
-    for elem in page:
-        if isinstance(elem, LTTextBox):
-            for line in elem:
-                if isinstance(line, LTTextLine):
-                    t = line.get_text().strip()
-                    if t: elements.append((line.y0, line.x0, t))
-    elements.sort(key=lambda e: -e[0])
-    print(f"\n=== PAGE {pg_idx+1} ===")
-    for y, x, t in elements:
-        print(f"  y={y:7.1f} x={x:6.1f} | {repr(t[:100])}")
-    if pg_idx >= 2: break  # just first 3 pages
+```javascript
+const fontSize = prev.transform ? Math.abs(prev.transform[0]) : 10;
+const estCharW = fontSize * 0.5;
+const gap = (Math.abs(prev.width || 0) < 0.1) ? gapEstimated : gapReported;
+const phantom = gap < estCharW * 0.4;
 ```
+
+### Fix E — (Choice A) paragraph split in explanations
+**Problem:** PDF renderer splits `(Choice A)` across two paragraphs at line break, producing:
+```
+"Generalized anxiety disorder (Choice"
+"A) is an anxiety disorder..."
+```
+**Fix:** After deduplication in `parseOneAnswer`, a `rejoined` pass detects paragraphs ending with `(Choice` and merges them with the next paragraph (with a space inserted).
+
+### Fix F — Split apostrophes in normalizeChars
+**Problem:** `"child 's"`, `"doesn 't"` etc. appearing in extracted text.
+**Fix:** Added to `normalizeChars()`:
+```javascript
+text = text.replace(/(\w)\s+'s\b/g, "$1's");
+text = text.replace(/(\w)\s+'t\b/g, "$1't");
+text = text.replace(/(\w)\s+'re\b/g, "$1're");
+text = text.replace(/(\w)\s+'ve\b/g, "$1've");
+text = text.replace(/(\w)\s+'ll\b/g, "$1'll");
+```
+
+### Fix G — Question/NEXT_Q boundary regex more flexible
+**Problem:** OCR may produce comma instead of period after question number.
+**Fix:** `NEXT_Q_RE = /^(\d+)[.,]\s+\S/` and stem prefix match `/^(\d+)[.,]\s+(.+)/`
+
+---
+
+## Known Remaining Issues
+
+### OCR / Extraction
+
+1. **Some phantom spaces may still persist** — Fix D was verified with simulated test cases but not yet re-tested against a full live Psych PDF re-extraction. If any `word space` artifacts remain after re-uploading the psych PDFs, the threshold `estCharW * 0.4` may need tuning upward (try `0.6`).
+
+2. **49 questions instead of 50** — Psych Shelf 4 item 8 still possibly missing. Uses extended matching (two-column 8-choice layout). `NEXT_Q_RE` fix was applied but not re-verified.
+
+3. **Trailing digits after answer choices** — Radio button glyph filter `x < 80 * sc` may need widening to `x < 100 * sc` for some PDF layouts.
+
+4. **Two-column answer layout** — Items with 8+ choices (A–H) in two columns sometimes produce choices out of order or merged. `splitMergedOptions()` handles most cases but edge cases remain.
+
+5. **Surgery PDF extraction not yet tested end-to-end** — Tesseract path was built and code-reviewed but user has decided to defer Surgery PDFs. Focus is Psych only.
+
+### UI Issues (lower priority, not yet fixed)
+
+6. **Timer visual glitch** — Two timers visible simultaneously.
+
+7. **Font size A+/A- zooms whole page** — Should only zoom question text, not the entire UI.
+
+8. **Lab values spacing** — Layout issue in the lab values panel.
+
+9. **Navigation panel width** — Sizing issue.
+
+10. **Search in navigation panel** — Not yet implemented.
+
+---
+
+## Priority for Next Session
+
+**Goal: Verify and perfect Psych PDF extraction with newly uploaded PDFs.**
+
+The user has new Psych question and answer PDFs to upload. Steps:
+
+1. Upload new psych questions PDF + answers PDF + `index.html` to the chat
+2. Extract and check for:
+   - Correct question count (should be 50)
+   - No phantom spaces in answer choices or stems
+   - No `(Choice\nA)` splits in explanations
+   - Correct answer letters parsed correctly
+   - Explanations complete and not duplicated
+3. If phantom spaces still appear, increase threshold from `estCharW * 0.4` to `estCharW * 0.6`
+4. Address remaining issues from the list above one by one
 
 ---
 
@@ -250,9 +292,9 @@ for pg_idx, page in enumerate(extract_pages('new_questions.pdf')):
 **Standard opening message:**
 > "Read PROJECT_CONTEXT.md and index.html. Confirm you understand the project before I give you any tasks."
 
-**For the new PDF session:**
-> "Read PROJECT_CONTEXT.md. I'm uploading new question and answer PDFs that return 'No questions found'. Please analyze their structure and fix the OCR pipeline to support them."
-> Then upload: new questions PDF, new answers PDF, and index.html
+**For the new psych PDF session:**
+> "Read PROJECT_CONTEXT.md and index.html. I'm uploading new psych question and answer PDFs. Please help me verify the extraction works correctly and fix any remaining issues."
+> Then upload: new psych questions PDF, new psych answers PDF, and index.html
 
 ---
 
@@ -263,9 +305,11 @@ for pg_idx, page in enumerate(extract_pages('new_questions.pdf')):
 - All edits go directly into index.html
 - Gemini model is `gemini-2.5-flash` (not gemini-2.0-flash)
 - PDF.js version is 3.11.174
+- Tesseract.js version is v5
 - After completing tasks: `git add . && git commit -m "description" && git push`
-- Run one prompt at a time, test in Chrome after each one
+- Give fixes one at a time — user confirms each one works before moving to the next
 - If a task runs longer than 5 minutes, press Ctrl+C and break into smaller steps
+- Always read index.html before making edits — never work from memory
 
 ---
 
@@ -276,42 +320,89 @@ b7bb556  Loads of edits done through Claude chat, particularly with PDF OCR v6, 
 a960471  Hint Button Issue Fixed after Setting Gemini Cloud Billing with Prepaid 0 with no auto reload
 77f5cca  Supabase Sync Error Fixed
 ```
+*(v8 changes not yet committed — user to run: `git add . && git commit -m "OCR v8: phantom space fix, Choice-A split fix, Tesseract fallback, Surgery PDF support" && git push`)*
 
 ---
 
-## Appendix: OCR Module v7 Key Functions (condensed)
+## Appendix: OCR v8 Key Functions (condensed)
 
-### `joinItems(items)` — phantom space fix
+### `joinItems(items)` — font-size-relative phantom space fix
 ```javascript
-// gap < 3.0pt AND both sides word chars → no space (phantom merge)
-// gap >= 3.0pt OR either side non-word → real space
-const phantom = gap < PHANTOM_GAP_MAX && prevWord && nextWord;
-result += (phantom ? '' : ' ') + items[i].str;
+function joinItems(items) {
+  if (!items.length) return '';
+  let result = items[0].str;
+  for (let i = 1; i < items.length; i++) {
+    const prev = items[i - 1];
+    const curr = items[i];
+    const prevWord = /[A-Za-z0-9]$/.test(result);
+    const nextWord = /^[A-Za-z0-9]/.test(curr.str);
+    if (!prevWord || !nextWord) { result += ' ' + curr.str; continue; }
+    const fontSize    = prev.transform ? Math.abs(prev.transform[0]) : 10;
+    const estCharW    = fontSize * 0.5;
+    const prevX1_rep  = prev.x0 + Math.abs(prev.width || 0);
+    const prevX1_est  = prev.x0 + (prev.str.length * estCharW);
+    const gapRep      = curr.x0 - prevX1_rep;
+    const gapEst      = curr.x0 - prevX1_est;
+    const gap         = (Math.abs(prev.width || 0) < 0.1) ? gapEst : gapRep;
+    const phantom     = gap < estCharW * 0.4;
+    result += (phantom ? '' : ' ') + curr.str;
+  }
+  return result.trim();
+}
+// NOTE: raw items must include { x0, x1, y, str, width, transform } fields
 ```
 
-### `parseOneQuestion(num, paragraphs)` — item boundary fix
+### `parseOneQuestion(num, paragraphs)` — item boundary + flexible number format
 ```javascript
-const NEXT_Q_RE = /^(\d+)\.\s+\S/;
-// While in options mode, if we see a different question number → stop
+const OPT_RE    = /^(?:[0oOQ©®°]\s{0,3})?([A-Ha-h])\s{0,2}[)]\s{0,4}(.{2,})/;
+const NEXT_Q_RE = /^(\d+)[.,]\s+\S/;
+// Stem number prefix — handles period or comma after number
+const nm = p.match(/^(\d+)[.,]\s+(.+)/);
+// While in options, stop if a different question number appears
 if (inOptions) {
-    const nqm = p.match(NEXT_Q_RE);
-    if (nqm && parseInt(nqm[1]) !== num) break;
+  const nqm = p.match(NEXT_Q_RE);
+  if (nqm && parseInt(nqm[1]) !== num) break;
 }
 ```
 
-### `parseOneAnswer(num, paragraphs)` — duplicate explanation fix
+### `parseOneAnswer(num, paragraphs)` — duplicate + split fix
 ```javascript
-// CA_RE won't match "Incorrect Answers: A, B..." — requires single letter after colon
+// CA_RE — single letter after colon prevents "Incorrect Answers: A, B" false match
 const CA_RE = /correct\s+answer\s*[:\-.]\s*([A-Ha-h])(?:[.\s,]|$)/i;
-// Use LAST true "Correct Answer: X" — that's the complete explanation page
+// Use LAST "Correct Answer" occurrence (page 2 repeat)
 const lastIdx = correctIndices[correctIndices.length - 1];
-const expParas = paragraphs.slice(lastIdx + 1);
+
+// Rejoin "(Choice\nA)" splits
+for (let i = 0; i < unique.length; i++) {
+  const cur = unique[i].trim();
+  const next = unique[i+1] ? unique[i+1].trim() : null;
+  if (next && /\(Choice\s*$/i.test(cur)) {
+    rejoined.push(cur + ' ' + next); i++;
+  } else {
+    rejoined.push(cur);
+  }
+}
+```
+
+### `pdfHasTextLayer(pdf)` — auto-detect image vs vector PDF
+```javascript
+async function pdfHasTextLayer(pdf) {
+  const sample = Math.min(3, pdf.numPages);
+  let total = 0;
+  for (let p = 1; p <= sample; p++) {
+    const page = await pdf.getPage(p);
+    const tc   = await page.getTextContent({ includeMarkedContent: false });
+    total += tc.items.reduce((n, i) => n + (i.str || '').trim().length, 0);
+  }
+  return total > 50;
+}
 ```
 
 ### `normalizeChars(text)` — artifact cleanup
 ```javascript
-// Age artifact: "4 ? 7-year" → "47-year"
-text.replace(/(\d)\s*\?\s*(\d)/g, '$1$2');
-// Greek: "~-Adrenergic" → "β-Adrenergic"
+text.replace(/(\d)\s*\?\s*(\d)/g, '$1$2');          // "4 ? 7" → "47"
 text.replace(/~\s*-\s*[Aa]drenergic/g, 'β-Adrenergic');
+text.replace(/(\w)\s+'s\b/g, "$1's");               // "child 's" → "child's"
+text.replace(/(\w)\s+'t\b/g, "$1't");               // "doesn 't" → "doesn't"
+// + 're, 've, 'll variants
 ```
