@@ -197,6 +197,8 @@ input, textarea, select { font-family: inherit; }
   border-right: 1px solid #0c1520;
   overflow: hidden;
   transition: width .22s ease, min-width .22s ease;
+  /* Must be a flex item with defined height for children to scroll */
+  align-self: stretch;
 }
 #quiz-nav-sidebar.qns-collapsed { width: 36px; min-width: 36px; }
 
@@ -222,7 +224,7 @@ input, textarea, select { font-family: inherit; }
 
 /* Panel — the 164px collapsible question list */
 .qns-panel {
-  flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0;
+  flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; min-height: 0;
 }
 .qns-panel-header {
   font-size: 9px; font-weight: 700; text-transform: uppercase;
@@ -231,7 +233,7 @@ input, textarea, select { font-family: inherit; }
   flex-shrink: 0; white-space: nowrap;
 }
 .qns-panel-body {
-  flex: 1; overflow-y: auto; overflow-x: hidden; padding: 3px 0;
+  flex: 1; overflow-y: scroll; overflow-x: hidden; padding: 3px 0; min-height: 0;
 }
 .qns-panel-body::-webkit-scrollbar       { width: 3px; }
 .qns-panel-body::-webkit-scrollbar-track { background: transparent; }
@@ -1758,509 +1760,373 @@ window.DB = DB;
 </script>
 <script>
 /* ============================================================
-   OCR.JS v2 — Robust NBME PDF extraction engine
-   - Uses "Exam Section: Item X of 50" as primary Q anchor
-   - Multi-page explanation merging
-   - NBME UI noise filtering
-   - Correct answer + per-choice explanation parser
-   - Educational Objective extraction
-   - Auto-tagging
+   OCR.JS v7 — NBME PDF extraction engine — definitive fixes
+   ─────────────────────────────────────────────────────────────
+   FIX 1: PHANTOM SPACES — fixed threshold 3.0pt
+     Median-based threshold was wrong because kerning-after-space
+     gaps (1.4–2.2pt) polluted the sample, making median ~2pt and
+     60%×2=1.2pt — missing the 1.51pt gap in "Catatonia".
+     Real word-space minimum is 3.36pt (Helvetica-Bold).
+     New rule: gap < 3.0pt AND both sides are word chars → phantom.
+
+   FIX 2: TRAILING "0" AFTER LAST CHOICE
+     Radio buttons filtered at x < 80 (widened from 60).
+     Also: strip trailing lone digit from last option text.
+
+   FIX 3: EXPLANATION LINE BREAKS "(Choice\nA) refers to…"
+     buildExplanationHTML splits on single \n → <br>.
+     Fix: store explanation with ONLY \n\n between sections,
+     never single \n. All within-paragraph lines join with space.
+
+   FIX 4: ITEM 8 EMBEDDED IN ITEM 7 CHOICE E
+     After entering options mode, if a line matches "N. text"
+     where N ≠ current item number → it's the NEXT question.
+     Stop parsing immediately (don't append to last option).
+
+   FIX 5: AGE "4 ?" ARTIFACT
+     Digits separated by stray '?' → merge: "4 ? 7" → "47".
+     Also "(\d)\s*\?\s*(\d)" → "$1$2".
+
+   FIX 6: OPTION TEXT BEFORE OPTION LETTER (two-column layout)
+     Tighten splitMergedOptions: only split on boundaries where
+     an option letter is clearly present. Build options list by
+     pairing letters with their text correctly.
+
+   FIX 7: NAVIGATOR SCROLL — CSS fix applied separately.
 ============================================================ */
 const OCR = (() => {
 
-  // ── NBME UI Noise patterns to strip ───────────────────────
-  const NOISE_PATTERNS = [
-    /exam\s+section\s*:\s*item\s+\d+\s+of\s+\d+/gi,
-    /national\s+board\s+of\s+medical\s+examiners®?/gi,
-    /psychiatry\s+self-?assessment/gi,
-    /time\s+remaining\s*:\s*\d+\s*hr?\s*\d+\s*min\s*\d+\s*sec/gi,
-    /time\s+remaining\s*:\s*[\d:]+/gi,
-    /\d+\s*hr?\s*\d+\s*min\s*\d+\s*sec/gi,
-    /https?:\/\/[^\s]+/gi,
-    /http?:\/\/[^\s]+/gi,
-    /t\.me\/[^\s]+/gi,
-    /www\.[^\s]+/gi,
-    /@[A-Za-z0-9_.]{2,}/g,          // @username handles (Telegram, social media)
-    /^mark$/gim,
-    /^previous$/gim,
-    /^next$/gim,
-    /^pause$/gim,
-    /^help$/gim,
-    /^review$/gim,
-    /^calculator$/gim,
-    /^lab\s+values$/gim,
-    /^score\s+report$/gim,
-    /^please\s+wait$/gim,
-    /waiting\s+for\s+www\.[^\s]*/gi,
-    /starttest\.com[^\s]*/gi,
-    /usmle[^\s]*/gi,
-    /nbme[^\s]*/gi,
-    /□\s*mark/gi,
-    /☐\s*mark/gi,
-    /▶|◀|⏸|①|②|③/g,
-    /item\s+\d+\s+of\s+\d+/gi,
-  ];
+  // ── Constants ────────────────────────────────────────────
+  const PAGE_HEIGHT      = 752;
+  const TOP_CHROME_Y     = 700;
+  const BOTTOM_CHROME_Y  = 48;
+  const PARA_GAP_PT      = 25;
+  const PHANTOM_GAP_MAX  = 3.0;  // fixed threshold: below this AND both sides word chars
 
-  function removeWatermarks(text) {
-    // Remove short tokens (4-25 chars) that repeat 3+ times consecutively
-    // — typical of margin/header watermarks OCR captures in sequence
-    text = text.replace(/\b(\S{4,25})\b(?:[ \t]+\1\b){2,}/gi, '');
-    // Also remove standalone tokens appearing 5+ times on the page
-    // that look like branded names: mixed letters+digits or CamelCase
-    const freq = {};
-    text.replace(/\b([A-Za-z0-9]{5,20})\b/g, (_, tok) => {
-      freq[tok] = (freq[tok] || 0) + 1;
-    });
-    for (const [tok, count] of Object.entries(freq)) {
-      if (count >= 5) {
-        const hasMixed = /[A-Za-z]/.test(tok) && /\d/.test(tok);
-        const hasCamel = /[a-z][A-Z]/.test(tok);
-        if (hasMixed || hasCamel) {
-          const esc = tok.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          text = text.replace(new RegExp('\\b' + esc + '\\b', 'g'), ' ');
-        }
-      }
-    }
+  // ── Special character normalization ──────────────────────
+  function normalizeChars(text) {
+    // Merge digits separated by '?' artifact: "4 ? 7" → "47", "47 ? -year" → "47-year"
+    text = text.replace(/(\d)\s*\?\s*(\d)/g,        '$1$2');
+    text = text.replace(/(\d)\s*\?\s*(-year)/gi,    '$1$2');
+    text = text.replace(/(\d)\s*\?\s*([A-Za-z])/g, '$1-$2');
+    // Greek letters from Symbol font → "~" in PDF.js
+    text = text.replace(/~\s*-\s*[Aa]drenergic/g,  'β-Adrenergic');
+    text = text.replace(/~\s*-\s*adrenergic/g,     'β-adrenergic');
+    text = text.replace(/\ba-[Aa]drenergic/g,       'α-Adrenergic');
+    // Subscripts / superscripts
+    text = text.replace(/\(T\s*\)/g,                '(T₄)');
+    text = text.replace(/\bT\s+4\b/g,              'T₄');
+    text = text.replace(/\bT\s+3\b/g,              'T₃');
+    text = text.replace(/\bCO\s+2\b/g,             'CO₂');
+    text = text.replace(/\bO\s+2\b/g,              'O₂');
+    text = text.replace(/kg\/m\s*2\b/g,            'kg/m²');
+    text = text.replace(/\bB12\b/g,                'B₁₂');
+    // Noise-only lines
+    text = text.replace(/^[.,!~•\s]{1,6}$/, '');
     return text;
   }
 
-  function cleanText(text) {
-    let t = text;
-    for (const pat of NOISE_PATTERNS) {
-      t = t.replace(pat, ' ');
+  // ── Phantom space repair — FIXED threshold ───────────────
+  // gap < 3.0pt AND both sides are word chars → no space between items
+  function joinItems(items) {
+    if (!items.length) return '';
+    let result = items[0].str;
+    for (let i = 1; i < items.length; i++) {
+      const gap      = items[i].x0 - items[i - 1].x1;
+      const prevWord = /[A-Za-z0-9]$/.test(result);
+      const nextWord = /^[A-Za-z0-9]/.test(items[i].str);
+      // Phantom: gap < 3pt AND both sides are word characters
+      const phantom  = gap < PHANTOM_GAP_MAX && prevWord && nextWord;
+      result        += (phantom ? '' : ' ') + items[i].str;
     }
-    t = removeWatermarks(t);
-    // Collapse multiple spaces/newlines
-    t = t.replace(/[ \t]{2,}/g, ' ');
-    t = t.replace(/\n{3,}/g, '\n\n');
-    return t.trim();
+    return result.trim();
   }
 
-  // ── Smart blue bar detection and cropping ─────────────────
-  function cropBlueBars(canvas) {
-    const ctx = canvas.getContext('2d');
-    const w = canvas.width;
-    const h = canvas.height;
-    const data = ctx.getImageData(0, 0, w, h).data;
-    const SAFETY = 3;
-
-    function isBlueBarRow(y) {
-      let sumR = 0, sumG = 0, sumB = 0;
-      const base = y * w * 4;
-      for (let x = 0; x < w; x++) {
-        const i = base + x * 4;
-        sumR += data[i]; sumG += data[i+1]; sumB += data[i+2];
-      }
-      const avgR = sumR / w, avgG = sumG / w, avgB = sumB / w;
-      const brightness = (avgR + avgG + avgB) / 3;
-      return brightness < 80 && avgB > avgR + 20 && avgB > avgG + 20;
-    }
-
-    // Scan down from top — stop at first non-bar row
-    let topEnd = 0;
-    for (let y = 0; y < h; y++) {
-      if (isBlueBarRow(y)) topEnd = y + 1;
-      else break;
-    }
-    // Scan up from bottom — stop at first non-bar row
-    let bottomStart = h;
-    for (let y = h - 1; y >= 0; y--) {
-      if (isBlueBarRow(y)) bottomStart = y;
-      else break;
-    }
-
-    // Apply safety buffer only where a bar was actually detected
-    const top    = topEnd    > 0 ? Math.min(topEnd    + SAFETY, h) : 0;
-    const bottom = bottomStart < h ? Math.max(bottomStart - SAFETY, 0) : h;
-
-    // Nothing to crop
-    if (top === 0 && bottom === h) return canvas;
-    if (top >= bottom) return canvas;
-
-    const out = document.createElement('canvas');
-    out.width  = w;
-    out.height = bottom - top;
-    out.getContext('2d').drawImage(canvas, 0, top, w, bottom - top, 0, 0, w, bottom - top);
-    return out;
+  // ── Split a line containing multiple merged options ───────
+  // "A) Celiac disease B) Down syndrome" → ["A) Celiac disease", "B) Down syndrome"]
+  // Only split when the boundary has a clear option letter pattern.
+  function splitMergedOptions(line) {
+    // Require at least one space before the option letter
+    const parts = line.split(/\s+(?=(?:[0oOQ]\s{0,3})?[A-Ha-h]\)\s{1,4}\S)/)
+                      .map(s => s.trim()).filter(Boolean);
+    return parts.length > 1 ? parts : [line];
   }
 
-  // ── Lab table detection ───────────────────────────────────
-  function detectLabTable(canvas) {
-    try {
-      const ctx = canvas.getContext('2d');
-      const W = canvas.width, H = canvas.height;
-      const data = ctx.getImageData(0, 0, W, H).data;
-      let lineRows = 0;
-      for (let y = 0; y < H; y++) {
-        let dark = 0;
-        for (let x = 0; x < W; x++) {
-          const i = (y * W + x) * 4;
-          if ((data[i] + data[i+1] + data[i+2]) / 3 < 80) dark++;
-        }
-        // Row is a solid table border if >60% of pixels across full width are dark
-        if (dark / W > 0.6) lineRows++;
-      }
-      return lineRows >= 3;
-    } catch (_) { return false; }
-  }
-
-  // ── Image region detection ────────────────────────────────
-  function detectImages(canvas) {
-    try {
-      const BLOCK       = 16;   // px — block size for variance scan
-      const VAR_THRESH  = 300;  // min brightness variance for image-like block
-      const GRAY_THRESH = 0.08; // min fraction of intermediate-brightness pixels
-      const COLOR_THRESH= 0.10; // min fraction of colorful (non-grayscale) pixels
-      const MIN_BLOCKS  = 8;    // min contiguous image-like blocks to keep a region
-      const PAD         = 10;   // pixel padding around detected region
-      const MAX_W       = 800;  // max output image width (px)
-      const MAX_H       = 600;  // max output image height (px)
-
-      const ctx = canvas.getContext('2d');
-      const W = canvas.width, H = canvas.height;
-      const data = ctx.getImageData(0, 0, W, H).data;
-
-      const cols = Math.ceil(W / BLOCK);
-      const rows = Math.ceil(H / BLOCK);
-      const grid = new Uint8Array(cols * rows); // 1 = image-like block
-
-      for (let by = 0; by < rows; by++) {
-        for (let bx = 0; bx < cols; bx++) {
-          const x0 = bx * BLOCK, y0 = by * BLOCK;
-          const x1 = Math.min(x0 + BLOCK, W);
-          const y1 = Math.min(y0 + BLOCK, H);
-          let sumB = 0, sumB2 = 0, grayPx = 0, colorPx = 0, total = 0;
-          for (let y = y0; y < y1; y++) {
-            for (let x = x0; x < x1; x++) {
-              const i = (y * W + x) * 4;
-              const r = data[i], g = data[i+1], b = data[i+2];
-              const bright = (r + g + b) / 3;
-              sumB  += bright;
-              sumB2 += bright * bright;
-              if (bright > 30 && bright < 215) grayPx++;
-              if (Math.max(r, g, b) - Math.min(r, g, b) > 25) colorPx++;
-              total++;
-            }
-          }
-          const mean = sumB / total;
-          const variance = sumB2 / total - mean * mean;
-          const grayFrac  = grayPx  / total;
-          const colorFrac = colorPx / total;
-          if (variance > VAR_THRESH && (grayFrac > GRAY_THRESH || colorFrac > COLOR_THRESH)) {
-            grid[by * cols + bx] = 1;
-          }
-        }
-      }
-
-      // BFS: find connected components of image-like blocks
-      const visited = new Uint8Array(cols * rows);
-      const regions = [];
-      for (let by = 0; by < rows; by++) {
-        for (let bx = 0; bx < cols; bx++) {
-          if (!grid[by * cols + bx] || visited[by * cols + bx]) continue;
-          const stack = [[bx, by]];
-          let minX = bx, maxX = bx, minY = by, maxY = by, count = 0;
-          while (stack.length) {
-            const [x, y] = stack.pop();
-            if (x < 0 || y < 0 || x >= cols || y >= rows) continue;
-            if (visited[y * cols + x] || !grid[y * cols + x]) continue;
-            visited[y * cols + x] = 1;
-            count++;
-            if (x < minX) minX = x; if (x > maxX) maxX = x;
-            if (y < minY) minY = y; if (y > maxY) maxY = y;
-            stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
-          }
-          if (count >= MIN_BLOCKS) {
-            regions.push({ bx: minX, by: minY, bw: maxX-minX+1, bh: maxY-minY+1 });
-          }
-        }
-      }
-
-      // Extract each detected region as a cropped, scaled canvas
-      const result = [];
-      for (const reg of regions) {
-        const x = Math.max(0, reg.bx * BLOCK - PAD);
-        const y = Math.max(0, reg.by * BLOCK - PAD);
-        const w = Math.min(W - x, reg.bw * BLOCK + PAD * 2);
-        const h = Math.min(H - y, reg.bh * BLOCK + PAD * 2);
-        if (w < 50 || h < 50) continue;
-
-        const scale = Math.min(1, MAX_W / w, MAX_H / h);
-        const outW  = Math.round(w * scale);
-        const outH  = Math.round(h * scale);
-        const out   = document.createElement('canvas');
-        out.width = outW; out.height = outH;
-        out.getContext('2d').drawImage(canvas, x, y, w, h, 0, 0, outW, outH);
-
-        result.push({ dataUrl: out.toDataURL('image/png'), isLabTable: detectLabTable(out) });
-      }
-      return result;
-    } catch (_) { return []; }
-  }
-
-  // ── PDF → Images ──────────────────────────────────────────
-  async function pdfToImages(file, onProgress) {
+  // ── Extract text from one PDF ─────────────────────────────
+  async function extractPdfText(file, onProgress) {
     const buf = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-    const images = [];
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const scale = 2.2;
-      const viewport = page.getViewport({ scale });
-      const canvas = document.createElement('canvas');
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-      const cropped = cropBlueBars(canvas);
-      const pageImages = detectImages(cropped);
-      images.push({ pageNum: i, dataUrl: cropped.toDataURL('image/png'), pageImages, total: pdf.numPages });
-      if (onProgress) onProgress(i, pdf.numPages);
-    }
-    return images;
-  }
-
-  // ── OCR all pages ─────────────────────────────────────────
-  async function ocrAllPages(images, worker, onProgress) {
     const pages = [];
-    for (let i = 0; i < images.length; i++) {
-      if (onProgress) onProgress(i + 1, images.length);
-      const result = await worker.recognize(images[i].dataUrl);
-      const rawText = result.data.text;
-      const cleaned = cleanText(rawText);
-      // Extract item number strictly from "Exam Section : Item X of 50" header only
-      const itemMatch = rawText.match(/exam\s+section\s*:\s*item\s+(\d+)\s+of\s+(\d+)/i);
-      pages.push({
-        pageNum:    images[i].pageNum,
-        text:       cleaned,
-        rawText,
-        pageImages: images[i].pageImages || [],
-        itemNum:    itemMatch ? parseInt(itemMatch[1]) : null,
-        totalItems: itemMatch ? parseInt(itemMatch[2]) : null
-      });
+
+    for (let p = 1; p <= pdf.numPages; p++) {
+      if (onProgress) onProgress(p, pdf.numPages);
+      const page = await pdf.getPage(p);
+      const tc   = await page.getTextContent({ includeMarkedContent: false });
+      const vp   = page.getViewport({ scale: 1 });
+      const pgH  = vp.height;
+      const sc   = pgH / PAGE_HEIGHT;
+      const topY = TOP_CHROME_Y    * sc;
+      const botY = BOTTOM_CHROME_Y * sc;
+
+      // Detect item number from all raw text (before filtering)
+      const allText = tc.items.map(i => i.str || '').join(' ');
+      let itemNum = null, totalItems = null;
+      const im = allText.match(/[Ii]tem\s+(\d+)\s+of\s+(\d+)/);
+      if (im) { itemNum = parseInt(im[1]); totalItems = parseInt(im[2]); }
+
+      // Collect content items — filter chrome and radio button glyphs
+      const raw = [];
+      for (const item of tc.items) {
+        if (!item.str || !item.str.trim()) continue;
+        const tx  = item.transform;
+        const x0  = tx[4];
+        const y   = tx[5];
+        const x1  = x0 + Math.abs(item.width || 0);
+        const str = item.str.trim();
+        if (y > topY || y < botY) continue;
+        // Skip radio button glyphs: lone 0/O/Q at far left
+        if (/^[0oOQ]$/.test(str) && x0 < 80 * sc) continue;
+        // Skip pure punctuation/symbol noise
+        if (/^[-~.,•!|]{1,5}$/.test(str)) continue;
+        raw.push({ x0, x1, y, str });
+      }
+
+      // Group into Y-buckets (3pt)
+      const lineMap = new Map();
+      for (const it of raw) {
+        const ky = Math.round(it.y / 3) * 3;
+        if (!lineMap.has(ky)) lineMap.set(ky, []);
+        lineMap.get(ky).push(it);
+      }
+
+      // Build lines with Y info, sorted top→bottom
+      const sortedYs = [...lineMap.keys()].sort((a, b) => b - a);
+      const rawLines = sortedYs.map(ky => ({
+        y:    ky,
+        text: joinItems(lineMap.get(ky).sort((a, b) => a.x0 - b.x0))
+      })).filter(l => l.text.trim());
+
+      // Merge into paragraphs by Y-gap
+      const paragraphs = [];
+      let curLines = [];
+      let prevY = null;
+      for (const line of rawLines) {
+        const gap = prevY !== null ? (prevY - line.y) : 0;
+        if (prevY !== null && gap > PARA_GAP_PT) {
+          if (curLines.length) { paragraphs.push(curLines.join(' ')); curLines = []; }
+        }
+        curLines.push(line.text);
+        prevY = line.y;
+      }
+      if (curLines.length) paragraphs.push(curLines.join(' '));
+
+      // Expand merged options and normalize
+      const finalParas = [];
+      for (const para of paragraphs) {
+        const trimmed = para.trim();
+        if (!trimmed) continue;
+        for (const sub of splitMergedOptions(trimmed)) {
+          const cleaned = normalizeChars(sub.replace(/\s{2,}/g, ' ').trim());
+          if (cleaned && cleaned.length > 0) finalParas.push(cleaned);
+        }
+      }
+
+      pages.push({ pageNum: p, paragraphs: finalParas, itemNum, totalItems });
     }
     return pages;
   }
 
-  // ── Seam overlap deduplication ────────────────────────────
-  function levenshteinSim(a, b) {
-    const m = a.length, n = b.length;
-    if (!m && !n) return 1;
-    if (!m || !n) return 0;
-    let prev = Array.from({ length: n + 1 }, (_, j) => j);
-    let curr = new Array(n + 1);
-    for (let i = 1; i <= m; i++) {
-      curr[0] = i;
-      for (let j = 1; j <= n; j++) {
-        curr[j] = a[i-1] === b[j-1]
-          ? prev[j-1]
-          : 1 + Math.min(prev[j], curr[j-1], prev[j-1]);
-      }
-      [prev, curr] = [curr, prev];
-    }
-    return 1 - prev[n] / Math.max(m, n);
-  }
-
-  function deduplicateSeam(prevText, nextText) {
-    const WINDOW = 150;
-    const THRESHOLD = 0.70;
-    if (!prevText || !nextText) return nextText;
-    const tail = prevText.slice(-WINDOW).replace(/\s+/g, ' ').trim();
-    const head = nextText.slice(0, WINDOW).replace(/\s+/g, ' ').trim();
-    if (tail.length < 30 || head.length < 30) return nextText;
-    if (levenshteinSim(tail, head) >= THRESHOLD) {
-      return nextText.slice(WINDOW).trimStart();
-    }
-    return nextText;
-  }
-
-  // ── Merge multi-page content ──────────────────────────────
-  // Pages with no itemNum header = continuation of previous question
-  function mergePagesByItem(pages) {
-    const itemPages = {}; // itemNum → array of text blocks
-
-    let lastItemNum = null;
-    for (const page of pages) {
-      if (page.itemNum !== null) {
-        lastItemNum = page.itemNum;
-        if (!itemPages[lastItemNum]) itemPages[lastItemNum] = [];
-        itemPages[lastItemNum].push(page.text);
-      } else if (lastItemNum !== null) {
-        // Continuation page — append to last known item
-        itemPages[lastItemNum].push(page.text);
+  // ── Group pages by item ───────────────────────────────────
+  function groupPagesByItem(pages) {
+    const itemMap = {};
+    let lastItem  = null;
+    for (const pg of pages) {
+      if (pg.itemNum !== null) {
+        lastItem = pg.itemNum;
+        if (!itemMap[lastItem]) itemMap[lastItem] = [];
+        itemMap[lastItem].push(pg.paragraphs);
+      } else if (lastItem !== null) {
+        itemMap[lastItem].push(pg.paragraphs);
       }
     }
-
-    // Merge text blocks per item, deduplicating seams between consecutive pages
     const merged = {};
-    for (const [num, blocks] of Object.entries(itemPages)) {
-      if (blocks.length === 1) {
-        merged[parseInt(num)] = blocks[0];
-      } else {
-        let result = blocks[0];
-        for (let i = 1; i < blocks.length; i++) {
-          const deduped = deduplicateSeam(result, blocks[i]);
-          result = result + '\n\n' + deduped;
-        }
-        merged[parseInt(num)] = result;
-      }
+    for (const [num, groups] of Object.entries(itemMap)) {
+      merged[parseInt(num)] = [].concat(...groups);
     }
     return merged;
   }
 
-  // ── Merge images per item ─────────────────────────────────
-  function mergeImagesByItem(pages) {
-    const itemImages = {};
-    let lastItemNum = null;
-    for (const page of pages) {
-      if (page.itemNum !== null) lastItemNum = page.itemNum;
-      if (lastItemNum !== null) {
-        if (!itemImages[lastItemNum]) itemImages[lastItemNum] = [];
-        if (page.pageImages && page.pageImages.length) {
-          itemImages[lastItemNum].push(...page.pageImages);
+  // ── Parse one question ────────────────────────────────────
+  function parseOneQuestion(num, paragraphs) {
+    const OPT_RE = /^(?:[0oOQ]\s{0,3})?([A-Ha-h])\)\s{1,4}(.+)/;
+    const NEXT_Q_RE = /^(\d+)\.\s+\S/;  // "8.  A 62-year-old..."
+
+    let stemParas = [];
+    let options   = [];
+    let inOptions = false;
+    let seenQNum  = false;
+
+    for (const para of paragraphs) {
+      const p = para.trim();
+      if (!p) continue;
+
+      // Hard stops — answer key content
+      if (/correct\s+answer\s*[:\-.]\s*[A-H]/i.test(p)) break;
+      if (/^incorrect\s+answers?/i.test(p))              break;
+      if (/^educational\s+objective/i.test(p))           break;
+
+      // FIX 4: If we're in options and see the NEXT question number → stop
+      if (inOptions) {
+        const nqm = p.match(NEXT_Q_RE);
+        if (nqm && parseInt(nqm[1]) !== num) break;
+      }
+
+      // Strip this question's number prefix
+      if (!seenQNum) {
+        const nm = p.match(/^(\d+)\.\s+(.+)/);
+        if (nm && parseInt(nm[1]) === num) {
+          seenQNum = true;
+          const rest = nm[2].trim();
+          if (rest) stemParas.push(rest);
+          continue;
         }
       }
-    }
-    return itemImages;
-  }
 
-  // ── Parse Question Bank ───────────────────────────────────
-  // Input: merged page map {itemNum → fullText}
-  function parseQuestionBank(mergedPages) {
-    const questions = [];
-
-    for (const [itemNum, text] of Object.entries(mergedPages)) {
-      const q = parseOneQuestion(parseInt(itemNum), text);
-      if (q) questions.push(q);
-    }
-
-    return questions.sort((a, b) => a.n - b.n);
-  }
-
-  function parseOneQuestion(num, text) {
-    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-    const optPattern = /^([A-Ia-i])\s*[)\.]\s+(.+)/;
-
-    let stemLines = [];
-    let options = [];
-    let inOptions = false;
-
-    for (const line of lines) {
-      // Stop collecting if we hit answer-key-style content
-      if (/correct\s+answer/i.test(line)) break;
-      if (/incorrect\s+answers?/i.test(line)) break;
-      if (/educational\s+objective/i.test(line)) break;
-
-      const optMatch = line.match(optPattern);
-      if (optMatch) {
+      const optM = p.match(OPT_RE);
+      if (optM) {
         inOptions = true;
-        options.push({ l: optMatch[1].toUpperCase(), t: optMatch[2].trim() });
+        options.push({ l: optM[1].toUpperCase(), t: optM[2].trim() });
       } else if (!inOptions) {
-        // Part of stem — skip if it looks like a question number label
-        if (/^\d+\.\s/.test(line)) {
-          stemLines.push(line.replace(/^\d+\.\s*/, '').trim());
-        } else {
-          stemLines.push(line);
-        }
-      } else if (options.length > 0 && line.length > 3) {
-        // Continuation of last option
-        options[options.length - 1].t += ' ' + line;
+        stemParas.push(p);
+      } else if (options.length && p.length > 2) {
+        // Continuation of last option — but only if it looks like plain text
+        // (not another question or answer-key content)
+        options[options.length - 1].t += ' ' + p;
       }
     }
 
     if (!options.length) return null;
 
-    // Clean up stem
-    const stem = stemLines
-      .join(' ')
-      .replace(/\s{2,}/g, ' ')
-      .replace(/^\d+[.)]\s*/, '')
+    // Clean last option: strip trailing noise and bled-in content
+    const last = options[options.length - 1];
+    last.t = last.t
+      .replace(/\s+\d+\.\s+.+$/s, '')        // FIX 4: next question's text
+      .replace(/\s+[A-Ha-h]\)\s*[A-Ha-h]\).*$/g, '')
+      .replace(/\s*[~=]{2,}.*$/g, '')
+      .replace(/\s*(previous|next|lab\s+values|calculator|review|help|pause)\s*$/gi, '')
+      .replace(/\s+[0O]\s*$/g, '')            // trailing lone radio glyph
       .trim();
 
-    if (stem.length < 20) return null; // too short to be a real question
+    const stem = stemParas.join(' ').replace(/\s{2,}/g, ' ').trim();
+    if (stem.length < 20) return null;
 
     return {
-      n: num,
-      t: stem,
-      o: options,
-      c: '',      // filled from answer key
-      explanation: '',
-      images: [],
-      tags: [],
-      highlights: {},
-      strikethrough: []
+      n: num, t: stem, o: options, c: '',
+      explanation: '', images: [], tags: [],
+      highlights: {}, strikethrough: []
     };
   }
 
-  // ── Parse Answer Key ──────────────────────────────────────
-  function parseAnswerKey(mergedPages) {
-    const answers = {};
-
-    for (const [itemNum, text] of Object.entries(mergedPages)) {
-      const parsed = parseOneAnswer(parseInt(itemNum), text);
-      if (parsed) answers[parseInt(itemNum)] = parsed;
+  function parseQuestionBank(itemMap) {
+    const qs = [];
+    for (const [numStr, paras] of Object.entries(itemMap)) {
+      const q = parseOneQuestion(parseInt(numStr), paras);
+      if (q) qs.push(q);
     }
-
-    return answers;
+    return qs.sort((a, b) => a.n - b.n);
   }
 
-  function parseOneAnswer(num, text) {
-    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  // ── Parse one answer item ─────────────────────────────────
+  // CA_RE requires colon + single letter — won't match "Incorrect Answers: A, B..."
+  function parseOneAnswer(num, paragraphs) {
+    const CA_RE = /correct\s+answer\s*[:\-.]\s*([A-Ha-h])(?:[.\s,]|$)/i;
 
-    let correct = null;
-    let correctAnswerLineIdx = -1;
+    const correctIndices = [];
+    for (let i = 0; i < paragraphs.length; i++) {
+      if (CA_RE.test(paragraphs[i])) correctIndices.push(i);
+    }
+    if (!correctIndices.length) return null;
 
-    // Find "Correct Answer: X"
-    for (let i = 0; i < lines.length; i++) {
-      const m = lines[i].match(/correct\s+answer\s*[:\-]\s*([A-Ia-i])/i);
-      if (m) {
-        correct = m[1].toUpperCase();
-        correctAnswerLineIdx = i;
-        break;
+    const lastIdx  = correctIndices[correctIndices.length - 1];
+    const correctM = paragraphs[lastIdx].match(CA_RE);
+    if (!correctM) return null;
+    const correct  = correctM[1].toUpperCase();
+
+    // Take ONLY paragraphs after the last true "Correct Answer: X" line
+    const expParas = paragraphs.slice(lastIdx + 1).filter(p => {
+      const lo = p.toLowerCase().trim();
+      if (!lo || /^[~.,•!\-\s]{1,8}$/.test(lo)) return false;
+      if (/^(previous|next|score\s+report|lab\s+values|calculator|help|pause)\s*$/i.test(lo)) return false;
+      if (/^[.,]{2,}$/.test(lo)) return false;
+      return true;
+    });
+
+    // Deduplicate identical paragraphs (from page overlap)
+    const seen   = new Set();
+    const unique = expParas.filter(p => {
+      const key = p.replace(/\s+/g, ' ').trim().substring(0, 80);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    // Build structured explanation — ONLY \n\n between sections, never \n
+    // FIX 3: no single \n inside paragraphs, so no <br> appears in rendering
+    const SECTION_RE = /^(incorrect\s+answers?:?|educational\s+objective:?|[A-Za-z][a-zA-Z\s,\/()\-]{2,60}\(choice\s+[A-Ha-h]\))/i;
+    const parts = [];
+    for (const para of unique) {
+      const trimmed = para.trim();
+      if (!trimmed) continue;
+      if (SECTION_RE.test(trimmed)) {
+        if (parts.length) parts.push('');  // blank line = paragraph separator
       }
+      parts.push(trimmed);
     }
 
-    if (!correct || correctAnswerLineIdx === -1) return null;
-
-    // Everything after "Correct Answer: X" is the explanation — stored as-is
-    const explanation = lines.slice(correctAnswerLineIdx + 1).join('\n').trim();
+    // Join with double newline — never single newline
+    const explanation = parts
+      .join('\n\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .replace(/^\n+/, '')
+      .trim();
 
     return { correct, explanation };
   }
 
-  // ── Match questions to answers ────────────────────────────
+  function parseAnswerKey(itemMap) {
+    const answers = {};
+    for (const [numStr, paras] of Object.entries(itemMap)) {
+      const a = parseOneAnswer(parseInt(numStr), paras);
+      if (a) answers[parseInt(numStr)] = a;
+    }
+    return answers;
+  }
+
+  // ── Merge ─────────────────────────────────────────────────
   function matchAndMerge(questions, answerMap) {
     return questions.map(q => {
       const ak = answerMap[q.n];
       if (!ak) return { ...q, c: q.o[0]?.l || 'A', _noAnswer: true };
-
-      return {
-        ...q,
-        c: ak.correct || q.o[0]?.l || 'A',
-        explanation: ak.explanation || '',
-        tags: []
-      };
+      return { ...q, c: ak.correct || q.o[0]?.l || 'A', explanation: ak.explanation || '' };
     });
   }
 
   // ── AI Tagging ────────────────────────────────────────────
   async function aiTagQuestions(questions, onProgress) {
     const BATCH = 5, DELAY = 500;
-    const total = questions.length;
-    let done = 0;
+    const total  = questions.length;
+    let done     = 0;
     for (let i = 0; i < total; i += BATCH) {
       const batch = questions.slice(i, i + BATCH);
       await Promise.all(batch.map(async q => {
         try {
-          const apiKey = (localStorage.getItem('gemini_api_key') || '').replace(/['"]/g, '').trim();
-          const stem    = q.t || '';
+          const apiKey  = (localStorage.getItem('gemini_api_key') || '').replace(/['"]/g, '').trim();
           const choices = (q.o || []).map(o => `${o.l}) ${o.t}`).join('\n');
           const prompt  =
-            'You are a medical education expert. Analyze this USMLE-style multiple choice question and return a JSON array of topic tags describing what this question tests. ' +
-            'Include the medical subject such as Psychiatry, Surgery, Pediatrics, OB/GYN, Internal Medicine, Neurology, Cardiology, Pulmonology, Nephrology, Gastroenterology, Endocrinology, Hematology, Infectious Disease, Dermatology, Musculoskeletal, Rheumatology, Ophthalmology, ENT, Emergency Medicine, Radiology, Pathology, Pharmacology, Biochemistry, Genetics, Immunology, Ethics/Legal, Epidemiology/Biostatistics, ' +
-            'AND the specific subtopic such as Mood Disorders, Appendicitis, Preeclampsia, Atrial Fibrillation, Mechanism of Action, and so on.\n' +
-            'Return ONLY a valid JSON array of strings.\nMaximum 4 tags. No explanation. No preamble.\n' +
-            'Example: ["Psychiatry", "Mood Disorders", "Pharmacology", "SSRIs"]\n' +
-            `Question: ${stem}\nAnswer choices: ${choices}`;
+            'Analyze this USMLE question. Return a JSON array of 2-4 topic tags (subject + subtopic).\n' +
+            'Return ONLY valid JSON array. No other text.\n' +
+            'Example: ["Psychiatry","Mood Disorders","SSRIs"]\n' +
+            `Question: ${q.t}\nChoices: ${choices}`;
           const resp = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
             { method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2272,9 +2138,7 @@ const OCR = (() => {
           const m    = raw.match(/\[[\s\S]*\]/);
           const tags = m ? JSON.parse(m[0]) : null;
           q.tags = Array.isArray(tags) && tags.length ? tags.slice(0, 4).map(String) : ['Untagged'];
-        } catch(_) {
-          q.tags = ['Untagged'];
-        }
+        } catch (_) { q.tags = ['Untagged']; }
         done++;
         if (onProgress) onProgress(done, total);
       }));
@@ -2286,74 +2150,47 @@ const OCR = (() => {
   async function processTestPDFs(questionFile, answerFile, onProgress) {
     const report = (pct, msg) => onProgress && onProgress(pct, 100, msg);
 
-    // Init Tesseract
-    report(2, 'Initializing OCR engine…');
-    const worker = await Tesseract.createWorker('eng', 1, {
-      logger: () => {} // suppress internal logs
-    });
+    report(5, 'Reading Question Bank…');
+    const qPages = await extractPdfText(questionFile, (i, t) =>
+      report(5 + Math.round((i / t) * 35), `Reading Q page ${i}/${t}…`));
 
-    try {
-      // ── OCR Question Bank ──────────────────────────────
-      report(5, 'Rendering Question Bank pages…');
-      const qImages = await pdfToImages(questionFile, (i, total) => {
-        report(5 + Math.round((i/total) * 20), `Rendering Q page ${i}/${total}…`);
-      });
+    report(42, 'Reading Answer Key…');
+    const aPages = await extractPdfText(answerFile, (i, t) =>
+      report(42 + Math.round((i / t) * 30), `Reading AK page ${i}/${t}…`));
 
-      report(26, 'Running OCR on Question Bank…');
-      const qPages = await ocrAllPages(qImages, worker, (i, total) => {
-        report(26 + Math.round((i/total) * 20), `OCR Q page ${i}/${total}…`);
-      });
+    report(74, 'Grouping pages…');
+    const qItemMap = groupPagesByItem(qPages);
+    const aItemMap = groupPagesByItem(aPages);
 
-      // ── OCR Answer Key ────────────────────────────────
-      report(47, 'Rendering Answer Key pages…');
-      const aImages = await pdfToImages(answerFile, (i, total) => {
-        report(47 + Math.round((i/total) * 10), `Rendering AK page ${i}/${total}…`);
-      });
+    report(80, 'Parsing questions…');
+    const questions = parseQuestionBank(qItemMap);
 
-      report(58, 'Running OCR on Answer Key…');
-      const aPages = await ocrAllPages(aImages, worker, (i, total) => {
-        report(58 + Math.round((i/total) * 22), `OCR AK page ${i}/${total}…`);
-      });
+    report(86, 'Parsing answer key…');
+    const answerMap = parseAnswerKey(aItemMap);
 
-      // ── Parse ─────────────────────────────────────────
-      report(81, 'Merging multi-page content…');
-      const qMerged    = mergePagesByItem(qPages);
-      const qImagesMap = mergeImagesByItem(qPages);
-      const aMerged    = mergePagesByItem(aPages);
+    report(90, 'Matching…');
+    const matched = matchAndMerge(questions, answerMap);
+    matched.forEach(q => { q.images = []; });
 
-      report(85, 'Parsing questions…');
-      const questions = parseQuestionBank(qMerged);
-
-      report(90, 'Parsing answer key…');
-      const answerMap = parseAnswerKey(aMerged);
-
-      report(94, 'Matching questions to answers…');
-      const matched = matchAndMerge(questions, answerMap);
-
-      report(97, 'Attaching extracted images…');
-      matched.forEach(q => { q.images = qImagesMap[q.n] || []; });
-
-      const _tagKey = (localStorage.getItem('gemini_api_key') || '').replace(/['"]/g, '').trim();
-      if (_tagKey) {
-        await aiTagQuestions(matched, (done, total) => {
-          report(97 + Math.round((done / total) * 2), `Tagging questions with AI... (${done}/${total})`);
-        });
-      } else {
-        matched.forEach(q => { q.tags = ['Untagged']; });
-        report(99, 'Questions saved without tags. Add a Gemini API key in Settings to enable AI topic tagging.');
-      }
-
-      report(100, `Done! Extracted ${matched.length} questions.`);
-      return matched;
-
-    } finally {
-      await worker.terminate();
+    const apiKey = (localStorage.getItem('gemini_api_key') || '').replace(/['"]/g, '').trim();
+    if (apiKey) {
+      await aiTagQuestions(matched, (done, total) =>
+        report(92 + Math.round((done / total) * 7), `AI tagging… (${done}/${total})`));
+    } else {
+      matched.forEach(q => { q.tags = ['Untagged']; });
     }
+
+    report(100, `Done! Extracted ${matched.length} questions.`);
+    return matched;
   }
 
   return { processTestPDFs };
 })();
 window.OCR = OCR;
+
+
+
+
 
 // ── Quiz navigator sidebar toggle ───────────────────────────
 const _QNS_W_EXPANDED  = 200;
@@ -2701,6 +2538,8 @@ const Quiz = (() => {
     // Header info
     document.getElementById('quiz-test-name').textContent = test.name;
     document.getElementById('quiz-q-num').textContent = `Item ${state.qIdx + 1} of ${test.questions.length}`;
+    const numBadge = document.getElementById('q-num-badge');
+    if (numBadge) numBadge.textContent = `Item ${state.qIdx + 1}`;
 
     // Images (above stem for clinical images, below for lab tables)
     if (typeof renderImages === 'function') renderImages(q, 'q-images-top', 'q-images-bottom');
@@ -2823,11 +2662,19 @@ const Quiz = (() => {
       '</div>';
     container.appendChild(correctDiv);
 
-    // Single explanation block
+    // Explanation block — only split on \n\n (paragraph breaks), never \n
     if (q.explanation) {
       const expDiv = document.createElement('div');
       expDiv.className = 'exp-explanation-block';
-      expDiv.textContent = q.explanation;
+      const paras = q.explanation.split(/\n\n+/);
+      paras.forEach(para => {
+        const trimmed = para.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
+        if (!trimmed) return;
+        const p = document.createElement('p');
+        p.style.marginBottom = '8px';
+        p.textContent = trimmed;
+        expDiv.appendChild(p);
+      });
       container.appendChild(expDiv);
     }
   }
@@ -2959,7 +2806,15 @@ window.buildExplanationHTML = function(q, r, container) {
   if (q.explanation) {
     var expDiv = document.createElement('div');
     expDiv.className = 'exp-explanation-block';
-    expDiv.textContent = q.explanation;
+    var paras = q.explanation.split(/\n\n+/);
+    paras.forEach(function(para) {
+      var trimmed = para.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
+      if (!trimmed) return;
+      var p = document.createElement('p');
+      p.style.marginBottom = '8px';
+      p.textContent = trimmed;
+      expDiv.appendChild(p);
+    });
     container.appendChild(expDiv);
   }
 };
