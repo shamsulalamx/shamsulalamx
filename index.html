@@ -2571,9 +2571,9 @@ const Quiz = (() => {
   function startQTimer() {
     stopQTimer();
     state.qSecs = 0;
-    const start = Date.now();
+    state.qStart = Date.now();
     state.qTimerRef = setInterval(() => {
-      state.qSecs = Math.floor((Date.now() - start) / 1000);
+      state.qSecs = Math.floor((Date.now() - state.qStart) / 1000);
       renderQTimer();
     }, 500);
   }
@@ -2655,7 +2655,7 @@ const Quiz = (() => {
       testId, mode, qIdx: 0,
       results: questions.map(() => ({ answered: false, correct: false, chosen: null, time: 0, highlights: {}, strikethrough: [] })),
       marks: new Set(),
-      totSecs: 0, qSecs: 0,
+      totSecs: 0, qSecs: 0, qStart: Date.now(),
       totTimerRef: null, qTimerRef: null,
       paused: false
     };
@@ -2670,7 +2670,7 @@ const Quiz = (() => {
       testId, mode: saved.mode || 'tutor', qIdx: saved.qIdx || 0,
       results: saved.results || test.questions.map(() => ({ answered: false, correct: false, chosen: null, time: 0, highlights: {}, strikethrough: [] })),
       marks: new Set(saved.marks || []),
-      totSecs: saved.totSecs || 0, qSecs: 0,
+      totSecs: saved.totSecs || 0, qSecs: 0, qStart: Date.now(),
       totTimerRef: null, qTimerRef: null,
       paused: false
     };
@@ -2714,10 +2714,9 @@ const Quiz = (() => {
     if (!state) return;
     const r = state.results[state.qIdx];
     if (r.answered) return;
-    const elapsed = state.qSecs || 0;
     const q = getQuestion();
     const ok = letter === q.c;
-    r.answered = true; r.correct = ok; r.chosen = letter; r.time = elapsed;
+    r.answered = true; r.correct = ok; r.chosen = letter;
     persistState();
 
     if (state.mode === 'tutor') {
@@ -2734,10 +2733,9 @@ const Quiz = (() => {
     if (!state) return;
     const q_count = getTest().questions.length;
     if (idx < 0 || idx >= q_count) return;
-    // Save time for current if unanswered
-    if (!state.results[state.qIdx].answered) {
-      state.results[state.qIdx].time = state.qSecs;
-    }
+    const elapsed = Math.floor((Date.now() - (state.qStart || Date.now())) / 1000);
+    const r = state.results[state.qIdx];
+    r.time = (r.time || 0) + elapsed;
     stopQTimer();
     state.qIdx = idx;
     if (typeof resetHintPanel === 'function') resetHintPanel();
@@ -2761,6 +2759,9 @@ const Quiz = (() => {
   // ── Finish test ────────────────────────────────────────────
   function finishTest() {
     if (!state) return;
+    const elapsed = Math.floor((Date.now() - (state.qStart || Date.now())) / 1000);
+    const r = state.results[state.qIdx];
+    r.time = (r.time || 0) + elapsed;
     stopAllTimers();
     const entry = DB.finishAttempt(state.testId, state.results, state.totSecs, state.mode);
     window.Results && window.Results.show(state.testId, entry, state.results, getTest().questions);
@@ -3249,7 +3250,7 @@ const Results = (() => {
     const pct     = Math.round(score / total * 100);
     const skipped = _results.filter(r => r.chosen === null).length;
     const wrong   = _results.filter(r => r.answered && !r.correct).length;
-    const avgTime = Math.round(_results.reduce((a,r) => a + r.time, 0) / total);
+    const avgTime = Math.round(_results.reduce((a,r) => a + Math.max(0, Math.min(r.time || 0, 3600)), 0) / total);
     const test    = DB.getTest(_testId);
 
     // Header
@@ -3348,7 +3349,7 @@ const Results = (() => {
         <td>${tag}</td>
         <td class="td-text">${chosen}</td>
         <td class="td-text">${correct}</td>
-        <td class="td-time">${r.time}s</td>
+        <td class="td-time">${Math.max(0, Math.min(r.time || 0, 3600))}s</td>
         <td>${flagBtn}</td>
         <td><button class="btn-review-item" onclick="openReview(${i})">Review</button></td>`;
       tbody.appendChild(tr);
@@ -3549,7 +3550,7 @@ const Results = (() => {
     const pct     = Math.round(score / total * 100);
     const skipped = _results.filter(r => r.chosen === null).length;
     const wrong   = _results.filter(r => r.answered && !r.correct).length;
-    const avgTime = Math.round(_results.reduce((a,r) => a + r.time, 0) / total);
+    const avgTime = Math.round(_results.reduce((a,r) => a + Math.max(0, Math.min(r.time || 0, 3600)), 0) / total);
 
     const NAVY = [30, 58, 95], BLUE = [41, 128, 185], WHITE = [255,255,255],
           LGRAY = [240, 242, 245], DGRAY = [80, 100, 120], BLACK = [20, 30, 45],
@@ -3825,7 +3826,8 @@ const App = (() => {
       if (document.visibilityState === 'hidden') {
         const st = Quiz.getState();
         if (st) {
-          st.results[st.qIdx].time = st.qSecs || 0;
+          const _elapsed = Math.floor((Date.now() - (st.qStart || Date.now())) / 1000);
+          st.results[st.qIdx].time = (st.results[st.qIdx].time || 0) + _elapsed;
           DB.saveAttempt(st.testId, {
             mode: st.mode, qIdx: st.qIdx, results: st.results,
             marks: [...st.marks], totSecs: st.totSecs
