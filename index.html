@@ -567,16 +567,6 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 .uz-desc  { font-size: 11px; color: var(--muted); }
 .uz-name  { font-size: 11px; color: var(--green); margin-top: 5px; font-style: italic; }
 
-/* Edit question modal */
-.edit-opt-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-.edit-opt-letter { font-weight: 700; font-size: 12px; color: var(--navy); min-width: 20px; }
-.edit-opt-text { flex: 1; padding: 5px 8px; border: 1px solid var(--border); border-radius: 3px; font-size: 12px; outline: none; }
-.edit-opt-text:focus { border-color: var(--blue); }
-.edit-correct-lbl { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 3px; white-space: nowrap; }
-.edit-exp-row { margin-bottom: 8px; }
-.edit-exp-label { display: block; font-size: 11px; font-weight: 600; color: var(--navy); margin-bottom: 3px; }
-.edit-exp-text { width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 3px; font-size: 11.5px; outline: none; resize: vertical; }
-.edit-exp-text:focus { border-color: var(--blue); }
 
 /* Inline rename */
 .rename-input {
@@ -946,7 +936,6 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
               <button class="quiz-btn" id="btn-mark" onclick="Quiz.toggleMark(Quiz.getState()?.qIdx)">📌 Mark</button>
               <button class="quiz-btn" onclick="openLabValues()" title="Lab Values">🧪 Lab</button>
               <button class="quiz-btn btn-pause" onclick="Quiz.pauseTest()">⏸ Pause</button>
-              <button class="quiz-btn" onclick="App.openEditCurrentQuestion()" title="Edit question">✏️</button>
             </div>
           </div>
           <div class="quiz-progress">
@@ -1063,7 +1052,6 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
             </div>
             <div class="rev-topbar-right">
               <button class="btn-rev" id="rev-btn-flag" onclick="Results.toggleCurrentFlag()">🏳 Flag</button>
-              <button class="btn-rev" id="rev-btn-edit" onclick="Results.openEditFromReview()">✏️ Edit</button>
               <button class="btn-rev" id="rev-btn-prev" onclick="Results.reviewPrev()" disabled>◀ Prev</button>
               <button class="btn-rev primary" id="rev-btn-next" onclick="Results.reviewNext()">Next ▶</button>
             </div>
@@ -1418,29 +1406,6 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
     <div class="modal-actions">
       <button class="btn-modal" onclick="App.closeGenerateModal()">Cancel</button>
       <button class="btn-modal primary" id="btn-gen-start" onclick="App.startOCR()">Extract &amp; Generate →</button>
-    </div>
-  </div>
-</div>
-
-<!-- ═══ EDIT QUESTION MODAL ═══ -->
-<div id="modal-edit" class="modal-overlay">
-  <div class="modal-box" style="max-width:640px;">
-    <h3>Edit Question</h3>
-    <div class="form-group">
-      <label class="form-label">Question Stem</label>
-      <textarea class="form-textarea" id="edit-stem" rows="5" style="min-height:100px;"></textarea>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Answer Choices</label>
-      <div id="edit-options"></div>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Explanations</label>
-      <div id="edit-explanations"></div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn-modal" onclick="document.getElementById('modal-edit').style.display='none'">Cancel</button>
-      <button class="btn-modal primary" onclick="Results.saveEditQuestion()">Save Changes</button>
     </div>
   </div>
 </div>
@@ -3430,10 +3395,6 @@ const Results = (() => {
       flagBtn.classList.toggle('flagged', flagged);
     }
 
-    // Edit button
-    const editBtn = document.getElementById('rev-btn-edit');
-    if (editBtn) editBtn.onclick = () => openEditQuestion(_testId, q.n, _reviewIdx);
-
     // Prev/Next
     document.getElementById('rev-btn-prev').disabled = _reviewIdx === 0;
     document.getElementById('rev-btn-next').disabled = _reviewIdx === _questions.length - 1;
@@ -3466,74 +3427,10 @@ const Results = (() => {
     }
   }
 
-  // ── Edit question ──────────────────────────────────────────
-  function openEditQuestion(testId, qNum, displayIdx) {
-    const test = DB.getTest(testId);
-    const q = test.questions.find(q => q.n === qNum);
-    if (!q) return;
-    const modal = document.getElementById('modal-edit');
-    if (!modal) return;
-
-    modal.querySelector('#edit-stem').value = q.t;
-    const optContainer = modal.querySelector('#edit-options');
-    optContainer.innerHTML = '';
-    q.o.forEach(opt => {
-      const row = document.createElement('div');
-      row.className = 'edit-opt-row';
-      row.innerHTML = `
-        <span class="edit-opt-letter">${opt.l})</span>
-        <input type="text" class="edit-opt-text" data-letter="${opt.l}" value="${opt.t.replace(/"/g,'&quot;')}">
-        <label class="edit-correct-lbl">
-          <input type="radio" name="correct-ans" value="${opt.l}" ${q.c===opt.l?'checked':''}> Correct
-        </label>`;
-      optContainer.appendChild(row);
-    });
-
-    // Explanation
-    const expContainer = modal.querySelector('#edit-explanations');
-    expContainer.innerHTML = '';
-    const expRow = document.createElement('div');
-    expRow.className = 'edit-exp-row';
-    expRow.innerHTML = `<label class="edit-exp-label">Explanation:</label>
-      <textarea class="edit-exp-text" data-field="explanation" rows="5">${q.explanation || ''}</textarea>`;
-    expContainer.appendChild(expRow);
-
-    modal.style.display = 'flex';
-    modal.dataset.testId = testId;
-    modal.dataset.qNum   = qNum;
-    modal.dataset.displayIdx = displayIdx || '';
-  }
-
-  function saveEditQuestion() {
-    const modal = document.getElementById('modal-edit');
-    const testId = modal.dataset.testId;
-    const qNum   = parseInt(modal.dataset.qNum);
-    const test   = DB.getTest(testId);
-    const q      = test.questions.find(q => q.n === qNum);
-    if (!q) return;
-
-    q.t = modal.querySelector('#edit-stem').value.trim();
-    modal.querySelectorAll('.edit-opt-text').forEach(inp => {
-      const opt = q.o.find(o => o.l === inp.dataset.letter);
-      if (opt) opt.t = inp.value.trim();
-    });
-    const correctInput = modal.querySelector('input[name="correct-ans"]:checked');
-    if (correctInput) q.c = correctInput.value;
-    const expTa = modal.querySelector('.edit-exp-text[data-field="explanation"]');
-    if (expTa) q.explanation = expTa.value.trim();
-    q.tags = q.tags && q.tags.length ? q.tags : ['Untagged'];
-    DB.updateTest(testId, { questions: test.questions });
-    window.toast('Question saved ✓', 2000);
-    // Re-render if in review
-    if (_inReview) renderReviewQuestion();
-    const qst = Quiz.getState(); if (qst) { Quiz.renderQuestion(); Quiz.renderOptions(); }
-  }
-
   function grade(p)     { return p>=90?'Excellent':p>=80?'Proficient':p>=70?'Satisfactory':p>=60?'Borderline Pass':'Below Passing'; }
   function gradeDesc(p) { return p>=90?'Outstanding performance.':p>=80?'Strong command of material.':p>=70?'Passing — targeted review recommended.':p>=60?'Marginal — additional study required.':'Comprehensive review needed.'; }
 
   function toggleCurrentFlag() { toggleFlagReview(_reviewIdx); }
-  function openEditFromReview() { const q = _questions[_reviewIdx]; Results.openEditQuestion(_testId, q.n, _reviewIdx); }
 
   function downloadTestReport() {
     if (!window.jspdf) { alert('PDF library not loaded. Check your internet connection.'); return; }
@@ -3775,7 +3672,7 @@ const Results = (() => {
     doc.save(`${safeName}_${dateStr}.pdf`);
   }
 
-  return { show, openReview, reviewPrev, reviewNext, closeReview, toggleFlagReview, toggleCurrentFlag, openEditFromReview, openEditQuestion, saveEditQuestion, downloadTestReport };
+  return { show, openReview, reviewPrev, reviewNext, closeReview, toggleFlagReview, toggleCurrentFlag, downloadTestReport };
 })();
 window.Results = Results;
 window.openReview        = Results.openReview;
@@ -4374,15 +4271,6 @@ const App = (() => {
     }
   }
 
-  // ── Edit question ──────────────────────────────────────────
-  function openEditCurrentQuestion() {
-    const st = Quiz.getState();
-    if (!st) return;
-    const test = DB.getTest(st.testId);
-    const q = test.questions[st.qIdx];
-    Results.openEditQuestion(st.testId, q.n, st.qIdx);
-  }
-
   // ── Highlighting ───────────────────────────────────────────
   function onStemSelect(e) {
     const sel = window.getSelection();
@@ -4461,7 +4349,6 @@ const App = (() => {
     confirmFinish,
     confirmFinishFromPause,
     doFinish,
-    openEditCurrentQuestion,
     onStemSelect,
     openSettings,
     toggleSidebar
