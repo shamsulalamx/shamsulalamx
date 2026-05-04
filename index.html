@@ -1891,6 +1891,33 @@ const OCR = (() => {
     return parts.length > 1 ? parts : [line];
   }
 
+  // ── Split a run-on lab value line into individual entries ─
+  // "Na+ 121 mEq/L Cl- 86 mEq/L K+ 3.0 mEq/L"
+  //   → ["Na+ 121 mEq/L", "Cl- 86 mEq/L", "K+ 3.0 mEq/L"]
+  const _LAB_UNIT = 'mEq\\/L|mg\\/dL|mm\\s*Hg|%|\\/mm\\s*3|µU\\/ml|ng\\/dl|µg\\/dl|IU\\/L|g\\/dL';
+  const _LAB_RE   = new RegExp(
+    '[A-Za-z][A-Za-z0-9\\s\\+\\-]*?\\s+[\\d.]+\\s*(?:' + _LAB_UNIT + ')',
+    'gi'
+  );
+  function splitLabValues(line) {
+    _LAB_RE.lastIndex = 0;
+    const matches = [];
+    let m;
+    while ((m = _LAB_RE.exec(line)) !== null) {
+      matches.push({ start: m.index, end: m.index + m[0].length });
+    }
+    if (matches.length < 2) return [line];
+    const parts = [];
+    const pre = line.slice(0, matches[0].start).trim();
+    if (pre) parts.push(pre);
+    for (const { start, end } of matches) {
+      parts.push(line.slice(start, end).trim());
+    }
+    const post = line.slice(matches[matches.length - 1].end).trim();
+    if (post) parts.push(post);
+    return parts.filter(Boolean);
+  }
+
   // ── Detect if PDF has a real text layer ──────────────────
   async function pdfHasTextLayer(pdf) {
     // Sample first 3 pages; if total chars < 50 → image-only
@@ -1989,8 +2016,10 @@ const OCR = (() => {
       const trimmed = para.trim();
       if (!trimmed) continue;
       for (const sub of splitMergedOptions(trimmed)) {
-        const cleaned = normalizeChars(sub.replace(/\s{2,}/g, ' ').trim());
-        if (cleaned) finalParas.push(cleaned);
+        for (const lab of splitLabValues(sub)) {
+          const cleaned = normalizeChars(lab.replace(/\s{2,}/g, ' ').trim());
+          if (cleaned) finalParas.push(cleaned);
+        }
       }
     }
 
@@ -2068,8 +2097,10 @@ const OCR = (() => {
           const trimmed = para.trim();
           if (!trimmed) continue;
           for (const sub of splitMergedOptions(trimmed)) {
-            const cleaned = normalizeChars(sub.replace(/\s{2,}/g, ' ').trim());
-            if (cleaned && cleaned.length > 0) finalParas.push(cleaned);
+            for (const lab of splitLabValues(sub)) {
+              const cleaned = normalizeChars(lab.replace(/\s{2,}/g, ' ').trim());
+              if (cleaned && cleaned.length > 0) finalParas.push(cleaned);
+            }
           }
         }
 
@@ -2173,6 +2204,9 @@ const OCR = (() => {
     }
 
     if (!options.length) return null;
+
+    // Sort by letter so two-column layouts (A,G,B,H,C,I…) come out A,B,C,D…
+    options.sort((a, b) => a.l.localeCompare(b.l));
 
     // Clean last option: strip trailing noise and bled-in content
     const last = options[options.length - 1];
