@@ -78,7 +78,25 @@ input, textarea, select { font-family: inherit; }
   overflow-y: auto; overflow-x: hidden;
   border-right: 1px solid #162333;
   flex-shrink: 0;
+  transition: width 200ms ease, min-width 200ms ease;
 }
+.sidebar-toggle {
+  display: flex; align-items: center; justify-content: flex-end;
+  width: 100%; height: 34px; flex-shrink: 0;
+  background: none; border: none; border-bottom: 1px solid #162333;
+  color: #5a7a9a; cursor: pointer; font-size: 11px; padding: 0 10px;
+  transition: color .12s, background .12s;
+}
+.sidebar-toggle:hover { background: rgba(255,255,255,.06); color: #9ab0c8; }
+#sidebar.sidebar-collapsed { width: 36px; min-width: 36px; }
+#sidebar.sidebar-collapsed .sidebar-toggle { justify-content: center; padding: 0; }
+#sidebar.sidebar-collapsed .item-label,
+#sidebar.sidebar-collapsed .item-count,
+#sidebar.sidebar-collapsed .sidebar-section-title,
+#sidebar.sidebar-collapsed .sidebar-folder-tests,
+#sidebar.sidebar-collapsed .sidebar-add-folder { display: none; }
+#sidebar.sidebar-collapsed .sidebar-item { padding: 7px 0; justify-content: center; }
+body.sidebar-collapsed { --sidebar-w: 36px; }
 .sidebar-section { padding: 8px 0; border-bottom: 1px solid #162333; }
 .sidebar-section-title {
   font-size: 10px; font-weight: 700; text-transform: uppercase;
@@ -421,6 +439,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
   right: 0; background: var(--navy); padding: 8px 20px;
   display: flex; align-items: center; justify-content: space-between;
   z-index: 50; border-top: 1px solid rgba(255,255,255,.1);
+  transition: left 200ms ease;
 }
 .quiz-bottom-bar.no-sidebar { left: 200px; transition: left .22s ease; }
 .score-info { font-size: 11px; color: #9ab0c8; }
@@ -847,6 +866,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 
     <!-- SIDEBAR -->
     <div id="sidebar">
+      <button class="sidebar-toggle" id="sidebar-toggle" onclick="App.toggleSidebar()" title="Toggle sidebar">❮</button>
       <div class="sidebar-section">
         <div class="sidebar-item" onclick="App.showHome()" id="nav-home">
           <span class="item-icon">🏠</span>
@@ -3787,6 +3807,15 @@ const App = (() => {
     renderSidebar();
     showHome();
 
+    // Restore sidebar collapsed state
+    if (localStorage.getItem('sidebar_collapsed') === '1') {
+      const sidebar = document.getElementById('sidebar');
+      const btn     = document.getElementById('sidebar-toggle');
+      if (sidebar) sidebar.classList.add('sidebar-collapsed');
+      document.body.classList.add('sidebar-collapsed');
+      if (btn) btn.textContent = '❯';
+    }
+
     // Load session from Supabase on start
     const userCode = window.getUserCode();
     window.loadSession(userCode).then(session => {
@@ -4394,6 +4423,15 @@ const App = (() => {
   }
 
   // ── Settings ───────────────────────────────────────────────
+  function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const btn     = document.getElementById('sidebar-toggle');
+    const collapsed = sidebar.classList.toggle('sidebar-collapsed');
+    document.body.classList.toggle('sidebar-collapsed', collapsed);
+    if (btn) btn.textContent = collapsed ? '❯' : '❮';
+    localStorage.setItem('sidebar_collapsed', collapsed ? '1' : '0');
+  }
+
   function openSettings() {
     const codeEl = document.getElementById('display-user-code');
     if (codeEl) codeEl.textContent = window.getUserCode();
@@ -4430,7 +4468,8 @@ const App = (() => {
     doFinish,
     openEditCurrentQuestion,
     onStemSelect,
-    openSettings
+    openSettings,
+    toggleSidebar
   };
 })();
 
