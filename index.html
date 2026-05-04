@@ -1886,7 +1886,7 @@ const OCR = (() => {
   // Only split when the boundary has a clear option letter pattern.
   function splitMergedOptions(line) {
     // Require at least one space before the option letter
-    const parts = line.split(/\s+(?=(?:[0oOQ]\s{0,3})?[A-Ha-h]\s{0,2}\)\s{1,4}\S)/)
+    const parts = line.split(/\s+(?=(?:[0oOQ]\s{0,3})?[A-Ka-k]\s{0,2}\)\s{1,4}\S)/)
                       .map(s => s.trim()).filter(Boolean);
     return parts.length > 1 ? parts : [line];
   }
@@ -2125,7 +2125,7 @@ const OCR = (() => {
 
   // ── Parse one question ────────────────────────────────────
   function parseOneQuestion(num, paragraphs) {
-    const OPT_RE = /^(?:[0oOQ©®°]\s{0,3})?([A-Ha-h])\s{0,2}[)]\s{0,4}(.{2,})/;
+    const OPT_RE = /^(?:[0oOQ©®°]\s{0,3})?([A-Ka-k])\s{0,2}[)]\s{0,4}(.{2,})/;
     const NEXT_Q_RE = /^(\d+)[.,]\s+\S/;  // "8.  A 62-year-old..." or OCR variant
 
     let stemParas = [];
@@ -2138,7 +2138,7 @@ const OCR = (() => {
       if (!p) continue;
 
       // Hard stops — answer key content
-      if (/correct\s+answer\s*[:\-.]\s*[A-H]/i.test(p)) break;
+      if (/correct\s+answer\s*[:\-.]\s*[A-Ka-k]/i.test(p)) break;
       if (/^incorrect\s+answers?/i.test(p))              break;
       if (/^educational\s+objective/i.test(p))           break;
 
@@ -2178,7 +2178,7 @@ const OCR = (() => {
     const last = options[options.length - 1];
     last.t = last.t
       .replace(/\s+\d+\.\s+.+$/s, '')        // FIX 4: next question's text
-      .replace(/\s+[A-Ha-h]\)\s*[A-Ha-h]\).*$/g, '')
+      .replace(/\s+[A-Ka-k]\)\s*[A-Ka-k]\).*$/g, '')
       .replace(/\s*[~=]{2,}.*$/g, '')
       .replace(/\s*(previous|next|lab\s+values|calculator|review|help|pause)\s*$/gi, '')
       .replace(/\s+[0O]\s*$/g, '')            // trailing lone radio glyph
@@ -2206,7 +2206,7 @@ const OCR = (() => {
   // ── Parse one answer item ─────────────────────────────────
   // CA_RE requires colon + single letter — won't match "Incorrect Answers: A, B..."
   function parseOneAnswer(num, paragraphs) {
-    const CA_RE = /correct\s+answer\s*[:\-.]\s*([A-Ha-h])(?:[.\s,]|$)/i;
+    const CA_RE = /correct\s+answer\s*[:\-.]\s*([A-Ka-k])(?:[.\s,]|$)/i;
 
     const correctIndices = [];
     for (let i = 0; i < paragraphs.length; i++) {
@@ -2260,7 +2260,7 @@ const OCR = (() => {
 
     // Build structured explanation — ONLY \n\n between sections, never \n
     // FIX 3: no single \n inside paragraphs, so no <br> appears in rendering
-    const SECTION_RE = /^(incorrect\s+answers?:?|educational\s+objective:?|[A-Za-z][a-zA-Z\s,\/()\-]{2,60}\(choice\s+[A-Ha-h]\))/i;
+    const SECTION_RE = /^(incorrect\s+answers?:?|educational\s+objective:?|[A-Za-z][a-zA-Z\s,\/()\-]{2,60}\(choice\s+[A-Ka-k]\))/i;
     const parts = [];
     for (const para of rejoined) {
       const trimmed = para.trim();
