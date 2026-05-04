@@ -2011,15 +2011,15 @@ const OCR = (() => {
   // ── Split a line containing multiple merged options ───────
   // "A) Celiac disease B) Down syndrome" → ["A) Celiac disease", "B) Down syndrome"]
   // Handles space-separated and zero-space-merged option boundaries,
-  // while NOT splitting temperature strings like "98.6° F)" or "98.6°F)".
+  // while NOT splitting medical unit patterns like "98.6°F)", "105 lb)", "130/90 mm Hg)".
   function splitMergedOptions(line) {
-    // Step 1: insert space at zero-space boundaries, EXCEPT temperature patterns.
-    // "interactionC)" → "interaction C)" but "6°F)" stays as-is.
+    // Step 1: insert space at zero-space boundaries, EXCEPT known unit-paren patterns.
     const spaced = line.replace(
       /([A-Za-z0-9])(?=(?:[0oOQ©®°]\s{0,3})?[A-Ka-k]\s{0,2}\)\s{0,4}\S)/g,
       (match, p1, offset, str) => {
-        // If ° [FC] ) follows immediately, it's a temperature — don't insert space
-        if (/^°\s*[FC]\s*\)/.test(str.slice(offset + 1))) return p1;
+        const ahead = str.slice(offset + 1);
+        if (/^°\s*[FC]\s*\)/.test(ahead)) return p1;  // °F) or °C) temperature
+        if (p1 === 'l' && /^b\s*\)/.test(ahead))  return p1;  // lb) pounds
         return p1 + ' ';
       }
     );
@@ -2031,24 +2031,27 @@ const OCR = (() => {
 
     if (parts.length <= 1) return [line];
 
-    // Step 3: reassemble temperature fragments that got split.
-    // Pattern: a part ending with °/digit/( followed by a part starting with °?[FC]),
-    // e.g. ["....(98.6", "°", "F), pulse..."] → reassemble into ["....(98.6 °F), pulse..."]
-    const TEMP_START = /^°?\s*[FC]\s*\)\s*[,)\s]/;
+    // Step 3: forward-merge unit-paren fragments that got split.
+    // Covers: temperature (°F/°C), pounds (lb)), blood pressure (mm Hg))
+    const TEMP_START = /^°?\s*[FC]\s*\)\s*[,)\s]/;  // °F), °C)
+    const LB_START   = /^b\s*\)\s*[;,)\s]/;            // b); from lb)
+    const HG_START   = /^g\s*\)\s*[;,)\s]/;            // g); from Hg)
+    const UNIT_END_L = /l\s*$/;                            // ends with l (lb)
+    const UNIT_END_H = /H\s*$/;                            // ends with H (Hg)
+
     const result = [];
     let i = 0;
     while (i < parts.length) {
       let part = parts[i];
-      // Forward-merge while the next part looks like a temperature continuation
       while (i + 1 < parts.length) {
         const next = parts[i + 1];
-        const endsWithTemp = /[°\d.(]\s*$/.test(part) || part === '°';
-        if (endsWithTemp && TEMP_START.test(next)) {
-          part = part + ' ' + next;
-          i++;
-        } else {
-          break;
-        }
+        const endsTemp = /[°\d.(]\s*$/.test(part) || part === '°';
+        const endsL    = UNIT_END_L.test(part);
+        const endsH    = UNIT_END_H.test(part);
+        if      (endsTemp && TEMP_START.test(next)) { part = part + ' ' + next; i++; }
+        else if (endsL    && LB_START.test(next))   { part = part + ' ' + next; i++; }
+        else if (endsH    && HG_START.test(next))   { part = part + ' ' + next; i++; }
+        else break;
       }
       result.push(part);
       i++;
@@ -2422,7 +2425,7 @@ const OCR = (() => {
 
       // Strip this question's number prefix
       if (!seenQNum) {
-        const nm = p.match(/^(\d+)[.,]\s+(.+)/);
+        const nm = p.match(/^(\d+)\s*[.,]\s*(.+)/);
         if (nm && parseInt(nm[1]) === num) {
           seenQNum = true;
           const rest = nm[2].trim();
