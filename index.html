@@ -2908,15 +2908,21 @@ const Quiz = (() => {
 
       // Click selector (radio + letter) → select answer
       div.querySelector('.opt-selector').addEventListener('click', () => {
+        const selectedText = window.getSelection().toString();
+        if (selectedText.length > 0) return;
         if (!r.answered) selectAnswer(opt.l);
       });
 
       // Right-click or click text body → strikethrough
       div.querySelector('.opt-text').addEventListener('click', e => {
+        const selectedText = window.getSelection().toString();
+        if (selectedText.length > 0) return;
         e.preventDefault();
         toggleStrike(state.qIdx, opt.l);
       });
       div.querySelector('.opt-text').addEventListener('contextmenu', e => {
+        const selectedText = window.getSelection().toString();
+        if (selectedText.length > 0) return;
         toggleStrike(state.qIdx, opt.l);
       });
 
