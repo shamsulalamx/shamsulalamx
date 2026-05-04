@@ -337,8 +337,9 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
   display: flex; align-items: center; justify-content: space-between;
   flex-wrap: wrap; gap: 8px; flex-shrink: 0;
 }
-.quiz-topbar-left  { display: flex; align-items: center; gap: 14px; }
-.quiz-topbar-right { display: flex; align-items: center; gap: 8px; }
+.quiz-topbar-left  { display: flex; align-items: center; gap: 14px; flex: 1; }
+.quiz-topbar-center { display: flex; align-items: center; justify-content: flex-start; flex-shrink: 0; padding-left: 32px; }
+.quiz-topbar-right { display: flex; align-items: center; gap: 8px; flex: 1; justify-content: flex-end; }
 .quiz-test-name  { font-size: 13px; font-weight: 700; color: white; }
 .quiz-q-counter  { font-size: 11px; color: #9ab0c8; }
 .quiz-score-live { font-size: 11px; color: #9ab0c8; }
@@ -925,11 +926,12 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
               <span class="quiz-q-counter" id="quiz-q-num">Item 1</span>
               <span class="quiz-score-live" id="score-live">0/0 (0%)</span>
             </div>
-            <div class="quiz-topbar-right">
+            <div class="quiz-topbar-center">
               <div class="timer-block">
                 <span class="timer-val" id="timer-q">0:00</span>
-                <span class="timer-lbl">This Q</span>
               </div>
+            </div>
+            <div class="quiz-topbar-right">
               <button class="quiz-btn btn-mode" id="btn-mode-toggle" onclick="App.toggleMode()">📖 Tutor</button>
               <button class="quiz-btn" id="btn-flag" onclick="Quiz.toggleFlag(Quiz.getState()?.qIdx)">🏳 Flag</button>
               <button class="quiz-btn" id="btn-mark" onclick="Quiz.toggleMark(Quiz.getState()?.qIdx)">📌 Mark</button>
