@@ -941,10 +941,6 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
                 <span class="timer-val" id="timer-q">0:00</span>
                 <span class="timer-lbl">This Q</span>
               </div>
-              <div class="timer-block">
-                <span class="timer-val" id="timer-total">00:00</span>
-                <span class="timer-lbl">Total</span>
-              </div>
               <button class="quiz-btn btn-mode" id="btn-mode-toggle" onclick="App.toggleMode()">📖 Tutor</button>
               <button class="quiz-btn" id="btn-flag" onclick="Quiz.toggleFlag(Quiz.getState()?.qIdx)">🏳 Flag</button>
               <button class="quiz-btn" id="btn-mark" onclick="Quiz.toggleMark(Quiz.getState()?.qIdx)">📌 Mark</button>
@@ -2602,8 +2598,6 @@ const Quiz = (() => {
 
   function renderTotalTimer() {
     const s = state.totSecs;
-    const topbar = document.getElementById('timer-total');
-    if (topbar) topbar.textContent = fmtTime(s);
     const bottom = document.getElementById('block-timer');
     if (bottom) bottom.textContent = fmtBlockTime(s);
   }
