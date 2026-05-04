@@ -1874,8 +1874,8 @@ const OCR = (() => {
         ? gapEstimated
         : gapReported;
 
-      // Phantom if gap < 40% of estimated char width
-      const phantom = gap < estCharW * 0.4;
+      // Phantom if gap < 60% of estimated char width
+      const phantom = gap < estCharW * 0.6;
       result += (phantom ? '' : ' ') + curr.str;
     }
     return result.trim();
