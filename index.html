@@ -1537,10 +1537,33 @@ const DB = (() => {
   }
 
   function saveLocal(db) {
-    try { localStorage.setItem(LOCAL_KEY, JSON.stringify(db)); }
-    catch(e) {
-      if (e.name === 'QuotaExceededError' && typeof window.toast === 'function')
-        window.toast('⚠️ Storage almost full.', 5000);
+    // ── History cap: keep only last 3 attempts per test ──────
+    const histByCap = {};
+    db.history = db.history.filter(h => {
+      histByCap[h.testId] = (histByCap[h.testId] || 0) + 1;
+      return histByCap[h.testId] <= 3;
+    });
+
+    // ── Auto-purge trash older than 7 days ───────────────────
+    const WEEK = 7 * 24 * 60 * 60 * 1000;
+    db.trash = (db.trash || []).filter(t => (Date.now() - (t.deletedAt || 0)) < WEEK);
+
+    // ── Attempt save; recover gracefully if quota exceeded ───
+    try {
+      localStorage.setItem(LOCAL_KEY, JSON.stringify(db));
+    } catch(e) {
+      if (e.name === 'QuotaExceededError') {
+        // Last resort: drop all history and try again
+        db.history = [];
+        try {
+          localStorage.setItem(LOCAL_KEY, JSON.stringify(db));
+          if (typeof window.toast === 'function')
+            window.toast('⚠️ Storage was full — old history cleared. Your tests are safe.', 6000);
+        } catch(e2) {
+          if (typeof window.toast === 'function')
+            window.toast('🚨 Storage full! Please delete some tests to continue.', 8000);
+        }
+      }
     }
   }
 
@@ -1596,8 +1619,21 @@ const DB = (() => {
     if(!db.folders.find(f=>f.id===test.folderId) && db.folders.length) test.folderId = db.folders[0].id;
     db.tests.push(test); save();
   }
-  function emptyTrash() { get().trash = []; save(); }
-  function permanentDelete(id) { const db=get(); db.trash=db.trash.filter(t=>t.id!==id); save(); }
+  function emptyTrash() {
+    const db = get();
+    // Clean up IndexedDB figures for all trashed tests
+    if (window.FigureStore) {
+      db.trash.forEach(t => window.FigureStore.deleteByPrefix(t.id + ':').catch(()=>{}));
+    }
+    db.trash = []; save();
+  }
+  function permanentDelete(id) {
+    const db = get();
+    db.trash = db.trash.filter(t => t.id !== id);
+    // Clean up IndexedDB figures for this test
+    if (window.FigureStore) window.FigureStore.deleteByPrefix(id + ':').catch(()=>{});
+    save();
+  }
 
   // ── Attempts ─────────────────────────────────────────────────
   function saveAttempt(testId, attempt) {
@@ -1636,6 +1672,75 @@ const DB = (() => {
 })();
 window.DB = DB;
 
+</script>
+<script>
+/* ============================================================
+   FIGURE STORE — IndexedDB for figure images
+   Keeps base64 PNG data OUT of localStorage entirely.
+   Keys: "testId:questionNum"  Values: base64 dataUrl string
+============================================================ */
+const FigureStore = (() => {
+  const DB_NAME    = 'nbme_figures_v1';
+  const STORE_NAME = 'figures';
+  let _db = null;
+
+  function open() {
+    if (_db) return Promise.resolve(_db);
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = e => {
+        e.target.result.createObjectStore(STORE_NAME);
+      };
+      req.onsuccess = e => { _db = e.target.result; resolve(_db); };
+      req.onerror   = e => reject(e.target.error);
+    });
+  }
+
+  async function put(key, dataUrl) {
+    const db = await open();
+    return new Promise((resolve, reject) => {
+      const tx  = db.transaction(STORE_NAME, 'readwrite');
+      const st  = tx.objectStore(STORE_NAME);
+      const req = st.put(dataUrl, key);
+      req.onsuccess = () => resolve();
+      req.onerror   = e => reject(e.target.error);
+    });
+  }
+
+  async function get(key) {
+    const db = await open();
+    return new Promise((resolve, reject) => {
+      const tx  = db.transaction(STORE_NAME, 'readonly');
+      const st  = tx.objectStore(STORE_NAME);
+      const req = st.get(key);
+      req.onsuccess = e => resolve(e.target.result || null);
+      req.onerror   = e => reject(e.target.error);
+    });
+  }
+
+  async function deleteByPrefix(prefix) {
+    // Delete all keys starting with prefix (e.g. "testId:")
+    const db = await open();
+    return new Promise((resolve, reject) => {
+      const tx  = db.transaction(STORE_NAME, 'readwrite');
+      const st  = tx.objectStore(STORE_NAME);
+      const req = st.openCursor();
+      req.onsuccess = e => {
+        const cursor = e.target.result;
+        if (cursor) {
+          if (String(cursor.key).startsWith(prefix)) cursor.delete();
+          cursor.continue();
+        } else {
+          resolve();
+        }
+      };
+      req.onerror = e => reject(e.target.error);
+    });
+  }
+
+  return { put, get, deleteByPrefix };
+})();
+window.FigureStore = FigureStore;
 </script>
 <script>
 /* ============================================================
@@ -1905,12 +2010,50 @@ const OCR = (() => {
 
   // ── Split a line containing multiple merged options ───────
   // "A) Celiac disease B) Down syndrome" → ["A) Celiac disease", "B) Down syndrome"]
-  // Only split when the boundary has a clear option letter pattern.
+  // Handles space-separated and zero-space-merged option boundaries,
+  // while NOT splitting temperature strings like "98.6° F)" or "98.6°F)".
   function splitMergedOptions(line) {
-    // Require at least one space before the option letter
-    const parts = line.split(/\s+(?=(?:[0oOQ]\s{0,3})?[A-Ka-k]\s{0,2}\)\s{1,4}\S)/)
-                      .map(s => s.trim()).filter(Boolean);
-    return parts.length > 1 ? parts : [line];
+    // Step 1: insert space at zero-space boundaries, EXCEPT temperature patterns.
+    // "interactionC)" → "interaction C)" but "6°F)" stays as-is.
+    const spaced = line.replace(
+      /([A-Za-z0-9])(?=(?:[0oOQ©®°]\s{0,3})?[A-Ka-k]\s{0,2}\)\s{0,4}\S)/g,
+      (match, p1, offset, str) => {
+        // If ° [FC] ) follows immediately, it's a temperature — don't insert space
+        if (/^°\s*[FC]\s*\)/.test(str.slice(offset + 1))) return p1;
+        return p1 + ' ';
+      }
+    );
+
+    // Step 2: split on whitespace before option letter pattern
+    const parts = spaced
+      .split(/\s+(?=(?:[0oOQ©®°]\s{0,3})?[A-Ka-k]\s{0,2}\)\s{0,4}\S)/)
+      .map(s => s.trim()).filter(Boolean);
+
+    if (parts.length <= 1) return [line];
+
+    // Step 3: reassemble temperature fragments that got split.
+    // Pattern: a part ending with °/digit/( followed by a part starting with °?[FC]),
+    // e.g. ["....(98.6", "°", "F), pulse..."] → reassemble into ["....(98.6 °F), pulse..."]
+    const TEMP_START = /^°?\s*[FC]\s*\)\s*[,)\s]/;
+    const result = [];
+    let i = 0;
+    while (i < parts.length) {
+      let part = parts[i];
+      // Forward-merge while the next part looks like a temperature continuation
+      while (i + 1 < parts.length) {
+        const next = parts[i + 1];
+        const endsWithTemp = /[°\d.(]\s*$/.test(part) || part === '°';
+        if (endsWithTemp && TEMP_START.test(next)) {
+          part = part + ' ' + next;
+          i++;
+        } else {
+          break;
+        }
+      }
+      result.push(part);
+      i++;
+    }
+    return result.length > 1 ? result : [line];
   }
 
   // ── Split a run-on lab value line into individual entries ─
@@ -2085,14 +2228,32 @@ const OCR = (() => {
           if (y > topY || y < botY) continue;
           if (/^[0oOQ]$/.test(str) && x0 < 80 * sc) continue;
           if (/^[-~.,•!|]{1,5}$/.test(str)) continue;
+
           raw.push({ x0, x1, y, str, width: item.width || 0, transform: tx });
         }
 
+        // Snap-to-nearest-line grouping.
+        // Fixed bucketing broke degree symbols and superscripts whose Y offset
+        // from baseline can be anywhere from 3-12pt depending on the PDF font metrics.
+        // Strategy:
+        //   - Single-char superscript items (°, ², ³, etc.): snap within 18pt
+        //   - All other items: snap within 12pt
+        // Minimum real NBME line gap is ~14pt, so 12pt is safely below that.
+        // Single-char items get 18pt because their Y offset can be large.
+        const _SUPERSCRIPT_RE = /^[°²³¹⁺⁻±µ]$|^\d$|^[+\-]$/;
         const lineMap = new Map();
         for (const it of raw) {
-          const ky = Math.round(it.y / 3) * 3;
-          if (!lineMap.has(ky)) lineMap.set(ky, []);
-          lineMap.get(ky).push(it);
+          const SNAP = _SUPERSCRIPT_RE.test(it.str) ? 18 : 12;
+          let found = null, minDist = Infinity;
+          for (const [lineY] of lineMap) {
+            const dist = Math.abs(it.y - lineY);
+            if (dist <= SNAP && dist < minDist) { minDist = dist; found = lineY; }
+          }
+          if (found !== null) {
+            lineMap.get(found).push(it);
+          } else {
+            lineMap.set(it.y, [it]);
+          }
         }
 
         const sortedYs = [...lineMap.keys()].sort((a, b) => b - a);
@@ -2126,21 +2287,53 @@ const OCR = (() => {
           }
         }
 
-        // Figure image: render page if text mentions a figure or image keyword
-        const _FIGURE_RE = /\b(figure|fig\.?)\s*\d+/i;
-        const _FIGURE_KW = /\b(shown\s+(?:below|above|here)|image|photograph|radiograph|graph|exhibit)\b/i;
-        if (_FIGURE_RE.test(allText) || _FIGURE_KW.test(allText)) {
+        // ── Figure extraction via operator list ──────────────
+        // Uses PDF.js getOperatorList() to find exact image positions.
+        // Tracks the CTM stack to compute each image's PDF-space bounding box.
+        // Falls back to cropped full-page render if no bitmap images found
+        // but figure keywords are present (handles vector drawings).
+        // Only trigger figure rendering when the page explicitly shows an embedded image.
+        // Must NOT match clinical procedure mentions like "CT scan shows..." or "X-ray of..."
+        // _FIGURE_RE: "Figure 1", "Fig. 2" (must have number — bare "figure" too common)
+        // _FIGURE_KW: "shown below/above", "photograph shows", "image shows" etc.
+        const _FIGURE_RE = /\b(figure|fig\.?)\s*\d+\b/i;
+        const _FIGURE_KW = /\bshown\s+(?:below|above|in\s+(?:the\s+)?(?:figure|image)\s*\d*)/i;
+        const _hasFigureRef = itemNum !== null && (_FIGURE_RE.test(allText) || _FIGURE_KW.test(allText));
+        let figureDataUrl = null;
+
+        if (_hasFigureRef) {
           try {
-            const fvp    = page.getViewport({ scale: 1.5 });
-            const canvas = document.createElement('canvas');
-            canvas.width  = Math.round(fvp.width);
-            canvas.height = Math.round(fvp.height);
-            await page.render({ canvasContext: canvas.getContext('2d'), viewport: fvp }).promise;
-            finalParas.push('__FIGURE__:' + canvas.toDataURL('image/png'));
+            // Render page at 2x and crop to content band only (strips top/bottom chrome).
+            // PDF_H = vp.height = true page height in PDF points (Y-up, 0=bottom).
+            // Chrome zones: top chrome is above TOP_CHROME_Y, bottom chrome below BOTTOM_CHROME_Y.
+            // In canvas space (Y-down, 0=top):
+            //   content top    = (PDF_H - TOP_CHROME_Y)    * SCALE
+            //   content bottom = (PDF_H - BOTTOM_CHROME_Y) * SCALE
+            const PDF_H  = vp.height;
+            const SCALE  = 2.0;
+            const fvp    = page.getViewport({ scale: SCALE });
+            const fullCanvas = document.createElement('canvas');
+            fullCanvas.width  = Math.round(fvp.width);
+            fullCanvas.height = Math.round(fvp.height);
+            await page.render({ canvasContext: fullCanvas.getContext('2d'), viewport: fvp }).promise;
+
+            const cropTop    = Math.round((PDF_H - TOP_CHROME_Y)    * SCALE);
+            const cropBottom = Math.round((PDF_H - BOTTOM_CHROME_Y) * SCALE);
+            const cropH      = cropBottom - cropTop;
+            if (cropH > 20) {
+              const cropCanvas = document.createElement('canvas');
+              cropCanvas.width  = fullCanvas.width;
+              cropCanvas.height = cropH;
+              cropCanvas.getContext('2d').drawImage(
+                fullCanvas, 0, cropTop, fullCanvas.width, cropH,
+                0, 0, fullCanvas.width, cropH
+              );
+              figureDataUrl = cropCanvas.toDataURL('image/png');
+            }
           } catch(_) {}
         }
 
-        pages.push({ pageNum: p, paragraphs: finalParas, itemNum, totalItems });
+        pages.push({ pageNum: p, paragraphs: finalParas, itemNum, totalItems, figureDataUrl });
       }
 
     } else {
@@ -2172,27 +2365,37 @@ const OCR = (() => {
 
   // ── Group pages by item ───────────────────────────────────
   function groupPagesByItem(pages) {
-    const itemMap = {};
+    const itemMap   = {};
+    const figureMap = {};  // itemNum -> first figureDataUrl found for that item
     let lastItem  = null;
     for (const pg of pages) {
       if (pg.itemNum !== null) {
         lastItem = pg.itemNum;
         if (!itemMap[lastItem]) itemMap[lastItem] = [];
         itemMap[lastItem].push(pg.paragraphs);
+        // Collect figure from this page if present and not already collected
+        if (pg.figureDataUrl && !figureMap[lastItem]) {
+          figureMap[lastItem] = pg.figureDataUrl;
+        }
       } else if (lastItem !== null) {
         itemMap[lastItem].push(pg.paragraphs);
+        if (pg.figureDataUrl && !figureMap[lastItem]) {
+          figureMap[lastItem] = pg.figureDataUrl;
+        }
       }
     }
     const merged = {};
     for (const [num, groups] of Object.entries(itemMap)) {
       merged[parseInt(num)] = [].concat(...groups);
     }
-    return merged;
+    return { merged, figureMap };
   }
 
   // ── Parse one question ────────────────────────────────────
   function parseOneQuestion(num, paragraphs) {
-    const OPT_RE = /^(?:[0oOQ©®°]\s{0,3})?([A-Ka-k])\s{0,2}[)]\s{0,4}(.{2,})/;
+    // Option text must start with a letter or digit — prevents temperature fragments
+    // like "F), pulse is 120/min" (from "103.1°F)") from matching as option F.
+    const OPT_RE = /^(?:[0oOQ©®°]\s{0,3})?([A-Ka-k])\s{0,2}[)]\s{0,4}([A-Za-z0-9].+)/;
     const NEXT_Q_RE = /^(\d+)[.,]\s+\S/;  // "8.  A 62-year-old..." or OCR variant
 
     let stemParas = [];
@@ -2203,6 +2406,8 @@ const OCR = (() => {
     for (const para of paragraphs) {
       const p = para.trim();
       if (!p) continue;
+      // Skip figure data tokens — figures are handled via q.images, not paragraph text
+      if (p.startsWith('__FIGURE__:')) continue;
 
       // Hard stops — answer key content
       if (/correct\s+answer\s*[:\-.]\s*[A-Ka-k]/i.test(p)) break;
@@ -2238,6 +2443,23 @@ const OCR = (() => {
         options[options.length - 1].t += ' ' + p;
       }
     }
+
+    // Fix two-column trailing-label pattern:
+    // When PDF x-ordering puts right-column text before its label, we get:
+    // option F text = "Lorazepam Propranolol G)" — G's text is embedded in F's.
+    // Detect and split: last word(s) before trailing "Letter)" belong to that letter.
+    const TRAIL_RE = /^(.*?)\s+([A-Za-z0-9]\S*)\s+(?:[0oOQ©®°]\s{0,3})?([A-Ka-k])\s{0,2}\)\s*$/;
+    const fixedOptions = [];
+    for (const opt of options) {
+      const tm = opt.t.match(TRAIL_RE);
+      if (tm) {
+        // Split: current option gets text before the trailing word,
+        // new option gets the trailing word as its text
+        opt.t = tm[1].trim();
+        fixedOptions.push({ l: tm[3].toUpperCase(), t: tm[2].trim() });
+      }
+    }
+    options.push(...fixedOptions);
 
     if (!options.length) return null;
 
@@ -2417,8 +2639,8 @@ const OCR = (() => {
       report(42 + Math.round((i / t) * 30), `Reading AK page ${i}/${t}…`));
 
     report(74, 'Grouping pages…');
-    const qItemMap = groupPagesByItem(qPages);
-    const aItemMap = groupPagesByItem(aPages);
+    const { merged: qItemMap, figureMap: qFigureMap } = groupPagesByItem(qPages);
+    const { merged: aItemMap }                        = groupPagesByItem(aPages);
 
     report(80, 'Parsing questions…');
     const questions = parseQuestionBank(qItemMap);
@@ -2428,7 +2650,18 @@ const OCR = (() => {
 
     report(90, 'Matching…');
     const matched = matchAndMerge(questions, answerMap);
-    matched.forEach(q => { q.images = []; });
+
+    // Attach figure metadata to questions.
+    // dataUrl is NOT stored here — it goes into IndexedDB via FigureStore.
+    // q.images stores only { figureKey, isLabTable } — a tiny reference.
+    // The testId is not known yet (assigned by DB.createTest), so we store
+    // figureKey as a temporary placeholder '__PENDING__:qNum' and rewrite
+    // it in saveGeneratedTest after createTest returns the real testId.
+    matched.forEach(q => {
+      const figUrl = qFigureMap[q.n];
+      q.images      = figUrl ? [{ figureKey: '__PENDING__:' + q.n, isLabTable: false }] : [];
+      q._figureData = figUrl || null;  // temp: dataUrl held here until saved to IndexedDB
+    });
 
     const apiKey = (localStorage.getItem('gemini_api_key') || '').replace(/['"]/g, '').trim();
     if (apiKey) {
@@ -2482,6 +2715,8 @@ function restoreNavSidebarState() {
 }
 
 // ── Shared image renderer (used by Quiz and Results) ────────
+// Loads figure dataUrls from IndexedDB (FigureStore) on demand.
+// q.images entries have { figureKey, isLabTable } — no dataUrl in localStorage.
 function renderImages(q, topElId, bottomElId) {
   const topEl    = document.getElementById(topElId);
   const bottomEl = document.getElementById(bottomElId);
@@ -2490,14 +2725,26 @@ function renderImages(q, topElId, bottomElId) {
   bottomEl.innerHTML = '';
   if (!q || !q.images || !q.images.length) return;
   for (const img of q.images) {
+    const dest = img.isLabTable ? bottomEl : topEl;
     const wrap = document.createElement('div');
     wrap.className = 'q-img-wrap';
     const el = document.createElement('img');
     el.className = 'q-img';
-    el.src = img.dataUrl;
     el.alt = img.isLabTable ? 'Lab values table' : 'Clinical image';
     wrap.appendChild(el);
-    (img.isLabTable ? bottomEl : topEl).appendChild(wrap);
+    dest.appendChild(wrap);
+
+    // Support both legacy dataUrl (in-memory, pre-save) and new figureKey (IndexedDB)
+    if (img.dataUrl) {
+      el.src = img.dataUrl;
+    } else if (img.figureKey && window.FigureStore) {
+      window.FigureStore.get(img.figureKey).then(dataUrl => {
+        if (dataUrl) el.src = dataUrl;
+        else wrap.style.display = 'none';  // figure not found — hide silently
+      }).catch(() => { wrap.style.display = 'none'; });
+    } else {
+      wrap.style.display = 'none';
+    }
   }
 }
 
@@ -2516,8 +2763,8 @@ function renderImages(q, topElId, bottomElId) {
     let i = 0;
     while (i < paras.length) {
       if (paras[i].startsWith('__FIGURE__:')) {
-        const src = paras[i].slice('__FIGURE__:'.length);
-        html += `<img src="${src}" style="max-width:100%;border:1px solid #ccc;margin:8px 0;display:block;" alt="Figure" />`;
+        // Defensive: __FIGURE__ tokens should not appear in stem text anymore
+        // (figures are attached via q.images). Skip silently.
         i++;
       } else if (_LAB_TABLE_RE.test(paras[i])) {
         let rows = '';
@@ -2681,9 +2928,15 @@ const Quiz = (() => {
   // ── Persist current state ──────────────────────────────────
   function persistState() {
     if (!state) return;
+    // Strip highlights from persisted results — they are in-memory only.
+    // Highlights can be large (full HTML per question) and cause QuotaExceededError.
+    const resultsToSave = state.results.map(r => {
+      const { highlights, ...rest } = r;
+      return rest;
+    });
     DB.saveAttempt(state.testId, {
       mode: state.mode, qIdx: state.qIdx,
-      results: state.results,
+      results: resultsToSave,
       marks: [...state.marks],
       totSecs: state.totSecs
     });
@@ -2762,7 +3015,12 @@ const Quiz = (() => {
     const r = state.results[state.qIdx];
     r.time = (r.time || 0) + elapsed;
     stopAllTimers();
-    const entry = DB.finishAttempt(state.testId, state.results, state.totSecs, state.mode);
+    // Strip highlights before saving to history — they are large and not needed post-test.
+    const resultsToSave = state.results.map(r => {
+      const { highlights, ...rest } = r;
+      return rest;
+    });
+    const entry = DB.finishAttempt(state.testId, resultsToSave, state.totSecs, state.mode);
     window.Results && window.Results.show(state.testId, entry, state.results, getTest().questions);
     state = null;
   }
@@ -3764,8 +4022,9 @@ const App = (() => {
         if (st) {
           const _elapsed = Math.floor((Date.now() - (st.qStart || Date.now())) / 1000);
           st.results[st.qIdx].time = (st.results[st.qIdx].time || 0) + _elapsed;
+          const _resultsToSave = st.results.map(r => { const { highlights, ...rest } = r; return rest; });
           DB.saveAttempt(st.testId, {
-            mode: st.mode, qIdx: st.qIdx, results: st.results,
+            mode: st.mode, qIdx: st.qIdx, results: _resultsToSave,
             marks: [...st.marks], totSecs: st.totSecs
           });
         }
@@ -4258,7 +4517,37 @@ const App = (() => {
 
   function saveGeneratedTest() {
     if (!_genParsed) return;
-    const test = DB.createTest(_genParsed.folderId, _genParsed.name, _genParsed.questions);
+    const questions = _genParsed.questions;
+
+    // Save figure images to IndexedDB BEFORE creating the test.
+    // Rewrite figureKey from '__PENDING__:qNum' to 'testId:qNum'.
+    // Strip _figureData from question objects so it never touches localStorage.
+    const figureEntries = [];  // [{key, dataUrl}] to save after we have testId
+    questions.forEach(q => {
+      if (q._figureData) {
+        figureEntries.push({ qNum: q.n, dataUrl: q._figureData });
+        delete q._figureData;
+      }
+      // Clear pending keys — will be rewritten after createTest
+      if (q.images) q.images.forEach(img => { img.figureKey = null; });
+    });
+
+    const test = DB.createTest(_genParsed.folderId, _genParsed.name, questions);
+
+    // Now we have test.id — write real figureKeys and save to IndexedDB
+    if (figureEntries.length > 0 && window.FigureStore) {
+      figureEntries.forEach(({ qNum, dataUrl }) => {
+        const key = test.id + ':' + qNum;
+        // Update q.images with the real key
+        const q = test.questions.find(q => q.n === qNum);
+        if (q && q.images && q.images[0]) q.images[0].figureKey = key;
+        // Save to IndexedDB (fire and forget — non-blocking)
+        window.FigureStore.put(key, dataUrl).catch(() => {});
+      });
+      // Re-save test with updated figureKeys
+      DB.updateTest(test.id, { questions: test.questions });
+    }
+
     document.getElementById('modal-generate').style.display = 'none';
     _currentFolder = _genParsed.folderId;
     renderSidebar(); renderHomeGrid();
