@@ -943,7 +943,6 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
             <div class="q-card">
               <div class="q-card-header">
                 <div class="q-num-badge" id="q-num-badge">Item 1</div>
-                <div id="q-tags" style="display:none;flex-wrap:wrap;gap:4px;flex:1;padding:0 8px;"></div>
               </div>
               <div class="q-images-top" id="q-images-top"></div>
               <div id="q-stem" onmouseup="App.onStemSelect(event)"></div>
@@ -966,6 +965,9 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
               <div class="exp-panel-title">📖 Answer Explanation</div>
               <div id="exp-body"></div>
             </div>
+
+            <!-- AI topic tags (shown after explanation) -->
+            <div id="q-tags" style="display:none;flex-wrap:wrap;gap:4px;padding:4px 0;"></div>
           </div>
 
           <!-- Bottom nav bar -->
@@ -1051,7 +1053,6 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
             </div>
           </div>
           <div class="q-card" style="margin-bottom:12px;">
-            <div id="rev-tags" style="display:none;flex-wrap:wrap;gap:4px;margin-bottom:8px;"></div>
             <div class="rev-images-top" id="rev-images-top"></div>
             <div id="rev-stem" style="font-size:13.5px;line-height:1.72;"></div>
             <div class="rev-images-bottom" id="rev-images-bottom"></div>
@@ -1063,6 +1064,8 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
             <div class="exp-panel-title">📖 Answer Explanation</div>
             <div id="rev-exp-body"></div>
           </div>
+          <!-- AI topic tags (shown after explanation) -->
+          <div id="rev-tags" style="display:none;flex-wrap:wrap;gap:4px;margin-top:8px;"></div>
         </div>
       </div>
 
