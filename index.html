@@ -199,6 +199,34 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 .btn-unflag { font-size: 11px; color: var(--red); background: none; border: 1px solid #f5c0bc; border-radius: 3px; padding: 3px 10px; }
 .btn-unflag:hover { background: #fef5f5; }
 
+/* ── Marked view ─────────────────────────────────────────── */
+.marked-folder-section { margin-bottom: 20px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.marked-folder-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; background: #f4f7fb; cursor: pointer;
+  font-size: 13px; font-weight: 700; color: var(--navy);
+  user-select: none;
+}
+.marked-folder-header:hover { background: #e8eef6; }
+.marked-folder-chevron { font-size: 11px; color: var(--muted); transition: transform .2s; }
+.marked-folder-header.open .marked-folder-chevron { transform: rotate(90deg); }
+.marked-folder-count { font-size: 11px; font-weight: 600; color: var(--ltblue); background: #e4edf8; border-radius: 10px; padding: 1px 8px; }
+.marked-folder-body { display: none; }
+.marked-folder-body.open { display: block; }
+.marked-item {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 14px; border-top: 1px solid var(--border);
+  font-size: 12.5px; line-height: 1.55;
+}
+.marked-item:hover { background: #fafcff; }
+.marked-item-num { flex-shrink: 0; font-size: 11px; font-weight: 700; color: var(--ltblue); background: #e4edf8; border-radius: 10px; padding: 2px 8px; margin-top: 2px; }
+.marked-item-body { flex: 1; min-width: 0; }
+.marked-item-source { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--ltblue); margin-bottom: 4px; }
+.marked-item-q { color: var(--text); margin-bottom: 6px; }
+.marked-item-footer { display: flex; justify-content: flex-end; margin-top: 6px; }
+.btn-unmark { font-size: 11px; color: #7a5c00; background: none; border: 1px solid #f0d080; border-radius: 3px; padding: 3px 10px; }
+.btn-unmark:hover { background: #fffbee; }
+
 /* ── Screen: Quiz ─────────────────────────────────────────── */
 #screen-quiz {
   display: none; flex-direction: row;
@@ -251,7 +279,7 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
   flex-shrink: 0; white-space: nowrap;
 }
 .qns-panel-body {
-  flex: 1; overflow-y: auto; overflow-x: hidden; padding: 3px 0; min-height: 0;
+  flex: 1; overflow-y: auto; overflow-x: hidden; padding: 3px 0 48px; min-height: 0;
 }
 .qns-panel-body::-webkit-scrollbar       { width: 3px; }
 .qns-panel-body::-webkit-scrollbar-track { background: transparent; }
@@ -716,64 +744,6 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
   display: block;
 }
 
-/* ── PIN screen ─────────────────────────────────────────── */
-#pin-screen {
-  position: fixed; inset: 0;
-  background: #1a3a5c;
-  display: flex; align-items: center; justify-content: center;
-  z-index: 9999;
-  flex-direction: column;
-}
-.pin-box {
-  background: white; border-radius: 8px;
-  padding: 36px 40px; text-align: center;
-  max-width: 340px; width: 90%;
-  box-shadow: 0 8px 40px rgba(0,0,0,.4);
-}
-.pin-logo {
-  width: 52px; height: 52px;
-  background: #1a3a5c; border-radius: 8px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 22px; font-weight: 900; color: white;
-  margin: 0 auto 14px; letter-spacing: -1px;
-}
-.pin-title { font-size: 16px; font-weight: 700; color: #1a3a5c; margin-bottom: 4px; }
-.pin-subtitle { font-size: 12px; color: #7a8a9a; margin-bottom: 22px; }
-.pin-dots {
-  display: flex; justify-content: center; gap: 12px;
-  margin-bottom: 22px;
-}
-.pin-dot {
-  width: 16px; height: 16px; border-radius: 50%;
-  border: 2px solid #c8d0da; background: white;
-  transition: all .15s;
-}
-.pin-dot.filled { background: #1a3a5c; border-color: #1a3a5c; }
-.pin-dot.error  { background: #e74c3c; border-color: #e74c3c; animation: shake .3s; }
-.pin-keypad {
-  display: grid; grid-template-columns: repeat(3, 1fr);
-  gap: 10px; margin-bottom: 14px;
-}
-.pin-key {
-  height: 52px; border-radius: 6px;
-  border: 1px solid #e0e6ec; background: #f8fafc;
-  font-size: 18px; font-weight: 600; color: #1a3a5c;
-  cursor: pointer; transition: all .1s;
-  display: flex; align-items: center; justify-content: center;
-}
-.pin-key:hover  { background: #e8f0f8; border-color: #1a3a5c; }
-.pin-key:active { background: #1a3a5c; color: white; transform: scale(.95); }
-.pin-key.del    { font-size: 14px; color: #e74c3c; }
-.pin-key.empty  { background: transparent; border: none; cursor: default; }
-.pin-key.enter  { background: #1a3a5c; color: white; font-size: 13px; font-weight: 700; }
-.pin-key.enter:hover { background: #244d73; }
-.pin-error-msg  { font-size: 11px; color: #e74c3c; height: 16px; }
-.pin-setup-hint { font-size: 11px; color: #7a8a9a; margin-top: 8px; }
-@keyframes shake {
-  0%,100%{transform:translateX(0)}
-  25%{transform:translateX(-6px)}
-  75%{transform:translateX(6px)}
-}
 
 /* ── Lab Values Modal ── */
 #modal-lab {
@@ -890,6 +860,10 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
         <div class="sidebar-item" onclick="App.showFlagged(null)" id="nav-flagged">
           <span class="item-icon">🚩</span>
           <span class="item-label">All Flagged</span>
+        </div>
+        <div class="sidebar-item" onclick="App.showMarked(null)" id="nav-marked">
+          <span class="item-icon">🔖</span>
+          <span class="item-label">Marked</span>
         </div>
         <div class="sidebar-item" onclick="App.showTrash()" id="nav-trash">
           <span class="item-icon">🗑</span>
@@ -1524,6 +1498,7 @@ const DB = (() => {
       tests: [],
       trash: [],
       flags: [],
+      marks: [],
       history: []
     };
   }
@@ -1665,10 +1640,56 @@ const DB = (() => {
   function removeFlag(testId, questionId) { const db=get(); db.flags=db.flags.filter(f=>!(f.testId===testId&&f.questionId===questionId)); save(); }
   function isFlagged(testId, questionId) { return !!get().flags.find(f=>f.testId===testId&&f.questionId===questionId); }
 
+  // ── Marks (bookmark questions for later review) ────────────────
+  function getMarks(folderId) {
+    const db = get();
+    if (!db.marks) db.marks = [];
+    if (folderId) {
+      const ids = db.tests.filter(t=>t.folderId===folderId).map(t=>t.id);
+      return db.marks.filter(m=>ids.includes(m.testId));
+    }
+    return [...db.marks];
+  }
+  function addMark(testId, questionIdx, questionNum) {
+    const db = get();
+    if (!db.marks) db.marks = [];
+    if (db.marks.find(m=>m.testId===testId&&m.questionIdx===questionIdx)) return;
+    db.marks.push({ id:uid(), testId, questionIdx, questionNum, createdAt:Date.now() });
+    save();
+  }
+  function removeMark(testId, questionIdx) {
+    const db = get();
+    if (!db.marks) db.marks = [];
+    db.marks = db.marks.filter(m=>!(m.testId===testId&&m.questionIdx===questionIdx));
+    save();
+  }
+  function isMarked(testId, questionIdx) {
+    const db = get();
+    if (!db.marks) return false;
+    return !!db.marks.find(m=>m.testId===testId&&m.questionIdx===questionIdx);
+  }
+  function syncMarks(testId, marksSet) {
+    // Called when a test finishes — syncs the in-memory marks Set to DB
+    const db = get();
+    if (!db.marks) db.marks = [];
+    // Remove all existing marks for this test
+    db.marks = db.marks.filter(m=>m.testId!==testId);
+    // Re-add from the current marks Set
+    const test = db.tests.find(t=>t.id===testId);
+    if (test) {
+      marksSet.forEach(idx => {
+        const q = test.questions[idx];
+        if (q) db.marks.push({ id:uid(), testId, questionIdx:idx, questionNum:q.n, createdAt:Date.now() });
+      });
+    }
+    save();
+  }
+
   return { get, save, uid,
     getFolders, createFolder, renameFolder, deleteFolder,
     getTests, getTest, createTest, updateTest, renameTest, trashTest, restoreTest, emptyTrash, permanentDelete,
-    saveAttempt, finishAttempt, getHistory, getFlags, addFlag, removeFlag, isFlagged };
+    saveAttempt, finishAttempt, getHistory, getFlags, addFlag, removeFlag, isFlagged,
+    getMarks, addMark, removeMark, isMarked, syncMarks };
 })();
 window.DB = DB;
 
@@ -1801,6 +1822,7 @@ window.FigureStore = FigureStore;
       tests:   db.tests,
       trash:   db.trash,
       flags:   db.flags,
+      marks:   db.marks || [],
       history: db.history,
       geminiApiKey: (localStorage.getItem('gemini_api_key') || '').replace(/['"]/g, '').trim(),
       quizState: qs ? {
@@ -1846,11 +1868,12 @@ window.FigureStore = FigureStore;
       if (Array.isArray(s.tests))   db.tests   = s.tests;
       if (Array.isArray(s.trash))   db.trash   = s.trash;
       if (Array.isArray(s.flags))   db.flags   = s.flags;
+      if (Array.isArray(s.marks))   db.marks   = s.marks;
       if (Array.isArray(s.history)) db.history = s.history;
       try { localStorage.setItem('nbme_app_v1', JSON.stringify(db)); } catch(_) {}
       if (s.geminiApiKey) localStorage.setItem('gemini_api_key', s.geminiApiKey);
       _lastHash = JSON.stringify({ folders:db.folders, tests:db.tests, trash:db.trash,
-        flags:db.flags, history:db.history, geminiApiKey:s.geminiApiKey||'', quizState:s.quizState||null });
+        flags:db.flags, marks:db.marks||[], history:db.history, geminiApiKey:s.geminiApiKey||'', quizState:s.quizState||null });
       window.updateSyncIndicator('synced');
       return s;
     } catch(_) { window.updateSyncIndicator('offline'); return null; }
@@ -2979,6 +3002,14 @@ const Quiz = (() => {
     } else {
       renderOptions(); // show selection + right/wrong in nav
     }
+
+    // Reveal tags now that the question has been answered
+    const tagEl = document.getElementById('q-tags');
+    if (tagEl && q.tags && q.tags.length) {
+      tagEl.innerHTML = q.tags.map(t => `<span class="q-tag">${t}</span>`).join('');
+      tagEl.style.display = 'flex';
+    }
+
     updateNavPanel();
     renderScoreLive();
   }
@@ -3018,6 +3049,8 @@ const Quiz = (() => {
     const r = state.results[state.qIdx];
     r.time = (r.time || 0) + elapsed;
     stopAllTimers();
+    // Sync marks to DB before finishing so they persist after state is cleared
+    DB.syncMarks(state.testId, state.marks);
     // Strip highlights before saving to history — they are large and not needed post-test.
     const resultsToSave = state.results.map(r => {
       const { highlights, ...rest } = r;
@@ -3040,8 +3073,13 @@ const Quiz = (() => {
 
   function toggleMark(qIdx) {
     if (!state) return;
-    if (state.marks.has(qIdx)) state.marks.delete(qIdx);
-    else state.marks.add(qIdx);
+    if (state.marks.has(qIdx)) {
+      state.marks.delete(qIdx);
+      DB.removeMark(state.testId, qIdx);
+    } else {
+      state.marks.add(qIdx);
+      DB.addMark(state.testId, qIdx, getTest().questions[qIdx]?.n);
+    }
     updateNavPanel();
     persistState();
   }
@@ -3104,13 +3142,17 @@ const Quiz = (() => {
       stemEl.innerHTML = window.buildStemHTML(q.t);
     }
 
-    // Tags
+    // Tags — only shown after the question has been answered
     const tagEl = document.getElementById('q-tags');
-    if (tagEl && q.tags && q.tags.length) {
-      tagEl.innerHTML = q.tags.map(t => `<span class="q-tag">${t}</span>`).join('');
-      tagEl.style.display = 'flex';
-    } else if (tagEl) {
-      tagEl.style.display = 'none';
+    if (tagEl) {
+      const r = state.results[state.qIdx];
+      if (r.answered && q.tags && q.tags.length) {
+        tagEl.innerHTML = q.tags.map(t => `<span class="q-tag">${t}</span>`).join('');
+        tagEl.style.display = 'flex';
+      } else {
+        tagEl.innerHTML = '';
+        tagEl.style.display = 'none';
+      }
     }
 
     renderOptions();
@@ -3301,7 +3343,16 @@ const Quiz = (() => {
       if (flagEl) flagEl.textContent = flgd ? '🏳' : '';
     });
     const cur = list.querySelector('.qns-item.qns-current');
-    if (cur) cur.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    if (cur) {
+      // Manual scroll: keep current item centered in the panel.
+      // scrollIntoView is unreliable on mobile (scrolls the viewport, not the container).
+      const container = list; // qns-panel-body is the scrollable element
+      const itemTop    = cur.offsetTop;
+      const itemHeight = cur.offsetHeight;
+      const panelHeight = container.clientHeight;
+      const targetScrollTop = itemTop - (panelHeight / 2) + (itemHeight / 2);
+      container.scrollTop = Math.max(0, targetScrollTop);
+    }
   }
 
   function updateNavPanel() {
@@ -4323,6 +4374,117 @@ const App = (() => {
     toast('Flag removed.');
   }
 
+  function showMarked(folderId) {
+    _currentView = 'marked';
+    document.getElementById('screen-home').style.display    = 'flex';
+    document.getElementById('screen-quiz').style.display    = 'none';
+    document.getElementById('screen-results').style.display = 'none';
+
+    document.getElementById('home-title').textContent = 'Marked Questions';
+    setActiveNav('nav-marked');
+
+    const content = document.getElementById('home-content');
+    const folders  = DB.getFolders();
+    const allMarks = DB.getMarks();
+
+    if (!allMarks.length) {
+      content.innerHTML = '<div class="no-tests">No marked questions yet. Mark questions during a test using the 🔖 button.</div>';
+      return;
+    }
+
+    // Group marks by folder
+    let html = '';
+    folders.forEach(folder => {
+      const folderTestIds = DB.getTests(folder.id).map(t => t.id);
+      const folderMarks   = allMarks.filter(m => folderTestIds.includes(m.testId));
+      if (!folderMarks.length) return;
+
+      const sectionId = 'marked-folder-' + folder.id;
+      html += `<div class="marked-folder-section">
+        <div class="marked-folder-header" id="${sectionId}-hdr" onclick="App.toggleMarkedFolder('${sectionId}')">
+          <span>📁 ${folder.name}</span>
+          <span style="display:flex;align-items:center;gap:8px;">
+            <span class="marked-folder-count">${folderMarks.length}</span>
+            <span class="marked-folder-chevron">▶</span>
+          </span>
+        </div>
+        <div class="marked-folder-body" id="${sectionId}-body">`;
+
+      folderMarks.forEach(mark => {
+        const test = DB.getTest(mark.testId);
+        if (!test) return;
+        const q = test.questions[mark.questionIdx];
+        if (!q) return;
+        html += `<div class="marked-item">
+          <span class="marked-item-num">Q${mark.questionNum || (mark.questionIdx + 1)}</span>
+          <div class="marked-item-body">
+            <div class="marked-item-source">📋 ${test.name}</div>
+            <div class="marked-item-q">${q.t.slice(0, 220)}${q.t.length > 220 ? '…' : ''}</div>
+            <div class="marked-item-footer">
+              <button class="btn-unmark" onclick="App.unmark('${mark.testId}',${mark.questionIdx})">Remove Mark</button>
+            </div>
+          </div>
+        </div>`;
+      });
+
+      html += `</div></div>`;
+    });
+
+    // Also show marks from tests with no folder (orphaned)
+    const allFolderTestIds = folders.flatMap(f => DB.getTests(f.id).map(t => t.id));
+    const orphanMarks = allMarks.filter(m => !allFolderTestIds.includes(m.testId));
+    if (orphanMarks.length) {
+      const sectionId = 'marked-folder-orphan';
+      html += `<div class="marked-folder-section">
+        <div class="marked-folder-header" id="${sectionId}-hdr" onclick="App.toggleMarkedFolder('${sectionId}')">
+          <span>📁 Other</span>
+          <span style="display:flex;align-items:center;gap:8px;">
+            <span class="marked-folder-count">${orphanMarks.length}</span>
+            <span class="marked-folder-chevron">▶</span>
+          </span>
+        </div>
+        <div class="marked-folder-body" id="${sectionId}-body">`;
+      orphanMarks.forEach(mark => {
+        const test = DB.getTest(mark.testId);
+        if (!test) return;
+        const q = test.questions[mark.questionIdx];
+        if (!q) return;
+        html += `<div class="marked-item">
+          <span class="marked-item-num">Q${mark.questionNum || (mark.questionIdx + 1)}</span>
+          <div class="marked-item-body">
+            <div class="marked-item-source">📋 ${test.name}</div>
+            <div class="marked-item-q">${q.t.slice(0, 220)}${q.t.length > 220 ? '…' : ''}</div>
+            <div class="marked-item-footer">
+              <button class="btn-unmark" onclick="App.unmark('${mark.testId}',${mark.questionIdx})">Remove Mark</button>
+            </div>
+          </div>
+        </div>`;
+      });
+      html += `</div></div>`;
+    }
+
+    if (!html) {
+      content.innerHTML = '<div class="no-tests">No marked questions yet.</div>';
+      return;
+    }
+    content.innerHTML = html;
+  }
+
+  function toggleMarkedFolder(sectionId) {
+    const hdr  = document.getElementById(sectionId + '-hdr');
+    const body = document.getElementById(sectionId + '-body');
+    if (!hdr || !body) return;
+    const isOpen = body.classList.contains('open');
+    body.classList.toggle('open', !isOpen);
+    hdr.classList.toggle('open', !isOpen);
+  }
+
+  function unmark(testId, questionIdx) {
+    DB.removeMark(testId, parseInt(questionIdx));
+    showMarked(null);
+    toast('Mark removed.');
+  }
+
   function showTrash() {
     _currentView = 'trash';
     document.getElementById('home-title').textContent = '🗑 Trash';
@@ -4761,6 +4923,9 @@ const App = (() => {
     showFlagged,
     showTrash,
     unflag,
+    showMarked,
+    toggleMarkedFolder,
+    unmark,
     promptNewFolder,
     createFolder,
     startRenameFolder,
@@ -4787,152 +4952,6 @@ const App = (() => {
 })();
 
 
-/* ============================================================
-   PIN.JS — 4-digit passcode protection
-============================================================ */
-const PIN = (() => {
-  const STORAGE_KEY = 'nbme_pin_v1';
-  let _buffer = '';
-  let _mode = 'enter'; // 'enter' | 'setup' | 'confirm'
-  let _firstPin = '';
-
-  function getStored() {
-    return localStorage.getItem(STORAGE_KEY) || null;
-  }
-  function setStored(pin) {
-    localStorage.setItem(STORAGE_KEY, pin);
-  }
-
-  function init() {
-    const stored = getStored();
-    const screen = document.getElementById('pin-screen');
-    if (!stored) {
-      // First launch — setup mode
-      _mode = 'setup';
-      document.getElementById('pin-subtitle').textContent = 'Create a 4-digit PIN';
-      document.getElementById('pin-setup-hint').textContent = 'You will be asked to confirm your PIN.';
-      screen.style.display = 'flex';
-    } else {
-      // Normal entry mode
-      _mode = 'enter';
-      document.getElementById('pin-subtitle').textContent = 'Enter your 4-digit PIN';
-      document.getElementById('pin-setup-hint').textContent = '';
-      screen.style.display = 'flex';
-    }
-    // Keyboard support
-    document.addEventListener('keydown', onKey);
-  }
-
-  function onKey(e) {
-    const screen = document.getElementById('pin-screen');
-    if (screen.style.display === 'none') return;
-    if (e.key >= '0' && e.key <= '9') press(e.key);
-    else if (e.key === 'Backspace') del();
-    else if (e.key === 'Enter') enter();
-  }
-
-  function press(digit) {
-    if (_buffer.length >= 4) return;
-    _buffer += digit;
-    updateDots();
-    if (_buffer.length === 4) {
-      setTimeout(enter, 120);
-    }
-  }
-
-  function del() {
-    _buffer = _buffer.slice(0, -1);
-    updateDots();
-    clearError();
-  }
-
-  function enter() {
-    if (_buffer.length < 4) {
-      showError('Enter all 4 digits');
-      return;
-    }
-
-    if (_mode === 'setup') {
-      _firstPin = _buffer;
-      _buffer = '';
-      _mode = 'confirm';
-      document.getElementById('pin-subtitle').textContent = 'Confirm your PIN';
-      document.getElementById('pin-setup-hint').textContent = 'Enter the same PIN again to confirm.';
-      updateDots();
-      return;
-    }
-
-    if (_mode === 'confirm') {
-      if (_buffer === _firstPin) {
-        setStored(_buffer);
-        unlock();
-      } else {
-        shakeError('PINs do not match. Start over.');
-        _buffer = ''; _firstPin = '';
-        _mode = 'setup';
-        document.getElementById('pin-subtitle').textContent = 'Create a 4-digit PIN';
-        document.getElementById('pin-setup-hint').textContent = 'You will be asked to confirm your PIN.';
-        updateDots();
-      }
-      return;
-    }
-
-    if (_mode === 'enter') {
-      if (_buffer === getStored()) {
-        unlock();
-      } else {
-        shakeError('Incorrect PIN. Try again.');
-        _buffer = '';
-        updateDots();
-      }
-    }
-  }
-
-  function unlock() {
-    const screen = document.getElementById('pin-screen');
-    screen.style.opacity = '0';
-    screen.style.transition = 'opacity .3s';
-    setTimeout(() => {
-      screen.style.display = 'none';
-      document.removeEventListener('keydown', onKey);
-    }, 300);
-    _buffer = '';
-  }
-
-  function updateDots() {
-    for (let i = 0; i < 4; i++) {
-      const dot = document.getElementById('pd' + i);
-      if (!dot) continue;
-      dot.classList.remove('error');
-      dot.classList.toggle('filled', i < _buffer.length);
-    }
-  }
-
-  function showError(msg) {
-    document.getElementById('pin-error').textContent = msg;
-  }
-
-  function clearError() {
-    document.getElementById('pin-error').textContent = '';
-  }
-
-  function shakeError(msg) {
-    for (let i = 0; i < 4; i++) {
-      const dot = document.getElementById('pd' + i);
-      if (dot) dot.classList.add('error');
-    }
-    showError(msg);
-    setTimeout(() => {
-      for (let i = 0; i < 4; i++) {
-        const dot = document.getElementById('pd' + i);
-        if (dot) dot.classList.remove('error');
-      }
-    }, 600);
-  }
-
-  return { init, press, del, enter };
-})();
-window.PIN = PIN;
 
 // ── Bootstrap ──────────────────────────────────────────────
 // ── Calculator ──────────────────────────────────────────────
@@ -5025,7 +5044,8 @@ function labTab(id, btn) {
 document.addEventListener('DOMContentLoaded', () => {
   const saved = parseInt(localStorage.getItem('question_font_size')) || 14;
   _applyQuestionFontSize(saved);
-  PIN.init();
+  // Remove any stored PIN from previous versions
+  localStorage.removeItem('nbme_pin_v1');
   App.init();
   restoreNavSidebarState();
   // Close calculator popup when leaving the quiz screen
@@ -5043,37 +5063,6 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 </script>
-
-<!-- ═══ PIN SCREEN ═══ -->
-<div id="pin-screen" style="display:none;">
-  <div class="pin-box">
-    <div class="pin-logo">NB</div>
-    <div class="pin-title">NBME Self-Assessment Suite</div>
-    <div class="pin-subtitle" id="pin-subtitle">Enter your 4-digit PIN</div>
-    <div class="pin-dots">
-      <div class="pin-dot" id="pd0"></div>
-      <div class="pin-dot" id="pd1"></div>
-      <div class="pin-dot" id="pd2"></div>
-      <div class="pin-dot" id="pd3"></div>
-    </div>
-    <div class="pin-keypad">
-      <button class="pin-key" onclick="PIN.press('1')">1</button>
-      <button class="pin-key" onclick="PIN.press('2')">2</button>
-      <button class="pin-key" onclick="PIN.press('3')">3</button>
-      <button class="pin-key" onclick="PIN.press('4')">4</button>
-      <button class="pin-key" onclick="PIN.press('5')">5</button>
-      <button class="pin-key" onclick="PIN.press('6')">6</button>
-      <button class="pin-key" onclick="PIN.press('7')">7</button>
-      <button class="pin-key" onclick="PIN.press('8')">8</button>
-      <button class="pin-key" onclick="PIN.press('9')">9</button>
-      <button class="pin-key del" onclick="PIN.del()">&#9003;</button>
-      <button class="pin-key" onclick="PIN.press('0')">0</button>
-      <button class="pin-key enter" onclick="PIN.enter()">OK</button>
-    </div>
-    <div class="pin-error-msg" id="pin-error"></div>
-    <div class="pin-setup-hint" id="pin-setup-hint"></div>
-  </div>
-</div>
 
 </body>
 </html>
