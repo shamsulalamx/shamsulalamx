@@ -373,7 +373,7 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 #btn-flag { }
 #btn-flag.flagged { color: #ffd54f; border-color: rgba(255,213,79,.5); }
 
-.quiz-content-area { flex: 1; padding: 16px 20px 80px; max-width: 900px; width: 100%; margin: 0 auto; }
+.quiz-content-area { flex: 1; padding: 16px 40px 80px; max-width: 1000px; width: 100%; margin: 0 auto; }
 
 /* Question card */
 .q-card {
@@ -2782,7 +2782,45 @@ function renderImages(q, topElId, bottomElId) {
    Shared stem rendering helper (used by Quiz and Results)
 ============================================================ */
 (function() {
-  const _LAB_TABLE_RE = /^([A-Za-z][A-Za-z0-9 \+\-²³⁻]*?)\s+([\d.]+)\s*(mEq\/L|mg\/dL|mm\s*Hg|%|\/mm\s*3|µU\/ml|ng\/dl|µg\/dl|IU\/L|g\/dL)/i;
+  // Lab detection using RegExp literals (not string construction) so \s works correctly.
+  // Handles spaced units like "mg/ dL", spaced ions like "Na +", prefix junk like "Serum",
+  // and multiple labs jammed in one paragraph.
+  const _LAB_SCAN_RE = /([A-Za-z][A-Za-z0-9\s\+\-²³⁻]*?)\s+([\d.]+)\s*(?:mEq\s*\/\s*L|mg\s*\/\s*dL|mm\s*Hg|%|\/mm\s*3|µU\/ml|ng\/dl|µg\/dl|IU\/L|g\/dL)/gi;
+  const _LAB_ROW_RE  = /^([A-Za-z][A-Za-z0-9\s\+\-²³⁻]*?)\s+([\d.]+)\s*(?:mEq\s*\/\s*L|mg\s*\/\s*dL|mm\s*Hg|%|\/mm\s*3|µU\/ml|ng\/dl|µg\/dl|IU\/L|g\/dL)/i;
+
+  function _cleanLabName(raw) {
+    let n = raw.trim();
+    // Strip leading junk: "with a normal differential", "Serum" prefix
+    n = n.replace(/^(?:with\s+a?\s*normal\s+differential\s+)?(?:Serum\s+)?/i, '');
+    // Fix spaced ion notation: "Na +" -> "Na+", "Ca2 +" -> "Ca2+"
+    n = n.replace(/([A-Za-z0-9])\s+([+\-])/g, '$1$2');
+    // OCR fix: "cI" -> "Cl-"
+    n = n.replace(/^cI$/i, 'Cl-');
+    return n.trim();
+  }
+
+  function _extractLabRows(para) {
+    // Extract all lab name+value pairs from a paragraph using global scan.
+    // Also returns any qualifier text embedded in the name (e.g. "with a normal differential")
+    // so the caller can append it to the previous row's value.
+    const rows = [];
+    _LAB_SCAN_RE.lastIndex = 0;
+    let m;
+    while ((m = _LAB_SCAN_RE.exec(para)) !== null) {
+      const rawName  = m[1].trim();
+      const qualifier = rawName.match(/^(with\s+a?\s*normal\s+differential)/i)?.[1] || '';
+      const name = _cleanLabName(rawName);
+      const val  = m[0].slice(m[1].length).trim();  // number + unit only
+      if (name) rows.push({ name, val, qualifier });
+    }
+    return rows;
+  }
+
+  function _isLabPara(para) {
+    _LAB_SCAN_RE.lastIndex = 0;
+    return _LAB_SCAN_RE.test(para);
+  }
+
   function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   window.buildStemHTML = function(text) {
     const paras = (text || '').split('\n\n').map(p => p.trim()).filter(Boolean);
@@ -2791,19 +2829,26 @@ function renderImages(q, topElId, bottomElId) {
     let i = 0;
     while (i < paras.length) {
       if (paras[i].startsWith('__FIGURE__:')) {
-        // Defensive: __FIGURE__ tokens should not appear in stem text anymore
-        // (figures are attached via q.images). Skip silently.
         i++;
-      } else if (_LAB_TABLE_RE.test(paras[i])) {
-        let rows = '';
-        while (i < paras.length && _LAB_TABLE_RE.test(paras[i])) {
-          const m = paras[i].match(_LAB_TABLE_RE);
-          const name = esc(m[1].trim());
-          const val  = esc(paras[i].slice(m[1].length).trim());
-          rows += `<tr><td>${name}</td><td>${val}</td></tr>`;
+      } else if (_isLabPara(paras[i])) {
+        // Accumulate consecutive lab paragraphs into one table
+        let tableRows = [];
+        while (i < paras.length && _isLabPara(paras[i])) {
+          const labRows = _extractLabRows(paras[i]);
+          labRows.forEach(({ name, val, qualifier }) => {
+            // If this row has a leading qualifier (e.g. "with a normal differential"),
+            // it belongs to the PREVIOUS row's value, not this row's name.
+            if (qualifier && tableRows.length > 0) {
+              tableRows[tableRows.length - 1].val += ' ' + qualifier;
+            }
+            tableRows.push({ name, val });
+          });
           i++;
         }
-        html += `<table class="lab-values-table"><tbody>${rows}</tbody></table>`;
+        const rows = tableRows.map(({ name, val }) =>
+          `<tr><td>${esc(name)}</td><td>${esc(val)}</td></tr>`
+        ).join('');
+        if (rows) html += `<table class="lab-values-table"><tbody>${rows}</tbody></table>`;
       } else {
         html += `<p>${esc(paras[i])}</p>`;
         i++;
