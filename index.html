@@ -936,6 +936,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
               <button class="quiz-btn" id="btn-mark" onclick="Quiz.toggleMark(Quiz.getState()?.qIdx)">📌 Mark</button>
               <button class="quiz-btn" onclick="openLabValues()" title="Lab Values">🧪 Lab</button>
               <button class="quiz-btn btn-pause" onclick="Quiz.pauseTest()">⏸ Pause</button>
+              <button id="btn-hint" class="quiz-btn" onclick="requestHint()">💡 Hint</button>
             </div>
           </div>
           <div class="quiz-progress">
@@ -954,9 +955,8 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
               <div class="q-images-bottom" id="q-images-bottom"></div>
             </div>
 
-            <!-- Hint -->
+            <!-- Hint panel (button moved to top bar) -->
             <div id="hint-area">
-              <button id="btn-hint" class="btn-hint" onclick="requestHint()">💡 Hint</button>
               <div id="hint-panel" class="hint-panel" style="display:none;"></div>
             </div>
 
