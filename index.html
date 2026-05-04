@@ -2108,6 +2108,20 @@ const OCR = (() => {
           }
         }
 
+        // Figure image: render page if text mentions a figure or image keyword
+        const _FIGURE_RE = /\b(figure|fig\.?)\s*\d+/i;
+        const _FIGURE_KW = /\b(shown\s+(?:below|above|here)|image|photograph|radiograph|graph|exhibit)\b/i;
+        if (_FIGURE_RE.test(allText) || _FIGURE_KW.test(allText)) {
+          try {
+            const fvp    = page.getViewport({ scale: 1.5 });
+            const canvas = document.createElement('canvas');
+            canvas.width  = Math.round(fvp.width);
+            canvas.height = Math.round(fvp.height);
+            await page.render({ canvasContext: canvas.getContext('2d'), viewport: fvp }).promise;
+            finalParas.push('__FIGURE__:' + canvas.toDataURL('image/png'));
+          } catch(_) {}
+        }
+
         pages.push({ pageNum: p, paragraphs: finalParas, itemNum, totalItems });
       }
 
@@ -2483,7 +2497,11 @@ function renderImages(q, topElId, bottomElId) {
     let html = '';
     let i = 0;
     while (i < paras.length) {
-      if (_LAB_TABLE_RE.test(paras[i])) {
+      if (paras[i].startsWith('__FIGURE__:')) {
+        const src = paras[i].slice('__FIGURE__:'.length);
+        html += `<img src="${src}" style="max-width:100%;border:1px solid #ccc;margin:8px 0;display:block;" alt="Figure" />`;
+        i++;
+      } else if (_LAB_TABLE_RE.test(paras[i])) {
         let rows = '';
         while (i < paras.length && _LAB_TABLE_RE.test(paras[i])) {
           const m = paras[i].match(_LAB_TABLE_RE);
