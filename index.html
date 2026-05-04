@@ -1984,6 +1984,30 @@ const OCR = (() => {
     return text;
   }
 
+  // ── Fix ligature phantom spaces ───────────────────────────
+  // PDF.js sometimes returns item.str values with spurious internal spaces
+  // caused by font ligature encoding artifacts specific to NBME PDFs.
+  // Examples: "stabi lizers", "amitriptyl ine", "Electroconvu lsive therapy"
+  // These are NOT real word boundaries — the space should not be there.
+  //
+  // Two rules:
+  // 1. Known phantom bigrams: remove space between specific letter pairs
+  //    that are essentially never real word boundaries in English medical text.
+  // 2. Short non-word left fragment: if the left side is 1-2 chars and not a
+  //    common English word, the space is phantom (e.g. "w" + "th" = "with").
+  const _PHANTOM_BIGRAMS = new Set(['il','li','ul','ff','lf','lv']);
+  const _COMMON_SHORT    = new Set(['a','i','in','is','it','of','to','an','as','at',
+    'be','by','do','go','he','if','me','my','no','on','or','so','up','us','we']);
+  function fixLigatureSpaces(str) {
+    return str.replace(/([A-Za-z]+) ([a-z][a-z]+)/g, (match, left, right) => {
+      const lc = left.toLowerCase();
+      const bigram = lc.slice(-1) + right[0];
+      if (_PHANTOM_BIGRAMS.has(bigram)) return left + right;
+      if (left.length <= 2 && !_COMMON_SHORT.has(lc)) return left + right;
+      return match;
+    });
+  }
+
   // ── Phantom space repair ──────────────────────────────────
   // PDF.js item.width is unreliable (can be 0, negative, or wrong for
   // some fonts). Instead we estimate item width from the transform matrix
@@ -2003,31 +2027,20 @@ const OCR = (() => {
       const nextWord = /^[A-Za-z0-9]/.test(curr.str);
 
       if (!prevWord || !nextWord) {
-        // Non-word boundary — always insert space
         result += ' ' + curr.str;
         continue;
       }
 
-      // Estimate the font size from the transform matrix (index 0 = scaleX)
-      // PDF.js transform: [scaleX, skewX, skewY, scaleY, x, y]
       const fontSize = prev.transform ? Math.abs(prev.transform[0]) : 10;
-      // Approximate char width = fontSize * 0.5 (rough average for most fonts)
       const estCharW = fontSize * 0.5;
 
-      // Calculate gap using x0 of current and x1 of previous
-      // x1 = x0 + |width|, but width is unreliable, so also estimate it
-      const prevX1_reported = prev.x0 + Math.abs(prev.width || 0);
+      const prevX1_reported  = prev.x0 + Math.abs(prev.width || 0);
       const prevX1_estimated = prev.x0 + (prev.str.length * estCharW);
-      // Use whichever is more plausible (closer to current x0)
       const gapReported  = curr.x0 - prevX1_reported;
       const gapEstimated = curr.x0 - prevX1_estimated;
-      // If reported width is 0 or gives a huge gap, use estimated
-      const gap = (Math.abs(prev.width || 0) < 0.1)
-        ? gapEstimated
-        : gapReported;
-
-      // Phantom if gap < 60% of estimated char width
+      const gap = (Math.abs(prev.width || 0) < 0.1) ? gapEstimated : gapReported;
       const phantom = gap < estCharW * 0.6;
+
       result += (phantom ? '' : ' ') + curr.str;
     }
     return result.trim();
@@ -2252,7 +2265,7 @@ const OCR = (() => {
           const x0  = tx[4];
           const y   = tx[5];
           const x1  = x0 + Math.abs(item.width || 0);
-          const str = item.str.trim();
+          const str = fixLigatureSpaces(item.str.trim());
           if (y > topY || y < botY) continue;
           if (/^[0oOQ]$/.test(str) && x0 < 80 * sc) continue;
           if (/^[-~.,•!|]{1,5}$/.test(str)) continue;
