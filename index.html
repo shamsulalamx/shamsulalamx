@@ -400,8 +400,8 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 .opt-row.opt-wrong    .opt-radio { border-color: var(--red); }
 .opt-radio-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--blue); }
 .opt-row.opt-wrong .opt-radio-dot { background: var(--red); }
-.opt-letter { font-weight: 700; font-size: 12.5px; color: var(--navy); flex-shrink: 0; }
-.opt-text { font-size: 13px; line-height: 1.55; flex: 1; cursor: pointer; }
+.opt-letter { font-weight: 700; font-size: 0.9em; color: var(--navy); flex-shrink: 0; }
+.opt-text { font-size: 1em; line-height: 1.55; flex: 1; cursor: pointer; }
 .opt-indicator { margin-left: auto; font-size: 11px; font-weight: 700; flex-shrink: 0; }
 .ind-correct { color: var(--green); }
 .ind-wrong   { color: var(--red); }
@@ -425,10 +425,10 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 /* Explanation */
 .exp-panel { background: white; border: 1px solid var(--border); border-left: 4px solid var(--blue); border-radius: 4px; padding: 16px 18px; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.07); }
 .exp-panel-title { font-size: 11px; font-weight: 700; color: var(--navy); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px; padding-bottom: 7px; border-bottom: 1px solid #edf1f5; }
-.exp-item { padding: 9px 12px; border-radius: 3px; margin-bottom: 8px; background: #f8fafc; border: 1px solid #e8ecf2; font-size: 12.5px; }
+.exp-item { padding: 9px 12px; border-radius: 3px; margin-bottom: 8px; background: #f8fafc; border: 1px solid #e8ecf2; font-size: 1em; }
 .exp-item.exp-correct { background: #f0f9f0; border-color: #a5d6a7; }
 .exp-header { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; }
-.exp-header strong { font-size: 12.5px; flex: 1; }
+.exp-header strong { font-size: 1em; flex: 1; }
 .exp-badge-correct { background: #d4edda; color: #155724; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; white-space: nowrap; }
 .exp-badge-wrong   { background: #f8d7da; color: #721c24; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; white-space: nowrap; }
 .exp-text { font-size: 12px; color: #444; line-height: 1.6; padding-left: 4px; }
@@ -4670,11 +4670,21 @@ function toggleCalc() {
   if (btn) btn.style.background = open ? 'rgba(255,255,255,.22)' : '';
 }
 
+function _applyQuestionFontSize(sz) {
+  const px = sz + 'px';
+  const stem = document.getElementById('q-stem');
+  const opts = document.getElementById('options-list');
+  const exp  = document.getElementById('exp-body');
+  if (stem) stem.style.fontSize = px;
+  if (opts) opts.style.fontSize = px;
+  if (exp)  exp.style.fontSize  = px;
+}
+
 function adjFontSize(delta) {
-  const current = parseInt(localStorage.getItem('nbme_fontSize')) || 14;
-  const next = Math.min(20, Math.max(12, current + delta));
-  document.body.style.zoom = next / 14;
-  localStorage.setItem('nbme_fontSize', next);
+  const current = parseInt(localStorage.getItem('question_font_size')) || 14;
+  const next = Math.min(22, Math.max(10, current + delta * 2));
+  localStorage.setItem('question_font_size', next);
+  _applyQuestionFontSize(next);
 }
 
 // ── Lab Values ──────────────────────────────────────────────
@@ -4695,8 +4705,8 @@ function labTab(id, btn) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  const saved = parseInt(localStorage.getItem('nbme_fontSize')) || 14;
-  document.body.style.zoom = saved / 14;
+  const saved = parseInt(localStorage.getItem('question_font_size')) || 14;
+  _applyQuestionFontSize(saved);
   PIN.init();
   App.init();
   restoreNavSidebarState();
