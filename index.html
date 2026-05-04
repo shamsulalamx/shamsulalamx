@@ -723,7 +723,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
   border-left: 3px solid var(--navy);
   border-radius: 4px;
   padding: 12px 14px;
-  font-size: 12.5px;
+  font-size: inherit;
   color: var(--text);
   line-height: 1.7;
   white-space: pre-wrap;
@@ -1059,7 +1059,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
           </div>
           <div class="q-card" style="margin-bottom:12px;">
             <div class="rev-images-top" id="rev-images-top"></div>
-            <div id="rev-stem" style="font-size:13.5px;line-height:1.72;"></div>
+            <div id="rev-stem" style="line-height:1.72;"></div>
             <div class="rev-images-bottom" id="rev-images-bottom"></div>
           </div>
           <div class="options-card" style="margin-bottom:12px;">
@@ -3245,6 +3245,10 @@ const Quiz = (() => {
     panel.style.display = showExp ? 'block' : 'none';
     if (!showExp) return;
     buildExplanationHTML(q, r, document.getElementById('exp-body'));
+    // Re-apply current font size so explanation matches stem/options
+    const sz = parseInt(localStorage.getItem('question_font_size')) || 14;
+    const expEl = document.getElementById('exp-body');
+    if (expEl) expEl.style.fontSize = sz + 'px';
   }
 
   function buildExplanationHTML(q, r, container) {
@@ -5011,12 +5015,17 @@ function toggleCalc() {
 
 function _applyQuestionFontSize(sz) {
   const px = sz + 'px';
-  const stem = document.getElementById('q-stem');
-  const opts = document.getElementById('options-list');
-  const exp  = document.getElementById('exp-body');
-  if (stem) stem.style.fontSize = px;
-  if (opts) opts.style.fontSize = px;
-  if (exp)  exp.style.fontSize  = px;
+  // Apply to the quiz screen container so it covers stem, options,
+  // explanation, and review screen — all in one shot via CSS inheritance.
+  const quizScreen = document.getElementById('screen-quiz');
+  if (quizScreen) quizScreen.style.setProperty('--q-font-size', px);
+  // Also set directly on individual elements for immediate effect
+  // and for any elements that override font-size explicitly.
+  const targets = ['q-stem', 'options-list', 'exp-body', 'rev-stem', 'rev-options', 'rev-exp-body'];
+  targets.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.fontSize = px;
+  });
 }
 
 function adjFontSize(delta) {
