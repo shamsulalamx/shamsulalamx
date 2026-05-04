@@ -829,6 +829,31 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 .lab-table tr:last-child td { border-bottom: none; }
 .lab-table tr:nth-child(even) td { background: #f8f9fb; }
 
+/* ── Screen: Review Test (full-scroll all questions) ─────── */
+#screen-review { flex: 1; overflow: hidden; }
+.rev-all-topbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 20px; background: var(--navy); border-bottom: 1px solid #162333;
+  flex-shrink: 0;
+}
+.rev-all-title { font-size: 13px; font-weight: 700; color: white; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rev-all-body  { flex: 1; overflow-y: auto; padding: 20px 24px; }
+.rev-all-card  { background: white; border: 1px solid var(--border); border-radius: 5px; margin-bottom: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.07); overflow: hidden; }
+.rev-all-card-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 16px; border-bottom: 1px solid #edf1f5;
+}
+.rev-all-card-header.rev-all-correct { background: #e8f5e9; border-bottom-color: #c8e6c9; }
+.rev-all-card-header.rev-all-wrong   { background: #ffebee; border-bottom-color: #ffcdd2; }
+.rev-all-card-header.rev-all-skip    { background: #f5f7fa; border-bottom-color: #edf1f5; }
+.rev-all-result-lbl { font-size: 12px; font-weight: 700; }
+.rev-all-correct .rev-all-result-lbl { color: #2e7d32; }
+.rev-all-wrong   .rev-all-result-lbl { color: #c62828; }
+.rev-all-skip    .rev-all-result-lbl { color: var(--muted); }
+.rev-all-stem { font-size: 13.5px; line-height: 1.72; color: var(--text); padding: 14px 18px 10px; }
+.rev-all-exp  { margin: 0 16px 14px; }
+.rev-all-tags { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 16px 14px; }
+
 </style>
 </head>
 <body>
@@ -1071,6 +1096,15 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
           <!-- AI topic tags (shown after explanation) -->
           <div id="rev-tags" style="display:none;flex-wrap:wrap;gap:4px;margin-top:8px;"></div>
         </div>
+      </div>
+
+      <!-- ─── REVIEW TEST SCREEN ─── -->
+      <div id="screen-review" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
+        <div class="rev-all-topbar">
+          <button class="btn-rev" onclick="App.closeReviewTest()">← Back</button>
+          <span class="rev-all-title" id="rev-all-title"></span>
+        </div>
+        <div class="rev-all-body" id="rev-all-body"></div>
       </div>
 
     </div><!-- end #content -->
@@ -3891,6 +3925,7 @@ const App = (() => {
     document.getElementById('screen-home').style.display    = 'flex';
     document.getElementById('screen-quiz').style.display    = 'none';
     document.getElementById('screen-results').style.display = 'none';
+    document.getElementById('screen-review').style.display  = 'none';
     renderSidebar();
     renderHomeGrid();
     setActiveNav('nav-home');
@@ -4323,10 +4358,101 @@ const App = (() => {
     document.getElementById('modal-settings').style.display = 'flex';
   }
 
-  // ── Public API ─────────────────────────────────────────────
+  // ── Review Test (full-scroll all-questions view) ──────────
   function reviewTest(testId) {
-    const data = DB.getTest(testId);
-    console.log('Review test:', testId, data);
+    const test = DB.getTest(testId);
+    if (!test) return;
+    const history = DB.getHistory(testId);
+    const latest  = history[0];
+    if (!latest) { window.toast('No completed attempt found.', 2000); return; }
+
+    document.getElementById('screen-home').style.display    = 'none';
+    document.getElementById('screen-quiz').style.display    = 'none';
+    document.getElementById('screen-results').style.display = 'none';
+    const reviewScreen = document.getElementById('screen-review');
+    reviewScreen.style.display = 'flex';
+
+    document.getElementById('rev-all-title').textContent = test.name;
+
+    const body = document.getElementById('rev-all-body');
+    body.innerHTML = '';
+
+    test.questions.forEach((q, i) => {
+      const r = latest.results[i] || { answered: false, correct: false, chosen: null, highlights: {}, strikethrough: [] };
+
+      const card = document.createElement('div');
+      card.className = 'rev-all-card';
+
+      // ── Header ─────────────────────────────────────────────
+      const headerClass = r.answered ? (r.correct ? 'rev-all-correct' : 'rev-all-wrong') : 'rev-all-skip';
+      const headerLabel = r.answered ? (r.correct ? '✓ Correct' : '✗ Incorrect') : '— Skipped';
+      const headerDiv   = document.createElement('div');
+      headerDiv.className = 'rev-all-card-header ' + headerClass;
+      headerDiv.innerHTML = `<span class="q-num-badge">Q${i + 1}</span>
+        <span class="rev-all-result-lbl">${headerLabel}</span>`;
+      card.appendChild(headerDiv);
+
+      // ── Stem ───────────────────────────────────────────────
+      const stemDiv = document.createElement('div');
+      stemDiv.className = 'rev-all-stem';
+      if (r.highlights && r.highlights.html) stemDiv.innerHTML = r.highlights.html;
+      else stemDiv.innerHTML = window.buildStemHTML(q.t);
+      card.appendChild(stemDiv);
+
+      // ── Options ────────────────────────────────────────────
+      const optsCard = document.createElement('div');
+      optsCard.className = 'options-card';
+      optsCard.style.margin = '0 16px 12px';
+      q.o.forEach(opt => {
+        const isCorrect = q.c === opt.l;
+        const isChosen  = r.chosen === opt.l;
+        const isStriken = r.strikethrough && r.strikethrough.includes(opt.l);
+        const row = document.createElement('div');
+        row.className = 'opt-row' +
+          (isCorrect            ? ' opt-correct' : '') +
+          (isChosen && !isCorrect ? ' opt-wrong'   : '') +
+          (isStriken            ? ' opt-striken'  : '');
+        row.innerHTML = `
+          <div class="opt-selector">
+            <div class="opt-radio">${isChosen || isCorrect ? '<div class="opt-radio-dot"></div>' : ''}</div>
+            <span class="opt-letter">${opt.l})</span>
+          </div>
+          <div class="opt-text">${opt.t}</div>
+          <div class="opt-indicator">
+            ${isCorrect && isChosen  ? '<span class="ind-correct">✓ Your Answer</span>' : ''}
+            ${isCorrect && !isChosen ? '<span class="ind-correct">✓ Correct</span>'      : ''}
+            ${isChosen  && !isCorrect ? '<span class="ind-wrong">✗ Your Answer</span>'   : ''}
+          </div>`;
+        optsCard.appendChild(row);
+      });
+      card.appendChild(optsCard);
+
+      // ── Explanation ────────────────────────────────────────
+      const expPanel = document.createElement('div');
+      expPanel.className = 'exp-panel rev-all-exp';
+      expPanel.innerHTML = '<div class="exp-panel-title">📖 Answer Explanation</div>';
+      const expBody = document.createElement('div');
+      window.buildExplanationHTML(q, r, expBody);
+      expPanel.appendChild(expBody);
+      card.appendChild(expPanel);
+
+      // ── Tags ───────────────────────────────────────────────
+      if (q.tags && q.tags.length) {
+        const tagsDiv = document.createElement('div');
+        tagsDiv.className = 'rev-all-tags';
+        tagsDiv.innerHTML = q.tags.map(t => `<span class="q-tag">${t}</span>`).join('');
+        card.appendChild(tagsDiv);
+      }
+
+      body.appendChild(card);
+    });
+
+    body.scrollTop = 0;
+  }
+
+  function closeReviewTest() {
+    document.getElementById('screen-review').style.display = 'none';
+    showHome();
   }
 
   return {
@@ -4348,6 +4474,7 @@ const App = (() => {
     viewHistory,
     retakeTest,
     reviewTest,
+    closeReviewTest,
     openGenerateModal,
     closeGenerateModal,
     onDrag, offDrag, onDrop, onFile,
