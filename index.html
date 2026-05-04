@@ -193,11 +193,11 @@ input, textarea, select { font-family: inherit; }
 #quiz-nav-sidebar {
   display: flex; flex-direction: row;
   width: 200px; min-width: 200px; flex-shrink: 0;
+  height: 100%;
   background: #141f2b;
   border-right: 1px solid #0c1520;
   overflow: hidden;
   transition: width .22s ease, min-width .22s ease;
-  /* Must be a flex item with defined height for children to scroll */
   align-self: stretch;
 }
 #quiz-nav-sidebar.qns-collapsed { width: 36px; min-width: 36px; }
@@ -224,7 +224,7 @@ input, textarea, select { font-family: inherit; }
 
 /* Panel — the 164px collapsible question list */
 .qns-panel {
-  flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; min-height: 0;
+  flex: 1; display: flex; flex-direction: column; overflow-x: hidden; min-width: 0; min-height: 0;
 }
 .qns-panel-header {
   font-size: 9px; font-weight: 700; text-transform: uppercase;
@@ -233,7 +233,7 @@ input, textarea, select { font-family: inherit; }
   flex-shrink: 0; white-space: nowrap;
 }
 .qns-panel-body {
-  flex: 1; overflow-y: scroll; overflow-x: hidden; padding: 3px 0; min-height: 0;
+  flex: 1; overflow-y: auto; overflow-x: hidden; padding: 3px 0; min-height: 0;
 }
 .qns-panel-body::-webkit-scrollbar       { width: 3px; }
 .qns-panel-body::-webkit-scrollbar-track { background: transparent; }
