@@ -3952,6 +3952,7 @@ const App = (() => {
         </div>
         <div class="test-card-actions">
           <button class="btn-card primary" onclick="Quiz.startTest('${test.id}')">▶ ${test.status==='in_progress'?'Resume':'Start'}</button>
+          ${test.status==='completed' ? `<button class="btn-card" onclick="App.reviewTest('${test.id}')">Review Test</button>` : ''}
           <button class="btn-card" onclick="App.viewHistory('${test.id}')">📊</button>
           <button class="btn-card" onclick="App.startRenameTest('${test.id}')">✏️</button>
           <button class="btn-card danger" onclick="App.trashTest('${test.id}')">🗑</button>
@@ -4323,6 +4324,11 @@ const App = (() => {
   }
 
   // ── Public API ─────────────────────────────────────────────
+  function reviewTest(testId) {
+    const data = DB.getTest(testId);
+    console.log('Review test:', testId, data);
+  }
+
   return {
     init,
     toast,
@@ -4341,6 +4347,7 @@ const App = (() => {
     generateInFolder,
     viewHistory,
     retakeTest,
+    reviewTest,
     openGenerateModal,
     closeGenerateModal,
     onDrag, offDrag, onDrop, onFile,
