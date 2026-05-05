@@ -1984,66 +1984,202 @@ const OCR = (() => {
     return text;
   }
 
-  // ── Fix ligature phantom spaces ───────────────────────────
-  // PDF.js sometimes returns item.str values with spurious internal spaces
-  // caused by font ligature encoding artifacts specific to NBME PDFs.
-  // Examples: "stabi lizers", "amitriptyl ine", "Electroconvu lsive therapy"
-  // These are NOT real word boundaries — the space should not be there.
+  // ── Phantom space repair via dictionary ──────────────────
+  // PDF.js bakes phantom spaces into item.str values at ligature glyph boundaries
+  // (e.g. "seroton in" instead of "serotonin", "fat ig ue" instead of "fatigue").
+  // These also appear across adjacent items when joinItems concatenates them.
   //
-  // Two rules:
-  // 1. Known phantom bigrams: remove space between specific letter pairs
-  //    that are essentially never real word boundaries in English medical text.
-  // 2. Short non-word left fragment: if the left side is 1-2 chars and not a
-  //    common English word, the space is phantom (e.g. "w" + "th" = "with").
-  const _PHANTOM_BIGRAMS = new Set(['il','li','ul','ff','lf','lv']);
-  const _COMMON_SHORT    = new Set(['a','i','in','is','it','of','to','an','as','at',
-    'be','by','do','go','he','if','me','my','no','on','or','so','up','us','we']);
+  // Strategy: token-based dictionary lookup.
+  //   1. Single-letter passes fix lone-letter fragments (w ith→with, A lzheimer→Alzheimer).
+  //   2. Token pass: split on spaces, accumulate non-dictionary alpha tokens into a buffer.
+  //      Flush the buffer as one merged token at real dictionary word boundaries.
+  //      Bound suffixes (ing, tion, ly, er…) always attach to whatever precedes them.
+  //      Forward-merge: if buf+tok is a known word, merge (handles seroton+in=serotonin).
+  //
+  // _REAL_WORDS: comprehensive English + medical dictionary. Any space-delimited token
+  // that IS in this set is a genuine word boundary. Any token NOT in this set is a
+  // phantom ligature fragment and gets merged into its neighbour.
+  const _REAL_WORDS = new Set([
+    // 1–2 letter words
+    'a','i','an','as','at','be','by','do','go','he','if','in','is','it','me','my',
+    'no','of','on','or','so','to','up','us','we','she','him','who','its','nor',
+    'her','his','had','has','was','are','our','can','may','all','any','one','two',
+    'the','and','for','not','but','age','old','new','low','few','per','via','due',
+    'use','non','sub','pre','pro','arm','leg','eye','ear','jaw','lip','rib','hip',
+    'toe','gum','gut','red','raw','dry','hot','wet','cut','put','ran','run','sat',
+    'set','try','top','tip','own','out','off','odd','now','mix','men','man','log',
+    'let','led','lay','lab','key','did','bid','ban','bad','ask','got','get','saw',
+    'say','see','sit','too','yet','far','how','yes','big','boy','bit',
+    // 4-letter words
+    'able','also','away','back','been','both','call','came','calm','case','cold',
+    'come','cool','cord','cyst','dark','data','days','dead','deep','does','done',
+    'down','drug','duct','each','else','even','ever','face','fact','fair','fast',
+    'feel','feet','felt','find','fine','five','flat','food','four','free','from',
+    'full','firm','gene','gave','give','good','grew','grow','germ','half','hand',
+    'hard','have','head','heat','held','help','here','high','hold','home','hour',
+    'hurt','heme','herb','host','into','iron','itch','just','keep','kept','knew',
+    'know','lack','last','late','lead','left','less','life','like','line','live',
+    'lobe','long','look','loss','lost','loud','made','make','many','mark','mass',
+    'mean','meet','mild','mind','mine','more','most','move','much','must','name',
+    'near','need','next','node','none','norm','note','null','only','open','over',
+    'pain','pale','pass','past','peak','plan','play','poor','pore','pure','rash',
+    'rate','real','rare','rest','rise','risk','role','room','rule','said','safe',
+    'same','scar','seem','self','sent','show','side','sign','site','size','skin',
+    'slow','some','soon','sore','spot','stay','stem','step','stop','such','sure',
+    'take','tall','term','test','than','that','them','then','they','thin','this',
+    'thus','time','tiny','told','took','tool','true','turn','type','urea','used',
+    'vein','very','view','void','wait','wall','warm','wart','weak','well','went',
+    'were','when','whom','wide','will','with','word','work','year','your','zero',
+    'upon','once','onto','base','bone','bile','cell','cells','soft','bold','oral',
+    'dose','seen','gone','bold','soft','warm','cool','cold','dark','fair','fine',
+    // 5-letter words
+    'about','above','acute','after','again','agent','aging','along','among','apply',
+    'areas','asked','being','below','blood','block','brain','brief','broad','based',
+    'calls','cause','check','chest','child','class','clear','close','colon','color',
+    'comes','could','count','daily','death','delay','dense','doing','drain','drink',
+    'drops','drugs','early','edema','elect','entry','equal','error','every','exact',
+    'extra','falls','false','fatal','feels','fever','fiber','field','finds','first',
+    'fixed','focus','force','front','given','gland','grade','great','green','gross',
+    'group','grown','guide','found','heart','heavy','hence','holds','image','index',
+    'inner','input','joint','keeps','known','large','later','layer','leads','least',
+    'legal','level','light','limit','links','liver','local','lower','lying','lymph',
+    'major','makes','match','means','media','minor','mixed','model','month','motor',
+    'mouth','moved','multi','named','needs','nerve','night','noted','novel','nurse',
+    'occur','often','onset','order','other','outer','oxide','panel','paper','patch',
+    'phase','place','plain','plane','plate','point','power','press','prior','prone',
+    'pulse','pupil','quite','rapid','ratio','reach','react','renal','right','rigid',
+    'route','scale','score','scope','seems','sense','serum','sharp','shift','short',
+    'shown','shows','since','sleep','small','solid','space','spasm','speed','split',
+    'stage','stain','state','still','stone','store','study','super','sweet','table',
+    'taken','takes','tears','there','these','those','three','total','toxic','trace',
+    'treat','trend','trial','tumor','twice','ultra','under','union','until','upper',
+    'urine','usual','valve','vital','vocal','voice','waste','water','where','which',
+    'while','white','whole','whose','woman','women','worse','worst','worth','would',
+    'wound','wrist','young','going','using','gives','helps','moves','doses','sinus',
+    'shunt','stent','tract','stool','stump','tonic','vena','lumen','hours','weeks',
+    // 6-letter words
+    'always','around','before','behind','beside','beyond','during','except','common',
+    'occurs','causes','called','placed','severe','stable','sudden','supply','target',
+    'tested','likely','needed','offers','output','result','should','slight','slowly',
+    'smooth','starts','strong','stress','stroke','sample','recent','region','remain',
+    'remove','return','having','higher','formed','normal','mainly','enough','really',
+    'simple','single','tissue','toward','unless','within','almost','itself','joints',
+    'lesion','method','muscle','narrow','nerves','organs','plasma','proven','rather',
+    'unable','varies','widely','second','longer','agents','amount','blocks','breath',
+    'change','chosen','direct','either','enzyme','family','female','finger','immune',
+    'layers','lining','liquid','lumbar','marked','median','medium','mental','middle',
+    'months','mucosa','neural','nodule','nurses','oxygen','period','portal','reduce',
+    'repair','screen','solute','source','spinal','spread','stones','tumors','values',
+    'venous','volume','weight','yellow','sheath','weekly','yearly','hourly',
+    // 7-letter words
+    'absence','account','affects','another','appears','between','blocked','cardiac',
+    'central','channel','chronic','coating','confirm','contact','content','control',
+    'correct','current','density','depends','derived','develop','disease','divided',
+    'effects','elastic','examine','exposed','factors','failure','feeling','follows',
+    'foreign','forming','glucose','hormone','however','imaging','include','initial',
+    'insulin','involve','located','maximum','medical','minimum','muscles','neurons',
+    'numbers','obvious','opening','organic','outcome','patient','pattern','perhaps',
+    'popular','predict','prevent','primary','produce','protein','quality','quickly',
+    'rapidly','reaches','reasons','reduced','reflect','regions','related','release',
+    'remains','removed','require','respond','results','reveals','rupture','samples',
+    'section','several','smaller','smoking','someone','special','surface','surgery',
+    'systems','tension','through','thyroid','totally','tubular','typical','usually',
+    'various','vessels','vitamin','whether','already','amounts','becomes','careful',
+    'certain','clearly','closely','complex','cycling','dilated','doubles','extends',
+    'fingers','general','genetic','gradual','hearing','helping','history','lateral',
+    'leading','limited','measure','migrate','minimal','natural','nearest','outside',
+    'overall','pathway','persist','present','problem','process','program','provide',
+    'reading','records','regular','relying','removal','reports','resolve','restore',
+    'returns','routine','running','scoring','serious','similar','sitting','skilled',
+    'suggest','suspect','testing','therapy','treated','urinary','working','written',
+    'because','without','subject','healthy','healing','friends','whereas',
+    // 8+ letter words common in medical prose
+    'patients','symptoms','treatment','diagnosis','infection','condition','function',
+    'procedure','increases','decreases','following','described','indicates','resulting',
+    'presents','affected','involved','elevated','reported','occurred','receiving',
+    'secondary','underwent','complaint','documents','questions','associated','occurring',
+    'indicating','presenting','developed','performed','diagnosed','experienced',
+    'demonstrates','malformations','consistent','medication','abnormality','inflammation',
+    'obstruction','perforation','compression','hemorrhage','insufficiency','recommended',
+    'administered','hospitalized','examination','abnormalities','complications',
+    'approximately','concentration','contraindicated','different','important','necessary',
+    'including','decreased','increased','confirmed','completed','continued','indicated',
+    'revealing','extending','involving','affecting','improving','worsening','producing',
+    'reducing','removing','providing','requiring','reporting','returning','stopping',
+    'starting','changing','checking','creating','treating','watching','physician',
+    'physicians','incontinence','ecchymoses','explanation','independent','overflow',
+    'pentagons','intersecting','regimen','irritability','serotonin','fatigue','urinary',
+  ]);
+
+  // Bound suffixes: a token starting with these is always a ligature fragment —
+  // it attaches to whatever immediately precedes it, never starts a new word.
+  const _BOUND_SUFFIXES = /^(?:ing|ings|ied|ies|tion|tions|sion|sions|ment|ments|ness|nesses|ful|less|ance|ances|ence|ences|ity|ities|ive|ives|ify|ics?|ize|ized|izes|ise|ised|ises|ly|er|ers|est|en|ens)(?:[^a-z]|$)/;
+
   function fixLigatureSpaces(str) {
-    return str.replace(/([A-Za-z]+) ([a-z][a-z]+)/g, (match, left, right) => {
-      const lc = left.toLowerCase();
-      const bigram = lc.slice(-1) + right[0];
-      if (_PHANTOM_BIGRAMS.has(bigram)) return left + right;
-      if (left.length <= 2 && !_COMMON_SHORT.has(lc)) return left + right;
-      return match;
+    // Pass 1a — single letter at start of string + lowercase word = phantom.
+    // Keep space only for: 'I' (pronoun), B/T + cell/lymph, a/i before a real word.
+    str = str.replace(/^([A-Za-z]) ([a-z]{2,})/, (match, left, right) => {
+      if (left === 'I') return match;
+      if ((left === 'B' || left === 'T') && /^(?:cells?|lymph)/.test(right)) return match;
+      if ((left === 'a' || left === 'i') && _REAL_WORDS.has(right)) return match;
+      return left + right;
     });
+    // Pass 1b — single letter after a space + lowercase word = phantom.
+    str = str.replace(/ ([A-Za-z]) ([a-z]{2,})/g, (match, left, right) => {
+      if (left === 'I') return match;
+      if ((left === 'B' || left === 'T') && /^(?:cells?|lymph)/.test(right)) return match;
+      if ((left === 'a' || left === 'i') && _REAL_WORDS.has(right)) return match;
+      return ' ' + left + right;
+    });
+
+    // Pass 2 — token-based merge.
+    // Split on spaces. Accumulate non-dictionary alpha tokens into a buffer.
+    // Flush at real-word boundaries. Bound suffixes attach to whatever precedes them.
+    const tokens = str.split(' ');
+    const out = [];
+    let buf = '';
+
+    for (let i = 0; i < tokens.length; i++) {
+      const tok = tokens[i];
+      if (!tok) continue;
+      const lc           = tok.toLowerCase();
+      const isAlpha      = /^[A-Za-z]+$/.test(tok);
+      const isRealWord   = isAlpha && _REAL_WORDS.has(lc);
+      const isBoundSuffix = isAlpha && _BOUND_SUFFIXES.test(tok);
+
+      if (isBoundSuffix) {
+        // Bound suffix: always glue to whatever came before
+        if (buf)             { buf += tok; out.push(buf); buf = ''; }
+        else if (out.length) { out[out.length - 1] += tok; }
+        else                 { out.push(tok); }
+      } else if (!isAlpha) {
+        // Number, punctuation, mixed — flush buffer, emit as-is
+        if (buf) { out.push(buf); buf = ''; }
+        out.push(tok);
+      } else if (!isRealWord) {
+        // Alpha but not a dictionary word = phantom fragment
+        // Check if buf+tok forms a known word (e.g. "seroton"+"in" = "serotonin")
+        const merged = (buf + tok).toLowerCase();
+        if (buf && _REAL_WORDS.has(merged)) { out.push(buf + tok); buf = ''; }
+        else                                { buf += tok; }
+      } else {
+        // Real dictionary word — check forward-merge, then flush
+        const merged = (buf + tok).toLowerCase();
+        if (buf && _REAL_WORDS.has(merged)) { out.push(buf + tok); buf = ''; }
+        else { if (buf) { out.push(buf); buf = ''; } out.push(tok); }
+      }
+    }
+    if (buf) out.push(buf);
+    return out.join(' ');
   }
 
-  // ── Phantom space repair ──────────────────────────────────
-  // PDF.js item.width is unreliable (can be 0, negative, or wrong for
-  // some fonts). Instead we estimate item width from the transform matrix
-  // font-size and string length, then compare gap to that estimate.
-  //
-  // Rule: if the gap between two word-char items is less than ~40% of
-  // the estimated character width, it's a phantom split — merge without space.
-  // If the gap is larger, it's a real word boundary — insert a space.
   function joinItems(items) {
+    // Always join items with a space between them.
+    // Gap-based phantom detection is NOT done here because prev.width is unreliable
+    // for NBME fonts — it causes real inter-word spaces to be eaten.
+    // All phantom space removal is handled by fixLigatureSpaces() via the dictionary.
     if (!items.length) return '';
-    let result = items[0].str;
-    for (let i = 1; i < items.length; i++) {
-      const prev = items[i - 1];
-      const curr = items[i];
-
-      const prevWord = /[A-Za-z0-9]$/.test(result);
-      const nextWord = /^[A-Za-z0-9]/.test(curr.str);
-
-      if (!prevWord || !nextWord) {
-        result += ' ' + curr.str;
-        continue;
-      }
-
-      const fontSize = prev.transform ? Math.abs(prev.transform[0]) : 10;
-      const estCharW = fontSize * 0.5;
-
-      const prevX1_reported  = prev.x0 + Math.abs(prev.width || 0);
-      const prevX1_estimated = prev.x0 + (prev.str.length * estCharW);
-      const gapReported  = curr.x0 - prevX1_reported;
-      const gapEstimated = curr.x0 - prevX1_estimated;
-      const gap = (Math.abs(prev.width || 0) < 0.1) ? gapEstimated : gapReported;
-      const phantom = gap < estCharW * 0.6;
-
-      result += (phantom ? '' : ' ') + curr.str;
-    }
-    return result.trim();
+    return items.map(it => it.str).join(' ').trim();
   }
 
   // ── Split a line containing multiple merged options ───────
