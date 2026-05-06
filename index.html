@@ -2109,68 +2109,45 @@ const OCR = (() => {
     'starting','changing','checking','creating','treating','watching','physician',
     'physicians','incontinence','ecchymoses','explanation','independent','overflow',
     'pentagons','intersecting','regimen','irritability','serotonin','fatigue','urinary',
+    'weekly','times','generalized','anxiety','disorder','adverse','effect','alzheimer',
+    'controlled','insulin','forgetfulness','significant','deficits','become','increasingly',
+    'suspicious',
   ]);
 
-  // Bound suffixes: a token starting with these is always a ligature fragment —
-  // it attaches to whatever immediately precedes it, never starts a new word.
-  const _BOUND_SUFFIXES = /^(?:ing|ings|ied|ies|tion|tions|sion|sions|ment|ments|ness|nesses|ful|less|ance|ances|ence|ences|ity|ities|ive|ives|ify|ics?|ize|ized|izes|ise|ised|ises|ly|er|ers|est|en|ens)(?:[^a-z]|$)/;
+  function _segmentAlphaRun(run) {
+    const compact = run.replace(/\s+/g, '');
+    if (compact.length < 2) return run;
+
+    const lower = compact.toLowerCase();
+    const n = lower.length;
+    const maxWordLen = 24;
+    const dp = Array(n + 1).fill(null);
+    dp[n] = [];
+
+    for (let i = n - 1; i >= 0; i--) {
+      let best = null;
+      const end = Math.min(n, i + maxWordLen);
+      for (let j = i + 1; j <= end; j++) {
+        const word = lower.slice(i, j);
+        if (!_REAL_WORDS.has(word) || !dp[j]) continue;
+        const candidate = [compact.slice(i, j), ...dp[j]];
+        if (!best || candidate.length < best.length) best = candidate;
+      }
+      dp[i] = best;
+    }
+
+    return dp[0] ? dp[0].join(' ') : run;
+  }
 
   function fixLigatureSpaces(str) {
-    // Pass 1a — single letter at start of string + lowercase word = phantom.
-    // Keep space only for: 'I' (pronoun), B/T + cell/lymph, a/i before a real word.
-    str = str.replace(/^([A-Za-z]) ([a-z]{2,})/, (match, left, right) => {
-      if (left === 'I') return match;
-      if ((left === 'B' || left === 'T') && /^(?:cells?|lymph)/.test(right)) return match;
-      if ((left === 'a' || left === 'i') && _REAL_WORDS.has(right)) return match;
-      return left + right;
-    });
-    // Pass 1b — single letter after a space + lowercase word = phantom.
-    str = str.replace(/ ([A-Za-z]) ([a-z]{2,})/g, (match, left, right) => {
-      if (left === 'I') return match;
-      if ((left === 'B' || left === 'T') && /^(?:cells?|lymph)/.test(right)) return match;
-      if ((left === 'a' || left === 'i') && _REAL_WORDS.has(right)) return match;
-      return ' ' + left + right;
-    });
-
-    // Pass 2 — token-based merge.
-    // Split on spaces. Accumulate non-dictionary alpha tokens into a buffer.
-    // Flush at real-word boundaries. Bound suffixes attach to whatever precedes them.
-    const tokens = str.split(' ');
-    const out = [];
-    let buf = '';
-
-    for (let i = 0; i < tokens.length; i++) {
-      const tok = tokens[i];
-      if (!tok) continue;
-      const lc           = tok.toLowerCase();
-      const isAlpha      = /^[A-Za-z]+$/.test(tok);
-      const isRealWord   = isAlpha && _REAL_WORDS.has(lc);
-      const isBoundSuffix = isAlpha && _BOUND_SUFFIXES.test(tok);
-
-      if (isBoundSuffix) {
-        // Bound suffix: always glue to whatever came before
-        if (buf)             { buf += tok; out.push(buf); buf = ''; }
-        else if (out.length) { out[out.length - 1] += tok; }
-        else                 { out.push(tok); }
-      } else if (!isAlpha) {
-        // Number, punctuation, mixed — flush buffer, emit as-is
-        if (buf) { out.push(buf); buf = ''; }
-        out.push(tok);
-      } else if (!isRealWord) {
-        // Alpha but not a dictionary word = phantom fragment
-        // Check if buf+tok forms a known word (e.g. "seroton"+"in" = "serotonin")
-        const merged = (buf + tok).toLowerCase();
-        if (buf && _REAL_WORDS.has(merged)) { out.push(buf + tok); buf = ''; }
-        else                                { buf += tok; }
-      } else {
-        // Real dictionary word — check forward-merge, then flush
-        const merged = (buf + tok).toLowerCase();
-        if (buf && _REAL_WORDS.has(merged)) { out.push(buf + tok); buf = ''; }
-        else { if (buf) { out.push(buf); buf = ''; } out.push(tok); }
-      }
-    }
-    if (buf) out.push(buf);
-    return out.join(' ');
+    // Conservative spacing repair:
+    // - preserve existing spaces unless an alphabetic run can be fully segmented
+    //   into known words
+    // - repair phantom fragments ("fat ig ue" -> "fatigue")
+    // - split run-together words ("Generalizedanxietydisorder" -> "Generalized anxiety disorder")
+    // This replaces the old unknown-token accumulator, which merged valid words
+    // whenever the dictionary was missing one medical term.
+    return str.replace(/[A-Za-z]+(?:\s+[A-Za-z]+)*/g, run => _segmentAlphaRun(run));
   }
 
   function joinItems(items) {
@@ -2861,7 +2838,7 @@ window.OCR = OCR;
 
 
 // ── Quiz navigator sidebar toggle ───────────────────────────
-const _QNS_W_EXPANDED  = 200;
+const _QNS_W_EXPANDED  = 96;
 const _QNS_W_COLLAPSED = 36;
 
 function toggleNavSidebar() {
