@@ -1109,10 +1109,6 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
             </div>
             <div class="res-stats-grid" id="res-stats"></div>
             <div class="res-analysis-grid">
-              <div class="analysis-card ac-str">
-                <h4>✅ Strengths</h4>
-                <div id="res-strengths"></div>
-              </div>
               <div class="analysis-card ac-wk">
                 <h4>⚠️ Needs Review</h4>
                 <div id="res-weaknesses"></div>
@@ -1124,7 +1120,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
             <div class="res-nav-dots" id="res-nav-dots"></div>
             <div style="overflow-x:auto;">
               <table class="res-table">
-                <thead><tr><th>#</th><th>Result</th><th>Your Answer</th><th>Correct Answer</th><th>Time</th><th>Flag</th><th>Review</th></tr></thead>
+                <thead><tr><th>#</th><th>Result</th><th>Question tag</th><th>Time</th><th>Flag</th><th>Review</th></tr></thead>
                 <tbody id="res-tbody"></tbody>
               </table>
             </div>
@@ -4590,32 +4586,21 @@ const Results = (() => {
   }
 
   function buildTopicAnalysis() {
-    const tagStats = {};
+    const reviewTags = [];
+    const seen = new Set();
     _questions.forEach((q, i) => {
       const r = _results[i];
-      (q.tags || []).forEach(tag => {
-        if (!tagStats[tag]) tagStats[tag] = { correct: 0, total: 0 };
-        tagStats[tag].total++;
-        if (r.correct) tagStats[tag].correct++;
-      });
+      if (!r || !r.answered || r.correct) return;
+      const tag = (q.tags && q.tags.length) ? q.tags[0] : 'Untagged';
+      if (seen.has(tag)) return;
+      seen.add(tag);
+      reviewTags.push(tag);
     });
 
-    const sorted = Object.entries(tagStats)
-      .map(([tag, s]) => ({ tag, pct: Math.round(s.correct/s.total*100), correct: s.correct, total: s.total }))
-      .sort((a,b) => a.pct - b.pct);
-
-    const strengths = sorted.filter(s => s.pct >= 70).reverse().slice(0, 5);
-    const weaknesses = sorted.filter(s => s.pct < 70).slice(0, 5);
-
-    document.getElementById('res-strengths').innerHTML =
-      strengths.length ? strengths.map(s =>
-        `<div class="topic-row"><span class="topic-name">${s.tag}</span><span class="topic-pct good">${s.pct}% (${s.correct}/${s.total})</span></div>`
-      ).join('') : '<div class="topic-empty">No data yet</div>';
-
     document.getElementById('res-weaknesses').innerHTML =
-      weaknesses.length ? weaknesses.map(s =>
-        `<div class="topic-row"><span class="topic-name">${s.tag}</span><span class="topic-pct bad">${s.pct}% (${s.correct}/${s.total})</span></div>`
-      ).join('') : '<div class="topic-empty">No weaknesses identified 🎉</div>';
+      reviewTags.length ? reviewTags.map(tag =>
+        `<div class="topic-row"><span class="topic-name">${escapeHTML(tag)}</span></div>`
+      ).join('') : '<div class="topic-empty">No incorrect answers.</div>';
   }
 
   function buildNavDots() {
@@ -4645,15 +4630,13 @@ const Results = (() => {
       const tag = r.chosen===null
         ? '<span class="tag-skip">SKIP</span>'
         : r.correct ? '<span class="tag-ok">✓</span>' : '<span class="tag-bad">✗</span>';
-      const chosen = r.chosen ? `${r.chosen}) ${q.o.find(o=>o.l===r.chosen)?.t?.slice(0,40)||''}…` : '—';
-      const correct = `${q.c}) ${q.o.find(o=>o.l===q.c)?.t?.slice(0,40)||''}…`;
+      const questionTag = (q.tags && q.tags.length) ? q.tags[0] : 'Untagged';
       const flagBtn = `<button class="btn-flag-review ${DB.isFlagged(_testId,q.n)?'flagged':''}"
         onclick="toggleFlagReview(${i})" title="Flag for review">🏳</button>`;
       tr.innerHTML = `
         <td>${i+1}</td>
         <td>${tag}</td>
-        <td class="td-text">${chosen}</td>
-        <td class="td-text">${correct}</td>
+        <td class="td-text">${escapeHTML(questionTag)}</td>
         <td class="td-time">${Math.max(0, Math.min(r.time || 0, 3600))}s</td>
         <td>${flagBtn}</td>
         <td><button class="btn-review-item" onclick="openReview(${i})">Review</button></td>`;
@@ -4771,8 +4754,8 @@ const Results = (() => {
     }
   }
 
-  function grade(p)     { return p>=90?'Excellent':p>=80?'Proficient':p>=70?'Satisfactory':p>=60?'Borderline Pass':'Below Passing'; }
-  function gradeDesc(p) { return p>=90?'Outstanding performance.':p>=80?'Strong command of material.':p>=70?'Passing — targeted review recommended.':p>=60?'Marginal — additional study required.':'Comprehensive review needed.'; }
+  function grade(p)     { return p>=90?'Excellent':p>=80?'Proficient':p>=70?'Satisfactory':p>=60?'Pass':'Below Passing'; }
+  function gradeDesc(p) { return p>=90?'Outstanding performance.':p>=80?'Strong command of material.':p>=70?'Passing — targeted review recommended.':p>=60?'Passing threshold met.':'Below the 60% passing threshold.'; }
 
   function toggleCurrentFlag() { toggleFlagReview(_reviewIdx); }
 
@@ -4864,59 +4847,33 @@ const Results = (() => {
     setFont('bold', 10); setColor(NAVY);
     doc.text('TOPIC ANALYSIS', ML, y); y += 5;
 
-    const tagStats = {};
+    const reviewTags = [];
+    const seenReviewTags = new Set();
     _questions.forEach((q, i) => {
-      (q.tags || []).forEach(tag => {
-        if (!tagStats[tag]) tagStats[tag] = { correct:0, total:0 };
-        tagStats[tag].total++;
-        if (_results[i].correct) tagStats[tag].correct++;
-      });
+      const r = _results[i];
+      if (!r || !r.answered || r.correct) return;
+      const tag = (q.tags && q.tags.length) ? q.tags[0] : 'Untagged';
+      if (seenReviewTags.has(tag)) return;
+      seenReviewTags.add(tag);
+      reviewTags.push(tag);
     });
-    const sorted = Object.entries(tagStats)
-      .map(([tag, s]) => ({ tag, pct: Math.round(s.correct/s.total*100), correct: s.correct, total: s.total }))
-      .sort((a,b) => a.pct - b.pct);
 
-    if (sorted.length === 0) {
+    if (reviewTags.length === 0) {
       setFont('italic', 9); setColor(DGRAY);
-      doc.text('No topic data available.', ML, y); y += 6;
+      doc.text('No incorrect answers.', ML, y); y += 6;
     } else {
-      const colW = (CW - 4) / 2;
-      // two columns: weaknesses left, strengths right
-      const weak = sorted.filter(s => s.pct < 70).slice(0, 8);
-      const strong = sorted.filter(s => s.pct >= 70).reverse().slice(0, 8);
-
       setFont('bold', 8); setColor(RED);
-      doc.text('Areas to Improve', ML, y);
-      setFont('bold', 8); setColor(GREEN);
-      doc.text('Strengths', ML + colW + 4, y);
+      doc.text('Needs Review', ML, y);
       y += 4;
 
-      const maxRows = Math.max(weak.length, strong.length, 1);
-      for (let r = 0; r < maxRows; r++) {
+      reviewTags.forEach(tag => {
         checkY(6);
-        // weak col
-        if (weak[r]) {
-          const wpct = weak[r].pct;
-          const barW = colW * 0.45, filledW = barW * wpct / 100;
-          setFill([235,240,245]); doc.rect(ML, y - 3, barW, 4, 'F');
-          setFill(wpct < 50 ? RED : AMBER); doc.rect(ML, y - 3, filledW, 4, 'F');
-          setFont('normal', 7.5); setColor(BLACK);
-          doc.text(weak[r].tag, ML + barW + 2, y);
-          setColor(DGRAY); doc.text(`${wpct}% (${weak[r].correct}/${weak[r].total})`, ML + colW - 1, y, { align:'right' });
-        }
-        // strong col
-        if (strong[r]) {
-          const spct = strong[r].pct;
-          const bx = ML + colW + 4;
-          const barW = colW * 0.45, filledW = barW * spct / 100;
-          setFill([235,240,245]); doc.rect(bx, y - 3, barW, 4, 'F');
-          setFill(GREEN); doc.rect(bx, y - 3, filledW, 4, 'F');
-          setFont('normal', 7.5); setColor(BLACK);
-          doc.text(strong[r].tag, bx + barW + 2, y);
-          setColor(DGRAY); doc.text(`${spct}% (${strong[r].correct}/${strong[r].total})`, bx + colW - 1, y, { align:'right' });
-        }
+        setFont('normal', 7.5); setColor(BLACK);
+        const tagLines = doc.splitTextToSize(`• ${tag}`, CW);
+        doc.text(tagLines, ML, y);
+        y += tagLines.length * 4;
         y += 6;
-      }
+      });
     }
     y += 2; hRule(LGRAY);
 
@@ -5503,7 +5460,7 @@ const App = (() => {
   function incorrectItemHTML({ test, q, result, idx }) {
     const correctOpt = (q.o || []).find(o => o.l === q.c);
     const chosenOpt = (q.o || []).find(o => o.l === result.chosen);
-    const preview = incorrectPreview(q, correctOpt);
+    const tag = (q.tags && q.tags.length) ? q.tags[0] : 'Untagged';
     const chosen = result.chosen ? `${result.chosen}) ${chosenOpt?.t || ''}` : 'Skipped';
     const correct = q.c ? `${q.c}) ${correctOpt?.t || ''}` : 'Not listed';
 
@@ -5511,20 +5468,10 @@ const App = (() => {
       <span class="incorrect-item-num">Q${q.n || idx + 1}</span>
       <div class="incorrect-item-body">
         <div class="incorrect-item-source">${escapeHTML(test.name)}</div>
-        <div class="incorrect-item-q">${escapeHTML(preview)}</div>
+        <div class="incorrect-item-q">${escapeHTML(tag)}</div>
         <div class="incorrect-item-answer">Your answer: ${escapeHTML(chosen)} · Correct: ${escapeHTML(correct)}</div>
       </div>
     </div>`;
-  }
-
-  function incorrectPreview(q, correctOpt) {
-    const stem = String(q.t || '').replace(/\s+/g, ' ').trim();
-    if (stem) return stem.slice(0, 220) + (stem.length > 220 ? '…' : '');
-    const exp = String(q.explanation || '').replace(/\s+/g, ' ').trim();
-    if (exp) return exp.slice(0, 220) + (exp.length > 220 ? '…' : '');
-    const correctText = String(correctOpt?.t || '').replace(/\s+/g, ' ').trim();
-    if (correctText) return `Image-based question · Correct answer: ${correctText.slice(0, 180)}${correctText.length > 180 ? '…' : ''}`;
-    return 'Image-based question';
   }
 
   function showMarked(folderId) {
