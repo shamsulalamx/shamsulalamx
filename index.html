@@ -406,7 +406,7 @@ mark.hl-green  { background: #a5d6a7; color: inherit; }
 mark.hl-pink   { background: #f48fb1; color: inherit; }
 
 /* Options */
-.options-card { background: white; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.07); }
+.options-card { background: white; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.07); font-family: Arial, Helvetica, sans-serif; font-size: 15px; }
 .opt-row {
   display: flex; align-items: flex-start; gap: 10px;
   padding: 11px 16px; border-bottom: 1px solid #edf1f5;
@@ -453,7 +453,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 .lab-values-table td { padding: 1px 12px 1px 4px; vertical-align: top; }
 
 /* Explanation */
-.exp-panel { background: white; border: 1px solid var(--border); border-left: 4px solid var(--blue); border-radius: 4px; padding: 16px 18px; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.07); }
+.exp-panel { background: white; border: 1px solid var(--border); border-left: 4px solid var(--blue); border-radius: 4px; padding: 16px 18px; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.07); font-size: 15px; }
 .exp-panel-title { font-size: 11px; font-weight: 700; color: var(--navy); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px; padding-bottom: 7px; border-bottom: 1px solid #edf1f5; }
 .exp-item { padding: 9px 12px; border-radius: 3px; margin-bottom: 8px; background: #f8fafc; border: 1px solid #e8ecf2; font-size: 1em; }
 .exp-item.exp-correct { background: #f0f9f0; border-color: #a5d6a7; }
@@ -3817,10 +3817,10 @@ const Quiz = (() => {
     panel.style.display = showExp ? 'block' : 'none';
     if (!showExp) return;
     buildExplanationHTML(q, r, document.getElementById('exp-body'));
-    // Re-apply current font size so explanation matches stem/options
+    // Re-apply current font size with explanation offset.
     const sz = parseInt(localStorage.getItem('question_font_size')) || 14;
     const expEl = document.getElementById('exp-body');
-    if (expEl) expEl.style.fontSize = sz + 'px';
+    if (expEl) expEl.style.fontSize = (sz + 1) + 'px';
   }
 
   function buildExplanationHTML(q, r, container) {
@@ -3848,7 +3848,7 @@ const Quiz = (() => {
         const trimmed = para.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
         if (!trimmed) return;
         const p = document.createElement('p');
-        p.style.marginBottom = '8px';
+        p.style.marginBottom = '14px';
         p.textContent = trimmed;
         expDiv.appendChild(p);
       });
@@ -3997,7 +3997,7 @@ window.buildExplanationHTML = function(q, r, container) {
       var trimmed = para.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
       if (!trimmed) return;
       var p = document.createElement('p');
-      p.style.marginBottom = '8px';
+      p.style.marginBottom = '14px';
       p.textContent = trimmed;
       expDiv.appendChild(p);
     });
@@ -6014,18 +6014,24 @@ function toggleCalc() {
 }
 
 function _applyQuestionFontSize(sz) {
-  const px = sz + 'px';
+  const stemPx = sz + 'px';
+  const choicesPx = (sz + 1) + 'px';
+  const expPx = (sz + 0.5) + 'px';
   // Apply to the quiz screen container so it covers stem, options,
   // explanation, and review screen — all in one shot via CSS inheritance.
   const quizScreen = document.getElementById('screen-quiz');
-  if (quizScreen) quizScreen.style.setProperty('--q-font-size', px);
+  if (quizScreen) quizScreen.style.setProperty('--q-font-size', stemPx);
   // Also set directly on individual elements for immediate effect
   // and for any elements that override font-size explicitly.
-  const targets = ['q-stem', 'options-list', 'exp-body', 'rev-stem', 'rev-options', 'rev-exp-body'];
-  targets.forEach(id => {
+  const groups = [
+    { ids: ['q-stem', 'rev-stem'], size: stemPx },
+    { ids: ['options-list', 'rev-options'], size: choicesPx },
+    { ids: ['exp-body', 'rev-exp-body'], size: expPx }
+  ];
+  groups.forEach(({ ids, size }) => ids.forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.style.fontSize = px;
-  });
+    if (el) el.style.fontSize = size;
+  }));
 }
 
 function adjFontSize(delta) {
