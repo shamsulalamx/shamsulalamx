@@ -423,12 +423,16 @@ mark.hl-yellow { background: #ffeb3b; color: inherit; }
 mark.hl-blue   { background: #81d4fa; color: inherit; }
 mark.hl-green  { background: #a5d6a7; color: inherit; }
 mark.hl-pink   { background: #f48fb1; color: inherit; }
+::highlight(note-highlight) { background: #ffeb3b; color: inherit; }
 .image-hl-layer { position: absolute; inset: 0; pointer-events: none; }
 .image-hl-rect {
   position: absolute;
-  background: rgba(255, 235, 59, .42);
+  background: #ffeb3b;
   border-radius: 2px;
   pointer-events: none;
+  opacity: .5;
+  mix-blend-mode: multiply;
+  box-shadow: 0 0 0 1px rgba(255,235,59,.18);
 }
 
 /* Options */
@@ -4994,6 +4998,7 @@ const App = (() => {
   let _ocrIssueIdx = 0;
   let _ocrUndoStack = [];
   let _noteSelection = null;
+  let _noteHighlightSeq = 0;
   // ── Init ───────────────────────────────────────────────────
   function init() {
     window.toast = toast;
@@ -6277,7 +6282,7 @@ const App = (() => {
     const wrap = wraps[0];
     if (wrap.dataset.hlReady === '1') return;
     wrap.dataset.hlReady = '1';
-    wrap.style.cursor = 'crosshair';
+    wrap.style.cursor = 'text';
 
     const img = wrap.querySelector('.q-img');
     const layer = document.createElement('div');
@@ -6296,14 +6301,27 @@ const App = (() => {
       positionLayer();
       layer.innerHTML = '';
       (r.highlights?.imageRects || []).forEach(rect => {
-        const el = document.createElement('div');
-        el.className = 'image-hl-rect';
-        el.style.left = (rect.x * 100) + '%';
-        el.style.top = (rect.y * 100) + '%';
-        el.style.width = (rect.w * 100) + '%';
-        el.style.height = (rect.h * 100) + '%';
-        layer.appendChild(el);
+        drawStroke(rect);
       });
+    }
+
+    function drawStroke(rect) {
+      const el = document.createElement('div');
+      el.className = 'image-hl-rect';
+      el.style.left = (rect.x * 100) + '%';
+      el.style.top = (rect.y * 100) + '%';
+      el.style.width = (rect.w * 100) + '%';
+      el.style.height = (rect.h * 100) + '%';
+      layer.appendChild(el);
+      return el;
+    }
+
+    function buildBrushStrokes(a, b) {
+      const brushH = 0.16;
+      const y = Math.max(0, Math.min(1 - brushH, a.y - brushH * 0.55));
+      const x = Math.max(0, Math.min(a.x, b.x));
+      const w = Math.min(1, Math.max(a.x, b.x)) - x;
+      return w > 0.01 ? [{ x, y, w, h: brushH }] : [];
     }
 
     function pointFromEvent(e) {
@@ -6315,43 +6333,30 @@ const App = (() => {
     }
 
     let start = null;
-    let draft = null;
+    let drafts = [];
     wrap.addEventListener('mousedown', e => {
       if (!img || e.button !== 0) return;
       const box = img.getBoundingClientRect();
       if (e.clientX < box.left || e.clientX > box.right || e.clientY < box.top || e.clientY > box.bottom) return;
       e.preventDefault();
       start = pointFromEvent(e);
-      draft = document.createElement('div');
-      draft.className = 'image-hl-rect';
-      layer.appendChild(draft);
+      drafts = [];
     });
     window.addEventListener('mousemove', e => {
-      if (!start || !draft) return;
+      if (!start) return;
       const pt = pointFromEvent(e);
-      const x = Math.min(start.x, pt.x);
-      const y = Math.min(start.y, pt.y);
-      const w = Math.abs(pt.x - start.x);
-      const h = Math.abs(pt.y - start.y);
-      draft.style.left = (x * 100) + '%';
-      draft.style.top = (y * 100) + '%';
-      draft.style.width = (w * 100) + '%';
-      draft.style.height = (h * 100) + '%';
+      drafts.forEach(el => el.remove());
+      drafts = buildBrushStrokes(start, pt).map(drawStroke);
     });
     window.addEventListener('mouseup', e => {
-      if (!start || !draft) return;
+      if (!start) return;
       const pt = pointFromEvent(e);
-      const rect = {
-        x: Math.min(start.x, pt.x),
-        y: Math.min(start.y, pt.y),
-        w: Math.abs(pt.x - start.x),
-        h: Math.abs(pt.y - start.y)
-      };
-      draft.remove();
+      const strokes = buildBrushStrokes(start, pt);
+      drafts.forEach(el => el.remove());
       start = null;
-      draft = null;
-      if (rect.w < 0.01 || rect.h < 0.005) { drawRects(); return; }
-      const next = [...(r.highlights?.imageRects || []), rect];
+      drafts = [];
+      if (!strokes.length) { drawRects(); return; }
+      const next = [...(r.highlights?.imageRects || []), ...strokes];
       Quiz.saveHighlightPart(st.qIdx, 'imageRects', next);
       r.highlights = Object.assign({}, r.highlights, { imageRects: next });
       drawRects();
@@ -6375,6 +6380,15 @@ const App = (() => {
     }
   }
 
+  function highlightExplanationRange(range) {
+    if (window.CSS?.highlights && window.Highlight) {
+      const name = 'note-highlight-' + (++_noteHighlightSeq);
+      CSS.highlights.set(name, new Highlight(range));
+      return true;
+    }
+    return false;
+  }
+
   function showExplanationNoteToolbar() {
     const sel = window.getSelection();
     const expEl = document.getElementById('exp-body');
@@ -6391,29 +6405,11 @@ const App = (() => {
     }
     _noteSelection = range;
     toolbar.dataset.selectedText = selectedText;
-    highlightSavedSelection(range.cloneRange());
+    highlightExplanationRange(range.cloneRange());
     const box = range.getBoundingClientRect();
     toolbar.style.left = Math.max(8, box.left) + 'px';
     toolbar.style.top = Math.max(8, box.top - 40) + 'px';
     toolbar.style.display = 'flex';
-  }
-
-  function highlightSavedSelection(range) {
-    try {
-      const mark = document.createElement('mark');
-      mark.className = 'hl-yellow';
-      mark.setAttribute('data-note-hl', '1');
-      range.surroundContents(mark);
-    } catch (_) {
-      try {
-        const frag = range.extractContents();
-        const mark = document.createElement('mark');
-        mark.className = 'hl-yellow';
-        mark.setAttribute('data-note-hl', '1');
-        mark.appendChild(frag);
-        range.insertNode(mark);
-      } catch (_) {}
-    }
   }
 
   function saveSelectedExplanationNote() {
