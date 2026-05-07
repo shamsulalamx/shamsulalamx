@@ -58,7 +58,6 @@ input, textarea, select { font-family: inherit; }
 .topbar-brand-text strong { font-size: 13px; display: block; }
 .topbar-brand-text span   { font-size: 10px; color: #9ab0c8; }
 .topbar-right { display: flex; align-items: center; gap: 12px; }
-#sync-indicator { font-size: 11px; color: #9ab0c8; }
 .topbar-btn {
   padding: 5px 12px; font-size: 11px; font-weight: 600;
   border-radius: 3px; border: 1px solid rgba(255,255,255,.25);
@@ -874,7 +873,6 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
       </div>
     </div>
     <div class="topbar-right">
-      <span id="sync-indicator" style="font-size:11px;color:#9ab0c8;">● Local</span>
       <button class="topbar-btn" onclick="adjFontSize(-1)" title="Decrease font size">A-</button>
       <button class="topbar-btn" onclick="adjFontSize(1)"  title="Increase font size">A+</button>
       <button class="topbar-btn" onclick="App.openSettings()" title="Settings">⚙ Settings</button>
@@ -1505,25 +1503,9 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 <div id="modal-settings" class="modal-overlay">
   <div class="modal-box" style="max-width:500px;">
     <h3>Settings</h3>
-    <div class="form-group">
-      <label class="form-label">Your Session Code</label>
-      <p style="font-size:12px;color:#5a6a7a;margin-bottom:8px;">Use this code to restore your session on any device. Keep it safe.</p>
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-        <code id="display-user-code" style="font-size:15px;font-weight:700;color:#1e3a5f;background:#e3f2fd;padding:6px 12px;border-radius:4px;letter-spacing:.08em;flex:1;text-align:center;"></code>
-        <button class="btn-modal" onclick="copyUserCode()">Copy Code</button>
-      </div>
-    </div>
-    <div class="form-group" style="margin-top:12px;">
-      <label class="form-label">Enter Code to Resume</label>
-      <p style="font-size:12px;color:#5a6a7a;margin-bottom:8px;">Enter a code from another device to restore that session here.</p>
-      <div style="display:flex;gap:8px;">
-        <input type="text" class="form-input" id="input-resume-code" placeholder="WORD-1234" style="flex:1;text-transform:uppercase;letter-spacing:.05em;">
-        <button class="btn-modal primary" onclick="resumeFromCode()">Restore</button>
-      </div>
-    </div>
     <div class="form-group" style="margin-top:12px;">
       <label class="form-label">Gemini API Key</label>
-      <p style="font-size:12px;color:#5a6a7a;margin-bottom:8px;">Used for AI-powered question hints. Synced automatically.</p>
+      <p style="font-size:12px;color:#5a6a7a;margin-bottom:8px;">Used for AI-powered question hints and tagging.</p>
       <input type="password" class="form-input" id="settings-gemini-key" placeholder="AIza..." autocomplete="off" oninput="saveGeminiKey(this.value)">
     </div>
     <div class="form-group" style="margin-top:12px;">
@@ -1543,7 +1525,6 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 </div>
 
 <!-- Scripts -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
@@ -1636,7 +1617,6 @@ const DB = (() => {
   function save() {
     if (_db) {
       const ok = saveLocal(_db);
-      if (typeof window.scheduleSupabaseSave === 'function') window.scheduleSupabaseSave();
       if (typeof window.scheduleGoogleDriveSave === 'function') window.scheduleGoogleDriveSave();
       return ok;
     }
@@ -1871,6 +1851,7 @@ window.FigureStore = FigureStore;
   const DRIVE_MANIFEST_NAME = 'nbme_manifest.json';
   let _tokenClient = null, _accessToken = null, _folderId = null, _manifestFileId = null;
   let _timer = null, _busy = false, _pending = false;
+  let _skipNextSchedule = false;
 
   function setDriveStatus(text, color) {
     const el = document.getElementById('drive-sync-status');
@@ -1970,7 +1951,6 @@ window.FigureStore = FigureStore;
     return JSON.parse(JSON.stringify({
       version: 1,
       updatedAt: new Date().toISOString(),
-      userCode: window.getUserCode(),
       folders: db.folders,
       tests: db.tests,
       trash: db.trash,
@@ -1993,7 +1973,9 @@ window.FigureStore = FigureStore;
   }
 
   async function uploadDriveFile(name, blob, mimeType, parentId, existingId) {
-    const metadata = { name, mimeType, parents: parentId ? [parentId] : undefined };
+    const metadata = existingId
+      ? { name, mimeType }
+      : { name, mimeType, parents: parentId ? [parentId] : undefined };
     const form = new FormData();
     form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
     form.append('file', blob);
@@ -2014,6 +1996,24 @@ window.FigureStore = FigureStore;
           const blob = dataUrl ? dataUrlToBlob(dataUrl) : null;
           if (!blob) continue;
           img.driveFileId = await uploadDriveFile(`${img.figureKey}.png`, blob, blob.type || 'image/png', folderId);
+        }
+      }
+    }
+  }
+
+  function applyDriveFileIdsToLocal(snapshot) {
+    const db = DB.get();
+    for (const snapTest of snapshot.tests || []) {
+      const localTest = db.tests.find(t => t.id === snapTest.id);
+      if (!localTest) continue;
+      for (let qi = 0; qi < (snapTest.questions || []).length; qi++) {
+        const snapQ = snapTest.questions[qi];
+        const localQ = localTest.questions?.[qi];
+        if (!snapQ || !localQ) continue;
+        for (let ii = 0; ii < (snapQ.images || []).length; ii++) {
+          if (snapQ.images[ii]?.driveFileId && localQ.images?.[ii]) {
+            localQ.images[ii].driveFileId = snapQ.images[ii].driveFileId;
+          }
         }
       }
     }
@@ -2067,6 +2067,9 @@ window.FigureStore = FigureStore;
       await ensureDriveAuth('');
       const snapshot = driveDbSnapshot();
       await uploadFiguresToDrive(snapshot);
+      applyDriveFileIdsToLocal(snapshot);
+      _skipNextSchedule = true;
+      DB.save();
       await saveManifestToDrive(snapshot);
       setDriveStatus('Drive backup complete.', '#27ae60');
     } catch(e) {
@@ -2092,6 +2095,7 @@ window.FigureStore = FigureStore;
       if (Array.isArray(snapshot.flags)) db.flags = snapshot.flags;
       if (Array.isArray(snapshot.marks)) db.marks = snapshot.marks;
       if (Array.isArray(snapshot.history)) db.history = snapshot.history;
+      _skipNextSchedule = true;
       DB.save();
       setDriveStatus('Drive restore complete. Reloading...', '#27ae60');
       setTimeout(() => location.reload(), 1000);
@@ -2102,6 +2106,8 @@ window.FigureStore = FigureStore;
 
   window.scheduleGoogleDriveSave = function() {
     if (!_accessToken) return;
+    if (_skipNextSchedule) { _skipNextSchedule = false; return; }
+    if (_busy) { _pending = true; return; }
     if (_timer) clearTimeout(_timer);
     _timer = setTimeout(() => window.saveGoogleDriveNow(), 1200);
   };
@@ -2121,151 +2127,6 @@ window.FigureStore = FigureStore;
     if (dataUrl) await window.FigureStore.put(img.figureKey, dataUrl).catch(() => {});
     return dataUrl;
   };
-})();
-</script>
-<script>
-/* ============================================================
-   SUPABASE SYNC — Automatic session persistence
-============================================================ */
-(function() {
-  const SB_URL = 'https://lmxdedepkwmilnvjcxil.supabase.co';
-  const SB_KEY = 'sb_publishable_CVhmesK9VAUhAn-mMpQHYQ_yg2MMz9Q';
-  const SB_HEADERS = {
-    'apikey': SB_KEY,
-    'Authorization': 'Bearer ' + SB_KEY,
-    'Content-Type': 'application/json'
-  };
-
-  // ── User code ─────────────────────────────────────────────
-  const _WORDS = ['ATLAS','BLAZE','CEDAR','CRANE','DELTA','DUSK','EMBER','FALCON',
-    'FROST','GROVE','HAVEN','HERON','INDIGO','IVORY','JADE','JASPER','KNIGHT',
-    'LUNAR','MAPLE','NOBLE','OCEAN','PEARL','QUEST','RIDGE','SOLAR','STORM',
-    'TIGER','TORCH','ULTRA','VISTA','WILLOW'];
-
-  window.generateUserCode = function() {
-    const w = _WORDS[Math.floor(Math.random() * _WORDS.length)];
-    const n = String(Math.floor(1000 + Math.random() * 9000));
-    return `${w}-${n}`;
-  };
-
-  window.getUserCode = function() {
-    let c = localStorage.getItem('user_code');
-    if (!c) { c = window.generateUserCode(); localStorage.setItem('user_code', c); }
-    return c;
-  };
-
-  // ── Sync indicator ────────────────────────────────────────
-  window.updateSyncIndicator = function(state) {
-    const el = document.getElementById('sync-indicator');
-    if (!el) return;
-    const m = { syncing:['↻ Syncing…','#f0a500'], synced:['✓ Synced','#27ae60'],
-                error:['⚠ Offline','#e74c3c'], offline:['● Local','#95a5a6'] };
-    const s = m[state] || m.offline;
-    el.textContent = s[0]; el.style.color = s[1];
-  };
-
-  // ── Save session ──────────────────────────────────────────
-  let _timer = null, _lastHash = null, _dirty = false;
-
-  window.scheduleSupabaseSave = function() {
-    _dirty = true;
-    if (_timer) clearTimeout(_timer);
-    _timer = setTimeout(() => window._doSaveSession(), 500);
-  };
-
-  window._doSaveSession = async function() {
-    const userCode = window.getUserCode();
-    const db  = DB.get();
-    const qs  = (typeof Quiz !== 'undefined') ? Quiz.getState() : null;
-    const data = {
-      folders: db.folders,
-      tests:   db.tests,
-      trash:   db.trash,
-      flags:   db.flags,
-      marks:   db.marks || [],
-      history: db.history,
-      geminiApiKey: (localStorage.getItem('gemini_api_key') || '').replace(/['"]/g, '').trim(),
-      quizState: qs ? {
-        testId: qs.testId, qIdx: qs.qIdx, mode: qs.mode,
-        results: qs.results, marks: [...qs.marks],
-        totSecs: qs.totSecs, paused: qs.paused
-      } : null
-    };
-    const hash = JSON.stringify(data);
-    if (hash === _lastHash) { _dirty = false; return; }
-    window.updateSyncIndicator('syncing');
-    try {
-      const resp = await fetch(`${SB_URL}/rest/v1/sessions`, {
-        method: 'POST',
-        headers: Object.assign({}, SB_HEADERS,
-          { 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
-        body: JSON.stringify({
-          user_id: userCode,
-          data: data,
-          updated_at: new Date().toISOString()
-        })
-      });
-      if (!resp.ok) throw new Error(resp.status);
-      _lastHash = hash; _dirty = false;
-      window.updateSyncIndicator('synced');
-    } catch(_) { window.updateSyncIndicator('offline'); }
-  };
-
-  // ── Load session ──────────────────────────────────────────
-  window.loadSession = async function(userCode) {
-    window.updateSyncIndicator('syncing');
-    try {
-      const resp = await fetch(
-        `${SB_URL}/rest/v1/sessions?user_id=eq.${encodeURIComponent(userCode)}&select=data`,
-        { headers: SB_HEADERS }
-      );
-      if (!resp.ok) throw new Error(resp.status);
-      const rows = await resp.json();
-      if (!rows.length) { window.updateSyncIndicator('offline'); return null; }
-      const s = rows[0].data;
-      const db = DB.get();
-      if (Array.isArray(s.folders)) db.folders = s.folders;
-      if (Array.isArray(s.tests))   db.tests   = s.tests;
-      if (Array.isArray(s.trash))   db.trash   = s.trash;
-      if (Array.isArray(s.flags))   db.flags   = s.flags;
-      if (Array.isArray(s.marks))   db.marks   = s.marks;
-      if (Array.isArray(s.history)) db.history = s.history;
-      try { localStorage.setItem('nbme_app_v1', JSON.stringify(db)); } catch(_) {}
-      if (s.geminiApiKey) localStorage.setItem('gemini_api_key', s.geminiApiKey);
-      _lastHash = JSON.stringify({ folders:db.folders, tests:db.tests, trash:db.trash,
-        flags:db.flags, marks:db.marks||[], history:db.history, geminiApiKey:s.geminiApiKey||'', quizState:s.quizState||null });
-      window.updateSyncIndicator('synced');
-      return s;
-    } catch(_) { window.updateSyncIndicator('offline'); return null; }
-  };
-
-  // ── Settings helpers ──────────────────────────────────────
-  window.copyUserCode = function() {
-    const code = window.getUserCode();
-    navigator.clipboard.writeText(code)
-      .then(() => { if (window.toast) window.toast('Code copied!', 2000); })
-      .catch(() => prompt('Your session code:', code));
-  };
-
-  window.resumeFromCode = async function() {
-    const inp = document.getElementById('input-resume-code');
-    if (!inp) return;
-    const code = inp.value.trim().toUpperCase();
-    if (!code || !code.includes('-')) {
-      if (window.toast) window.toast('Enter a valid code (e.g. TIGER-4829)'); return;
-    }
-    const session = await window.loadSession(code);
-    if (session) {
-      localStorage.setItem('user_code', code);
-      if (window.toast) window.toast('✓ Session restored! Reloading…', 2000);
-      setTimeout(() => location.reload(), 1500);
-    } else {
-      if (window.toast) window.toast('Code not found. Check and try again.');
-    }
-  };
-
-  // ── Background sync every 15s ─────────────────────────────
-  setInterval(() => { if (_dirty) window._doSaveSession(); }, 15000);
 })();
 </script>
 <script>
@@ -3613,8 +3474,21 @@ function renderImagesInto(q, topEl, bottomEl) {
       el.src = img.dataUrl;
     } else if (img.figureKey && window.FigureStore) {
       window.FigureStore.get(img.figureKey).then(dataUrl => {
+        if (dataUrl) {
+          el.src = dataUrl;
+        } else if (typeof window.loadFigureFromGoogleDrive === 'function') {
+          window.loadFigureFromGoogleDrive(img).then(driveUrl => {
+            if (driveUrl) el.src = driveUrl;
+            else wrap.style.display = 'none';
+          }).catch(() => { wrap.style.display = 'none'; });
+        } else {
+          wrap.style.display = 'none';
+        }
+      }).catch(() => { wrap.style.display = 'none'; });
+    } else if (typeof window.loadFigureFromGoogleDrive === 'function') {
+      window.loadFigureFromGoogleDrive(img).then(dataUrl => {
         if (dataUrl) el.src = dataUrl;
-        else wrap.style.display = 'none';  // figure not found — hide silently
+        else wrap.style.display = 'none';
       }).catch(() => { wrap.style.display = 'none'; });
     } else {
       wrap.style.display = 'none';
@@ -5087,12 +4961,6 @@ const App = (() => {
       if (btn) btn.textContent = '❯';
     }
 
-    // Load session from Supabase on start
-    const userCode = window.getUserCode();
-    window.loadSession(userCode).then(session => {
-      if (session) { renderSidebar(); renderHomeGrid(); }
-    });
-
     // Close modals on overlay click
     document.querySelectorAll('.modal-overlay').forEach(m => {
       m.addEventListener('click', e => { if (e.target === m) m.style.display = 'none'; });
@@ -5111,7 +4979,6 @@ const App = (() => {
             marks: [...st.marks], totSecs: st.totSecs
           });
         }
-        window._doSaveSession();
       }
     });
 
@@ -6346,8 +6213,6 @@ const App = (() => {
   }
 
   function openSettings() {
-    const codeEl = document.getElementById('display-user-code');
-    if (codeEl) codeEl.textContent = window.getUserCode();
     loadGeminiKeyToSettings();
     document.getElementById('modal-settings').style.display = 'flex';
   }
