@@ -178,6 +178,23 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 .btn-card { padding: 5px 10px; font-size: 11px; border-radius: 3px; border: 1px solid var(--border); background: white; color: var(--navy); transition: background .12s; }
 .btn-card:hover { background: #f5f7fa; }
 .btn-card.primary { background: var(--navy); color: white; border-color: var(--navy); }
+
+/* Notes */
+.notes-folder { background: white; border: 1px solid var(--border); border-radius: 4px; margin-bottom: 12px; overflow: hidden; }
+.notes-folder-title { background: #f5f7fa; color: var(--navy); font-size: 13px; font-weight: 700; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.notes-list { margin: 0; padding: 12px 20px 14px 30px; }
+.notes-list li { font-size: 14px; line-height: 1.65; margin-bottom: 8px; }
+.notes-meta { display: block; font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+.selection-toolbar {
+  position: fixed; z-index: 9999; display: none; gap: 6px;
+  background: #162333; border: 1px solid rgba(255,255,255,.18);
+  border-radius: 4px; padding: 5px; box-shadow: 0 4px 14px rgba(0,0,0,.22);
+}
+.selection-toolbar button {
+  border: none; border-radius: 3px; background: white; color: var(--navy);
+  font-size: 11px; font-weight: 700; padding: 5px 9px; cursor: pointer;
+}
+.selection-toolbar button:hover { background: #eaf3fb; }
 .btn-card.primary:hover { background: #244d73; }
 .btn-card.danger { color: var(--red); border-color: #f5c0bc; }
 .btn-card.danger:hover { background: #fef5f5; }
@@ -464,6 +481,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 /* Explanation */
 .exp-panel { background: white; border: 1px solid var(--border); border-left: 4px solid var(--blue); border-radius: 4px; padding: 16px 18px; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.07); font-size: 15px; }
 .exp-panel-title { font-size: 11px; font-weight: 700; color: var(--navy); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px; padding-bottom: 7px; border-bottom: 1px solid #edf1f5; }
+#exp-body, #rev-exp-body, .exp-explanation-block, .exp-explanation-block p { user-select: text; }
 .exp-item { padding: 9px 12px; border-radius: 3px; margin-bottom: 8px; background: #f8fafc; border: 1px solid #e8ecf2; font-size: 1em; }
 .exp-item.exp-correct { background: #f0f9f0; border-color: #a5d6a7; }
 .exp-header { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; }
@@ -897,6 +915,10 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
         <div class="sidebar-item" onclick="App.showMarked(null)" id="nav-marked">
           <span class="item-icon">🔖</span>
           <span class="item-label">Marked</span>
+        </div>
+        <div class="sidebar-item" onclick="App.showNotes()" id="nav-notes">
+          <span class="item-icon">📝</span>
+          <span class="item-label">Notes</span>
         </div>
         <div class="sidebar-item" onclick="App.showTrash()" id="nav-trash">
           <span class="item-icon">🗑</span>
@@ -1400,6 +1422,10 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
   </div>
 </div>
 
+<div id="selection-toolbar" class="selection-toolbar">
+  <button type="button" onclick="App.saveSelectedExplanationNote()">Add to Notes</button>
+</div>
+
 <!-- ═══ RESUME MODAL ═══ -->
 <div id="modal-resume" class="modal-overlay">
   <div class="modal-box">
@@ -1530,6 +1556,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 <script>pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html-docx-js/dist/html-docx.min.js"></script>
 <script>
 /* ============================================================
    DB.JS — Storage Layer
@@ -1546,6 +1573,7 @@ const DB = (() => {
       trash: [],
       flags: [],
       marks: [],
+      notes: [],
       history: []
     };
   }
@@ -1562,6 +1590,7 @@ const DB = (() => {
     return JSON.parse(JSON.stringify(db, (key, value) => {
       if (key === 'dataUrl' || key === '_figureData') return undefined;
       if (key === 'highlights') return undefined;
+      if (key === '_range') return undefined;
       return value;
     }));
   }
@@ -1762,11 +1791,30 @@ const DB = (() => {
     save();
   }
 
+  function getNotes() {
+    const db = get();
+    if (!db.notes) db.notes = [];
+    return [...db.notes].sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
+  }
+  function addNote(note) {
+    const db = get();
+    if (!db.notes) db.notes = [];
+    db.notes.push(Object.assign({ id: uid(), createdAt: Date.now() }, note));
+    save();
+  }
+  function deleteNote(id) {
+    const db = get();
+    if (!db.notes) db.notes = [];
+    db.notes = db.notes.filter(n => n.id !== id);
+    save();
+  }
+
   return { get, save, uid,
     getFolders, createFolder, renameFolder, deleteFolder,
     getTests, getTest, createTest, updateTest, renameTest, trashTest, restoreTest, emptyTrash, permanentDelete,
     saveAttempt, finishAttempt, getHistory, getFlags, addFlag, removeFlag, isFlagged,
-    getMarks, addMark, removeMark, isMarked, syncMarks };
+    getMarks, addMark, removeMark, isMarked, syncMarks,
+    getNotes, addNote, deleteNote };
 })();
 window.DB = DB;
 
@@ -1956,6 +2004,7 @@ window.FigureStore = FigureStore;
       trash: db.trash,
       flags: db.flags,
       marks: db.marks || [],
+      notes: db.notes || [],
       history: db.history
     }, (key, value) => {
       if (key === 'dataUrl' || key === '_figureData' || key === 'highlights') return undefined;
@@ -2094,6 +2143,7 @@ window.FigureStore = FigureStore;
       if (Array.isArray(snapshot.trash)) db.trash = snapshot.trash;
       if (Array.isArray(snapshot.flags)) db.flags = snapshot.flags;
       if (Array.isArray(snapshot.marks)) db.marks = snapshot.marks;
+      if (Array.isArray(snapshot.notes)) db.notes = snapshot.notes;
       if (Array.isArray(snapshot.history)) db.history = snapshot.history;
       _skipNextSchedule = true;
       DB.save();
@@ -4033,12 +4083,9 @@ const Quiz = (() => {
     const sz = parseInt(localStorage.getItem('question_font_size')) || 14;
     const expEl = document.getElementById('exp-body');
     if (expEl) {
-      if (r.highlights && r.highlights.expHtml) expEl.innerHTML = r.highlights.expHtml;
       expEl.style.fontSize = (sz + 0.5) + 'px';
       expEl.onmouseup = () => {
-        if (typeof window.toggleSelectionHighlight === 'function' && window.toggleSelectionHighlight(expEl)) {
-          Quiz.saveHighlightPart(state.qIdx, 'expHtml', expEl.innerHTML);
-        }
+        if (typeof window.showExplanationNoteToolbar === 'function') window.showExplanationNoteToolbar();
       };
     }
   }
@@ -4946,6 +4993,7 @@ const App = (() => {
   let _ocrIssues = [];
   let _ocrIssueIdx = 0;
   let _ocrUndoStack = [];
+  let _noteSelection = null;
   // ── Init ───────────────────────────────────────────────────
   function init() {
     window.toast = toast;
@@ -5130,6 +5178,12 @@ const App = (() => {
 
   function removeContextMenus() {
     document.getElementById('ctx-menu')?.remove();
+  }
+
+  function escapeHTML(str) {
+    return String(str || '').replace(/[&<>"']/g, ch => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
   }
 
   // ── Views ──────────────────────────────────────────────────
@@ -5364,6 +5418,117 @@ const App = (() => {
       return;
     }
     content.innerHTML = html;
+  }
+
+  function showNotes() {
+    _currentView = 'notes';
+    document.getElementById('screen-home').style.display    = 'flex';
+    document.getElementById('screen-quiz').style.display    = 'none';
+    document.getElementById('screen-results').style.display = 'none';
+    document.getElementById('screen-review').style.display  = 'none';
+    document.getElementById('home-title').textContent = 'Notes';
+    setActiveNav('nav-notes');
+
+    const content = document.getElementById('home-content');
+    const notes = DB.getNotes();
+    if (!notes.length) {
+      content.innerHTML = '<div class="no-tests">No notes yet. Select answer explanation text during review, then choose Add to Notes.</div>';
+      return;
+    }
+
+    const folders = DB.getFolders();
+    let html = '<div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:12px;"><button class="btn-card" onclick="App.downloadNotesDocx()">Download DOCX</button><button class="btn-card" onclick="App.downloadNotesPdf()">Download PDF</button></div>';
+    folders.forEach(folder => {
+      const folderTestIds = DB.getTests(folder.id).map(t => t.id);
+      const folderNotes = notes.filter(n => folderTestIds.includes(n.testId));
+      if (!folderNotes.length) return;
+      html += `<div class="notes-folder"><div class="notes-folder-title">${folder.name}</div><ul class="notes-list">`;
+      folderNotes.forEach(n => {
+        html += `<li>${escapeHTML(n.text)}
+          <span class="notes-meta">${escapeHTML(n.testName || 'Test')} · Q${n.questionNum || n.questionIdx + 1}
+          <button class="btn-card" onclick="App.deleteNote('${n.id}')" style="margin-left:8px;">Delete</button></span>
+        </li>`;
+      });
+      html += '</ul></div>';
+    });
+
+    const folderIds = folders.map(f => f.id);
+    const otherNotes = notes.filter(n => {
+      const test = DB.getTest(n.testId);
+      return !test || !folderIds.includes(test.folderId);
+    });
+    if (otherNotes.length) {
+      html += '<div class="notes-folder"><div class="notes-folder-title">Other</div><ul class="notes-list">';
+      otherNotes.forEach(n => {
+        html += `<li>${escapeHTML(n.text)}
+          <span class="notes-meta">${escapeHTML(n.testName || 'Test')} · Q${n.questionNum || n.questionIdx + 1}
+          <button class="btn-card" onclick="App.deleteNote('${n.id}')" style="margin-left:8px;">Delete</button></span>
+        </li>`;
+      });
+      html += '</ul></div>';
+    }
+
+    content.innerHTML = html || '<div class="no-tests">No notes yet.</div>';
+  }
+
+  function deleteNote(id) {
+    DB.deleteNote(id);
+    showNotes();
+    toast('Note deleted.');
+  }
+
+  function groupedNotesHTML() {
+    const notes = DB.getNotes();
+    const folders = DB.getFolders();
+    let html = '<h1>NBME Notes</h1>';
+    folders.forEach(folder => {
+      const ids = DB.getTests(folder.id).map(t => t.id);
+      const folderNotes = notes.filter(n => ids.includes(n.testId));
+      if (!folderNotes.length) return;
+      html += `<h2>${escapeHTML(folder.name)}</h2><ul>`;
+      folderNotes.forEach(n => {
+        html += `<li>${escapeHTML(n.text)} <span style="color:#5a6a7a;font-size:10pt;">(${escapeHTML(n.testName || 'Test')}, Q${n.questionNum || n.questionIdx + 1})</span></li>`;
+      });
+      html += '</ul>';
+    });
+    return html;
+  }
+
+  function downloadNotesDocx() {
+    if (!window.htmlDocx) { alert('DOCX library not loaded. Check your internet connection.'); return; }
+    const html = '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' + groupedNotesHTML() + '</body></html>';
+    const blob = window.htmlDocx.asBlob(html);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'NBME_Notes.docx';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function downloadNotesPdf() {
+    if (!window.jspdf) { alert('PDF library not loaded. Check your internet connection.'); return; }
+    const doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'letter' });
+    const notes = DB.getNotes();
+    const folders = DB.getFolders();
+    let y = 48;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.text('NBME Notes', 48, y); y += 28;
+    folders.forEach(folder => {
+      const ids = DB.getTests(folder.id).map(t => t.id);
+      const folderNotes = notes.filter(n => ids.includes(n.testId));
+      if (!folderNotes.length) return;
+      if (y > 700) { doc.addPage(); y = 48; }
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text(folder.name, 48, y); y += 18;
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+      folderNotes.forEach(n => {
+        const line = `• ${n.text} (${n.testName || 'Test'}, Q${n.questionNum || n.questionIdx + 1})`;
+        const lines = doc.splitTextToSize(line, 500);
+        if (y + lines.length * 14 > 740) { doc.addPage(); y = 48; }
+        doc.text(lines, 60, y);
+        y += lines.length * 14 + 6;
+      });
+      y += 8;
+    });
+    doc.save('NBME_Notes.pdf');
   }
 
   function toggleMarkedFolder(sectionId) {
@@ -6202,6 +6367,77 @@ const App = (() => {
     if (st && toggleSelectionHighlight(stemEl)) Quiz.saveHighlight(st.qIdx, stemEl.innerHTML);
   }
 
+  function hideSelectionToolbar() {
+    const toolbar = document.getElementById('selection-toolbar');
+    if (toolbar) {
+      toolbar.style.display = 'none';
+      delete toolbar.dataset.selectedText;
+    }
+  }
+
+  function showExplanationNoteToolbar() {
+    const sel = window.getSelection();
+    const expEl = document.getElementById('exp-body');
+    const toolbar = document.getElementById('selection-toolbar');
+    const selectedText = sel ? sel.toString().replace(/\s+/g, ' ').trim() : '';
+    if (!sel || sel.isCollapsed || !selectedText || !expEl || !toolbar) {
+      hideSelectionToolbar();
+      return;
+    }
+    const range = sel.getRangeAt(0).cloneRange();
+    if (!expEl.contains(range.commonAncestorContainer)) {
+      hideSelectionToolbar();
+      return;
+    }
+    _noteSelection = range;
+    toolbar.dataset.selectedText = selectedText;
+    highlightSavedSelection(range.cloneRange());
+    const box = range.getBoundingClientRect();
+    toolbar.style.left = Math.max(8, box.left) + 'px';
+    toolbar.style.top = Math.max(8, box.top - 40) + 'px';
+    toolbar.style.display = 'flex';
+  }
+
+  function highlightSavedSelection(range) {
+    try {
+      const mark = document.createElement('mark');
+      mark.className = 'hl-yellow';
+      mark.setAttribute('data-note-hl', '1');
+      range.surroundContents(mark);
+    } catch (_) {
+      try {
+        const frag = range.extractContents();
+        const mark = document.createElement('mark');
+        mark.className = 'hl-yellow';
+        mark.setAttribute('data-note-hl', '1');
+        mark.appendChild(frag);
+        range.insertNode(mark);
+      } catch (_) {}
+    }
+  }
+
+  function saveSelectedExplanationNote() {
+    const qs = Quiz.getState();
+    const test = qs ? DB.getTest(qs.testId) : null;
+    const q = test?.questions?.[qs.qIdx];
+    const toolbar = document.getElementById('selection-toolbar');
+    const selectedText = toolbar?.dataset.selectedText || '';
+    if (!test || !q || !selectedText) { hideSelectionToolbar(); return; }
+    DB.addNote({
+      testId: test.id,
+      testName: test.name,
+      folderId: test.folderId,
+      questionIdx: qs.qIdx,
+      questionNum: q.n || qs.qIdx + 1,
+      source: 'explanation',
+      text: selectedText
+    });
+    window.getSelection()?.removeAllRanges();
+    _noteSelection = null;
+    hideSelectionToolbar();
+    toast('Added to Notes.');
+  }
+
   // ── Settings ───────────────────────────────────────────────
   function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
@@ -6337,6 +6573,10 @@ const App = (() => {
     showTrash,
     unflag,
     showMarked,
+    showNotes,
+    deleteNote,
+    downloadNotesDocx,
+    downloadNotesPdf,
     toggleMarkedFolder,
     unmark,
     promptNewFolder,
@@ -6367,10 +6607,14 @@ const App = (() => {
     confirmFinishFromPause,
     doFinish,
     onStemSelect,
+    showExplanationNoteToolbar,
+    saveSelectedExplanationNote,
     openSettings,
     toggleSidebar
   };
 })();
+
+window.showExplanationNoteToolbar = App.showExplanationNoteToolbar;
 
 
 
