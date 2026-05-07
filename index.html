@@ -142,7 +142,19 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 #screen-home { flex: 1; padding: 24px; }
 .home-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
 .home-header h2 { font-size: 18px; font-weight: 700; color: var(--navy); }
-.home-header-actions { display: flex; gap: 8px; }
+.home-header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.search-input {
+  width: min(360px, 48vw); padding: 8px 10px; border: 1px solid var(--border);
+  border-radius: 3px; font-size: 12.5px; outline: none;
+}
+.search-input:focus { border-color: var(--blue); }
+.search-result { background: white; border: 1px solid var(--border); border-radius: 4px; padding: 12px 14px; margin-bottom: 10px; }
+.search-result { cursor: pointer; transition: box-shadow .12s, transform .12s; }
+.search-result:hover { box-shadow: 0 3px 12px rgba(0,0,0,.10); transform: translateY(-1px); }
+.search-result-title { font-size: 13px; font-weight: 700; color: var(--navy); margin-bottom: 5px; }
+.search-result-tag { display: inline-block; font-size: 10.5px; background: #e3f2fd; color: #0d47a1; border-radius: 10px; padding: 2px 8px; margin-bottom: 6px; font-weight: 700; }
+.search-result-meta { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+.search-result-preview { font-size: 12.5px; color: var(--text); line-height: 1.55; }
 .btn-generate {
   display: flex; align-items: center; gap: 6px;
   padding: 8px 16px; font-size: 12px; font-weight: 700;
@@ -947,6 +959,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
         <div class="home-header">
           <h2 id="home-title">Welcome</h2>
           <div class="home-header-actions">
+            <input type="search" class="search-input" id="global-search" placeholder="Search" oninput="App.searchQuestionContent(this.value)">
             <button class="btn-generate" onclick="App.openGenerateModal()">
               ＋ Generate Test
             </button>
@@ -3731,6 +3744,13 @@ const Quiz = (() => {
     initState(testId, test.questions, 'tutor');
   }
 
+  function startTestAt(testId, qIdx) {
+    const test = DB.getTest(testId);
+    if (!test) return;
+    initState(testId, test.questions, 'tutor');
+    goTo(qIdx);
+  }
+
   function showResumeDialog(testId, saved) {
     const test = DB.getTest(testId);
     const modal = document.getElementById('modal-resume');
@@ -4236,7 +4256,7 @@ const Quiz = (() => {
   // ── Public API ─────────────────────────────────────────────
   return {
     startTest, pauseTest, unpauseTest, finishTest,
-    goTo, nextQ, prevQ, setMode,
+    startTestAt, goTo, nextQ, prevQ, setMode,
     toggleFlag, toggleMark, toggleStrike, saveHighlight, saveHighlightPart,
     renderQuestion, renderOptions, renderExplanation,
     updateNavPanel, renderScoreLive,
@@ -5269,6 +5289,57 @@ const App = (() => {
     });
     html += '</div>';
     contentEl.innerHTML = html;
+  }
+
+  function searchQuestionContent(query) {
+    const qText = String(query || '').trim().toLowerCase();
+    if (!qText) {
+      renderHomeGrid();
+      return;
+    }
+
+    _currentView = 'search';
+    document.getElementById('screen-home').style.display    = 'flex';
+    document.getElementById('screen-quiz').style.display    = 'none';
+    document.getElementById('screen-results').style.display = 'none';
+    document.getElementById('screen-review').style.display  = 'none';
+    document.getElementById('home-title').textContent = 'Search Results';
+    setActiveNav(null);
+
+    const content = document.getElementById('home-content');
+    const db = DB.get();
+    const matches = [];
+    db.tests.forEach(test => {
+      (test.questions || []).forEach((q, idx) => {
+        const choices = (q.o || []).map(o => `${o.l}) ${o.t}`).join(' ');
+        const explanation = q.explanation || '';
+        const haystack = `${choices} ${explanation}`.toLowerCase();
+        if (!haystack.includes(qText)) return;
+        const source = choices.toLowerCase().includes(qText) ? 'Answer choices' : 'Explanation';
+        const fullText = source === 'Answer choices' ? choices : explanation;
+        const hitIdx = fullText.toLowerCase().indexOf(qText);
+        const start = Math.max(0, hitIdx - 90);
+        const preview = fullText.slice(start, start + 260).replace(/\s+/g, ' ').trim();
+        matches.push({ test, q, idx, source, preview });
+      });
+    });
+
+    if (!matches.length) {
+      content.innerHTML = '<div class="no-tests">No matching questions found.</div>';
+      return;
+    }
+
+    let html = '';
+    matches.forEach(({ test, q, idx, source, preview }) => {
+      const tag = (q.tags && q.tags.length) ? q.tags[0] : 'Untagged';
+      html += `<div class="search-result" onclick="Quiz.startTestAt('${test.id}',${idx})" title="Open this question">
+        <div class="search-result-title">${escapeHTML(test.name)} · Q${q.n || idx + 1}</div>
+        <div class="search-result-tag">${escapeHTML(tag)}</div>
+        <div class="search-result-meta">${source}</div>
+        <div class="search-result-preview">${escapeHTML(preview)}</div>
+      </div>`;
+    });
+    content.innerHTML = html;
   }
 
   function showFlagged(folderId) {
@@ -6565,6 +6636,7 @@ const App = (() => {
     renderSidebar,
     showHome,
     showFolderHome,
+    searchQuestionContent,
     showFlagged,
     showTrash,
     unflag,
