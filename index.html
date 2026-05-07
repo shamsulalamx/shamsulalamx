@@ -374,6 +374,7 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 #btn-flag.flagged { color: #ffd54f; border-color: rgba(255,213,79,.5); }
 
 .quiz-content-area { flex: 1; padding: 16px 40px 80px; max-width: 1000px; width: 100%; margin: 0 auto; }
+.quiz-content-area.image-stem-active { max-width: 1280px; padding-left: 18px; padding-right: 18px; }
 
 /* Question card */
 .q-card {
@@ -596,6 +597,23 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 .uz-desc  { font-size: 11px; color: var(--muted); }
 .uz-name  { font-size: 11px; color: var(--green); margin-top: 5px; font-style: italic; }
 
+.ocr-review-box { max-width: 680px; }
+.ocr-review-meta { font-size: 11px; font-weight: 700; color: var(--ltblue); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; }
+.ocr-review-progress { font-size: 11px; color: var(--muted); margin-bottom: 10px; }
+.ocr-review-card { border: 1px solid var(--border); border-radius: 4px; overflow: hidden; margin-bottom: 12px; }
+.ocr-review-row { display: grid; grid-template-columns: 110px 1fr; gap: 10px; padding: 10px 12px; border-bottom: 1px solid #edf1f5; align-items: start; }
+.ocr-review-row:last-child { border-bottom: none; }
+.ocr-review-label { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.ocr-review-value { font-size: 13px; color: var(--text); line-height: 1.55; word-break: break-word; }
+.ocr-review-bad { background: #fff3f1; color: #9b1c13; border-radius: 3px; padding: 1px 4px; }
+.ocr-review-good { background: #edf8f0; color: #1f7a3b; border-radius: 3px; padding: 1px 4px; }
+.ocr-review-context { background: #f8fafc; padding: 10px 12px; font-size: 12px; color: #34495e; line-height: 1.6; max-height: 120px; overflow-y: auto; }
+.ocr-review-edit { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 3px; font-size: 13px; }
+.ocr-review-empty { font-size: 12px; color: var(--green); background: #edf8f0; border: 1px solid #cdebd6; padding: 10px 12px; border-radius: 4px; margin-bottom: 12px; }
+.parse-audit-pre { background: #f8fafc; border: 1px solid var(--border); border-radius: 4px; padding: 10px; max-height: 180px; overflow: auto; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; line-height: 1.45; color: #34495e; }
+.parse-audit-fail { color: #b42318; font-weight: 700; }
+.parse-audit-warn { color: #9a6700; font-weight: 700; }
+
 
 /* Inline rename */
 .rename-input {
@@ -738,12 +756,14 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 }
 .q-images-top:empty, .q-images-bottom:empty,
 .rev-images-top:empty, .rev-images-bottom:empty { display: none; }
-.q-img-wrap { display: inline-block; }
+.q-img-wrap { display: block; width: 100%; }
 .q-img {
-  max-width: 100%; height: auto;
+  width: 100%; max-width: none; height: auto;
   border: 1px solid var(--border); border-radius: 4px;
   display: block;
 }
+.q-stem-image-mode #q-stem,
+.rev-stem-image-mode #rev-stem { display: none; }
 
 
 /* ── Lab Values Modal ── */
@@ -1420,6 +1440,39 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
   </div>
 </div>
 
+<!-- ═══ OCR REVIEW MODAL ═══ -->
+<div id="modal-ocr-review" class="modal-overlay">
+  <div class="modal-box ocr-review-box">
+    <h3>OCR Review Before Saving</h3>
+    <p id="ocr-review-summary" style="font-size:12px;color:#5a6a7a;margin-bottom:10px;"></p>
+    <div id="ocr-review-content"></div>
+    <div class="modal-actions">
+      <button class="btn-modal" onclick="App.prevOcrIssue()">Previous</button>
+      <button class="btn-modal" onclick="App.undoOcrIssue()">Undo</button>
+      <button class="btn-modal" onclick="App.skipOcrIssue()">Skip</button>
+      <button class="btn-modal" onclick="App.applyAllOcrIssue()">Apply All Same</button>
+      <button class="btn-modal" onclick="App.applyOcrIssue()">Apply Fix</button>
+      <button class="btn-modal primary" onclick="App.saveOcrEdit()">Use Manual Edit</button>
+      <button class="btn-modal danger" id="ocr-review-save-anyway" onclick="App.saveGeneratedTest(true)">Save Anyway</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PARSE AUDIT MODAL ═══ -->
+<div id="modal-parse-audit" class="modal-overlay">
+  <div class="modal-box ocr-review-box">
+    <h3>Parse Audit Before Saving</h3>
+    <p id="parse-audit-summary" style="font-size:12px;color:#5a6a7a;margin-bottom:10px;"></p>
+    <div id="parse-audit-content"></div>
+    <div class="modal-actions">
+      <button class="btn-modal" onclick="App.prevParseAuditIssue()">Previous</button>
+      <button class="btn-modal" onclick="App.nextParseAuditIssue()">Next</button>
+      <button class="btn-modal" onclick="App.openOcrReview()">Review OCR Issues</button>
+      <button class="btn-modal danger" onclick="App.saveGeneratedTest(true, true)">Save Anyway</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ NEW FOLDER MODAL ═══ -->
 <div id="modal-new-folder" class="modal-overlay">
   <div class="modal-box" style="max-width:380px;">
@@ -1961,6 +2014,7 @@ const OCR = (() => {
     text = text.replace(/(\d)\s*\?\s*(\d)/g,        '$1$2');
     text = text.replace(/(\d)\s*\?\s*(-year)/gi,    '$1$2');
     text = text.replace(/(\d)\s*\?\s*([A-Za-z])/g, '$1-$2');
+    text = text.replace(/\b(\d)\s+(\d)(-year-old)\b/gi, '$1$2$3');
     // Greek letters from Symbol font → "~" in PDF.js
     text = text.replace(/~\s*-\s*[Aa]drenergic/g,  'β-Adrenergic');
     text = text.replace(/~\s*-\s*adrenergic/g,     'β-adrenergic');
@@ -2111,52 +2165,148 @@ const OCR = (() => {
     'pentagons','intersecting','regimen','irritability','serotonin','fatigue','urinary',
     'weekly','times','generalized','anxiety','disorder','adverse','effect','alzheimer',
     'controlled','insulin','forgetfulness','significant','deficits','become','increasingly',
-    'suspicious',
+    'suspicious','bradykinesia','progression','independently','limits','wernicke',
+    'poland','subtract','writing','interpreter','fun','wife','extremities','captopril',
+    'hematocrit','reassurance','directive','difficulty','min','temperature','para',
+    'reexamination','usa','physically','loudly','hospital','telling','assault','illicit',
+    'mini','approximately','functioning','hypertension','hydrochlorothiazide','bilaterally',
+    'excellent','unable','serial','judgment','laboratory','mild','abnormalities',
+    'himself','herself','ago','medications','alcohol','confrontational','psychiatric',
+    'tendon','mental','physical','delusional','dementia','modafinil','zolpidem','visual',
+    'cerebrospinal','oligoclonal','metoprolol','arrival','essential','sertraline','fewer',
+    'alumni','allopurinol','psychological','preschool','bilateral','marital','sildenafil',
+    'haloperidol','propranolol','school','condition','ideation','suicidal','medical',
+    'superficial','concerned','several','norepinephrine','infidelity','paramour','sneaking',
+    'superficially','dysphoric','depressive','personality','threatening','sedating',
+    'amitriptyline','aripiprazole','chlorpromazine','brought','hypercholesterolemia',
+    'questions','pharmacotherapy','dopamine','urinating','findings','millions','toilet',
+    'increasing','ruining','bulimia','height','transient','heard','vomiting','normal',
+    'discord','clomipramine','willi','worries','correctly','participates','college',
+    'airline','glorious','reticent','help','door','diligently','leukocyte','interaction',
+    'incomprehensible','remembering','shifts','milestones','trying','racing','guilty',
+    'finding','jail','devil','forth','features','lithium','exhibitionism',
+    'nortriptyline','neurotransmitters','philtrum','pulmonary','illness','standardized',
+    'idiopathic','thoughts','toluene','third','multivitamin','talking','girl','talks',
+    'reaction','twine','pupils','person','neighbors',
   ]);
 
-  function _segmentAlphaRun(run) {
-    const compact = run.replace(/\s+/g, '');
-    if (compact.length < 2) return run;
+  const _FORCE_COMPACT_WORDS = new Set(['himself','herself','yourself','myself','ago']);
+
+  function _segmentCompactAlpha(compact) {
+    if (compact.length < 2) return null;
 
     const lower = compact.toLowerCase();
     const n = lower.length;
     const maxWordLen = 24;
     const dp = Array(n + 1).fill(null);
+    const scores = Array(n + 1).fill(Infinity);
     dp[n] = [];
+    scores[n] = 0;
+
+    function wordCost(word) {
+      if (word.length <= 1) return 12;
+      if (word.length === 2) return 8;
+      if (word.length === 3) return 2;
+      return 1;
+    }
 
     for (let i = n - 1; i >= 0; i--) {
       let best = null;
+      let bestScore = Infinity;
       const end = Math.min(n, i + maxWordLen);
       for (let j = i + 1; j <= end; j++) {
         const word = lower.slice(i, j);
         if (!_REAL_WORDS.has(word) || !dp[j]) continue;
+        const score = wordCost(word) + scores[j];
         const candidate = [compact.slice(i, j), ...dp[j]];
-        if (!best || candidate.length < best.length) best = candidate;
+        if (
+          score < bestScore ||
+          (score === bestScore && (!best || candidate.length < best.length))
+        ) {
+          best = candidate;
+          bestScore = score;
+        }
       }
       dp[i] = best;
+      scores[i] = bestScore;
     }
 
-    return dp[0] ? dp[0].join(' ') : run;
+    return dp[0];
+  }
+
+  function _repairAlphaRun(run) {
+    const tokens = run.split(/\s+/).filter(Boolean);
+    if (!tokens.length) return run;
+    const safeShort = new Set(['a','an','as','at','be','by','do','go','he','if','in','is','it','me','my','no','of','on','or','so','to','up','us','we']);
+    const isKnown = tok => _REAL_WORDS.has(tok.toLowerCase());
+    const isSuspicious = tok => {
+      const clean = tok.replace(/[^A-Za-z]/g, '');
+      if (!clean) return false;
+      const lc = clean.toLowerCase();
+      if (/^[A-Z]{2}$/.test(clean)) return true;
+      if (clean.length === 1) return !(clean === 'I' || clean === 'B' || clean === 'T' || clean === 'A');
+      if (clean.length <= 2 && !safeShort.has(lc)) return true;
+      return !isKnown(clean);
+    };
+
+    const out = [];
+    for (let i = 0; i < tokens.length;) {
+      let best = null;
+      const maxTokens = Math.min(6, tokens.length - i);
+
+      for (let len = maxTokens; len >= 1; len--) {
+        const slice = tokens.slice(i, i + len);
+        const compact = slice.join('');
+        const forced = len > 1 && _FORCE_COMPACT_WORDS.has(compact.toLowerCase());
+        if (!forced && !slice.some(isSuspicious)) continue;
+        const segmented = _segmentCompactAlpha(compact);
+        if (!segmented) continue;
+
+        const unchanged =
+          segmented.length === slice.length &&
+          segmented.every((word, idx) => word.toLowerCase() === slice[idx].toLowerCase());
+
+        if (!unchanged || len > 1) {
+          best = { len, words: segmented };
+          break;
+        }
+      }
+
+      if (best) {
+        out.push(...best.words);
+        i += best.len;
+      } else {
+        out.push(tokens[i]);
+        i++;
+      }
+    }
+
+    return out.join(' ');
   }
 
   function fixLigatureSpaces(str) {
     // Conservative spacing repair:
-    // - preserve existing spaces unless an alphabetic run can be fully segmented
-    //   into known words
+    // - repair local alphabetic windows instead of requiring a whole sentence
+    //   fragment to segment perfectly
     // - repair phantom fragments ("fat ig ue" -> "fatigue")
     // - split run-together words ("Generalizedanxietydisorder" -> "Generalized anxiety disorder")
     // This replaces the old unknown-token accumulator, which merged valid words
     // whenever the dictionary was missing one medical term.
-    return str.replace(/[A-Za-z]+(?:\s+[A-Za-z]+)*/g, run => _segmentAlphaRun(run));
+    return str
+      .replace(/\bhe\s+a\s+ed\b/gi, 'heard')
+      .replace(/\bhell\s+p\b/gi, 'help')
+      .replace(/[A-Za-z]+(?:\s+[A-Za-z]+)*/g, run => _repairAlphaRun(run))
+      .replace(/\bserum\s*~\s*-\s*hCG\b/gi, 'serum-hCG');
   }
 
   function joinItems(items) {
     // Always join items with a space between them.
     // Gap-based phantom detection is NOT done here because prev.width is unreliable
     // for NBME fonts — it causes real inter-word spaces to be eaten.
-    // All phantom space removal is handled by fixLigatureSpaces() via the dictionary.
+    // Run fixLigatureSpaces() after joining as well, because some phantom splits
+    // are created across adjacent PDF.js text items rather than inside item.str.
     if (!items.length) return '';
-    return items.map(it => it.str).join(' ').trim();
+    return fixLigatureSpaces(items.map(it => it.str).join(' ').trim());
   }
 
   // ── Split a line containing multiple merged options ───────
@@ -2215,24 +2365,38 @@ const OCR = (() => {
   //   → ["Na+ 121 mEq/L", "Cl- 86 mEq/L", "K+ 3.0 mEq/L"]
   const _LAB_UNIT = 'mEq\\/L|mg\\/dL|mm\\s*Hg|%|\\/mm\\s*3|µU\\/ml|ng\\/dl|µg\\/dl|IU\\/L|g\\/dL';
   const _LAB_RE   = new RegExp(
-    '[A-Za-z][A-Za-z0-9\\s\\+\\-]*?\\s+[\\d.]+\\s*(?:' + _LAB_UNIT + ')',
+    '\\b(?:[A-Za-z][A-Za-z0-9+()\\-]{0,24}\\s+){0,3}[\\d.]+\\s*(?:' + _LAB_UNIT + ')',
     'gi'
   );
   function splitLabValues(line) {
+    const text = String(line || '').trim();
+    if (!text) return [];
+
+    // Only split compact lab-table rows. Clinical prose often contains several
+    // lab units inside a sentence, and splitting those sentences can remove the
+    // question stem around the values.
+    const unitHits = text.match(new RegExp('(?:' + _LAB_UNIT + ')', 'gi')) || [];
+    if (unitHits.length < 2) return [line];
+    const proseLike =
+      text.length > 180 ||
+      /[.!?]\s+[A-Z]/.test(text) ||
+      /\b(?:because|patient|man|woman|boy|girl|physician|department|serum\s+studies\s+show|concentration|screening|positive|which\s+of\s+the\s+following)\b/i.test(text);
+    if (proseLike) return [line];
+
     _LAB_RE.lastIndex = 0;
     const matches = [];
     let m;
-    while ((m = _LAB_RE.exec(line)) !== null) {
+    while ((m = _LAB_RE.exec(text)) !== null) {
       matches.push({ start: m.index, end: m.index + m[0].length });
     }
     if (matches.length < 2) return [line];
     const parts = [];
-    const pre = line.slice(0, matches[0].start).trim();
+    const pre = text.slice(0, matches[0].start).trim();
     if (pre) parts.push(pre);
     for (const { start, end } of matches) {
-      parts.push(line.slice(start, end).trim());
+      parts.push(text.slice(start, end).trim());
     }
-    const post = line.slice(matches[matches.length - 1].end).trim();
+    const post = text.slice(matches[matches.length - 1].end).trim();
     if (post) parts.push(post);
     return parts.filter(Boolean);
   }
@@ -2453,9 +2617,23 @@ const OCR = (() => {
         const _FIGURE_RE = /\b(figure|fig\.?)\s*\d+\b/i;
         const _FIGURE_KW = /\bshown\s+(?:below|above|in\s+(?:the\s+)?(?:figure|image)\s*\d*)/i;
         const _hasFigureRef = itemNum !== null && (_FIGURE_RE.test(allText) || _FIGURE_KW.test(allText));
-        let figureDataUrl = null;
+        const _LAB_EXHIBIT_UNIT_RE = /(?:mEq\s*\/\s*L|mg\s*\/\s*d\s*L|mm\s*Hg|\/\s*mm\s*3|µ?\s*U\s*\/\s*m\s*l|ng\s*\/\s*d\s*l|µg\s*\/\s*d\s*l|IU\s*\/\s*L|g\s*\/\s*d\s*L|\/\s*m\s*l|\/\s*d\s*l|%)/i;
+        const _hasLabExhibit = rawLines.filter(l => {
+          const text = l.text.replace(/\s+/g, ' ').trim();
+          if (!_LAB_EXHIBIT_UNIT_RE.test(text)) return false;
+          if (text.length > 130) return false;
+          if (/\b(?:because|patient|man|woman|boy|girl|physician|department|which\s+of\s+the\s+following)\b/i.test(text)) return false;
+          return true;
+        }).length >= 2;
+        const _FIRST_CHOICE_RE = /^(?:[0oOQ©®°]\s+)?A\s{0,2}\)\s+\S/i;
+        const firstChoiceLine = rawLines.find(l => _FIRST_CHOICE_RE.test(l.text.replace(/\s+/g, ' ').trim()));
+        const stemCropBottomY = firstChoiceLine ? firstChoiceLine.y + (18 * sc) : BOTTOM_CHROME_Y * sc;
 
-        if (_hasFigureRef) {
+        let figureDataUrl = null;
+        let labExhibitDataUrl = null;
+        let stemCropDataUrl = null;
+
+        if (itemNum !== null || _hasFigureRef || _hasLabExhibit) {
           try {
             // Render page at 2x and crop to content band only (strips top/bottom chrome).
             // PDF_H = vp.height = true page height in PDF points (Y-up, 0=bottom).
@@ -2471,9 +2649,25 @@ const OCR = (() => {
             fullCanvas.height = Math.round(fvp.height);
             await page.render({ canvasContext: fullCanvas.getContext('2d'), viewport: fvp }).promise;
 
-            const cropTop    = Math.round((PDF_H - TOP_CHROME_Y)    * SCALE);
+            const cropTop    = Math.round((PDF_H - TOP_CHROME_Y) * SCALE);
             const cropBottom = Math.round((PDF_H - BOTTOM_CHROME_Y) * SCALE);
             const cropH      = cropBottom - cropTop;
+            if (itemNum !== null) {
+              const stemBottom = Math.round((PDF_H - stemCropBottomY) * SCALE);
+              const stemH = Math.max(0, Math.min(cropBottom, stemBottom) - cropTop);
+              if (stemH > 60) {
+                const stemCropLeft = Math.round(42 * sc * SCALE);
+                const stemCropW = Math.max(1, fullCanvas.width - stemCropLeft);
+                const stemCanvas = document.createElement('canvas');
+                stemCanvas.width = stemCropW;
+                stemCanvas.height = stemH;
+                stemCanvas.getContext('2d').drawImage(
+                  fullCanvas, stemCropLeft, cropTop, stemCropW, stemH,
+                  0, 0, stemCropW, stemH
+                );
+                stemCropDataUrl = stemCanvas.toDataURL('image/png');
+              }
+            }
             if (cropH > 20) {
               const cropCanvas = document.createElement('canvas');
               cropCanvas.width  = fullCanvas.width;
@@ -2482,12 +2676,14 @@ const OCR = (() => {
                 fullCanvas, 0, cropTop, fullCanvas.width, cropH,
                 0, 0, fullCanvas.width, cropH
               );
-              figureDataUrl = cropCanvas.toDataURL('image/png');
+              const cropUrl = cropCanvas.toDataURL('image/png');
+              if (_hasFigureRef) figureDataUrl = cropUrl;
+              if (_hasLabExhibit) labExhibitDataUrl = cropUrl;
             }
           } catch(_) {}
         }
 
-        pages.push({ pageNum: p, paragraphs: finalParas, itemNum, totalItems, figureDataUrl });
+        pages.push({ pageNum: p, paragraphs: finalParas, itemNum, totalItems, figureDataUrl, labExhibitDataUrl, stemCropDataUrl });
       }
 
     } else {
@@ -2521,6 +2717,7 @@ const OCR = (() => {
   function groupPagesByItem(pages) {
     const itemMap   = {};
     const figureMap = {};  // itemNum -> first figureDataUrl found for that item
+    const exhibitMap = {};  // itemNum -> visual exhibits, eg figures or lab-table crops
     let lastItem  = null;
     for (const pg of pages) {
       if (pg.itemNum !== null) {
@@ -2531,10 +2728,28 @@ const OCR = (() => {
         if (pg.figureDataUrl && !figureMap[lastItem]) {
           figureMap[lastItem] = pg.figureDataUrl;
         }
+        if (pg.figureDataUrl || pg.labExhibitDataUrl) {
+          if (!exhibitMap[lastItem]) exhibitMap[lastItem] = [];
+          if (pg.figureDataUrl) exhibitMap[lastItem].push({ kind: 'figure', isLabTable: false, dataUrl: pg.figureDataUrl });
+          if (pg.labExhibitDataUrl && pg.labExhibitDataUrl !== pg.figureDataUrl) exhibitMap[lastItem].push({ kind: 'lab', isLabTable: true, dataUrl: pg.labExhibitDataUrl });
+        }
+        if (pg.stemCropDataUrl) {
+          if (!exhibitMap[lastItem]) exhibitMap[lastItem] = [];
+          exhibitMap[lastItem].push({ kind: 'stem', isLabTable: true, dataUrl: pg.stemCropDataUrl });
+        }
       } else if (lastItem !== null) {
         itemMap[lastItem].push(pg.paragraphs);
         if (pg.figureDataUrl && !figureMap[lastItem]) {
           figureMap[lastItem] = pg.figureDataUrl;
+        }
+        if (pg.figureDataUrl || pg.labExhibitDataUrl) {
+          if (!exhibitMap[lastItem]) exhibitMap[lastItem] = [];
+          if (pg.figureDataUrl) exhibitMap[lastItem].push({ kind: 'figure', isLabTable: false, dataUrl: pg.figureDataUrl });
+          if (pg.labExhibitDataUrl && pg.labExhibitDataUrl !== pg.figureDataUrl) exhibitMap[lastItem].push({ kind: 'lab', isLabTable: true, dataUrl: pg.labExhibitDataUrl });
+        }
+        if (pg.stemCropDataUrl) {
+          if (!exhibitMap[lastItem]) exhibitMap[lastItem] = [];
+          exhibitMap[lastItem].push({ kind: 'stem', isLabTable: true, dataUrl: pg.stemCropDataUrl });
         }
       }
     }
@@ -2542,7 +2757,7 @@ const OCR = (() => {
     for (const [num, groups] of Object.entries(itemMap)) {
       merged[parseInt(num)] = [].concat(...groups);
     }
-    return { merged, figureMap };
+    return { merged, figureMap, exhibitMap };
   }
 
   // ── Parse one question ────────────────────────────────────
@@ -2558,7 +2773,7 @@ const OCR = (() => {
     let seenQNum  = false;
 
     for (const para of paragraphs) {
-      const p = para.trim();
+      const p = para.trim().replace(/^(\d)\s+(\d)\s*([.,])\s*/, '$1$2$3 ');
       if (!p) continue;
       // Skip figure data tokens — figures are handled via q.images, not paragraph text
       if (p.startsWith('__FIGURE__:')) continue;
@@ -2683,30 +2898,49 @@ const OCR = (() => {
       return true;
     });
 
-    // Rejoin paragraphs that were split mid-sentence by the PDF renderer.
-    // Pattern: a paragraph ending with "(Choice" gets the next paragraph
-    // starting with a letter + ")" merged back into it.
-    // Also handles any paragraph ending mid-word or with an open paren.
-    const rejoined = [];
-    for (let i = 0; i < unique.length; i++) {
-      const cur  = unique[i].trim();
-      const next = unique[i + 1] ? unique[i + 1].trim() : null;
-      if (next && /\(Choice\s*$/i.test(cur)) {
-        // "(Choice" split — merge with a space and skip next
-        rejoined.push(cur + ' ' + next);
-        i++;
-      } else if (next && /\($/.test(cur)) {
-        // bare open paren at end — merge with space
-        rejoined.push(cur + next);
-        i++;
-      } else {
-        rejoined.push(cur);
-      }
-    }
-
     // Build structured explanation — ONLY \n\n between sections, never \n
     // FIX 3: no single \n inside paragraphs, so no <br> appears in rendering
     const SECTION_RE = /^(incorrect\s+answers?:?|educational\s+objective:?|[A-Za-z][a-zA-Z\s,\/()\-]{2,60}\(choice\s+[A-Ka-k]\))/i;
+    function explanationJoiner(cur, next) {
+      if (!next || SECTION_RE.test(next)) return null;
+      if (/\(Choice\s*$/i.test(cur)) return ' ';
+      if (/\($/.test(cur)) return '';
+      if (/\([A-Z]$/.test(cur) && /^[A-Z]\)?/.test(next)) return '';
+      if (/^[A-Z]$/.test(cur) && /^[A-Z]\)?/.test(next)) return '';
+      if (/\b[A-Z]{2,}$/.test(cur) && /^[A-Z]\)/.test(next)) return '';
+      if (/\bChoices?\s+[A-K](?:\s*,\s*[A-K])*\s+and$/i.test(cur) && /^[A-K]\)/.test(next)) return ' ';
+      const curWord = (cur.match(/[A-Za-z]+$/) || [''])[0].toLowerCase();
+      const nextWord = (next.match(/^[A-Za-z]+/) || [''])[0].toLowerCase();
+      if (
+        curWord.length >= 2 &&
+        nextWord.length >= 2 &&
+        nextWord.length <= 8 &&
+        _REAL_WORDS.has(curWord + nextWord) &&
+        !_REAL_WORDS.has(curWord)
+      ) return '';
+      if (/[A-Za-z]{2,}$/.test(cur) && /^[a-z]{1,2}\b[).,;:]?/.test(next)) return '';
+      if (!/[.!?)]$/.test(cur) && /^[a-z]/.test(next)) return ' ';
+      if (/[,;:]$/.test(cur) && /^[A-Za-z]/.test(next)) return ' ';
+      return null;
+    }
+
+    const rejoined = [];
+    for (const para of unique) {
+      const trimmed = para.trim();
+      if (!trimmed) continue;
+      if (!rejoined.length) {
+        rejoined.push(trimmed);
+        continue;
+      }
+      const prev = rejoined[rejoined.length - 1];
+      const joiner = explanationJoiner(prev, trimmed);
+      if (joiner !== null) {
+        rejoined[rejoined.length - 1] = (prev + joiner + trimmed).replace(/\s{2,}/g, ' ').trim();
+      } else {
+        rejoined.push(trimmed);
+      }
+    }
+
     const parts = [];
     for (const para of rejoined) {
       const trimmed = para.trim();
@@ -2793,8 +3027,8 @@ const OCR = (() => {
       report(42 + Math.round((i / t) * 30), `Reading AK page ${i}/${t}…`));
 
     report(74, 'Grouping pages…');
-    const { merged: qItemMap, figureMap: qFigureMap } = groupPagesByItem(qPages);
-    const { merged: aItemMap }                        = groupPagesByItem(aPages);
+    const { merged: qItemMap, figureMap: qFigureMap, exhibitMap: qExhibitMap } = groupPagesByItem(qPages);
+    const { merged: aItemMap }                                             = groupPagesByItem(aPages);
 
     report(80, 'Parsing questions…');
     const questions = parseQuestionBank(qItemMap);
@@ -2805,16 +3039,32 @@ const OCR = (() => {
     report(90, 'Matching…');
     const matched = matchAndMerge(questions, answerMap);
 
-    // Attach figure metadata to questions.
-    // dataUrl is NOT stored here — it goes into IndexedDB via FigureStore.
-    // q.images stores only { figureKey, isLabTable } — a tiny reference.
+    // Attach exhibit metadata to questions.
+    // dataUrl is NOT stored here permanently — it goes into IndexedDB via FigureStore.
+    // q.images stores only { figureKey, isLabTable, kind } — a tiny reference.
     // The testId is not known yet (assigned by DB.createTest), so we store
     // figureKey as a temporary placeholder '__PENDING__:qNum' and rewrite
     // it in saveGeneratedTest after createTest returns the real testId.
     matched.forEach(q => {
-      const figUrl = qFigureMap[q.n];
-      q.images      = figUrl ? [{ figureKey: '__PENDING__:' + q.n, isLabTable: false }] : [];
-      q._figureData = figUrl || null;  // temp: dataUrl held here until saved to IndexedDB
+      const exhibits = qExhibitMap[q.n] || (qFigureMap[q.n] ? [{ kind: 'figure', isLabTable: false, dataUrl: qFigureMap[q.n] }] : []);
+      q.images = exhibits.map((ex, idx) => ({
+        figureKey: '__PENDING__:' + q.n + ':' + idx,
+        isLabTable: !!ex.isLabTable,
+        kind: ex.kind || (ex.isLabTable ? 'lab' : 'figure')
+      }));
+      q._figureData = exhibits.map(ex => ({
+        dataUrl: ex.dataUrl,
+        isLabTable: !!ex.isLabTable,
+        kind: ex.kind || (ex.isLabTable ? 'lab' : 'figure')
+      }));
+      q._parseAudit = {
+        item: q.n,
+        questionParagraphs: qItemMap[q.n] || [],
+        answerParagraphs: aItemMap[q.n] || [],
+        parsedStem: q.t || '',
+        parsedOptions: (q.o || []).map(o => `${o.l}) ${o.t}`),
+        parsedExplanation: q.explanation || ''
+      };
     });
 
     const apiKey = (localStorage.getItem('gemini_api_key') || '').replace(/['"]/g, '').trim();
@@ -2878,13 +3128,15 @@ function renderImages(q, topElId, bottomElId) {
   topEl.innerHTML = '';
   bottomEl.innerHTML = '';
   if (!q || !q.images || !q.images.length) return;
-  for (const img of q.images) {
-    const dest = img.isLabTable ? bottomEl : topEl;
+  const hasStemCrop = q.images.some(img => img.kind === 'stem');
+  const displayImages = hasStemCrop ? q.images.filter(img => img.kind === 'stem') : q.images;
+  for (const img of displayImages) {
+    const dest = bottomEl;
     const wrap = document.createElement('div');
     wrap.className = 'q-img-wrap';
     const el = document.createElement('img');
     el.className = 'q-img';
-    el.alt = img.isLabTable ? 'Lab values table' : 'Clinical image';
+    el.alt = img.isLabTable ? 'Lab values/table exhibit' : 'Clinical image';
     wrap.appendChild(el);
     dest.appendChild(wrap);
 
@@ -3304,16 +3556,23 @@ const Quiz = (() => {
     const numBadge = document.getElementById('q-num-badge');
     if (numBadge) numBadge.textContent = `Item ${state.qIdx + 1}`;
 
-    // Images (above stem for clinical images, below for lab tables)
-    if (typeof renderImages === 'function') renderImages(q, 'q-images-top', 'q-images-bottom');
-
     // Stem
     const stemEl = document.getElementById('q-stem');
-    if (r.highlights && r.highlights.html) {
+    const hasStemCrop = !!(q.images && q.images.some(img => img.kind === 'stem'));
+    const qCard = stemEl ? stemEl.closest('.q-card') : null;
+    const contentArea = stemEl ? stemEl.closest('.quiz-content-area') : null;
+    if (qCard) qCard.classList.toggle('q-stem-image-mode', hasStemCrop);
+    if (contentArea) contentArea.classList.toggle('image-stem-active', hasStemCrop);
+    if (hasStemCrop) {
+      stemEl.innerHTML = '';
+    } else if (r.highlights && r.highlights.html) {
       stemEl.innerHTML = r.highlights.html;
     } else {
       stemEl.innerHTML = window.buildStemHTML(q.t);
     }
+
+    // Exhibits render after the stem.
+    if (typeof renderImages === 'function') renderImages(q, 'q-images-top', 'q-images-bottom');
 
     // Tags — only shown after the question has been answered
     const tagEl = document.getElementById('q-tags');
@@ -3866,13 +4125,17 @@ const Results = (() => {
     document.getElementById('rev-counter').textContent = `Item ${_reviewIdx+1} of ${_questions.length}`;
     document.getElementById('rev-test-name').textContent = test.name;
 
-    // Images
-    if (typeof renderImages === 'function') renderImages(q, 'rev-images-top', 'rev-images-bottom');
-
     // Stem with saved highlights
     const stemEl = document.getElementById('rev-stem');
-    if (r.highlights && r.highlights.html) stemEl.innerHTML = r.highlights.html;
+    const hasStemCrop = !!(q.images && q.images.some(img => img.kind === 'stem'));
+    const revCard = stemEl ? stemEl.closest('.q-card') : null;
+    if (revCard) revCard.classList.toggle('rev-stem-image-mode', hasStemCrop);
+    if (hasStemCrop) stemEl.innerHTML = '';
+    else if (r.highlights && r.highlights.html) stemEl.innerHTML = r.highlights.html;
     else stemEl.innerHTML = window.buildStemHTML(q.t);
+
+    // Images
+    if (typeof renderImages === 'function') renderImages(q, 'rev-images-top', 'rev-images-bottom');
 
     // Tags
     const tagEl = document.getElementById('rev-tags');
@@ -4220,6 +4483,11 @@ const App = (() => {
   let _currentView   = 'home'; // 'home'|'quiz'|'results'|'flagged'|'trash'
   let _genQBFile = null, _genAKFile = null;
   let _genParsed = null;
+  let _ocrIssues = [];
+  let _ocrIssueIdx = 0;
+  let _ocrUndoStack = [];
+  let _parseAuditIssues = [];
+  let _parseAuditIdx = 0;
   // ── Init ───────────────────────────────────────────────────
   function init() {
     window.toast = toast;
@@ -4784,6 +5052,13 @@ const App = (() => {
     document.getElementById('gen-parse-note').style.display  = 'none';
     document.getElementById('btn-gen-start').textContent = 'Extract & Generate →';
     document.getElementById('btn-gen-start').disabled = false;
+    document.getElementById('btn-gen-start').onclick = startOCR;
+    document.getElementById('modal-ocr-review').style.display = 'none';
+    document.getElementById('modal-parse-audit').style.display = 'none';
+    _ocrIssues = [];
+    _ocrIssueIdx = 0;
+    _parseAuditIssues = [];
+    _parseAuditIdx = 0;
 
     // Populate folder select
     const sel = document.getElementById('gen-folder-select');
@@ -4818,6 +5093,580 @@ const App = (() => {
     document.getElementById('uz-'+id).classList.add('loaded');
     document.getElementById('gen-parse-note').style.display = 'none';
     _genParsed = null;
+    _ocrIssues = [];
+    _ocrIssueIdx = 0;
+    _ocrUndoStack = [];
+    _parseAuditIssues = [];
+    _parseAuditIdx = 0;
+  }
+
+  const OCR_REVIEW_RULES = [
+    [/then\s+ig\s+ht/gi, 'the night'], [/T\s+he/g, 'The'],
+    [/especial\s+ly/gi, 'especially'], [/Eosinoph\s+ilocytosis/gi, 'Eosinophilocytosis'],
+    [/letharg\s+i\s+c/gi, 'lethargic'], [/ta\s+nt\s+rums/gi, 'tantrums'],
+    [/Initial\s+ly/gi, 'Initially'], [/irritabl\s+e/gi, 'irritable'],
+    [/norm\s+a\s+l/gi, 'normal'], [/reg\s+ression/gi, 'regression'],
+    [/eval\s+ua\s+tions/gi, 'evaluations'], [/urinati\s+ng/gi, 'urinating'],
+    [/Prader-Will\s+i/gi, 'Prader-Willi'], [/fi\s+ndings/gi, 'findings'],
+    [/mi\s+llions/gi, 'millions'], [/to\s+i\s+let/gi, 'toilet'],
+    [/i\s+nc\s+reasing/gi, 'increasing'], [/rui\s+ni\s+ng/gi, 'ruining'],
+    [/Bu\s+limia/g, 'Bulimia'], [/heig\s+ht/gi, 'height'],
+    [/Transie\s+nt/gi, 'Transient'], [/he\s+a\s+ed/gi, 'heard'],
+    [/vom\s+it\s+i\s+ng/gi, 'vomiting'], [/serum\s*~\s*-\s*hCG/gi, 'serum-hCG'],
+    [/disco\s+rd/gi, 'discord'], [/clom\s+ipram\s+ine/gi, 'clomipramine'],
+    [/tem\s+perature/gi, 'temperature'], [/reexami\s+na\s+tion/gi, 'reexamination'],
+    [/physical\s+ly/gi, 'physically'], [/loudl\s+y/gi, 'loudly'],
+    [/hospita\s+l/gi, 'hospital'], [/tel\s+li\s+ng/gi, 'telling'],
+    [/assau\s+l\s+t/gi, 'assault'], [/il\s+li\s+cit/gi, 'illicit'],
+    [/Min\s+i-Mental/g, 'Mini-Mental'], [/f\s+un/gi, 'fun'],
+    [/w\s+ife/gi, 'wife'], [/extrem\s+ities/gi, 'extremities'],
+    [/captopri\s+l/gi, 'captopril'], [/Hema\s+tocrit/gi, 'Hematocrit'],
+    [/Reassu\s+ra\s+nce/gi, 'Reassurance'], [/direct\s+i\s+vein/gi, 'directive in'],
+    [/90\/mi\s+n/gi, '90/min'], [/diffi\s+cu\s+lty/gi, 'difficulty'],
+    [/peri\s+od/gi, 'period'], [/duri\s+ng/gi, 'during'],
+    [/insu\s+li\s+n/gi, 'insulin'], [/brady\s+ki\s+nesi\s+a/gi, 'bradykinesia'],
+    [/A\s+l\s+zheimer/g, 'Alzheimer'], [/fat\s+ig\s+ue/gi, 'fatigue'],
+    [/i\s+rri\s+tabil\s+ity/gi, 'irritability'], [/US\s+A/g, 'USA'],
+    [/cogn\s+itive/gi, 'cognitive'], [/pe\s+rfo\s+rm/gi, 'perform'],
+    [/hell\s+p/gi, 'help'], [/toe\s+at/gi, 'to eat'],
+    [/Drug\s+-\s*drug/g, 'Drug-drug'], [/drug\s+-\s*drug/g, 'drug-drug'],
+    [/\/m\s+l\b/gi, '/ml'], [/\/d\s+l\b/gi, '/dl'],
+    [/\b(\d)\s+(\d)(-year-old)\b/gi, m => m.replace(/\s+/, '')]
+  ];
+
+  const OCR_REVIEW_COMPACT_WORDS = new Set([
+    'worries','correctly','participates','college','airline','glorious','reticent',
+    'help','door','diligently','leukocyte','interaction','likely','incomprehensible',
+    'temperature','reexamination','physically','loudly','hospital','telling','assault',
+    'illicit','findings','millions','toilet','increasing','ruining','bulimia','height',
+    'transient','vomiting','normal','discord','clomipramine','urinating','especially',
+    'lethargic','tantrums','initially','irritable','regression','evaluations','cognitive',
+    'perform','period','during','insulin','bradykinesia','fatigue','irritability',
+    'remembering','shifts','milestones','trying','racing','guilty','finding','jail',
+    'devil','forth','features','illness','standardized','thoughts','third',
+    'multivitamin','talking','girl','talks','reaction','twine','pupils','person',
+    'neighbors'
+  ]);
+
+  const OCR_MEDICAL_COMPACT_WORDS = new Set([
+    'acetylcholine','aminobutyric','amitriptyline','aripiprazole','benzodiazepine',
+    'bupropion','buspirone','carbamazepine','carbidopa','chlorpromazine','citalopram',
+    'clomipramine','clonazepam','clozapine','diazepam','dopamine','donepezil',
+    'duloxetine','escitalopram','fluoxetine','fluphenazine','gabapentin','haloperidol',
+    'hydroxyzine','imipramine','lamotrigine','levodopa','lorazepam','lurasidone',
+    'methylphenidate','modafinil','naltrexone','norepinephrine','olanzapine',
+    'paroxetine','pramipexole','propranolol','quetiapine','risperidone','ropinirole',
+    'sertraline','serotonin','trazodone','venlafaxine','ziprasidone','zolpidem',
+    'alzheimer','wernicke','korsakoff','parkinson','praderwilli','eosinophilocytosis',
+    'hematocrit','leukocyte','thrombocytopenia','lymphocytosis','neutrophilia',
+    'eosinophilia','cardiovascular','cerebrospinal','neurologic','psychiatric',
+    'psychological','psychopharmacology','psychotherapy','pharmacotherapy',
+    'hydrochlorothiazide','captopril','gemfibrozil','lovastatin','lisinopril',
+    'metoprolol','allopurinol','sildenafil','hemoglobin','creatinine','bicarbonate',
+    'hypercholesterolemia','hypertension','hypothyroidism','hyperthyroidism',
+    'hyponatremia','hypokalemia','hypercalcemia','hyperglycemia','hypoglycemia',
+    'amenorrhea','dysmenorrhea','galactorrhea','pseudodementia','dysthymia',
+    'cyclothymia','schizophrenia','schizoaffective','delusional','somatization',
+    'conversion','dissociation','depersonalization','derealization','agoraphobia',
+    'obsessivecompulsive','posttraumatic','neurocognitive','frontotemporal',
+    'bradykinesia','dyskinesia','akathisia','dystonia','catatonia','anhedonia',
+    'avolition','aphasia','apraxia','agnosia','ataxia','dysphoria','euphoria',
+    'hypomania','mania','delirium','dementia','enuresis','encopresis','bulimia',
+    'anorexia','tubular','reticular','occipital','subdural','cerebral','bilateral',
+    'superficial','oligoclonal','electroconvulsive','neuroleptic','anticholinergic',
+    'antidepressant','antipsychotic','anticonvulsant','benzodiazepines',
+    'exhibitionism','lithium','nortriptyline','neurotransmitters','philtrum',
+    'pulmonary','idiopathic','toluene'
+  ]);
+
+  function escHtml(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function getQuestionField(q, field, optIdx) {
+    if (field === 'stem') return q.t || '';
+    if (field === 'explanation') return q.explanation || '';
+    if (field === 'choice') return q.o?.[optIdx]?.t || '';
+    return '';
+  }
+
+  function setQuestionField(q, field, optIdx, value) {
+    if (field === 'stem') q.t = value;
+    else if (field === 'explanation') q.explanation = value;
+    else if (field === 'choice' && q.o?.[optIdx]) q.o[optIdx].t = value;
+  }
+
+  function loadLearnedOcrCorrections() {
+    try { return JSON.parse(localStorage.getItem('nbme_ocr_corrections_v1') || '{}') || {}; }
+    catch (_) { return {}; }
+  }
+
+  function saveLearnedOcrCorrection(original, correction) {
+    const compact = String(original || '').replace(/\s+/g, '').toLowerCase();
+    if (!compact || !correction || compact === correction.toLowerCase()) return;
+    const learned = loadLearnedOcrCorrections();
+    learned[compact] = correction;
+    try { localStorage.setItem('nbme_ocr_corrections_v1', JSON.stringify(learned)); } catch (_) {}
+  }
+
+  function makeOcrIssue(qIdx, field, optIdx, match, suggestion, source, flags, start = null, end = null) {
+    return {
+      id: DB.uid(), qIdx, field, optIdx,
+      original: match, suggestion,
+      source, flags, start, end, status: 'open'
+    };
+  }
+
+  function caseLike(original, suggestion) {
+    const raw = String(original || '').replace(/[^A-Za-z]/g, '');
+    if (!raw) return suggestion;
+    if (raw === raw.toUpperCase()) return suggestion.toUpperCase();
+    if (raw[0] === raw[0].toUpperCase()) return suggestion.charAt(0).toUpperCase() + suggestion.slice(1);
+    return suggestion;
+  }
+
+  function scanCompactWordIssues(text, qIdx, field, optIdx) {
+    const issues = [];
+    const re = /\b[A-Za-z]+(?:\s+[A-Za-z]+){1,4}\b/g;
+    let m;
+    while ((m = re.exec(text || '')) !== null) {
+      const phrase = m[0];
+      const tokens = phrase.split(/\s+/).filter(Boolean);
+      for (let start = 0; start < tokens.length; start++) {
+        for (let len = Math.min(5, tokens.length - start); len >= 2; len--) {
+          const slice = tokens.slice(start, start + len);
+          const original = slice.join(' ');
+          const compact = original.replace(/\s+/g, '').toLowerCase();
+          const learned = loadLearnedOcrCorrections();
+          const learnedSuggestion = learned[compact];
+          const isKnownCompact = OCR_REVIEW_COMPACT_WORDS.has(compact) || OCR_MEDICAL_COMPACT_WORDS.has(compact);
+          if (!learnedSuggestion && !isKnownCompact) continue;
+          const suggestion = learnedSuggestion || caseLike(original, compact);
+          if (original === suggestion) continue;
+          const source = original.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+          const localIdx = phrase.indexOf(original);
+          const issueStart = localIdx >= 0 ? m.index + localIdx : m.index;
+          issues.push(makeOcrIssue(qIdx, field, optIdx, original, suggestion, source, 'gi', issueStart, issueStart + original.length));
+          start += len - 1;
+          break;
+        }
+      }
+      if (m.index === re.lastIndex) re.lastIndex++;
+    }
+    return issues;
+  }
+
+  function scanTextForOcrIssues(text, qIdx, field, optIdx) {
+    const issues = [];
+    for (const [rule, suggestionDef] of OCR_REVIEW_RULES) {
+      const flags = rule.flags.includes('g') ? rule.flags : rule.flags + 'g';
+      const re = new RegExp(rule.source, flags);
+      let m;
+      while ((m = re.exec(text || '')) !== null) {
+        const suggestion = typeof suggestionDef === 'function' ? suggestionDef(m[0]) : suggestionDef;
+        if (!m[0] || m[0] === suggestion) continue;
+        issues.push(makeOcrIssue(qIdx, field, optIdx, m[0], suggestion, re.source, flags, m.index, m.index + m[0].length));
+        if (m.index === re.lastIndex) re.lastIndex++;
+      }
+    }
+    issues.push(...scanCompactWordIssues(text, qIdx, field, optIdx));
+    const seen = new Set();
+    return issues.filter(issue => {
+      const key = `${issue.field}|${issue.optIdx}|${issue.start}|${issue.end}|${issue.original}|${issue.suggestion}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  function diagnoseGeneratedQuestions(questions) {
+    const issues = [];
+    questions.forEach((q, qIdx) => {
+      issues.push(...scanTextForOcrIssues(q.t || '', qIdx, 'stem', null));
+      (q.o || []).forEach((opt, optIdx) => {
+        issues.push(...scanTextForOcrIssues(opt.t || '', qIdx, 'choice', optIdx));
+      });
+      issues.push(...scanTextForOcrIssues(q.explanation || '', qIdx, 'explanation', null));
+    });
+    return issues;
+  }
+
+  function buildParseAudit(questions) {
+    const issues = [];
+    const labUnitRe = /(?:mEq\s*\/\s*L|mg\s*\/\s*d\s*L|mm\s*Hg|\/\s*mm\s*3|µ?\s*U\s*\/\s*m\s*l|ng\s*\/\s*d\s*l|µg\s*\/\s*d\s*l|IU\s*\/\s*L|g\s*\/\s*d\s*L|\/\s*m\s*l|\/\s*d\s*l|%)/gi;
+    const clinicalIntroRe = /\b(?:\d+\s*(?:\?|)?-?year-old|year-old|patient|man|woman|boy|girl|physician|department|clinic|hospital|presents|comes|brought|reports|history|examination|which\s+of\s+the\s+following)\b/i;
+    const questionPromptRe = /\bwhich\s+of\s+the\s+following\b|[?]\s*$/i;
+    const labTextRe = /\b(?:serum|urine|plasma|blood|sodium|potassium|chloride|bicarbonate|glucose|creatinine|thyroxine|triiodothyronine|hormone|concentration|toxicology|screening|hemoglobin|hematocrit|leukocyte|platelet|protein|albumin|calcium|phosphate|magnesium|mEq|mg|µU|ng|µg|IU)\b/i;
+    const brokenExplanationRe = /(?:^|\n\n)[A-Za-z]{1,3}(?:[).,;:]|\n\n)|\([A-Z]\n\n[A-Z]|\b[A-Za-z]{2,}\n\n[a-z]{1,4}\b/;
+    const leadingClinicalRe = /^\s*(?:\d+\s*[.,]\s*)?(?:A|An)\s+\d+\s*(?:\?|)?-?year-old\b/i;
+    const tokenSet = text => new Set(
+      String(text || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, ' ')
+        .split(/\s+/)
+        .filter(w => w.length >= 4 && !/^\d+$/.test(w))
+    );
+
+    questions.forEach((q, qIdx) => {
+      const stem = q.t || '';
+      const audit = q._parseAudit || {};
+      const rawQuestion = (audit.questionParagraphs || []).join('\n\n');
+      const compactStemLen = stem.replace(/\s+/g, '').length;
+      const compactRawLen = rawQuestion.replace(/\s+/g, '').length;
+      const labHits = stem.match(labUnitRe) || [];
+      const rawHasClinicalIntro = clinicalIntroRe.test(rawQuestion);
+      const stemHasClinicalIntro = clinicalIntroRe.test(stem);
+      const stemHasQuestionPrompt = questionPromptRe.test(stem);
+      const rawHasQuestionPrompt = questionPromptRe.test(rawQuestion);
+      const rawStartsWithClinical = leadingClinicalRe.test(rawQuestion);
+      const stemStartsWithClinical = leadingClinicalRe.test(stem);
+      const rawTokens = tokenSet(rawQuestion);
+      const stemTokens = tokenSet(stem);
+      let sharedTokens = 0;
+      rawTokens.forEach(tok => { if (stemTokens.has(tok)) sharedTokens++; });
+      const rawCoverage = rawTokens.size ? sharedTokens / rawTokens.size : 1;
+      const reasons = [];
+      let severity = 'warning';
+
+      if (compactStemLen < 40) {
+        severity = 'fail';
+        reasons.push('Stem is extremely short.');
+      } else if (compactStemLen < 90) {
+        reasons.push('Stem is shorter than expected.');
+      }
+
+      if (labHits.length >= 2 && !clinicalIntroRe.test(stem)) {
+        severity = 'fail';
+        reasons.push('Stem has multiple lab units but no clear clinical vignette.');
+      }
+
+      if (labHits.length >= 2 && (compactStemLen < 260 || (!stemHasClinicalIntro && !stemHasQuestionPrompt))) {
+        severity = 'fail';
+        reasons.push('Stem may contain only lab values.');
+      }
+
+      if (labTextRe.test(stem) && !stemHasClinicalIntro && !stemHasQuestionPrompt) {
+        severity = 'fail';
+        reasons.push('Stem looks lab-heavy and lacks the clinical setup/question prompt.');
+      }
+
+      if (rawHasClinicalIntro && !stemHasClinicalIntro) {
+        severity = 'fail';
+        reasons.push('Raw extraction appears to contain a clinical vignette, but the parsed stem does not.');
+      }
+
+      if (rawHasQuestionPrompt && !stemHasQuestionPrompt) {
+        severity = 'fail';
+        reasons.push('Raw extraction contains the question prompt, but the parsed stem does not.');
+      }
+
+      if (rawStartsWithClinical && !stemStartsWithClinical) {
+        severity = 'fail';
+        reasons.push('Parsed stem does not start with the clinical vignette seen in raw extraction.');
+      }
+
+      if (rawTokens.size >= 25 && rawCoverage < 0.62) {
+        severity = 'fail';
+        reasons.push(`Parsed stem preserves only ${Math.round(rawCoverage * 100)}% of raw question keywords.`);
+      } else if (rawTokens.size >= 25 && rawCoverage < 0.78) {
+        reasons.push(`Parsed stem preserves only ${Math.round(rawCoverage * 100)}% of raw question keywords.`);
+      }
+
+      if (compactRawLen > 0 && compactStemLen > 0 && compactRawLen > compactStemLen * 1.35) {
+        severity = 'fail';
+        reasons.push('Parsed stem is much shorter than the raw grouped question text.');
+      }
+
+      if (!q.o || q.o.length < 2) {
+        severity = 'fail';
+        reasons.push('Fewer than 2 answer choices parsed.');
+      } else if (q.o.length < 5) {
+        reasons.push(`Only ${q.o.length} answer choices parsed.`);
+      }
+
+      if (brokenExplanationRe.test(q.explanation || '')) {
+        reasons.push('Explanation contains suspicious broken paragraph fragments.');
+      }
+
+      if (reasons.length) {
+        issues.push({
+          qIdx,
+          item: q.n,
+          displayNum: qIdx + 1,
+          severity,
+          reasons,
+          audit
+        });
+      }
+    });
+
+    return issues;
+  }
+
+  function openParseAudit() {
+    if (!_genParsed) return;
+    _parseAuditIdx = Math.max(0, Math.min(_parseAuditIdx, _parseAuditIssues.length - 1));
+    document.getElementById('modal-ocr-review').style.display = 'none';
+    document.getElementById('modal-parse-audit').style.display = 'flex';
+    renderParseAudit();
+  }
+
+  function renderParseAudit() {
+    const content = document.getElementById('parse-audit-content');
+    const summary = document.getElementById('parse-audit-summary');
+    const fails = _parseAuditIssues.filter(i => i.severity === 'fail').length;
+    const warns = _parseAuditIssues.length - fails;
+    summary.textContent = `${fails} failed structural check${fails === 1 ? '' : 's'} and ${warns} warning${warns === 1 ? '' : 's'} before saving.`;
+    if (!_parseAuditIssues.length) {
+      content.innerHTML = '<div class="ocr-review-empty">No structural parse issues detected.</div>';
+      return;
+    }
+
+    const issue = _parseAuditIssues[_parseAuditIdx] || _parseAuditIssues[0];
+    const q = _genParsed.questions[issue.qIdx];
+    const audit = issue.audit || {};
+    const qParas = (audit.questionParagraphs || []).join('\n\n');
+    const aParas = (audit.answerParagraphs || []).join('\n\n');
+    const opts = (audit.parsedOptions || []).join('\n');
+    const exp = audit.parsedExplanation || '';
+    const parsedChars = (q?.t || '').replace(/\s+/g, '').length;
+    const rawChars = qParas.replace(/\s+/g, '').length;
+    const sevClass = issue.severity === 'fail' ? 'parse-audit-fail' : 'parse-audit-warn';
+
+    content.innerHTML = `
+      <div class="ocr-review-progress">Issue ${_parseAuditIdx + 1} of ${_parseAuditIssues.length}</div>
+      <div class="ocr-review-card">
+        <div class="ocr-review-row">
+          <div class="ocr-review-label">Item</div>
+          <div class="ocr-review-value"><span class="${sevClass}">${issue.severity.toUpperCase()}</span> · Display item ${escHtml(issue.displayNum)} · Source item ${escHtml(issue.item)}</div>
+        </div>
+        <div class="ocr-review-row">
+          <div class="ocr-review-label">Reason</div>
+          <div class="ocr-review-value">${issue.reasons.map(escHtml).join('<br>')}</div>
+        </div>
+        <div class="ocr-review-row">
+          <div class="ocr-review-label">Size Check</div>
+          <div class="ocr-review-value">Parsed stem: ${parsedChars} chars · Raw grouped question: ${rawChars} chars</div>
+        </div>
+        <div class="ocr-review-row">
+          <div class="ocr-review-label">Parsed Stem</div>
+          <div class="ocr-review-value">${escHtml(q?.t || '').slice(0, 1200)}</div>
+        </div>
+        <div class="ocr-review-row">
+          <div class="ocr-review-label">Options</div>
+          <div class="ocr-review-value"><pre class="parse-audit-pre">${escHtml(opts || '(none)')}</pre></div>
+        </div>
+        <div class="ocr-review-row">
+          <div class="ocr-review-label">Raw Question</div>
+          <div class="ocr-review-value"><pre class="parse-audit-pre">${escHtml(qParas || '(none)')}</pre></div>
+        </div>
+        <div class="ocr-review-row">
+          <div class="ocr-review-label">Raw Answer</div>
+          <div class="ocr-review-value"><pre class="parse-audit-pre">${escHtml(aParas || '(none)')}</pre></div>
+        </div>
+        <div class="ocr-review-row">
+          <div class="ocr-review-label">Explanation</div>
+          <div class="ocr-review-value"><pre class="parse-audit-pre">${escHtml(exp.slice(0, 1600) || '(none)')}</pre></div>
+        </div>
+      </div>
+    `;
+  }
+
+  function nextParseAuditIssue() {
+    if (!_parseAuditIssues.length) return;
+    _parseAuditIdx = (_parseAuditIdx + 1) % _parseAuditIssues.length;
+    renderParseAudit();
+  }
+
+  function prevParseAuditIssue() {
+    if (!_parseAuditIssues.length) return;
+    _parseAuditIdx = (_parseAuditIdx - 1 + _parseAuditIssues.length) % _parseAuditIssues.length;
+    renderParseAudit();
+  }
+
+  function nextOpenOcrIssueIndex(start = 0) {
+    for (let i = start; i < _ocrIssues.length; i++) if (_ocrIssues[i].status === 'open') return i;
+    for (let i = 0; i < start; i++) if (_ocrIssues[i].status === 'open') return i;
+    return -1;
+  }
+
+  function prevVisibleOcrIssueIndex(start = _ocrIssueIdx - 1) {
+    for (let i = Math.min(start, _ocrIssues.length - 1); i >= 0; i--) {
+      if (_ocrIssues[i].status !== 'hidden') return i;
+    }
+    for (let i = _ocrIssues.length - 1; i > start; i--) {
+      if (_ocrIssues[i].status !== 'hidden') return i;
+    }
+    return -1;
+  }
+
+  function getIssueContext(text, issue) {
+    let idx = Number.isInteger(issue.start) ? issue.start : -1;
+    let endIdx = Number.isInteger(issue.end) ? issue.end : -1;
+    if (idx < 0 || endIdx <= idx || text.slice(idx, endIdx) !== issue.original) {
+      idx = text.indexOf(issue.original);
+      endIdx = idx >= 0 ? idx + issue.original.length : -1;
+    }
+    if (idx < 0) return text.slice(0, 240);
+    const leftPunct = Math.max(text.lastIndexOf('.', idx - 1), text.lastIndexOf('?', idx - 1), text.lastIndexOf('!', idx - 1), text.lastIndexOf('\n', idx - 1));
+    const rightCandidates = ['.', '?', '!', '\n'].map(ch => text.indexOf(ch, endIdx)).filter(n => n >= 0);
+    const rightPunct = rightCandidates.length ? Math.min(...rightCandidates) : -1;
+    const start = Math.max(0, leftPunct + 1, idx - 90);
+    const end = rightPunct >= 0 ? Math.min(text.length, rightPunct + 1) : Math.min(text.length, endIdx + 90);
+    return {
+      before: text.slice(start, idx).trimStart(),
+      match: text.slice(idx, endIdx),
+      after: text.slice(endIdx, end).trimEnd()
+    };
+  }
+
+  function openOcrReview() {
+    if (!_genParsed) return;
+    _ocrIssueIdx = nextOpenOcrIssueIndex(_ocrIssueIdx);
+    document.getElementById('modal-parse-audit').style.display = 'none';
+    document.getElementById('modal-ocr-review').style.display = 'flex';
+    renderOcrReview();
+  }
+
+  function renderOcrReview() {
+    const content = document.getElementById('ocr-review-content');
+    const summary = document.getElementById('ocr-review-summary');
+    const saveBtn = document.getElementById('ocr-review-save-anyway');
+    const openCount = _ocrIssues.filter(i => i.status === 'open').length;
+    summary.textContent = `${openCount} possible OCR issue${openCount === 1 ? '' : 's'} remaining. Apply fixes before saving, or save anyway if the text is acceptable.`;
+    if (saveBtn) {
+      saveBtn.textContent = openCount === 0 ? 'Save Test' : 'Save Anyway';
+      saveBtn.classList.toggle('danger', openCount > 0);
+      saveBtn.classList.toggle('primary', openCount === 0);
+    }
+    if (!_genParsed || openCount === 0) {
+      content.innerHTML = '<div class="ocr-review-empty">No unresolved OCR issues remain.</div>';
+      return;
+    }
+    if (_ocrIssueIdx < 0 || !_ocrIssues[_ocrIssueIdx] || _ocrIssues[_ocrIssueIdx].status !== 'open') {
+      _ocrIssueIdx = nextOpenOcrIssueIndex(0);
+    }
+    const issue = _ocrIssues[_ocrIssueIdx];
+    const q = _genParsed.questions[issue.qIdx];
+    const fieldLabel = issue.field === 'choice'
+      ? `Answer choice ${q.o?.[issue.optIdx]?.l || ''}`
+      : issue.field === 'stem' ? 'Question stem' : 'Explanation';
+    const current = getQuestionField(q, issue.field, issue.optIdx);
+    const context = getIssueContext(current, issue);
+    const contextHtml = typeof context === 'string'
+      ? escHtml(context)
+      : `${escHtml(context.before)}<mark class="ocr-review-bad">${escHtml(context.match)}</mark>${escHtml(context.after)}`;
+    content.innerHTML = `
+      <div class="ocr-review-meta">Item ${q.n || issue.qIdx + 1} · ${fieldLabel}</div>
+      <div class="ocr-review-progress">Issue ${_ocrIssueIdx + 1} of ${_ocrIssues.length}</div>
+      <div class="ocr-review-card">
+        <div class="ocr-review-row">
+          <div class="ocr-review-label">Detected</div>
+          <div class="ocr-review-value"><span class="ocr-review-bad">${escHtml(issue.original)}</span></div>
+        </div>
+        <div class="ocr-review-row">
+          <div class="ocr-review-label">Suggested</div>
+          <div class="ocr-review-value"><span class="ocr-review-good">${escHtml(issue.suggestion)}</span></div>
+        </div>
+        <div class="ocr-review-context">${contextHtml}</div>
+      </div>
+      <label class="form-label">Manual Correction</label>
+      <input class="ocr-review-edit" id="ocr-review-edit" value="${escHtml(issue.suggestion)}">
+    `;
+  }
+
+  function replaceIssueOccurrence(issue, replacement, allSame = false) {
+    if (!_genParsed) return;
+    const re = new RegExp(issue.source, issue.flags);
+    const changes = [];
+    _genParsed.questions.forEach((q, qIdx) => {
+      const fields = [
+        { field: 'stem', optIdx: null },
+        { field: 'explanation', optIdx: null },
+        ...(q.o || []).map((_, optIdx) => ({ field: 'choice', optIdx }))
+      ];
+      fields.forEach(({ field, optIdx }) => {
+        if (!allSame && (qIdx !== issue.qIdx || field !== issue.field || optIdx !== issue.optIdx)) return;
+        const val = getQuestionField(q, field, optIdx);
+        if (!val) return;
+        let next;
+        if (!allSame && Number.isInteger(issue.start) && Number.isInteger(issue.end) && val.slice(issue.start, issue.end) === issue.original) {
+          next = val.slice(0, issue.start) + replacement + val.slice(issue.end);
+        } else {
+          next = val.replace(re, replacement);
+        }
+        if (next !== val) {
+          changes.push({ qIdx, field, optIdx, before: val });
+          setQuestionField(q, field, optIdx, next);
+        }
+      });
+    });
+    if (changes.length) _ocrUndoStack.push({ issueIdx: _ocrIssueIdx, changes });
+  }
+
+  function applyOcrIssue() {
+    const issue = _ocrIssues[_ocrIssueIdx];
+    if (!issue || issue.status !== 'open') return;
+    replaceIssueOccurrence(issue, issue.suggestion, false);
+    saveLearnedOcrCorrection(issue.original, issue.suggestion);
+    issue.status = 'fixed';
+    _ocrIssueIdx = nextOpenOcrIssueIndex(_ocrIssueIdx + 1);
+    renderOcrReview();
+  }
+
+  function applyAllOcrIssue() {
+    const issue = _ocrIssues[_ocrIssueIdx];
+    if (!issue || issue.status !== 'open') return;
+    replaceIssueOccurrence(issue, issue.suggestion, true);
+    saveLearnedOcrCorrection(issue.original, issue.suggestion);
+    _ocrIssues.forEach(i => {
+      if (i.source === issue.source && i.suggestion === issue.suggestion && i.status === 'open') i.status = 'fixed';
+    });
+    _ocrIssueIdx = nextOpenOcrIssueIndex(_ocrIssueIdx + 1);
+    renderOcrReview();
+  }
+
+  function saveOcrEdit() {
+    const issue = _ocrIssues[_ocrIssueIdx];
+    const inp = document.getElementById('ocr-review-edit');
+    if (!issue || !inp) return;
+    const correction = inp.value.trim();
+    if (!correction) { toast('Enter a correction or skip this issue.'); return; }
+    replaceIssueOccurrence(issue, correction, false);
+    saveLearnedOcrCorrection(issue.original, correction);
+    issue.status = 'fixed';
+    _ocrIssueIdx = nextOpenOcrIssueIndex(_ocrIssueIdx + 1);
+    renderOcrReview();
+  }
+
+  function skipOcrIssue() {
+    const issue = _ocrIssues[_ocrIssueIdx];
+    if (!issue) return;
+    issue.status = 'skipped';
+    _ocrIssueIdx = nextOpenOcrIssueIndex(_ocrIssueIdx + 1);
+    renderOcrReview();
+  }
+
+  function prevOcrIssue() {
+    const prev = prevVisibleOcrIssueIndex(_ocrIssueIdx - 1);
+    if (prev >= 0) {
+      _ocrIssueIdx = prev;
+      renderOcrReview();
+    }
+  }
+
+  function undoOcrIssue() {
+    const last = _ocrUndoStack.pop();
+    if (!last || !_genParsed) { toast('Nothing to undo.'); return; }
+    last.changes.forEach(ch => {
+      const q = _genParsed.questions[ch.qIdx];
+      if (q) setQuestionField(q, ch.field, ch.optIdx, ch.before);
+    });
+    if (_ocrIssues[last.issueIdx]) {
+      _ocrIssues[last.issueIdx].status = 'open';
+      _ocrIssueIdx = last.issueIdx;
+    }
+    renderOcrReview();
   }
 
   async function startOCR() {
@@ -4842,34 +5691,61 @@ const App = (() => {
       if (!questions.length) throw new Error('No questions found. Try the manual paste option.');
 
       _genParsed = { name, folderId, questions };
+      _parseAuditIssues = buildParseAudit(questions);
+      _parseAuditIdx = 0;
+      _ocrIssues = diagnoseGeneratedQuestions(questions);
+      _ocrIssueIdx = nextOpenOcrIssueIndex(0);
+      _ocrUndoStack = [];
       document.getElementById('ocr-status-msg').textContent = `✓ Extracted ${questions.length} questions!`;
       document.getElementById('ocr-progress-fill').style.width = '100%';
-      document.getElementById('gen-parse-note').textContent   = `✓ ${questions.length} questions ready. Click Save to create the test.`;
+      const parseFails = _parseAuditIssues.filter(i => i.severity === 'fail').length;
+      document.getElementById('gen-parse-note').textContent = _parseAuditIssues.length
+        ? `⚠ ${questions.length} questions ready, with ${parseFails} structural failure${parseFails === 1 ? '' : 's'} and ${_ocrIssues.length} possible OCR issue${_ocrIssues.length === 1 ? '' : 's'} before saving.`
+        : _ocrIssues.length
+          ? `⚠ ${questions.length} questions ready, with ${_ocrIssues.length} possible OCR issue${_ocrIssues.length === 1 ? '' : 's'} to review before saving.`
+          : `✓ ${questions.length} questions ready. Click Save to create the test.`;
       document.getElementById('gen-parse-note').style.display = 'block';
-      document.getElementById('btn-gen-start').textContent    = '💾 Save Test';
+      document.getElementById('btn-gen-start').textContent    = _parseAuditIssues.length ? 'Review Parse Audit' : _ocrIssues.length ? 'Review OCR Issues' : '💾 Save Test';
       document.getElementById('btn-gen-start').disabled       = false;
-      document.getElementById('btn-gen-start').onclick        = saveGeneratedTest;
+      document.getElementById('btn-gen-start').onclick        = _parseAuditIssues.length ? openParseAudit : _ocrIssues.length ? openOcrReview : saveGeneratedTest;
+      if (_parseAuditIssues.length) openParseAudit();
+      else if (_ocrIssues.length) openOcrReview();
     } catch(err) {
       document.getElementById('ocr-status-msg').textContent = '✗ Error: ' + err.message;
       document.getElementById('btn-gen-start').disabled     = false;
       document.getElementById('btn-gen-start').textContent  = 'Try Again →';
+      document.getElementById('btn-gen-start').onclick      = startOCR;
       toast('OCR failed. Try manual text entry if the PDF is still unreadable.', 4000);
     }
   }
 
-  function saveGeneratedTest() {
+  function saveGeneratedTest(skipOcrReview = false, skipParseAudit = false) {
     if (!_genParsed) return;
+    if (!skipParseAudit && _parseAuditIssues.some(i => i.severity === 'fail')) {
+      openParseAudit();
+      return;
+    }
+    if (!skipOcrReview && _ocrIssues.some(i => i.status === 'open')) {
+      openOcrReview();
+      return;
+    }
     const questions = _genParsed.questions;
 
     // Save figure images to IndexedDB BEFORE creating the test.
     // Rewrite figureKey from '__PENDING__:qNum' to 'testId:qNum'.
     // Strip _figureData from question objects so it never touches localStorage.
-    const figureEntries = [];  // [{key, dataUrl}] to save after we have testId
+    const figureEntries = [];  // [{qNum, idx, dataUrl}] to save after we have testId
     questions.forEach(q => {
-      if (q._figureData) {
-        figureEntries.push({ qNum: q.n, dataUrl: q._figureData });
+      if (Array.isArray(q._figureData)) {
+        q._figureData.forEach((ex, idx) => {
+          if (ex && ex.dataUrl) figureEntries.push({ qNum: q.n, idx, dataUrl: ex.dataUrl });
+        });
+        delete q._figureData;
+      } else if (q._figureData) {
+        figureEntries.push({ qNum: q.n, idx: 0, dataUrl: q._figureData });
         delete q._figureData;
       }
+      if (q._parseAudit) delete q._parseAudit;
       // Clear pending keys — will be rewritten after createTest
       if (q.images) q.images.forEach(img => { img.figureKey = null; });
     });
@@ -4878,11 +5754,11 @@ const App = (() => {
 
     // Now we have test.id — write real figureKeys and save to IndexedDB
     if (figureEntries.length > 0 && window.FigureStore) {
-      figureEntries.forEach(({ qNum, dataUrl }) => {
-        const key = test.id + ':' + qNum;
+      figureEntries.forEach(({ qNum, idx, dataUrl }) => {
+        const key = test.id + ':' + qNum + ':' + idx;
         // Update q.images with the real key
         const q = test.questions.find(q => q.n === qNum);
-        if (q && q.images && q.images[0]) q.images[0].figureKey = key;
+        if (q && q.images && q.images[idx]) q.images[idx].figureKey = key;
         // Save to IndexedDB (fire and forget — non-blocking)
         window.FigureStore.put(key, dataUrl).catch(() => {});
       });
@@ -4891,10 +5767,17 @@ const App = (() => {
     }
 
     document.getElementById('modal-generate').style.display = 'none';
+    document.getElementById('modal-ocr-review').style.display = 'none';
+    document.getElementById('modal-parse-audit').style.display = 'none';
     _currentFolder = _genParsed.folderId;
     renderSidebar(); renderHomeGrid();
     toast(`✓ "${test.name}" created with ${test.questions.length} questions!`);
     _genParsed = null;
+    _ocrIssues = [];
+    _ocrIssueIdx = 0;
+    _ocrUndoStack = [];
+    _parseAuditIssues = [];
+    _parseAuditIdx = 0;
   }
 
   // ── Mode toggle ────────────────────────────────────────────
@@ -5118,6 +6001,17 @@ const App = (() => {
     closeGenerateModal,
     onDrag, offDrag, onDrop, onFile,
     startOCR,
+    openParseAudit,
+    nextParseAuditIssue,
+    prevParseAuditIssue,
+    openOcrReview,
+    applyOcrIssue,
+    applyAllOcrIssue,
+    saveOcrEdit,
+    skipOcrIssue,
+    prevOcrIssue,
+    undoOcrIssue,
+    saveGeneratedTest,
     toggleMode,
     confirmFinish,
     confirmFinishFromPause,
