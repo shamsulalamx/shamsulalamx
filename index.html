@@ -255,6 +255,24 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 .btn-unmark { font-size: 11px; color: #7a5c00; background: none; border: 1px solid #f0d080; border-radius: 3px; padding: 3px 10px; }
 .btn-unmark:hover { background: #fffbee; }
 
+/* ── Incorrect view ───────────────────────────────────────── */
+.incorrect-tag-group { border-top: 1px solid var(--border); }
+.incorrect-tag-title {
+  background: #fbfcfe; color: var(--navy); font-size: 12px; font-weight: 700;
+  padding: 9px 14px; border-bottom: 1px solid #eef2f6;
+}
+.incorrect-item {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 11px 14px; border-bottom: 1px solid #eef2f6;
+  font-size: 12.5px; line-height: 1.55; cursor: pointer;
+}
+.incorrect-item:hover { background: #fafcff; }
+.incorrect-item-num { flex-shrink: 0; font-size: 11px; font-weight: 700; color: #a12f24; background: #fdebea; border-radius: 10px; padding: 2px 8px; margin-top: 2px; }
+.incorrect-item-body { flex: 1; min-width: 0; }
+.incorrect-item-source { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--ltblue); margin-bottom: 4px; }
+.incorrect-item-q { color: var(--text); margin-bottom: 4px; }
+.incorrect-item-answer { font-size: 11.5px; color: var(--muted); }
+
 /* ── Screen: Quiz ─────────────────────────────────────────── */
 #screen-quiz {
   display: none; flex-direction: row;
@@ -927,6 +945,10 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
         <div class="sidebar-item" onclick="App.showFlagged(null)" id="nav-flagged">
           <span class="item-icon">🚩</span>
           <span class="item-label">All Flagged</span>
+        </div>
+        <div class="sidebar-item" onclick="App.showIncorrect()" id="nav-incorrect">
+          <span class="item-icon">✗</span>
+          <span class="item-label">Incorrect</span>
         </div>
         <div class="sidebar-item" onclick="App.showMarked(null)" id="nav-marked">
           <span class="item-icon">🔖</span>
@@ -5400,6 +5422,111 @@ const App = (() => {
     toast('Flag removed.');
   }
 
+  function showIncorrect() {
+    _currentView = 'incorrect';
+    document.getElementById('screen-home').style.display    = 'flex';
+    document.getElementById('screen-quiz').style.display    = 'none';
+    document.getElementById('screen-results').style.display = 'none';
+    document.getElementById('screen-review').style.display  = 'none';
+    document.getElementById('home-title').textContent = 'Incorrect Questions';
+    setActiveNav('nav-incorrect');
+
+    const content = document.getElementById('home-content');
+    const folders = DB.getFolders();
+    const folderIds = folders.map(f => f.id);
+    let totalIncorrect = 0;
+    let html = '';
+
+    folders.forEach(folder => {
+      const grouped = collectIncorrectByTag(DB.getTests(folder.id));
+      const folderCount = Object.values(grouped).reduce((sum, items) => sum + items.length, 0);
+      if (!folderCount) return;
+      totalIncorrect += folderCount;
+      html += incorrectFolderHTML(folder.name, folder.id, grouped, folderCount);
+    });
+
+    const otherTests = DB.get().tests.filter(t => !folderIds.includes(t.folderId));
+    const otherGrouped = collectIncorrectByTag(otherTests);
+    const otherCount = Object.values(otherGrouped).reduce((sum, items) => sum + items.length, 0);
+    if (otherCount) {
+      totalIncorrect += otherCount;
+      html += incorrectFolderHTML('Other', 'other', otherGrouped, otherCount);
+    }
+
+    content.innerHTML = totalIncorrect
+      ? html
+      : '<div class="no-tests">No incorrect questions yet. Finish a test to build this list.</div>';
+  }
+
+  function collectIncorrectByTag(tests) {
+    const grouped = {};
+    tests.forEach(test => {
+      const latest = DB.getHistory(test.id)[0];
+      if (!latest || !latest.results) return;
+      latest.results.forEach((r, idx) => {
+        if (!r || !r.answered || r.correct) return;
+        const q = test.questions[idx];
+        if (!q) return;
+        const tag = (q.tags && q.tags.length) ? q.tags[0] : 'Untagged';
+        if (!grouped[tag]) grouped[tag] = [];
+        grouped[tag].push({ test, q, result: r, idx });
+      });
+    });
+    return grouped;
+  }
+
+  function incorrectFolderHTML(folderName, folderId, grouped, count) {
+    const sectionId = 'incorrect-folder-' + folderId;
+    let html = `<div class="marked-folder-section">
+      <div class="marked-folder-header open" id="${sectionId}-hdr" onclick="App.toggleMarkedFolder('${sectionId}')">
+        <span>📁 ${escapeHTML(folderName)}</span>
+        <span style="display:flex;align-items:center;gap:8px;">
+          <span class="marked-folder-count">${count}</span>
+          <span class="marked-folder-chevron">▶</span>
+        </span>
+      </div>
+      <div class="marked-folder-body open" id="${sectionId}-body">`;
+
+    Object.keys(grouped).sort((a,b) => a.localeCompare(b)).forEach(tag => {
+      html += `<div class="incorrect-tag-group">
+        <div class="incorrect-tag-title">${escapeHTML(tag)}</div>`;
+      grouped[tag].forEach(item => {
+        html += incorrectItemHTML(item);
+      });
+      html += '</div>';
+    });
+
+    html += '</div></div>';
+    return html;
+  }
+
+  function incorrectItemHTML({ test, q, result, idx }) {
+    const correctOpt = (q.o || []).find(o => o.l === q.c);
+    const chosenOpt = (q.o || []).find(o => o.l === result.chosen);
+    const preview = incorrectPreview(q, correctOpt);
+    const chosen = result.chosen ? `${result.chosen}) ${chosenOpt?.t || ''}` : 'Skipped';
+    const correct = q.c ? `${q.c}) ${correctOpt?.t || ''}` : 'Not listed';
+
+    return `<div class="incorrect-item" onclick="Quiz.startTestAt('${test.id}',${idx})" title="Open this question">
+      <span class="incorrect-item-num">Q${q.n || idx + 1}</span>
+      <div class="incorrect-item-body">
+        <div class="incorrect-item-source">${escapeHTML(test.name)}</div>
+        <div class="incorrect-item-q">${escapeHTML(preview)}</div>
+        <div class="incorrect-item-answer">Your answer: ${escapeHTML(chosen)} · Correct: ${escapeHTML(correct)}</div>
+      </div>
+    </div>`;
+  }
+
+  function incorrectPreview(q, correctOpt) {
+    const stem = String(q.t || '').replace(/\s+/g, ' ').trim();
+    if (stem) return stem.slice(0, 220) + (stem.length > 220 ? '…' : '');
+    const exp = String(q.explanation || '').replace(/\s+/g, ' ').trim();
+    if (exp) return exp.slice(0, 220) + (exp.length > 220 ? '…' : '');
+    const correctText = String(correctOpt?.t || '').replace(/\s+/g, ' ').trim();
+    if (correctText) return `Image-based question · Correct answer: ${correctText.slice(0, 180)}${correctText.length > 180 ? '…' : ''}`;
+    return 'Image-based question';
+  }
+
   function showMarked(folderId) {
     _currentView = 'marked';
     document.getElementById('screen-home').style.display    = 'flex';
@@ -6638,6 +6765,7 @@ const App = (() => {
     showFolderHome,
     searchQuestionContent,
     showFlagged,
+    showIncorrect,
     showTrash,
     unflag,
     showMarked,
