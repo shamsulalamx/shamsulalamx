@@ -610,11 +610,6 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 .ocr-review-context { background: #f8fafc; padding: 10px 12px; font-size: 12px; color: #34495e; line-height: 1.6; max-height: 120px; overflow-y: auto; }
 .ocr-review-edit { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 3px; font-size: 13px; }
 .ocr-review-empty { font-size: 12px; color: var(--green); background: #edf8f0; border: 1px solid #cdebd6; padding: 10px 12px; border-radius: 4px; margin-bottom: 12px; }
-.parse-audit-pre { background: #f8fafc; border: 1px solid var(--border); border-radius: 4px; padding: 10px; max-height: 180px; overflow: auto; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; line-height: 1.45; color: #34495e; }
-.parse-audit-fail { color: #b42318; font-weight: 700; }
-.parse-audit-warn { color: #9a6700; font-weight: 700; }
-
-
 /* Inline rename */
 .rename-input {
   background: transparent; border: none; border-bottom: 1px solid var(--blue);
@@ -756,11 +751,20 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 }
 .q-images-top:empty, .q-images-bottom:empty,
 .rev-images-top:empty, .rev-images-bottom:empty { display: none; }
-.q-img-wrap { display: block; width: 100%; }
+.q-img-wrap {
+  display: block; width: 100%;
+  background: #fff;
+  border: none;
+  border-radius: 0;
+  padding: 4px 0;
+  box-shadow: none;
+}
 .q-img {
   width: 100%; max-width: none; height: auto;
-  border: 1px solid var(--border); border-radius: 4px;
+  border: none; border-radius: 0;
   display: block;
+  background: #fff;
+  box-shadow: none;
 }
 .q-stem-image-mode #q-stem,
 .rev-stem-image-mode #rev-stem { display: none; }
@@ -1454,21 +1458,6 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
       <button class="btn-modal" onclick="App.applyOcrIssue()">Apply Fix</button>
       <button class="btn-modal primary" onclick="App.saveOcrEdit()">Use Manual Edit</button>
       <button class="btn-modal danger" id="ocr-review-save-anyway" onclick="App.saveGeneratedTest(true)">Save Anyway</button>
-    </div>
-  </div>
-</div>
-
-<!-- ═══ PARSE AUDIT MODAL ═══ -->
-<div id="modal-parse-audit" class="modal-overlay">
-  <div class="modal-box ocr-review-box">
-    <h3>Parse Audit Before Saving</h3>
-    <p id="parse-audit-summary" style="font-size:12px;color:#5a6a7a;margin-bottom:10px;"></p>
-    <div id="parse-audit-content"></div>
-    <div class="modal-actions">
-      <button class="btn-modal" onclick="App.prevParseAuditIssue()">Previous</button>
-      <button class="btn-modal" onclick="App.nextParseAuditIssue()">Next</button>
-      <button class="btn-modal" onclick="App.openOcrReview()">Review OCR Issues</button>
-      <button class="btn-modal danger" onclick="App.saveGeneratedTest(true, true)">Save Anyway</button>
     </div>
   </div>
 </div>
@@ -2509,6 +2498,114 @@ const OCR = (() => {
     return { paragraphs: finalParas, itemNum, totalItems };
   }
 
+  function cropTightStemCanvas(fullCanvas, sx, sy, sw, sh) {
+    const sourceCanvas = document.createElement('canvas');
+    sourceCanvas.width = Math.max(1, Math.round(sw));
+    sourceCanvas.height = Math.max(1, Math.round(sh));
+    const sourceCtx = sourceCanvas.getContext('2d');
+    sourceCtx.drawImage(
+      fullCanvas,
+      Math.max(0, Math.round(sx)),
+      Math.max(0, Math.round(sy)),
+      sourceCanvas.width,
+      sourceCanvas.height,
+      0,
+      0,
+      sourceCanvas.width,
+      sourceCanvas.height
+    );
+
+    const img = sourceCtx.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height);
+    const data = img.data;
+    const inkByCol = Array(sourceCanvas.width).fill(0);
+    let minX = sourceCanvas.width;
+    let minY = sourceCanvas.height;
+    let maxX = -1;
+    let maxY = -1;
+
+    for (let y = 0; y < sourceCanvas.height; y++) {
+      for (let x = 0; x < sourceCanvas.width; x++) {
+        const idx = (y * sourceCanvas.width + x) * 4;
+        const r = data[idx];
+        const g = data[idx + 1];
+        const b = data[idx + 2];
+        const lum = (r * 0.2126) + (g * 0.7152) + (b * 0.0722);
+        if (lum < 246) {
+          inkByCol[x]++;
+          if (x < minX) minX = x;
+          if (y < minY) minY = y;
+          if (x > maxX) maxX = x;
+          if (y > maxY) maxY = y;
+        }
+        if (lum > 247) {
+          data[idx] = 255; data[idx + 1] = 255; data[idx + 2] = 255;
+        } else if (lum < 120) {
+          data[idx] = 0; data[idx + 1] = 0; data[idx + 2] = 0;
+        }
+      }
+    }
+    sourceCtx.putImageData(img, 0, 0);
+
+    if (maxX < 0 || maxY < 0) return sourceCanvas;
+
+    // Remove the rendered item-number gutter. The item number is often not
+    // represented consistently in the PDF text layer, so detect it visually as
+    // a small left ink cluster separated from the stem by a blank gap.
+    const colThreshold = Math.max(2, Math.round(sourceCanvas.height * 0.002));
+    const scanLimit = Math.min(sourceCanvas.width - 1, Math.round(sourceCanvas.width * 0.45));
+    const clusters = [];
+    let clusterStart = null;
+    let lastInk = null;
+    for (let x = 0; x <= scanLimit; x++) {
+      if (inkByCol[x] >= colThreshold) {
+        if (clusterStart === null) clusterStart = x;
+        lastInk = x;
+      } else if (clusterStart !== null && x - lastInk > 2) {
+        clusters.push({ start: clusterStart, end: lastInk });
+        clusterStart = null;
+        lastInk = null;
+      }
+    }
+    if (clusterStart !== null) clusters.push({ start: clusterStart, end: lastInk });
+    const usableClusters = clusters.filter(c => c.end - c.start + 1 >= 2);
+    if (usableClusters.length >= 2) {
+      const first = usableClusters[0];
+      const second = usableClusters[1];
+      const gap = second.start - first.end;
+      const firstIsGutter = first.start < sourceCanvas.width * 0.18 && first.end < sourceCanvas.width * 0.28;
+      if (firstIsGutter && gap >= 10) minX = Math.max(minX, second.start);
+    }
+
+    const padX = 10;
+    const padY = 18;
+    minX = Math.max(0, minX - padX);
+    minY = Math.max(0, minY - padY);
+    maxX = Math.min(sourceCanvas.width - 1, maxX + padX);
+    maxY = Math.min(sourceCanvas.height - 1, maxY + padY);
+
+    const outCanvas = document.createElement('canvas');
+    outCanvas.width = Math.max(1, maxX - minX + 1);
+    outCanvas.height = Math.max(1, maxY - minY + 1);
+    outCanvas.getContext('2d').drawImage(
+      sourceCanvas,
+      minX,
+      minY,
+      outCanvas.width,
+      outCanvas.height,
+      0,
+      0,
+      outCanvas.width,
+      outCanvas.height
+    );
+    return outCanvas;
+  }
+
+  function percentile(sortedNums, p) {
+    if (!sortedNums.length) return null;
+    const idx = Math.max(0, Math.min(sortedNums.length - 1, Math.floor(sortedNums.length * p)));
+    return sortedNums[idx];
+  }
+
   // ── Extract text from one PDF ─────────────────────────────
   async function extractPdfText(file, onProgress) {
     const buf = await file.arrayBuffer();
@@ -2653,17 +2750,68 @@ const OCR = (() => {
             const cropBottom = Math.round((PDF_H - BOTTOM_CHROME_Y) * SCALE);
             const cropH      = cropBottom - cropTop;
             if (itemNum !== null) {
-              const stemBottom = Math.round((PDF_H - stemCropBottomY) * SCALE);
-              const stemH = Math.max(0, Math.min(cropBottom, stemBottom) - cropTop);
-              if (stemH > 60) {
-                const stemCropLeft = Math.round(42 * sc * SCALE);
-                const stemCropW = Math.max(1, fullCanvas.width - stemCropLeft);
-                const stemCanvas = document.createElement('canvas');
-                stemCanvas.width = stemCropW;
-                stemCanvas.height = stemH;
-                stemCanvas.getContext('2d').drawImage(
-                  fullCanvas, stemCropLeft, cropTop, stemCropW, stemH,
-                  0, 0, stemCropW, stemH
+              const stemItems = raw.filter(it => {
+                const text = (it.str || '').replace(/\s+/g, ' ').trim();
+                if (!text) return false;
+                if (it.y <= stemCropBottomY || it.y >= topY) return false;
+                if (/^[0oOQ©®°]$/.test(text) && it.x0 < 90 * sc) return false;
+                if (/^\d{1,3}$/.test(text) && it.x0 < 120 * sc) return false;
+                return true;
+              });
+
+              const itemNumberItems = raw.filter(it => {
+                const text = (it.str || '').replace(/\s+/g, ' ').trim();
+                if (it.y <= stemCropBottomY || it.y >= topY) return false;
+                return it.x0 < 135 * sc && (/^\d{1,3}$/.test(text) || text === String(itemNum));
+              });
+              const itemNumberRight = itemNumberItems.length
+                ? Math.max(...itemNumberItems.map(it => it.x1))
+                : 0;
+              const contentStemItems = stemItems.filter(it => {
+                const text = (it.str || '').replace(/\s+/g, ' ').trim();
+                if (itemNumberItems.includes(it)) return false;
+                if (it.x1 <= itemNumberRight + (4 * sc)) return false;
+                if (/^\d{1,3}$/.test(text) && it.x0 < 150 * sc) return false;
+                return true;
+              });
+              const cropItems = contentStemItems.length ? contentStemItems : stemItems;
+              const stemTextStarts = raw
+                .filter(it => {
+                  const text = (it.str || '').replace(/\s+/g, ' ').trim();
+                  if (!text) return false;
+                  if (it.y <= stemCropBottomY || it.y >= topY) return false;
+                  if (/^\d{1,3}[.)]?$/.test(text)) return false;
+                  if (/^[0oOQ©®°]$/.test(text)) return false;
+                  return it.x0 > 35 * sc;
+                })
+                .map(it => it.x0)
+                .sort((a, b) => a - b);
+              const likelyStemLeft = percentile(stemTextStarts, 0.08);
+
+              const minTextX = cropItems.length ? Math.min(...cropItems.map(it => it.x0)) : itemNumberRight + (12 * sc);
+              const maxTextX = cropItems.length ? Math.max(...cropItems.map(it => it.x1)) : vp.width;
+              const minTextY = cropItems.length ? Math.min(...cropItems.map(it => it.y)) : stemCropBottomY;
+              const maxTextY = cropItems.length ? Math.max(...cropItems.map(it => it.y)) : topY;
+
+              const detectedLeftPdf = likelyStemLeft !== null ? likelyStemLeft : minTextX;
+              const leftPdf = Math.max(0, detectedLeftPdf - (6 * sc));
+              const rightPdf = _hasFigureRef ? vp.width : Math.min(vp.width, maxTextX + (18 * sc));
+              const topPdf = Math.min(TOP_CHROME_Y * sc, maxTextY + (14 * sc));
+              const bottomPdf = Math.max(stemCropBottomY, minTextY - (18 * sc));
+
+              const stemCropLeft = Math.max(0, Math.round(leftPdf * SCALE));
+              const stemCropTop = Math.max(cropTop, Math.round((PDF_H - topPdf) * SCALE));
+              const stemCropRight = Math.min(fullCanvas.width, Math.round(rightPdf * SCALE));
+              const stemCropBottom = Math.min(cropBottom, Math.round((PDF_H - bottomPdf) * SCALE));
+              const stemCropW = Math.max(1, stemCropRight - stemCropLeft);
+              const stemH = Math.max(0, stemCropBottom - stemCropTop);
+              if (stemH > 30 && stemCropW > 80) {
+                const stemCanvas = cropTightStemCanvas(
+                  fullCanvas,
+                  stemCropLeft,
+                  stemCropTop,
+                  stemCropW,
+                  stemH
                 );
                 stemCropDataUrl = stemCanvas.toDataURL('image/png');
               }
@@ -3057,14 +3205,6 @@ const OCR = (() => {
         isLabTable: !!ex.isLabTable,
         kind: ex.kind || (ex.isLabTable ? 'lab' : 'figure')
       }));
-      q._parseAudit = {
-        item: q.n,
-        questionParagraphs: qItemMap[q.n] || [],
-        answerParagraphs: aItemMap[q.n] || [],
-        parsedStem: q.t || '',
-        parsedOptions: (q.o || []).map(o => `${o.l}) ${o.t}`),
-        parsedExplanation: q.explanation || ''
-      };
     });
 
     const apiKey = (localStorage.getItem('gemini_api_key') || '').replace(/['"]/g, '').trim();
@@ -3121,9 +3261,7 @@ function restoreNavSidebarState() {
 // ── Shared image renderer (used by Quiz and Results) ────────
 // Loads figure dataUrls from IndexedDB (FigureStore) on demand.
 // q.images entries have { figureKey, isLabTable } — no dataUrl in localStorage.
-function renderImages(q, topElId, bottomElId) {
-  const topEl    = document.getElementById(topElId);
-  const bottomEl = document.getElementById(bottomElId);
+function renderImagesInto(q, topEl, bottomEl) {
   if (!topEl || !bottomEl) return;
   topEl.innerHTML = '';
   bottomEl.innerHTML = '';
@@ -3152,6 +3290,10 @@ function renderImages(q, topElId, bottomElId) {
       wrap.style.display = 'none';
     }
   }
+}
+
+function renderImages(q, topElId, bottomElId) {
+  renderImagesInto(q, document.getElementById(topElId), document.getElementById(bottomElId));
 }
 
 </script>
@@ -4486,8 +4628,6 @@ const App = (() => {
   let _ocrIssues = [];
   let _ocrIssueIdx = 0;
   let _ocrUndoStack = [];
-  let _parseAuditIssues = [];
-  let _parseAuditIdx = 0;
   // ── Init ───────────────────────────────────────────────────
   function init() {
     window.toast = toast;
@@ -5054,11 +5194,8 @@ const App = (() => {
     document.getElementById('btn-gen-start').disabled = false;
     document.getElementById('btn-gen-start').onclick = startOCR;
     document.getElementById('modal-ocr-review').style.display = 'none';
-    document.getElementById('modal-parse-audit').style.display = 'none';
     _ocrIssues = [];
     _ocrIssueIdx = 0;
-    _parseAuditIssues = [];
-    _parseAuditIdx = 0;
 
     // Populate folder select
     const sel = document.getElementById('gen-folder-select');
@@ -5096,8 +5233,6 @@ const App = (() => {
     _ocrIssues = [];
     _ocrIssueIdx = 0;
     _ocrUndoStack = [];
-    _parseAuditIssues = [];
-    _parseAuditIdx = 0;
   }
 
   const OCR_REVIEW_RULES = [
@@ -5282,206 +5417,14 @@ const App = (() => {
   function diagnoseGeneratedQuestions(questions) {
     const issues = [];
     questions.forEach((q, qIdx) => {
-      issues.push(...scanTextForOcrIssues(q.t || '', qIdx, 'stem', null));
+      const hasStemCrop = !!(q.images && q.images.some(img => img.kind === 'stem'));
+      if (!hasStemCrop) issues.push(...scanTextForOcrIssues(q.t || '', qIdx, 'stem', null));
       (q.o || []).forEach((opt, optIdx) => {
         issues.push(...scanTextForOcrIssues(opt.t || '', qIdx, 'choice', optIdx));
       });
       issues.push(...scanTextForOcrIssues(q.explanation || '', qIdx, 'explanation', null));
     });
     return issues;
-  }
-
-  function buildParseAudit(questions) {
-    const issues = [];
-    const labUnitRe = /(?:mEq\s*\/\s*L|mg\s*\/\s*d\s*L|mm\s*Hg|\/\s*mm\s*3|µ?\s*U\s*\/\s*m\s*l|ng\s*\/\s*d\s*l|µg\s*\/\s*d\s*l|IU\s*\/\s*L|g\s*\/\s*d\s*L|\/\s*m\s*l|\/\s*d\s*l|%)/gi;
-    const clinicalIntroRe = /\b(?:\d+\s*(?:\?|)?-?year-old|year-old|patient|man|woman|boy|girl|physician|department|clinic|hospital|presents|comes|brought|reports|history|examination|which\s+of\s+the\s+following)\b/i;
-    const questionPromptRe = /\bwhich\s+of\s+the\s+following\b|[?]\s*$/i;
-    const labTextRe = /\b(?:serum|urine|plasma|blood|sodium|potassium|chloride|bicarbonate|glucose|creatinine|thyroxine|triiodothyronine|hormone|concentration|toxicology|screening|hemoglobin|hematocrit|leukocyte|platelet|protein|albumin|calcium|phosphate|magnesium|mEq|mg|µU|ng|µg|IU)\b/i;
-    const brokenExplanationRe = /(?:^|\n\n)[A-Za-z]{1,3}(?:[).,;:]|\n\n)|\([A-Z]\n\n[A-Z]|\b[A-Za-z]{2,}\n\n[a-z]{1,4}\b/;
-    const leadingClinicalRe = /^\s*(?:\d+\s*[.,]\s*)?(?:A|An)\s+\d+\s*(?:\?|)?-?year-old\b/i;
-    const tokenSet = text => new Set(
-      String(text || '')
-        .toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, ' ')
-        .split(/\s+/)
-        .filter(w => w.length >= 4 && !/^\d+$/.test(w))
-    );
-
-    questions.forEach((q, qIdx) => {
-      const stem = q.t || '';
-      const audit = q._parseAudit || {};
-      const rawQuestion = (audit.questionParagraphs || []).join('\n\n');
-      const compactStemLen = stem.replace(/\s+/g, '').length;
-      const compactRawLen = rawQuestion.replace(/\s+/g, '').length;
-      const labHits = stem.match(labUnitRe) || [];
-      const rawHasClinicalIntro = clinicalIntroRe.test(rawQuestion);
-      const stemHasClinicalIntro = clinicalIntroRe.test(stem);
-      const stemHasQuestionPrompt = questionPromptRe.test(stem);
-      const rawHasQuestionPrompt = questionPromptRe.test(rawQuestion);
-      const rawStartsWithClinical = leadingClinicalRe.test(rawQuestion);
-      const stemStartsWithClinical = leadingClinicalRe.test(stem);
-      const rawTokens = tokenSet(rawQuestion);
-      const stemTokens = tokenSet(stem);
-      let sharedTokens = 0;
-      rawTokens.forEach(tok => { if (stemTokens.has(tok)) sharedTokens++; });
-      const rawCoverage = rawTokens.size ? sharedTokens / rawTokens.size : 1;
-      const reasons = [];
-      let severity = 'warning';
-
-      if (compactStemLen < 40) {
-        severity = 'fail';
-        reasons.push('Stem is extremely short.');
-      } else if (compactStemLen < 90) {
-        reasons.push('Stem is shorter than expected.');
-      }
-
-      if (labHits.length >= 2 && !clinicalIntroRe.test(stem)) {
-        severity = 'fail';
-        reasons.push('Stem has multiple lab units but no clear clinical vignette.');
-      }
-
-      if (labHits.length >= 2 && (compactStemLen < 260 || (!stemHasClinicalIntro && !stemHasQuestionPrompt))) {
-        severity = 'fail';
-        reasons.push('Stem may contain only lab values.');
-      }
-
-      if (labTextRe.test(stem) && !stemHasClinicalIntro && !stemHasQuestionPrompt) {
-        severity = 'fail';
-        reasons.push('Stem looks lab-heavy and lacks the clinical setup/question prompt.');
-      }
-
-      if (rawHasClinicalIntro && !stemHasClinicalIntro) {
-        severity = 'fail';
-        reasons.push('Raw extraction appears to contain a clinical vignette, but the parsed stem does not.');
-      }
-
-      if (rawHasQuestionPrompt && !stemHasQuestionPrompt) {
-        severity = 'fail';
-        reasons.push('Raw extraction contains the question prompt, but the parsed stem does not.');
-      }
-
-      if (rawStartsWithClinical && !stemStartsWithClinical) {
-        severity = 'fail';
-        reasons.push('Parsed stem does not start with the clinical vignette seen in raw extraction.');
-      }
-
-      if (rawTokens.size >= 25 && rawCoverage < 0.62) {
-        severity = 'fail';
-        reasons.push(`Parsed stem preserves only ${Math.round(rawCoverage * 100)}% of raw question keywords.`);
-      } else if (rawTokens.size >= 25 && rawCoverage < 0.78) {
-        reasons.push(`Parsed stem preserves only ${Math.round(rawCoverage * 100)}% of raw question keywords.`);
-      }
-
-      if (compactRawLen > 0 && compactStemLen > 0 && compactRawLen > compactStemLen * 1.35) {
-        severity = 'fail';
-        reasons.push('Parsed stem is much shorter than the raw grouped question text.');
-      }
-
-      if (!q.o || q.o.length < 2) {
-        severity = 'fail';
-        reasons.push('Fewer than 2 answer choices parsed.');
-      } else if (q.o.length < 5) {
-        reasons.push(`Only ${q.o.length} answer choices parsed.`);
-      }
-
-      if (brokenExplanationRe.test(q.explanation || '')) {
-        reasons.push('Explanation contains suspicious broken paragraph fragments.');
-      }
-
-      if (reasons.length) {
-        issues.push({
-          qIdx,
-          item: q.n,
-          displayNum: qIdx + 1,
-          severity,
-          reasons,
-          audit
-        });
-      }
-    });
-
-    return issues;
-  }
-
-  function openParseAudit() {
-    if (!_genParsed) return;
-    _parseAuditIdx = Math.max(0, Math.min(_parseAuditIdx, _parseAuditIssues.length - 1));
-    document.getElementById('modal-ocr-review').style.display = 'none';
-    document.getElementById('modal-parse-audit').style.display = 'flex';
-    renderParseAudit();
-  }
-
-  function renderParseAudit() {
-    const content = document.getElementById('parse-audit-content');
-    const summary = document.getElementById('parse-audit-summary');
-    const fails = _parseAuditIssues.filter(i => i.severity === 'fail').length;
-    const warns = _parseAuditIssues.length - fails;
-    summary.textContent = `${fails} failed structural check${fails === 1 ? '' : 's'} and ${warns} warning${warns === 1 ? '' : 's'} before saving.`;
-    if (!_parseAuditIssues.length) {
-      content.innerHTML = '<div class="ocr-review-empty">No structural parse issues detected.</div>';
-      return;
-    }
-
-    const issue = _parseAuditIssues[_parseAuditIdx] || _parseAuditIssues[0];
-    const q = _genParsed.questions[issue.qIdx];
-    const audit = issue.audit || {};
-    const qParas = (audit.questionParagraphs || []).join('\n\n');
-    const aParas = (audit.answerParagraphs || []).join('\n\n');
-    const opts = (audit.parsedOptions || []).join('\n');
-    const exp = audit.parsedExplanation || '';
-    const parsedChars = (q?.t || '').replace(/\s+/g, '').length;
-    const rawChars = qParas.replace(/\s+/g, '').length;
-    const sevClass = issue.severity === 'fail' ? 'parse-audit-fail' : 'parse-audit-warn';
-
-    content.innerHTML = `
-      <div class="ocr-review-progress">Issue ${_parseAuditIdx + 1} of ${_parseAuditIssues.length}</div>
-      <div class="ocr-review-card">
-        <div class="ocr-review-row">
-          <div class="ocr-review-label">Item</div>
-          <div class="ocr-review-value"><span class="${sevClass}">${issue.severity.toUpperCase()}</span> · Display item ${escHtml(issue.displayNum)} · Source item ${escHtml(issue.item)}</div>
-        </div>
-        <div class="ocr-review-row">
-          <div class="ocr-review-label">Reason</div>
-          <div class="ocr-review-value">${issue.reasons.map(escHtml).join('<br>')}</div>
-        </div>
-        <div class="ocr-review-row">
-          <div class="ocr-review-label">Size Check</div>
-          <div class="ocr-review-value">Parsed stem: ${parsedChars} chars · Raw grouped question: ${rawChars} chars</div>
-        </div>
-        <div class="ocr-review-row">
-          <div class="ocr-review-label">Parsed Stem</div>
-          <div class="ocr-review-value">${escHtml(q?.t || '').slice(0, 1200)}</div>
-        </div>
-        <div class="ocr-review-row">
-          <div class="ocr-review-label">Options</div>
-          <div class="ocr-review-value"><pre class="parse-audit-pre">${escHtml(opts || '(none)')}</pre></div>
-        </div>
-        <div class="ocr-review-row">
-          <div class="ocr-review-label">Raw Question</div>
-          <div class="ocr-review-value"><pre class="parse-audit-pre">${escHtml(qParas || '(none)')}</pre></div>
-        </div>
-        <div class="ocr-review-row">
-          <div class="ocr-review-label">Raw Answer</div>
-          <div class="ocr-review-value"><pre class="parse-audit-pre">${escHtml(aParas || '(none)')}</pre></div>
-        </div>
-        <div class="ocr-review-row">
-          <div class="ocr-review-label">Explanation</div>
-          <div class="ocr-review-value"><pre class="parse-audit-pre">${escHtml(exp.slice(0, 1600) || '(none)')}</pre></div>
-        </div>
-      </div>
-    `;
-  }
-
-  function nextParseAuditIssue() {
-    if (!_parseAuditIssues.length) return;
-    _parseAuditIdx = (_parseAuditIdx + 1) % _parseAuditIssues.length;
-    renderParseAudit();
-  }
-
-  function prevParseAuditIssue() {
-    if (!_parseAuditIssues.length) return;
-    _parseAuditIdx = (_parseAuditIdx - 1 + _parseAuditIssues.length) % _parseAuditIssues.length;
-    renderParseAudit();
   }
 
   function nextOpenOcrIssueIndex(start = 0) {
@@ -5523,7 +5466,6 @@ const App = (() => {
   function openOcrReview() {
     if (!_genParsed) return;
     _ocrIssueIdx = nextOpenOcrIssueIndex(_ocrIssueIdx);
-    document.getElementById('modal-parse-audit').style.display = 'none';
     document.getElementById('modal-ocr-review').style.display = 'flex';
     renderOcrReview();
   }
@@ -5691,25 +5633,19 @@ const App = (() => {
       if (!questions.length) throw new Error('No questions found. Try the manual paste option.');
 
       _genParsed = { name, folderId, questions };
-      _parseAuditIssues = buildParseAudit(questions);
-      _parseAuditIdx = 0;
       _ocrIssues = diagnoseGeneratedQuestions(questions);
       _ocrIssueIdx = nextOpenOcrIssueIndex(0);
       _ocrUndoStack = [];
       document.getElementById('ocr-status-msg').textContent = `✓ Extracted ${questions.length} questions!`;
       document.getElementById('ocr-progress-fill').style.width = '100%';
-      const parseFails = _parseAuditIssues.filter(i => i.severity === 'fail').length;
-      document.getElementById('gen-parse-note').textContent = _parseAuditIssues.length
-        ? `⚠ ${questions.length} questions ready, with ${parseFails} structural failure${parseFails === 1 ? '' : 's'} and ${_ocrIssues.length} possible OCR issue${_ocrIssues.length === 1 ? '' : 's'} before saving.`
-        : _ocrIssues.length
-          ? `⚠ ${questions.length} questions ready, with ${_ocrIssues.length} possible OCR issue${_ocrIssues.length === 1 ? '' : 's'} to review before saving.`
-          : `✓ ${questions.length} questions ready. Click Save to create the test.`;
+      document.getElementById('gen-parse-note').textContent = _ocrIssues.length
+        ? `⚠ ${questions.length} questions ready, with ${_ocrIssues.length} possible OCR issue${_ocrIssues.length === 1 ? '' : 's'} to review before saving.`
+        : `✓ ${questions.length} questions ready. Click Save to create the test.`;
       document.getElementById('gen-parse-note').style.display = 'block';
-      document.getElementById('btn-gen-start').textContent    = _parseAuditIssues.length ? 'Review Parse Audit' : _ocrIssues.length ? 'Review OCR Issues' : '💾 Save Test';
+      document.getElementById('btn-gen-start').textContent    = _ocrIssues.length ? 'Review OCR Issues' : '💾 Save Test';
       document.getElementById('btn-gen-start').disabled       = false;
-      document.getElementById('btn-gen-start').onclick        = _parseAuditIssues.length ? openParseAudit : _ocrIssues.length ? openOcrReview : saveGeneratedTest;
-      if (_parseAuditIssues.length) openParseAudit();
-      else if (_ocrIssues.length) openOcrReview();
+      document.getElementById('btn-gen-start').onclick        = _ocrIssues.length ? openOcrReview : saveGeneratedTest;
+      if (_ocrIssues.length) openOcrReview();
     } catch(err) {
       document.getElementById('ocr-status-msg').textContent = '✗ Error: ' + err.message;
       document.getElementById('btn-gen-start').disabled     = false;
@@ -5719,12 +5655,8 @@ const App = (() => {
     }
   }
 
-  function saveGeneratedTest(skipOcrReview = false, skipParseAudit = false) {
+  function saveGeneratedTest(skipOcrReview = false) {
     if (!_genParsed) return;
-    if (!skipParseAudit && _parseAuditIssues.some(i => i.severity === 'fail')) {
-      openParseAudit();
-      return;
-    }
     if (!skipOcrReview && _ocrIssues.some(i => i.status === 'open')) {
       openOcrReview();
       return;
@@ -5745,7 +5677,6 @@ const App = (() => {
         figureEntries.push({ qNum: q.n, idx: 0, dataUrl: q._figureData });
         delete q._figureData;
       }
-      if (q._parseAudit) delete q._parseAudit;
       // Clear pending keys — will be rewritten after createTest
       if (q.images) q.images.forEach(img => { img.figureKey = null; });
     });
@@ -5768,7 +5699,6 @@ const App = (() => {
 
     document.getElementById('modal-generate').style.display = 'none';
     document.getElementById('modal-ocr-review').style.display = 'none';
-    document.getElementById('modal-parse-audit').style.display = 'none';
     _currentFolder = _genParsed.folderId;
     renderSidebar(); renderHomeGrid();
     toast(`✓ "${test.name}" created with ${test.questions.length} questions!`);
@@ -5776,8 +5706,6 @@ const App = (() => {
     _ocrIssues = [];
     _ocrIssueIdx = 0;
     _ocrUndoStack = [];
-    _parseAuditIssues = [];
-    _parseAuditIdx = 0;
   }
 
   // ── Mode toggle ────────────────────────────────────────────
@@ -5912,11 +5840,21 @@ const App = (() => {
       card.appendChild(headerDiv);
 
       // ── Stem ───────────────────────────────────────────────
+      const hasStemCrop = !!(q.images && q.images.some(img => img.kind === 'stem'));
       const stemDiv = document.createElement('div');
       stemDiv.className = 'rev-all-stem';
-      if (r.highlights && r.highlights.html) stemDiv.innerHTML = r.highlights.html;
+      if (hasStemCrop) stemDiv.style.display = 'none';
+      else if (r.highlights && r.highlights.html) stemDiv.innerHTML = r.highlights.html;
       else stemDiv.innerHTML = window.buildStemHTML(q.t);
       card.appendChild(stemDiv);
+
+      const imageTopDiv = document.createElement('div');
+      imageTopDiv.className = 'q-images-top';
+      const imageBottomDiv = document.createElement('div');
+      imageBottomDiv.className = 'q-images-bottom';
+      card.appendChild(imageTopDiv);
+      card.appendChild(imageBottomDiv);
+      if (typeof renderImagesInto === 'function') renderImagesInto(q, imageTopDiv, imageBottomDiv);
 
       // ── Options ────────────────────────────────────────────
       const optsCard = document.createElement('div');
@@ -6001,9 +5939,6 @@ const App = (() => {
     closeGenerateModal,
     onDrag, offDrag, onDrop, onFile,
     startOCR,
-    openParseAudit,
-    nextParseAuditIssue,
-    prevParseAuditIssue,
     openOcrReview,
     applyOcrIssue,
     applyAllOcrIssue,
