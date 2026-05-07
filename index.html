@@ -343,6 +343,9 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 .quiz-test-name  { font-size: 13px; font-weight: 700; color: white; }
 .quiz-q-counter  { font-size: 11px; color: #9ab0c8; }
 .quiz-score-live { font-size: 11px; color: #9ab0c8; }
+.hint-usage-counter { font-size: 11px; color: #9ab0c8; white-space: nowrap; }
+.hint-usage-counter.warn { color: #ffd54f; }
+.hint-usage-counter.high { color: #ff9f43; }
 .timer-block { text-align: center; }
 .timer-val {
   font-size: 14px; font-weight: 700; color: white;
@@ -404,6 +407,13 @@ mark.hl-yellow { background: #ffeb3b; color: inherit; }
 mark.hl-blue   { background: #81d4fa; color: inherit; }
 mark.hl-green  { background: #a5d6a7; color: inherit; }
 mark.hl-pink   { background: #f48fb1; color: inherit; }
+.image-hl-layer { position: absolute; inset: 0; pointer-events: none; }
+.image-hl-rect {
+  position: absolute;
+  background: rgba(255, 235, 59, .42);
+  border-radius: 2px;
+  pointer-events: none;
+}
 
 /* Options */
 .options-card { background: white; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.07); font-family: Arial, Helvetica, sans-serif; font-size: 15px; }
@@ -752,7 +762,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 .q-images-top:empty, .q-images-bottom:empty,
 .rev-images-top:empty, .rev-images-bottom:empty { display: none; }
 .q-img-wrap {
-  display: block; width: 100%;
+  display: block; width: 100%; position: relative;
   background: #fff;
   border: none;
   border-radius: 0;
@@ -949,6 +959,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
               <span class="quiz-test-name" id="quiz-test-name">—</span>
               <span class="quiz-q-counter" id="quiz-q-num">Item 1</span>
               <span class="quiz-score-live" id="score-live">0/0 (0%)</span>
+              <span class="hint-usage-counter" id="hint-usage-counter">Gemini hints today: 0</span>
             </div>
             <div class="quiz-topbar-center">
               <div class="timer-block">
@@ -1515,6 +1526,16 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
       <p style="font-size:12px;color:#5a6a7a;margin-bottom:8px;">Used for AI-powered question hints. Synced automatically.</p>
       <input type="password" class="form-input" id="settings-gemini-key" placeholder="AIza..." autocomplete="off" oninput="saveGeminiKey(this.value)">
     </div>
+    <div class="form-group" style="margin-top:12px;">
+      <label class="form-label">Google Drive Backup</label>
+      <p style="font-size:12px;color:#5a6a7a;margin-bottom:8px;">Stores tests and original question images in your Google Drive. Requires opening the app from http://localhost:8080.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <button class="btn-modal" onclick="connectGoogleDrive()">Connect Drive</button>
+        <button class="btn-modal" onclick="saveGoogleDriveNow()">Backup Now</button>
+        <button class="btn-modal" onclick="restoreGoogleDriveNow()">Restore Drive</button>
+      </div>
+      <div id="drive-sync-status" style="font-size:11px;color:#5a6a7a;margin-top:6px;">Drive not connected.</div>
+    </div>
     <div class="modal-actions">
       <button class="btn-modal primary" onclick="document.getElementById('modal-settings').style.display='none'">Done</button>
     </div>
@@ -1523,6 +1544,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 
 <!-- Scripts -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
@@ -1555,6 +1577,14 @@ const DB = (() => {
     } catch(e) { return defaultDB(); }
   }
 
+  function storagePayload(db) {
+    return JSON.parse(JSON.stringify(db, (key, value) => {
+      if (key === 'dataUrl' || key === '_figureData') return undefined;
+      if (key === 'highlights') return undefined;
+      return value;
+    }));
+  }
+
   function saveLocal(db) {
     // ── History cap: keep only last 3 attempts per test ──────
     const histByCap = {};
@@ -1568,21 +1598,36 @@ const DB = (() => {
     db.trash = (db.trash || []).filter(t => (Date.now() - (t.deletedAt || 0)) < WEEK);
 
     // ── Attempt save; recover gracefully if quota exceeded ───
+    const payload = storagePayload(db);
     try {
-      localStorage.setItem(LOCAL_KEY, JSON.stringify(db));
+      localStorage.setItem(LOCAL_KEY, JSON.stringify(payload));
+      return true;
     } catch(e) {
       if (e.name === 'QuotaExceededError') {
-        // Last resort: drop all history and try again
-        db.history = [];
+        // Existing installs may already have a bloated value under this key.
+        // Remove it once, then write the sanitized payload back.
         try {
-          localStorage.setItem(LOCAL_KEY, JSON.stringify(db));
-          if (typeof window.toast === 'function')
-            window.toast('⚠️ Storage was full — old history cleared. Your tests are safe.', 6000);
+          localStorage.removeItem(LOCAL_KEY);
+          localStorage.setItem(LOCAL_KEY, JSON.stringify(payload));
+          return true;
         } catch(e2) {
-          if (typeof window.toast === 'function')
-            window.toast('🚨 Storage full! Please delete some tests to continue.', 8000);
+          // Last resort: drop history and trash, then try the sanitized payload again.
+          const lean = storagePayload(Object.assign({}, db, { history: [], trash: [] }));
+          try {
+            localStorage.setItem(LOCAL_KEY, JSON.stringify(lean));
+            db.history = [];
+            db.trash = [];
+            if (typeof window.toast === 'function')
+              window.toast('Storage was full, so old history and trash were cleared. Your active tests were kept.', 8000);
+            return true;
+          } catch(e3) {
+            if (typeof window.toast === 'function')
+              window.toast('Storage full. Delete older tests, then try saving again.', 8000);
+            return false;
+          }
         }
       }
+      return false;
     }
   }
 
@@ -1590,9 +1635,12 @@ const DB = (() => {
   function get() { if (!_db) _db = loadLocal(); return _db; }
   function save() {
     if (_db) {
-      saveLocal(_db);
+      const ok = saveLocal(_db);
       if (typeof window.scheduleSupabaseSave === 'function') window.scheduleSupabaseSave();
+      if (typeof window.scheduleGoogleDriveSave === 'function') window.scheduleGoogleDriveSave();
+      return ok;
     }
+    return false;
   }
 
   function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
@@ -1617,7 +1665,12 @@ const DB = (() => {
   function createTest(folderId, name, questions) {
     const db = get();
     const test = { id: uid(), folderId, name, status: 'not_started', questions, attempts: 0, currentAttempt: null, createdAt: Date.now() };
-    db.tests.push(test); save(); return test;
+    db.tests.push(test);
+    if (!save()) {
+      db.tests = db.tests.filter(t => t.id !== test.id);
+      return null;
+    }
+    return test;
   }
   function updateTest(id, updates) {
     const db = get(); const idx = db.tests.findIndex(t=>t.id===id);
@@ -1806,6 +1859,269 @@ const FigureStore = (() => {
   return { put, get, deleteByPrefix };
 })();
 window.FigureStore = FigureStore;
+</script>
+<script>
+/* ============================================================
+   GOOGLE DRIVE BACKUP — Manifest + original figure files
+============================================================ */
+(function() {
+  const DRIVE_CLIENT_ID = '274374578651-5edirahp87c5hpv69donfpvcr81tmidk.apps.googleusercontent.com';
+  const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+  const DRIVE_FOLDER_NAME = 'NBME Self-Assessment Suite';
+  const DRIVE_MANIFEST_NAME = 'nbme_manifest.json';
+  let _tokenClient = null, _accessToken = null, _folderId = null, _manifestFileId = null;
+  let _timer = null, _busy = false, _pending = false;
+
+  function setDriveStatus(text, color) {
+    const el = document.getElementById('drive-sync-status');
+    if (el) { el.textContent = text; el.style.color = color || '#5a6a7a'; }
+  }
+
+  function localHostRequired() {
+    return location.origin === 'http://localhost:8080';
+  }
+
+  function waitForGoogleIdentity() {
+    return new Promise((resolve, reject) => {
+      let tries = 0;
+      const check = () => {
+        if (window.google?.accounts?.oauth2) { resolve(); return; }
+        if (++tries > 80) { reject(new Error('Google sign-in library did not load.')); return; }
+        setTimeout(check, 100);
+      };
+      check();
+    });
+  }
+
+  async function ensureDriveAuth(promptMode = '') {
+    if (!localHostRequired()) {
+      throw new Error('Open the app from http://localhost:8080 before connecting Google Drive.');
+    }
+    if (_accessToken) return _accessToken;
+    await waitForGoogleIdentity();
+    return new Promise((resolve, reject) => {
+      _tokenClient = _tokenClient || google.accounts.oauth2.initTokenClient({
+        client_id: DRIVE_CLIENT_ID,
+        scope: DRIVE_SCOPE,
+        callback: resp => {
+          if (resp.error) { reject(new Error(resp.error)); return; }
+          _accessToken = resp.access_token;
+          setDriveStatus('Drive connected.', '#27ae60');
+          resolve(_accessToken);
+        }
+      });
+      _tokenClient.requestAccessToken({ prompt: promptMode });
+    });
+  }
+
+  async function driveFetch(url, options = {}) {
+    const token = await ensureDriveAuth('');
+    const resp = await fetch(url, Object.assign({}, options, {
+      headers: Object.assign({}, options.headers || {}, { Authorization: 'Bearer ' + token })
+    }));
+    if (!resp.ok) throw new Error('Drive API ' + resp.status);
+    return resp;
+  }
+
+  async function findDriveFile(name, mimeType, parentId) {
+    const filters = [
+      `name='${name.replace(/'/g, "\\'")}'`,
+      `trashed=false`
+    ];
+    if (mimeType) filters.push(`mimeType='${mimeType}'`);
+    if (parentId) filters.push(`'${parentId}' in parents`);
+    const q = encodeURIComponent(filters.join(' and '));
+    const resp = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`);
+    const data = await resp.json();
+    return data.files?.[0] || null;
+  }
+
+  async function ensureDriveFolder() {
+    if (_folderId) return _folderId;
+    const existing = await findDriveFile(DRIVE_FOLDER_NAME, 'application/vnd.google-apps.folder');
+    if (existing) { _folderId = existing.id; return _folderId; }
+    const resp = await driveFetch('https://www.googleapis.com/drive/v3/files?fields=id', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: DRIVE_FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' })
+    });
+    const data = await resp.json();
+    _folderId = data.id;
+    return _folderId;
+  }
+
+  async function ensureManifestFile() {
+    if (_manifestFileId) return _manifestFileId;
+    const folderId = await ensureDriveFolder();
+    const existing = await findDriveFile(DRIVE_MANIFEST_NAME, 'application/json', folderId);
+    if (existing) { _manifestFileId = existing.id; return _manifestFileId; }
+    const resp = await driveFetch('https://www.googleapis.com/drive/v3/files?fields=id', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: DRIVE_MANIFEST_NAME, mimeType: 'application/json', parents: [folderId] })
+    });
+    const data = await resp.json();
+    _manifestFileId = data.id;
+    return _manifestFileId;
+  }
+
+  function driveDbSnapshot() {
+    const db = DB.get();
+    return JSON.parse(JSON.stringify({
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      userCode: window.getUserCode(),
+      folders: db.folders,
+      tests: db.tests,
+      trash: db.trash,
+      flags: db.flags,
+      marks: db.marks || [],
+      history: db.history
+    }, (key, value) => {
+      if (key === 'dataUrl' || key === '_figureData' || key === 'highlights') return undefined;
+      return value;
+    }));
+  }
+
+  function dataUrlToBlob(dataUrl) {
+    const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    if (!match) return null;
+    const bytes = atob(match[2]);
+    const arr = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+    return new Blob([arr], { type: match[1] });
+  }
+
+  async function uploadDriveFile(name, blob, mimeType, parentId, existingId) {
+    const metadata = { name, mimeType, parents: parentId ? [parentId] : undefined };
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', blob);
+    const url = existingId
+      ? `https://www.googleapis.com/upload/drive/v3/files/${existingId}?uploadType=multipart&fields=id`
+      : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id';
+    const resp = await driveFetch(url, { method: existingId ? 'PATCH' : 'POST', body: form });
+    return (await resp.json()).id;
+  }
+
+  async function uploadFiguresToDrive(snapshot) {
+    const folderId = await ensureDriveFolder();
+    for (const test of snapshot.tests || []) {
+      for (const q of test.questions || []) {
+        for (const img of q.images || []) {
+          if (!img.figureKey || img.driveFileId || !window.FigureStore) continue;
+          const dataUrl = await window.FigureStore.get(img.figureKey).catch(() => null);
+          const blob = dataUrl ? dataUrlToBlob(dataUrl) : null;
+          if (!blob) continue;
+          img.driveFileId = await uploadDriveFile(`${img.figureKey}.png`, blob, blob.type || 'image/png', folderId);
+        }
+      }
+    }
+  }
+
+  async function saveManifestToDrive(snapshot) {
+    const manifestId = await ensureManifestFile();
+    const blob = new Blob([JSON.stringify(snapshot)], { type: 'application/json' });
+    await uploadDriveFile(DRIVE_MANIFEST_NAME, blob, 'application/json', await ensureDriveFolder(), manifestId);
+  }
+
+  async function restoreFiguresFromDrive(snapshot) {
+    if (!window.FigureStore) return;
+    for (const test of snapshot.tests || []) {
+      for (const q of test.questions || []) {
+        for (const img of q.images || []) {
+          if (!img.figureKey || !img.driveFileId) continue;
+          const existing = await window.FigureStore.get(img.figureKey).catch(() => null);
+          if (existing) continue;
+          const resp = await driveFetch(`https://www.googleapis.com/drive/v3/files/${img.driveFileId}?alt=media`);
+          const blob = await resp.blob();
+          const dataUrl = await new Promise(resolve => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(blob);
+          });
+          if (dataUrl) await window.FigureStore.put(img.figureKey, dataUrl).catch(() => {});
+        }
+      }
+    }
+  }
+
+  window.connectGoogleDrive = async function() {
+    try {
+      setDriveStatus('Connecting Drive...', '#f0a500');
+      await ensureDriveAuth('consent');
+      await ensureDriveFolder();
+      await ensureManifestFile();
+      setDriveStatus('Drive connected.', '#27ae60');
+    } catch(e) {
+      setDriveStatus(e.message || 'Drive connection failed.', '#e74c3c');
+    }
+  };
+
+  window.saveGoogleDriveNow = async function() {
+    try {
+      if (_busy) { _pending = true; return; }
+      _busy = true;
+      setDriveStatus('Backing up to Drive...', '#f0a500');
+      await ensureDriveAuth('');
+      const snapshot = driveDbSnapshot();
+      await uploadFiguresToDrive(snapshot);
+      await saveManifestToDrive(snapshot);
+      setDriveStatus('Drive backup complete.', '#27ae60');
+    } catch(e) {
+      setDriveStatus(e.message || 'Drive backup failed.', '#e74c3c');
+    } finally {
+      _busy = false;
+      if (_pending) { _pending = false; window.scheduleGoogleDriveSave(); }
+    }
+  };
+
+  window.restoreGoogleDriveNow = async function() {
+    try {
+      setDriveStatus('Restoring from Drive...', '#f0a500');
+      await ensureDriveAuth('');
+      const manifestId = await ensureManifestFile();
+      const resp = await driveFetch(`https://www.googleapis.com/drive/v3/files/${manifestId}?alt=media`);
+      const snapshot = await resp.json();
+      await restoreFiguresFromDrive(snapshot);
+      const db = DB.get();
+      if (Array.isArray(snapshot.folders)) db.folders = snapshot.folders;
+      if (Array.isArray(snapshot.tests)) db.tests = snapshot.tests;
+      if (Array.isArray(snapshot.trash)) db.trash = snapshot.trash;
+      if (Array.isArray(snapshot.flags)) db.flags = snapshot.flags;
+      if (Array.isArray(snapshot.marks)) db.marks = snapshot.marks;
+      if (Array.isArray(snapshot.history)) db.history = snapshot.history;
+      DB.save();
+      setDriveStatus('Drive restore complete. Reloading...', '#27ae60');
+      setTimeout(() => location.reload(), 1000);
+    } catch(e) {
+      setDriveStatus(e.message || 'Drive restore failed.', '#e74c3c');
+    }
+  };
+
+  window.scheduleGoogleDriveSave = function() {
+    if (!_accessToken) return;
+    if (_timer) clearTimeout(_timer);
+    _timer = setTimeout(() => window.saveGoogleDriveNow(), 1200);
+  };
+
+  window.loadFigureFromGoogleDrive = async function(img) {
+    if (!img?.driveFileId || !img.figureKey || !window.FigureStore || !_accessToken) return null;
+    const existing = await window.FigureStore.get(img.figureKey).catch(() => null);
+    if (existing) return existing;
+    const resp = await driveFetch(`https://www.googleapis.com/drive/v3/files/${img.driveFileId}?alt=media`);
+    const blob = await resp.blob();
+    const dataUrl = await new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+    if (dataUrl) await window.FigureStore.put(img.figureKey, dataUrl).catch(() => {});
+    return dataUrl;
+  };
+})();
 </script>
 <script>
 /* ============================================================
@@ -3129,37 +3445,51 @@ const OCR = (() => {
 
   // ── AI Tagging ────────────────────────────────────────────
   async function aiTagQuestions(questions, onProgress) {
-    const BATCH = 5, DELAY = 500;
-    const total  = questions.length;
-    let done     = 0;
-    for (let i = 0; i < total; i += BATCH) {
-      const batch = questions.slice(i, i + BATCH);
-      await Promise.all(batch.map(async q => {
-        try {
-          const apiKey  = (localStorage.getItem('gemini_api_key') || '').replace(/['"]/g, '').trim();
-          const choices = (q.o || []).map(o => `${o.l}) ${o.t}`).join('\n');
-          const prompt  =
-            'Analyze this USMLE question. Return a JSON array of 2-4 topic tags (subject + subtopic).\n' +
-            'Return ONLY valid JSON array. No other text.\n' +
-            'Example: ["Psychiatry","Mood Disorders","SSRIs"]\n' +
-            `Question: ${q.t}\nChoices: ${choices}`;
-          const resp = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
-            { method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) }
-          );
-          if (!resp.ok) throw new Error('API ' + resp.status);
-          const data = await resp.json();
-          const raw  = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
-          const m    = raw.match(/\[[\s\S]*\]/);
-          const tags = m ? JSON.parse(m[0]) : null;
-          q.tags = Array.isArray(tags) && tags.length ? tags.slice(0, 4).map(String) : ['Untagged'];
-        } catch (_) { q.tags = ['Untagged']; }
-        done++;
-        if (onProgress) onProgress(done, total);
-      }));
-      if (i + BATCH < total) await new Promise(r => setTimeout(r, DELAY));
+    const apiKey = (localStorage.getItem('gemini_api_key') || '').replace(/['"]/g, '').trim();
+    if (!apiKey || !questions.length) return;
+    if (onProgress) onProgress(0, questions.length);
+
+    const payload = questions.map(q => ({
+      item: q.n,
+      stem: String(q.t || '').slice(0, 1600),
+      choices: (q.o || []).map(o => `${o.l}) ${o.t}`).join('\n').slice(0, 1200),
+      answer: q.c || '',
+      explanation: String(q.explanation || '').slice(0, 1200)
+    }));
+
+    const prompt =
+      'Create exactly one hyperspecific USMLE topic tag for each item.\n' +
+      'Each tag must name the exact diagnosis, drug, adverse effect, mechanism, management step, or tested association.\n' +
+      'Avoid broad labels like Pharmacology, Neurology, Alzheimer disease, or Cardiology.\n' +
+      'Good examples: "Alzheimer treatment: cholinesterase inhibitor first line", "Pramipexole adverse effect: impulse control disorder", "Myasthenia gravis: anti-AChR antibody postsynaptic blockade".\n' +
+      'Return ONLY valid JSON array in this exact shape: [{"item":1,"tag":"specific tag"}].\n' +
+      'Use 6-12 words per tag when possible.\n' +
+      JSON.stringify(payload);
+
+    try {
+      const resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.2,
+              maxOutputTokens: Math.max(512, questions.length * 24),
+              thinkingConfig: { thinkingBudget: 0 }
+            }
+          }) }
+      );
+      if (!resp.ok) throw new Error('API ' + resp.status);
+      const data = await resp.json();
+      const raw  = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+      const m    = raw.match(/\[[\s\S]*\]/);
+      const parsed = m ? JSON.parse(m[0]) : [];
+      const byItem = new Map(parsed.map(row => [Number(row.item), String(row.tag || '').trim()]).filter(([, tag]) => tag));
+      questions.forEach(q => { q.tags = [byItem.get(Number(q.n)) || 'Untagged']; });
+    } catch (_) {
+      questions.forEach(q => { q.tags = ['Untagged']; });
     }
+    if (onProgress) onProgress(questions.length, questions.length);
   }
 
   // ── Main pipeline ─────────────────────────────────────────
@@ -3664,7 +3994,13 @@ const Quiz = (() => {
   // ── Highlight ──────────────────────────────────────────────
   function saveHighlight(qIdx, htmlContent) {
     if (!state) return;
-    state.results[qIdx].highlights = { html: htmlContent };
+    state.results[qIdx].highlights = Object.assign({}, state.results[qIdx].highlights, { html: htmlContent });
+    persistState();
+  }
+
+  function saveHighlightPart(qIdx, key, value) {
+    if (!state) return;
+    state.results[qIdx].highlights = Object.assign({}, state.results[qIdx].highlights, { [key]: value });
     persistState();
   }
 
@@ -3715,6 +4051,7 @@ const Quiz = (() => {
 
     // Exhibits render after the stem.
     if (typeof renderImages === 'function') renderImages(q, 'q-images-top', 'q-images-bottom');
+    if (typeof window.setupImageStemHighlights === 'function') window.setupImageStemHighlights(q, r);
 
     // Tags — only shown after the question has been answered
     const tagEl = document.getElementById('q-tags');
@@ -3733,6 +4070,7 @@ const Quiz = (() => {
     renderExplanation();
     renderFlagButton();
     updateModeToggle();
+    if (typeof window.syncHintPanel === 'function') window.syncHintPanel();
 
     // Q timer always counts up from 0 — informational only
     startQTimer();
@@ -3820,7 +4158,15 @@ const Quiz = (() => {
     // Re-apply current font size with explanation offset.
     const sz = parseInt(localStorage.getItem('question_font_size')) || 14;
     const expEl = document.getElementById('exp-body');
-    if (expEl) expEl.style.fontSize = (sz + 1) + 'px';
+    if (expEl) {
+      if (r.highlights && r.highlights.expHtml) expEl.innerHTML = r.highlights.expHtml;
+      expEl.style.fontSize = (sz + 0.5) + 'px';
+      expEl.onmouseup = () => {
+        if (typeof window.toggleSelectionHighlight === 'function' && window.toggleSelectionHighlight(expEl)) {
+          Quiz.saveHighlightPart(state.qIdx, 'expHtml', expEl.innerHTML);
+        }
+      };
+    }
   }
 
   function buildExplanationHTML(q, r, container) {
@@ -3966,7 +4312,7 @@ const Quiz = (() => {
   return {
     startTest, pauseTest, unpauseTest, finishTest,
     goTo, nextQ, prevQ, setMode,
-    toggleFlag, toggleMark, toggleStrike, saveHighlight,
+    toggleFlag, toggleMark, toggleStrike, saveHighlight, saveHighlightPart,
     renderQuestion, renderOptions, renderExplanation,
     updateNavPanel, renderScoreLive,
     getState: () => state,
@@ -4008,6 +4354,71 @@ window.buildExplanationHTML = function(q, r, container) {
 /* ── HINT SYSTEM ─────────────────────────────────────────────────────────── */
 let _hintLevel = 0;
 let _hintTexts = [];
+const HINT_USAGE_KEY = 'gemini_hint_usage_v1';
+
+function hintDateKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function getDailyHintUsage() {
+  try {
+    const usage = JSON.parse(localStorage.getItem(HINT_USAGE_KEY) || '{}');
+    if (usage.date === hintDateKey()) return usage.count || 0;
+  } catch (_) {}
+  return 0;
+}
+
+function updateHintUsageCounter() {
+  const el = document.getElementById('hint-usage-counter');
+  if (!el) return;
+  const count = getDailyHintUsage();
+  el.textContent = `Gemini hints today: ${count}`;
+  el.classList.toggle('warn', count >= 10 && count < 25);
+  el.classList.toggle('high', count >= 25);
+}
+
+function incrementDailyHintUsage() {
+  const count = getDailyHintUsage() + 1;
+  try {
+    localStorage.setItem(HINT_USAGE_KEY, JSON.stringify({ date: hintDateKey(), count }));
+  } catch (_) {}
+  updateHintUsageCounter();
+}
+
+function downscaleImageForHint(dataUrl, maxWidth = 1200) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      if (!img.width || !img.height) { resolve(dataUrl); return; }
+      const scale = Math.min(1, maxWidth / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+async function getStemImageForHint(q) {
+  const stemImg = q?.images?.find(img => img.kind === 'stem');
+  if (!stemImg) return null;
+  let dataUrl = stemImg.dataUrl || null;
+  if (!dataUrl && stemImg.figureKey && window.FigureStore) {
+    dataUrl = await window.FigureStore.get(stemImg.figureKey).catch(() => null);
+  }
+  if (!dataUrl) return null;
+  dataUrl = await downscaleImageForHint(dataUrl);
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) return null;
+  return { mimeType: match[1], data: match[2] };
+}
 
 function resetHintPanel() {
   _hintLevel = 0;
@@ -4016,6 +4427,7 @@ function resetHintPanel() {
   const btn   = document.getElementById('btn-hint');
   if (panel) { panel.style.display = 'none'; panel.innerHTML = ''; }
   if (btn)   { btn.textContent = '💡 Hint'; btn.disabled = false; }
+  updateHintUsageCounter();
 }
 
 function _renderHints() {
@@ -4031,10 +4443,24 @@ function _renderHints() {
 function _updateHintButton() {
   const btn = document.getElementById('btn-hint');
   if (!btn) return;
-  if (_hintLevel === 0)      { btn.textContent = '💡 Hint';       btn.disabled = false; }
-  else if (_hintLevel === 1) { btn.textContent = '💡 More Hint';  btn.disabled = false; }
-  else if (_hintLevel === 2) { btn.textContent = '💡 Final Hint'; btn.disabled = false; }
-  else                       { btn.disabled = true; }
+  if (_hintLevel === 0) { btn.textContent = '💡 Hint'; btn.disabled = false; }
+  else                 { btn.textContent = '💡 Hint Used'; btn.disabled = true; }
+}
+
+function syncHintPanel() {
+  const qs = Quiz.getState();
+  if (!qs) { resetHintPanel(); return; }
+  const test = DB.getTest(qs.testId);
+  const q = test?.questions?.[qs.qIdx];
+  if (q?.hint) {
+    _hintTexts = [q.hint];
+    _hintLevel = 1;
+    _renderHints();
+    _updateHintButton();
+  } else {
+    resetHintPanel();
+  }
+  updateHintUsageCounter();
 }
 
 async function requestHint() {
@@ -4049,7 +4475,7 @@ async function requestHint() {
     return;
   }
 
-  if (_hintLevel >= 3) return;
+  if (_hintLevel >= 1) return;
 
   const qs = Quiz.getState();
   if (!qs) return;
@@ -4057,15 +4483,23 @@ async function requestHint() {
   if (!test) return;
   const q = test.questions[qs.qIdx];
   if (!q) return;
+  if (q.hint) {
+    _hintTexts = [q.hint];
+    _hintLevel = 1;
+    _renderHints();
+    _updateHintButton();
+    return;
+  }
 
   const stem    = q.t || '';
   const choices = (q.o || []).map(o => `${o.l}) ${o.t}`).join('\n');
+  const stemImage = await getStemImageForHint(q);
 
   const prompts = [
-    `You are a medical education tutor helping a student work through a multiple choice question. Give a subtle hint that points them in the right direction without revealing the answer or naming the correct choice. Focus on the key concept being tested.\nQuestion: ${stem}\nAnswer choices: ${choices}\nGive only the hint, no preamble.`,
-    `You are a medical education tutor. The student needs more guidance. Give a stronger hint that narrows down the reasoning significantly but still does not state the answer or name the correct choice directly.\nQuestion: ${stem}\nAnswer choices: ${choices}\nGive only the hint, no preamble.`,
-    `You are a medical education tutor. Give a final hint that leads the student directly to the answer through reasoning, but do not explicitly state which answer choice is correct. The student should be able to identify the answer themselves after reading this hint.\nQuestion: ${stem}\nAnswer choices: ${choices}\nGive only the hint, no preamble.`
+    `You are a medical education tutor helping a student work through a multiple choice question. Read the question stem from the attached image when present. Give one direct, efficient hint that points to the key reasoning step without explicitly giving the answer or naming the correct choice.\nParsed stem fallback: ${stem}\nAnswer choices: ${choices}\nPrefer one sentence. Use two sentences only if needed. No preamble.`
   ];
+  const parts = [{ text: prompts[_hintLevel] }];
+  if (stemImage) parts.push({ inlineData: stemImage });
 
   btn.textContent = '💡 Thinking...';
   btn.disabled = true;
@@ -4076,13 +4510,23 @@ async function requestHint() {
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompts[_hintLevel] }] }] })
+        body: JSON.stringify({
+          contents: [{ parts }],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 90,
+            thinkingConfig: { thinkingBudget: 0 }
+          }
+        })
       }
     );
     if (!resp.ok) throw new Error('API ' + resp.status);
     const data = await resp.json();
     const hintText = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
     if (!hintText) throw new Error('empty');
+    q.hint = hintText;
+    DB.updateTest(test.id, { questions: test.questions });
+    incrementDailyHintUsage();
     _hintTexts.push(hintText);
     _hintLevel++;
     _renderHints();
@@ -5655,7 +6099,7 @@ const App = (() => {
     }
   }
 
-  function saveGeneratedTest(skipOcrReview = false) {
+  async function saveGeneratedTest(skipOcrReview = false) {
     if (!_genParsed) return;
     if (!skipOcrReview && _ocrIssues.some(i => i.status === 'open')) {
       openOcrReview();
@@ -5678,21 +6122,28 @@ const App = (() => {
         delete q._figureData;
       }
       // Clear pending keys — will be rewritten after createTest
-      if (q.images) q.images.forEach(img => { img.figureKey = null; });
+      if (q.images) q.images.forEach(img => {
+        img.figureKey = null;
+        delete img.dataUrl;
+      });
     });
 
     const test = DB.createTest(_genParsed.folderId, _genParsed.name, questions);
+    if (!test) {
+      toast('Storage full. The test was not saved. Delete older tests, then try again.', 8000);
+      return;
+    }
 
     // Now we have test.id — write real figureKeys and save to IndexedDB
     if (figureEntries.length > 0 && window.FigureStore) {
-      figureEntries.forEach(({ qNum, idx, dataUrl }) => {
+      const writes = figureEntries.map(({ qNum, idx, dataUrl }) => {
         const key = test.id + ':' + qNum + ':' + idx;
         // Update q.images with the real key
         const q = test.questions.find(q => q.n === qNum);
         if (q && q.images && q.images[idx]) q.images[idx].figureKey = key;
-        // Save to IndexedDB (fire and forget — non-blocking)
-        window.FigureStore.put(key, dataUrl).catch(() => {});
+        return window.FigureStore.put(key, dataUrl);
       });
+      await Promise.allSettled(writes);
       // Re-save test with updated figureKeys
       DB.updateTest(test.id, { questions: test.questions });
     }
@@ -5755,14 +6206,13 @@ const App = (() => {
   }
 
   // ── Highlighting ───────────────────────────────────────────
-  function onStemSelect(e) {
+  function toggleSelectionHighlight(rootEl) {
     const sel = window.getSelection();
-    if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
+    if (!sel || sel.isCollapsed || !sel.toString().trim() || !rootEl) return false;
     const range = sel.getRangeAt(0).cloneRange();
-    const stemEl = document.getElementById('q-stem');
-    if (!stemEl) return;
-    const overlapping = Array.from(stemEl.querySelectorAll('mark[data-hl]'))
-                             .filter(m => range.intersectsNode(m));
+    if (!rootEl.contains(range.commonAncestorContainer)) return false;
+    const overlapping = Array.from(rootEl.querySelectorAll('mark[data-hl]'))
+      .filter(m => range.intersectsNode(m));
     if (overlapping.length > 0) {
       overlapping.forEach(m => {
         const parent = m.parentNode;
@@ -5780,12 +6230,109 @@ const App = (() => {
           const mark = document.createElement('mark');
           mark.className = 'hl-yellow'; mark.setAttribute('data-hl', 'hl-yellow');
           mark.appendChild(frag); range.insertNode(mark);
-        } catch(_) {}
+        } catch(_) { return false; }
       }
     }
-    const st = Quiz.getState();
-    if (st) Quiz.saveHighlight(st.qIdx, stemEl.innerHTML);
     sel.removeAllRanges();
+    return true;
+  }
+
+  function setupImageStemHighlights(q, r) {
+    const st = Quiz.getState();
+    if (!st || !q?.images?.some(img => img.kind === 'stem')) return;
+    const wraps = Array.from(document.querySelectorAll('#q-images-bottom .q-img-wrap'));
+    if (!wraps.length) return;
+    const wrap = wraps[0];
+    if (wrap.dataset.hlReady === '1') return;
+    wrap.dataset.hlReady = '1';
+    wrap.style.cursor = 'crosshair';
+
+    const img = wrap.querySelector('.q-img');
+    const layer = document.createElement('div');
+    layer.className = 'image-hl-layer';
+    wrap.appendChild(layer);
+
+    function positionLayer() {
+      if (!img) return;
+      layer.style.left = img.offsetLeft + 'px';
+      layer.style.top = img.offsetTop + 'px';
+      layer.style.width = img.clientWidth + 'px';
+      layer.style.height = img.clientHeight + 'px';
+    }
+
+    function drawRects() {
+      positionLayer();
+      layer.innerHTML = '';
+      (r.highlights?.imageRects || []).forEach(rect => {
+        const el = document.createElement('div');
+        el.className = 'image-hl-rect';
+        el.style.left = (rect.x * 100) + '%';
+        el.style.top = (rect.y * 100) + '%';
+        el.style.width = (rect.w * 100) + '%';
+        el.style.height = (rect.h * 100) + '%';
+        layer.appendChild(el);
+      });
+    }
+
+    function pointFromEvent(e) {
+      const box = img.getBoundingClientRect();
+      return {
+        x: Math.max(0, Math.min(1, (e.clientX - box.left) / box.width)),
+        y: Math.max(0, Math.min(1, (e.clientY - box.top) / box.height))
+      };
+    }
+
+    let start = null;
+    let draft = null;
+    wrap.addEventListener('mousedown', e => {
+      if (!img || e.button !== 0) return;
+      const box = img.getBoundingClientRect();
+      if (e.clientX < box.left || e.clientX > box.right || e.clientY < box.top || e.clientY > box.bottom) return;
+      e.preventDefault();
+      start = pointFromEvent(e);
+      draft = document.createElement('div');
+      draft.className = 'image-hl-rect';
+      layer.appendChild(draft);
+    });
+    window.addEventListener('mousemove', e => {
+      if (!start || !draft) return;
+      const pt = pointFromEvent(e);
+      const x = Math.min(start.x, pt.x);
+      const y = Math.min(start.y, pt.y);
+      const w = Math.abs(pt.x - start.x);
+      const h = Math.abs(pt.y - start.y);
+      draft.style.left = (x * 100) + '%';
+      draft.style.top = (y * 100) + '%';
+      draft.style.width = (w * 100) + '%';
+      draft.style.height = (h * 100) + '%';
+    });
+    window.addEventListener('mouseup', e => {
+      if (!start || !draft) return;
+      const pt = pointFromEvent(e);
+      const rect = {
+        x: Math.min(start.x, pt.x),
+        y: Math.min(start.y, pt.y),
+        w: Math.abs(pt.x - start.x),
+        h: Math.abs(pt.y - start.y)
+      };
+      draft.remove();
+      start = null;
+      draft = null;
+      if (rect.w < 0.01 || rect.h < 0.005) { drawRects(); return; }
+      const next = [...(r.highlights?.imageRects || []), rect];
+      Quiz.saveHighlightPart(st.qIdx, 'imageRects', next);
+      r.highlights = Object.assign({}, r.highlights, { imageRects: next });
+      drawRects();
+    });
+    if (img && !img.complete) img.addEventListener('load', drawRects, { once: true });
+    setTimeout(drawRects, 0);
+  }
+
+  function onStemSelect(e) {
+    const stemEl = document.getElementById('q-stem');
+    if (!stemEl) return;
+    const st = Quiz.getState();
+    if (st && toggleSelectionHighlight(stemEl)) Quiz.saveHighlight(st.qIdx, stemEl.innerHTML);
   }
 
   // ── Settings ───────────────────────────────────────────────
@@ -5911,6 +6458,9 @@ const App = (() => {
     document.getElementById('screen-review').style.display = 'none';
     showHome();
   }
+
+  window.toggleSelectionHighlight = toggleSelectionHighlight;
+  window.setupImageStemHighlights = setupImageStemHighlights;
 
   return {
     init,
@@ -6064,6 +6614,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Remove any stored PIN from previous versions
   localStorage.removeItem('nbme_pin_v1');
   App.init();
+  if (typeof updateHintUsageCounter === 'function') updateHintUsageCounter();
   restoreNavSidebarState();
   // Close calculator popup when leaving the quiz screen
   const _qs = document.getElementById('screen-quiz');
