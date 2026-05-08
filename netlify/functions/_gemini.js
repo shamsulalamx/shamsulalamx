@@ -56,8 +56,6 @@ if (!resp.ok) {
 }
   return data;
 }
-  return data;
-}
 
 function extractText(data) {
   return String(data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
