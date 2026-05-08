@@ -163,6 +163,84 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 }
 .btn-generate:hover { background: #244d73; }
 
+/* Source folder landing */
+.source-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 16px;
+}
+.source-card {
+  min-height: 150px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 18px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,.07);
+  transition: box-shadow .15s, transform .15s, border-color .15s;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+}
+.source-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.12); transform: translateY(-1px); border-color: #b7c9db; }
+.source-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.source-folder-icon {
+  width: 58px; height: 46px; border-radius: 5px;
+  background: linear-gradient(180deg, #d9ecfb 0%, #b9d7ef 100%);
+  border: 1px solid #9fc0dc;
+  position: relative;
+  flex-shrink: 0;
+}
+.source-folder-icon::before {
+  content: '';
+  position: absolute;
+  top: -8px; left: 7px;
+  width: 26px; height: 10px;
+  background: #d9ecfb;
+  border: 1px solid #9fc0dc;
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+}
+.source-card-count { font-size: 11px; color: var(--muted); background: #eef3f7; border-radius: 10px; padding: 2px 8px; }
+.source-card-name { font-size: 16px; font-weight: 700; color: var(--navy); line-height: 1.25; word-break: break-word; }
+.source-card-meta { font-size: 12px; color: var(--muted); }
+.source-card-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.source-card-rename {
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--navy);
+  border-radius: 3px;
+  padding: 5px 9px;
+  font-size: 11px;
+}
+.source-card-rename:hover { background: #f5f7fa; }
+.source-card.add {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border-style: dashed;
+  color: var(--muted);
+}
+.source-add-plus { font-size: 34px; line-height: 1; color: var(--ltblue); }
+.source-subfolder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+.subfolder-card {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 14px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  transition: box-shadow .15s, transform .15s;
+}
+.subfolder-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,.10); transform: translateY(-1px); }
+.subfolder-card-name { font-size: 13px; font-weight: 700; color: var(--navy); margin-bottom: 4px; }
+.subfolder-card-meta { font-size: 11px; color: var(--muted); }
+
 /* Test grid */
 .test-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
 .test-card {
@@ -982,7 +1060,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
           <h2 id="home-title">Welcome</h2>
           <div class="home-header-actions">
             <input type="search" class="search-input" id="global-search" placeholder="Search" oninput="App.searchQuestionContent(this.value)">
-            <button class="btn-generate" onclick="App.openGenerateModal()">
+            <button class="btn-generate" id="btn-home-generate" onclick="App.openGenerateModal()">
               ＋ Generate Test
             </button>
           </div>
@@ -1598,11 +1676,23 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 ============================================================ */
 const DB = (() => {
   const LOCAL_KEY = 'nbme_app_v1';
+  const DEFAULT_SOURCE_ID = 'src-nbme';
+  const DEFAULT_SOURCE_FOLDERS = [
+    { id: 'src-nbme', name: 'NBME', order: 0 },
+    { id: 'src-uworld', name: 'UWorld', order: 1 },
+    { id: 'src-anki', name: 'Anki', order: 2 },
+    { id: 'src-ome', name: 'OME', order: 3 },
+    { id: 'src-divine-podcasts', name: 'Divine Podcasts', order: 4 },
+    { id: 'src-mehlman', name: 'Mehlman', order: 5 },
+    { id: 'src-images-and-tables', name: 'Images and Tables', order: 6 },
+    { id: 'src-amboss', name: 'Amboss', order: 7 }
+  ];
 
   function defaultDB() {
     return {
       version: 1,
       settings: {},
+      sourceFolders: DEFAULT_SOURCE_FOLDERS.map(f => Object.assign({}, f)),
       folders: [],
       tests: [],
       trash: [],
@@ -1616,9 +1706,29 @@ const DB = (() => {
   function loadLocal() {
     try {
       const raw = localStorage.getItem(LOCAL_KEY);
-      if (!raw) return defaultDB();
-      return Object.assign(defaultDB(), JSON.parse(raw));
+      if (!raw) return ensureSourceFolders(defaultDB());
+      return ensureSourceFolders(Object.assign(defaultDB(), JSON.parse(raw)));
     } catch(e) { return defaultDB(); }
+  }
+
+  function ensureSourceFolders(db) {
+    if (!Array.isArray(db.sourceFolders)) db.sourceFolders = [];
+
+    DEFAULT_SOURCE_FOLDERS.forEach(src => {
+      const existing = db.sourceFolders.find(s => s.id === src.id);
+      if (!existing) db.sourceFolders.push(Object.assign({}, src));
+      else {
+        if (!existing.name) existing.name = src.name;
+        if (existing.order == null) existing.order = src.order;
+      }
+    });
+
+    if (!Array.isArray(db.folders)) db.folders = [];
+    db.folders.forEach(folder => {
+      if (!folder.sourceId) folder.sourceId = DEFAULT_SOURCE_ID;
+    });
+
+    return db;
   }
 
   function storagePayload(db) {
@@ -1677,7 +1787,7 @@ const DB = (() => {
   }
 
   let _db = null;
-  function get() { if (!_db) _db = loadLocal(); return _db; }
+  function get() { if (!_db) _db = loadLocal(); return ensureSourceFolders(_db); }
   function save() {
     if (_db) {
       const ok = saveLocal(_db);
@@ -1690,10 +1800,29 @@ const DB = (() => {
   function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 
   // ── Folders ─────────────────────────────────────────────────
-  function getFolders() { return get().folders.sort((a,b) => (a.order||0) - (b.order||0)); }
-  function createFolder(name) {
+  function getSourceFolders() {
+    return get().sourceFolders.sort((a,b) => (a.order||0) - (b.order||0));
+  }
+  function getSourceFolder(id) {
+    return get().sourceFolders.find(s => s.id === id) || null;
+  }
+  function createSourceFolder(name) {
     const db = get();
-    const f = { id: uid(), name, createdAt: Date.now(), order: db.folders.length };
+    const f = { id: uid(), name, createdAt: Date.now(), order: db.sourceFolders.length };
+    db.sourceFolders.push(f); save(); return f;
+  }
+  function renameSourceFolder(id, name) {
+    const f = get().sourceFolders.find(f=>f.id===id);
+    if(f){f.name=name;save();}
+  }
+  function getFolders(sourceId) {
+    const folders = get().folders.sort((a,b) => (a.order||0) - (b.order||0));
+    return sourceId ? folders.filter(f => (f.sourceId || DEFAULT_SOURCE_ID) === sourceId) : folders;
+  }
+  function createFolder(name, sourceId = DEFAULT_SOURCE_ID) {
+    const db = get();
+    const sourceFolder = getSourceFolder(sourceId) || getSourceFolder(DEFAULT_SOURCE_ID);
+    const f = { id: uid(), name, sourceId: sourceFolder?.id || DEFAULT_SOURCE_ID, createdAt: Date.now(), order: db.folders.length };
     db.folders.push(f); save(); return f;
   }
   function renameFolder(id, name) { const f = get().folders.find(f=>f.id===id); if(f){f.name=name;save();} }
@@ -1845,6 +1974,7 @@ const DB = (() => {
   }
 
   return { get, save, uid,
+    getSourceFolders, getSourceFolder, createSourceFolder, renameSourceFolder,
     getFolders, createFolder, renameFolder, deleteFolder,
     getTests, getTest, createTest, updateTest, renameTest, trashTest, restoreTest, emptyTrash, permanentDelete,
     saveAttempt, finishAttempt, getHistory, getFlags, addFlag, removeFlag, isFlagged,
@@ -4782,8 +4912,10 @@ const Results = (() => {
     const wrong   = _results.filter(r => r.answered && !r.correct).length;
     const avgTime = Math.round(_results.reduce((a,r) => a + Math.max(0, Math.min(r.time || 0, 3600)), 0) / total);
     const folder = DB.getFolders().find(f => f.id === test.folderId);
+    const source = folder?.sourceId ? DB.getSourceFolder(folder.sourceId) : null;
+    const libraryName = source?.name || 'Study Library';
     const folderName = folder?.name || 'Unfiled';
-    const reportTitle = `${folderName} ${test.name}`.trim();
+    const reportTitle = `${libraryName} ${folderName} ${test.name}`.trim();
 
     const NAVY = [30, 58, 95], BLUE = [41, 128, 185], WHITE = [255,255,255],
           LGRAY = [240, 242, 245], DGRAY = [80, 100, 120], BLACK = [20, 30, 45],
@@ -5173,6 +5305,7 @@ window.toggleFlagReview  = Results.toggleFlagReview;
 const App = (() => {
 
   // ── State ──────────────────────────────────────────────────
+  let _currentSource = null;
   let _currentFolder = null;
   let _currentView   = 'home'; // 'home'|'quiz'|'results'|'flagged'|'trash'
   let _genQBFile = null, _genAKFile = null;
@@ -5260,8 +5393,24 @@ const App = (() => {
   // ── Sidebar ────────────────────────────────────────────────
   function renderSidebar() {
     const container = document.getElementById('folder-list');
-    const folders = DB.getFolders();
+    const title = document.querySelector('#sidebar-folders .sidebar-section-title');
+    const addFolder = document.querySelector('#sidebar-folders .sidebar-add-folder');
+    const source = _currentSource ? DB.getSourceFolder(_currentSource) : null;
+    const folders = _currentSource ? DB.getFolders(_currentSource) : [];
     container.innerHTML = '';
+
+    if (title) title.textContent = source ? `${source.name} Folders` : 'Folders';
+    if (addFolder) addFolder.style.display = _currentSource ? 'flex' : 'none';
+
+    if (!_currentSource) {
+      container.innerHTML = '<div class="sidebar-test-item" style="cursor:default;color:#7a9ab8;">Open a library folder first.</div>';
+      return;
+    }
+
+    if (!folders.length) {
+      container.innerHTML = '<div class="sidebar-test-item" style="cursor:default;color:#7a9ab8;">No subfolders yet.</div>';
+      return;
+    }
 
     folders.forEach(folder => {
       const tests = DB.getTests(folder.id);
@@ -5328,6 +5477,11 @@ const App = (() => {
     return st && st.testId === testId;
   }
 
+  function setSourceFromFolder(folderId) {
+    const folder = DB.getFolders().find(f => f.id === folderId);
+    if (folder) _currentSource = folder.sourceId || 'src-nbme';
+  }
+
   // ── Context menus ──────────────────────────────────────────
   function showFolderContextMenu(e, folder) {
     removeContextMenus();
@@ -5379,7 +5533,27 @@ const App = (() => {
   // ── Views ──────────────────────────────────────────────────
   function showHome(folderId) {
     _currentView = 'home';
-    if (folderId) _currentFolder = folderId;
+    if (folderId) {
+      _currentFolder = folderId;
+      setSourceFromFolder(folderId);
+    } else {
+      _currentSource = null;
+      _currentFolder = null;
+    }
+    document.getElementById('screen-home').style.display    = 'flex';
+    document.getElementById('screen-quiz').style.display    = 'none';
+    document.getElementById('screen-results').style.display = 'none';
+    document.getElementById('screen-review').style.display  = 'none';
+    renderSidebar();
+    renderHomeGrid();
+    setActiveNav('nav-home');
+  }
+
+  function showSourceHome(sourceId) {
+    if (!DB.getSourceFolder(sourceId)) return;
+    _currentSource = sourceId;
+    _currentFolder = null;
+    _currentView = 'home';
     document.getElementById('screen-home').style.display    = 'flex';
     document.getElementById('screen-quiz').style.display    = 'none';
     document.getElementById('screen-results').style.display = 'none';
@@ -5391,6 +5565,7 @@ const App = (() => {
 
   function showFolderHome(folderId, highlightTestId) {
     _currentFolder = folderId;
+    setSourceFromFolder(folderId);
     showHome(folderId);
     if (highlightTestId) {
       // Scroll to card
@@ -5403,10 +5578,19 @@ const App = (() => {
   function renderHomeGrid() {
     const titleEl = document.getElementById('home-title');
     const contentEl = document.getElementById('home-content');
+    const generateBtn = document.getElementById('btn-home-generate');
+    if (generateBtn) generateBtn.style.display = _currentSource ? 'flex' : 'none';
+
+    if (!_currentSource) {
+      titleEl.textContent = 'Study Library';
+      renderSourceLanding(contentEl);
+      return;
+    }
 
     if (!_currentFolder) {
-      titleEl.textContent = 'Welcome';
-      contentEl.innerHTML = '<div class="no-tests">Select a folder from the sidebar, or create a new one to get started.</div>';
+      const source = DB.getSourceFolder(_currentSource);
+      titleEl.textContent = source?.name || 'Library';
+      renderSourceFolderPage(contentEl);
       return;
     }
 
@@ -5454,6 +5638,62 @@ const App = (() => {
         </div>
       </div>`;
     });
+    html += '</div>';
+    contentEl.innerHTML = html;
+  }
+
+  function renderSourceLanding(contentEl) {
+    const sources = DB.getSourceFolders();
+    const folders = DB.getFolders();
+    let html = '<div class="source-grid">';
+    sources.forEach(src => {
+      const subfolders = folders.filter(f => (f.sourceId || 'src-nbme') === src.id);
+      const testCount = subfolders.reduce((sum, f) => sum + DB.getTests(f.id).length, 0);
+      html += `<div class="source-card" onclick="App.showSourceHome('${src.id}')">
+        <div class="source-card-top">
+          <div class="source-folder-icon"></div>
+          <div class="source-card-count">${subfolders.length}</div>
+        </div>
+        <div>
+          <div class="source-card-name">${escapeHTML(src.name)}</div>
+          <div class="source-card-meta">${subfolders.length} subfolder${subfolders.length!==1?'s':''} · ${testCount} test${testCount!==1?'s':''}</div>
+        </div>
+        <div class="source-card-actions">
+          <button class="source-card-rename" onclick="event.stopPropagation();App.renameSourceFolder('${src.id}')">Rename</button>
+        </div>
+      </div>`;
+    });
+    html += `<div class="source-card add" onclick="App.promptNewSourceFolder()">
+      <div class="source-add-plus">＋</div>
+      <div>
+        <div class="source-card-name">Add Folder</div>
+        <div class="source-card-meta">Create a new library card</div>
+      </div>
+    </div>`;
+    html += '</div>';
+    contentEl.innerHTML = html;
+  }
+
+  function renderSourceFolderPage(contentEl) {
+    const folders = DB.getFolders(_currentSource);
+    if (!folders.length) {
+      contentEl.innerHTML = `<div class="no-tests">No subfolders in this library yet.<br><br>
+        <button class="btn-generate" onclick="App.promptNewFolder()">＋ New Subfolder</button></div>`;
+      return;
+    }
+
+    let html = '<div class="source-subfolder-grid">';
+    folders.forEach(folder => {
+      const tests = DB.getTests(folder.id);
+      html += `<div class="subfolder-card" onclick="App.showFolderHome('${folder.id}')">
+        <div class="subfolder-card-name">📁 ${escapeHTML(folder.name)}</div>
+        <div class="subfolder-card-meta">${tests.length} test${tests.length!==1?'s':''}</div>
+      </div>`;
+    });
+    html += `<div class="subfolder-card" onclick="App.promptNewFolder()">
+      <div class="subfolder-card-name">＋ New Subfolder</div>
+      <div class="subfolder-card-meta">Add another folder inside this library</div>
+    </div>`;
     html += '</div>';
     contentEl.innerHTML = html;
   }
@@ -5918,7 +6158,30 @@ const App = (() => {
   }
 
   // ── Folders & Tests management ─────────────────────────────
+  function promptNewSourceFolder() {
+    const name = prompt('New library folder name:');
+    if (!name || !name.trim()) return;
+    const source = DB.createSourceFolder(name.trim());
+    toast(`Folder "${source.name}" created.`);
+    showSourceHome(source.id);
+  }
+
+  function renameSourceFolder(id) {
+    const source = DB.getSourceFolder(id);
+    if (!source) return;
+    const name = prompt('Rename folder:', source.name);
+    if (!name || !name.trim()) return;
+    DB.renameSourceFolder(id, name.trim());
+    renderSidebar();
+    renderHomeGrid();
+    toast('Renamed.');
+  }
+
   function promptNewFolder() {
+    if (!_currentSource) {
+      toast('Open a library folder first.');
+      return;
+    }
     document.getElementById('new-folder-name').value = '';
     document.getElementById('modal-new-folder').style.display = 'flex';
     setTimeout(() => document.getElementById('new-folder-name').focus(), 100);
@@ -5927,9 +6190,12 @@ const App = (() => {
   function createFolder() {
     const name = document.getElementById('new-folder-name').value.trim();
     if (!name) { toast('Please enter a folder name.'); return; }
-    DB.createFolder(name);
+    if (!_currentSource) { toast('Open a library folder first.'); return; }
+    const folder = DB.createFolder(name, _currentSource);
+    _currentFolder = folder.id;
     document.getElementById('modal-new-folder').style.display = 'none';
     renderSidebar();
+    renderHomeGrid();
     toast(`Folder "${name}" created.`);
   }
 
@@ -5946,6 +6212,7 @@ const App = (() => {
       const name = input.value.trim() || folder.name;
       DB.renameFolder(id, name);
       renderSidebar();
+      renderHomeGrid();
       if (_currentFolder === id) document.getElementById('home-title').textContent = name;
     };
     input.addEventListener('blur', done);
@@ -5963,7 +6230,7 @@ const App = (() => {
     if (!confirm('Delete folder and move all tests to Trash?')) return;
     DB.deleteFolder(id);
     _currentFolder = null;
-    renderSidebar(); showHome(); toast('Folder deleted.');
+    renderSidebar(); renderHomeGrid(); toast('Folder deleted.');
   }
 
   function trashTest(id) {
@@ -5974,6 +6241,7 @@ const App = (() => {
 
   function generateInFolder(folderId) {
     _currentFolder = folderId;
+    setSourceFromFolder(folderId);
     openGenerateModal();
   }
 
@@ -6022,7 +6290,7 @@ const App = (() => {
     // Populate folder select
     const sel = document.getElementById('gen-folder-select');
     sel.innerHTML = '';
-    const folders = DB.getFolders();
+    const folders = _currentSource ? DB.getFolders(_currentSource) : DB.getFolders();
     if (_currentFolder) {
       const f = folders.find(f => f.id === _currentFolder);
       if (f) sel.innerHTML += `<option value="${f.id}" selected>${f.name}</option>`;
@@ -6529,6 +6797,7 @@ const App = (() => {
     document.getElementById('modal-generate').style.display = 'none';
     document.getElementById('modal-ocr-review').style.display = 'none';
     _currentFolder = _genParsed.folderId;
+    setSourceFromFolder(_currentFolder);
     renderSidebar(); renderHomeGrid();
     toast(`✓ "${test.name}" created with ${test.questions.length} questions!`);
     _genParsed = null;
@@ -6894,7 +7163,9 @@ const App = (() => {
 
   function closeReviewTest() {
     document.getElementById('screen-review').style.display = 'none';
-    showHome();
+    if (_currentFolder) showFolderHome(_currentFolder);
+    else if (_currentSource) showSourceHome(_currentSource);
+    else showHome();
   }
 
   window.toggleSelectionHighlight = toggleSelectionHighlight;
@@ -6905,6 +7176,7 @@ const App = (() => {
     toast,
     renderSidebar,
     showHome,
+    showSourceHome,
     showFolderHome,
     searchQuestionContent,
     showFlagged,
@@ -6918,6 +7190,8 @@ const App = (() => {
     downloadNotesPdf,
     toggleMarkedFolder,
     unmark,
+    promptNewSourceFolder,
+    renameSourceFolder,
     promptNewFolder,
     createFolder,
     startRenameFolder,
