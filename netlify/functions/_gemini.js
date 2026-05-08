@@ -45,12 +45,17 @@ async function callGemini(requestBody) {
     body: JSON.stringify(requestBody)
   });
   const data = await resp.json().catch(() => ({}));
-  if (!resp.ok) {
-    const message = data?.error?.message || `Gemini API ${resp.status}`;
-    const err = new Error(message);
-    err.statusCode = resp.status;
-    throw err;
-  }
+if (!resp.ok) {
+  console.error('Gemini API error status:', resp.status);
+  console.error('Gemini API error response:', JSON.stringify(data, null, 2));
+
+  const message = data?.error?.message || `Gemini API ${resp.status}`;
+  const err = new Error(message);
+  err.statusCode = resp.status;
+  throw err;
+}
+  return data;
+}
   return data;
 }
 
