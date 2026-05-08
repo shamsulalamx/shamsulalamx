@@ -65,6 +65,15 @@ input, textarea, select { font-family: inherit; }
   transition: background .15s;
 }
 .topbar-btn:hover { background: rgba(255,255,255,.2); }
+.drive-alert, .gemini-alert {
+  display: none; align-items: center; gap: 6px;
+  padding: 5px 10px; font-size: 11px; font-weight: 700;
+  border-radius: 3px; border: 1px solid rgba(255,255,255,.35);
+  background: rgba(240,165,0,.22); color: white;
+}
+.drive-alert.show, .gemini-alert.show { display: flex; }
+.drive-alert.error, .gemini-alert.error { background: rgba(192,57,43,.35); }
+.drive-alert.ok, .gemini-alert.ok { background: rgba(39,174,96,.25); }
 
 /* ── Main body ────────────────────────────────────────────── */
 #main { display: flex; flex: 1; overflow: hidden; }
@@ -1003,6 +1012,8 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
       </div>
     </div>
     <div class="topbar-right">
+      <button class="drive-alert" id="drive-alert" onclick="App.openSettings()" title="Open Drive backup settings"></button>
+      <button class="gemini-alert" id="gemini-alert" onclick="App.openSettings()" title="Open Gemini API settings"></button>
       <button class="topbar-btn" onclick="adjFontSize(-1)" title="Decrease font size">A-</button>
       <button class="topbar-btn" onclick="adjFontSize(1)"  title="Increase font size">A+</button>
       <button class="topbar-btn" onclick="App.openSettings()" title="Settings">⚙ Settings</button>
@@ -1731,11 +1742,19 @@ const DB = (() => {
     return db;
   }
 
+  function isUnsafeStorageValue(key, value) {
+    if (key === 'dataUrl' || key === '_figureData') return true;
+    if (key === 'highlights') return true;
+    if (key === '_range') return true;
+    if (key === 'blob' || key === 'base64') return true;
+    if (key === 'src' && typeof value === 'string' && /^data:image\//i.test(value)) return true;
+    if (typeof value === 'string' && /^data:image\/[^;]+;base64,/i.test(value)) return true;
+    return false;
+  }
+
   function storagePayload(db) {
     return JSON.parse(JSON.stringify(db, (key, value) => {
-      if (key === 'dataUrl' || key === '_figureData') return undefined;
-      if (key === 'highlights') return undefined;
-      if (key === '_range') return undefined;
+      if (isUnsafeStorageValue(key, value)) return undefined;
       return value;
     }));
   }
@@ -2062,13 +2081,27 @@ window.FigureStore = FigureStore;
   const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
   const DRIVE_FOLDER_NAME = 'NBME Self-Assessment Suite';
   const DRIVE_MANIFEST_NAME = 'nbme_manifest.json';
+  const DRIVE_ENABLED_KEY = 'nbme_drive_backup_enabled_v1';
   let _tokenClient = null, _accessToken = null, _folderId = null, _manifestFileId = null;
   let _timer = null, _busy = false, _pending = false;
   let _skipNextSchedule = false;
 
-  function setDriveStatus(text, color) {
+  function setDriveNotice(text, state = 'warn') {
+    const alert = document.getElementById('drive-alert');
+    if (!alert) return;
+    if (!text) {
+      alert.className = 'drive-alert';
+      alert.textContent = '';
+      return;
+    }
+    alert.textContent = text;
+    alert.className = 'drive-alert show' + (state === 'error' ? ' error' : state === 'ok' ? ' ok' : '');
+  }
+
+  function setDriveStatus(text, color, noticeText = '', noticeState = 'warn') {
     const el = document.getElementById('drive-sync-status');
     if (el) { el.textContent = text; el.style.color = color || '#5a6a7a'; }
+    setDriveNotice(noticeText, noticeState);
   }
 
   function localHostRequired() {
@@ -2100,7 +2133,7 @@ window.FigureStore = FigureStore;
         callback: resp => {
           if (resp.error) { reject(new Error(resp.error)); return; }
           _accessToken = resp.access_token;
-          setDriveStatus('Drive connected.', '#27ae60');
+          setDriveStatus('Drive connected.', '#27ae60', 'Drive ready', 'ok');
           resolve(_accessToken);
         }
       });
@@ -2164,6 +2197,8 @@ window.FigureStore = FigureStore;
     return JSON.parse(JSON.stringify({
       version: 1,
       updatedAt: new Date().toISOString(),
+      settings: db.settings || {},
+      sourceFolders: db.sourceFolders,
       folders: db.folders,
       tests: db.tests,
       trash: db.trash,
@@ -2173,6 +2208,9 @@ window.FigureStore = FigureStore;
       history: db.history
     }, (key, value) => {
       if (key === 'dataUrl' || key === '_figureData' || key === 'highlights') return undefined;
+      if (key === '_range' || key === 'blob' || key === 'base64') return undefined;
+      if (key === 'src' && typeof value === 'string' && /^data:image\//i.test(value)) return undefined;
+      if (typeof value === 'string' && /^data:image\/[^;]+;base64,/i.test(value)) return undefined;
       return value;
     }));
   }
@@ -2184,6 +2222,29 @@ window.FigureStore = FigureStore;
     const arr = new Uint8Array(bytes.length);
     for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
     return new Blob([arr], { type: match[1] });
+  }
+
+  function snapshotTestsWithImages(snapshot) {
+    return []
+      .concat(snapshot.tests || [])
+      .concat(snapshot.trash || []);
+  }
+
+  function applyDriveFileIdsForCollection(snapshotTests, localTests) {
+    for (const snapTest of snapshotTests || []) {
+      const localTest = (localTests || []).find(t => t.id === snapTest.id);
+      if (!localTest) continue;
+      for (let qi = 0; qi < (snapTest.questions || []).length; qi++) {
+        const snapQ = snapTest.questions[qi];
+        const localQ = localTest.questions?.[qi];
+        if (!snapQ || !localQ) continue;
+        for (let ii = 0; ii < (snapQ.images || []).length; ii++) {
+          if (snapQ.images[ii]?.driveFileId && localQ.images?.[ii]) {
+            localQ.images[ii].driveFileId = snapQ.images[ii].driveFileId;
+          }
+        }
+      }
+    }
   }
 
   async function uploadDriveFile(name, blob, mimeType, parentId, existingId) {
@@ -2202,7 +2263,7 @@ window.FigureStore = FigureStore;
 
   async function uploadFiguresToDrive(snapshot) {
     const folderId = await ensureDriveFolder();
-    for (const test of snapshot.tests || []) {
+    for (const test of snapshotTestsWithImages(snapshot)) {
       for (const q of test.questions || []) {
         for (const img of q.images || []) {
           if (!img.figureKey || img.driveFileId || !window.FigureStore) continue;
@@ -2217,20 +2278,8 @@ window.FigureStore = FigureStore;
 
   function applyDriveFileIdsToLocal(snapshot) {
     const db = DB.get();
-    for (const snapTest of snapshot.tests || []) {
-      const localTest = db.tests.find(t => t.id === snapTest.id);
-      if (!localTest) continue;
-      for (let qi = 0; qi < (snapTest.questions || []).length; qi++) {
-        const snapQ = snapTest.questions[qi];
-        const localQ = localTest.questions?.[qi];
-        if (!snapQ || !localQ) continue;
-        for (let ii = 0; ii < (snapQ.images || []).length; ii++) {
-          if (snapQ.images[ii]?.driveFileId && localQ.images?.[ii]) {
-            localQ.images[ii].driveFileId = snapQ.images[ii].driveFileId;
-          }
-        }
-      }
-    }
+    applyDriveFileIdsForCollection(snapshot.tests, db.tests);
+    applyDriveFileIdsForCollection(snapshot.trash, db.trash);
   }
 
   async function saveManifestToDrive(snapshot) {
@@ -2241,7 +2290,7 @@ window.FigureStore = FigureStore;
 
   async function restoreFiguresFromDrive(snapshot) {
     if (!window.FigureStore) return;
-    for (const test of snapshot.tests || []) {
+    for (const test of snapshotTestsWithImages(snapshot)) {
       for (const q of test.questions || []) {
         for (const img of q.images || []) {
           if (!img.figureKey || !img.driveFileId) continue;
@@ -2267,9 +2316,30 @@ window.FigureStore = FigureStore;
       await ensureDriveAuth('consent');
       await ensureDriveFolder();
       await ensureManifestFile();
-      setDriveStatus('Drive connected.', '#27ae60');
+      localStorage.setItem(DRIVE_ENABLED_KEY, '1');
+      setDriveStatus('Drive connected.', '#27ae60', 'Drive ready', 'ok');
     } catch(e) {
-      setDriveStatus(e.message || 'Drive connection failed.', '#e74c3c');
+      setDriveStatus(e.message || 'Drive connection failed.', '#e74c3c', 'Reconnect Drive', 'error');
+    }
+  };
+
+  window.autoConnectGoogleDrive = async function() {
+    if (localStorage.getItem(DRIVE_ENABLED_KEY) !== '1') {
+      setDriveStatus('Drive backup is not enabled.', '#5a6a7a', 'Enable Drive backup', 'warn');
+      return;
+    }
+    if (!localHostRequired()) {
+      setDriveStatus('Open from http://localhost:8080 to auto-connect Drive.', '#f0a500', 'Open localhost for Drive', 'warn');
+      return;
+    }
+    try {
+      setDriveStatus('Connecting Drive...', '#f0a500');
+      await ensureDriveAuth('');
+      await ensureDriveFolder();
+      await ensureManifestFile();
+      setDriveStatus('Drive connected.', '#27ae60', 'Drive ready', 'ok');
+    } catch(e) {
+      setDriveStatus('Drive needs reconnection. Click Connect Drive.', '#e74c3c', 'Reconnect Drive', 'error');
     }
   };
 
@@ -2279,15 +2349,16 @@ window.FigureStore = FigureStore;
       _busy = true;
       setDriveStatus('Backing up to Drive...', '#f0a500');
       await ensureDriveAuth('');
+      localStorage.setItem(DRIVE_ENABLED_KEY, '1');
       const snapshot = driveDbSnapshot();
       await uploadFiguresToDrive(snapshot);
       applyDriveFileIdsToLocal(snapshot);
       _skipNextSchedule = true;
       DB.save();
       await saveManifestToDrive(snapshot);
-      setDriveStatus('Drive backup complete.', '#27ae60');
+      setDriveStatus('Drive backup complete.', '#27ae60', '', 'ok');
     } catch(e) {
-      setDriveStatus(e.message || 'Drive backup failed.', '#e74c3c');
+      setDriveStatus(e.message || 'Drive backup failed.', '#e74c3c', 'Backup failed', 'error');
     } finally {
       _busy = false;
       if (_pending) { _pending = false; window.scheduleGoogleDriveSave(); }
@@ -2298,11 +2369,15 @@ window.FigureStore = FigureStore;
     try {
       setDriveStatus('Restoring from Drive...', '#f0a500');
       await ensureDriveAuth('');
+      localStorage.setItem(DRIVE_ENABLED_KEY, '1');
       const manifestId = await ensureManifestFile();
       const resp = await driveFetch(`https://www.googleapis.com/drive/v3/files/${manifestId}?alt=media`);
       const snapshot = await resp.json();
       await restoreFiguresFromDrive(snapshot);
       const db = DB.get();
+      if (snapshot.settings && typeof snapshot.settings === 'object') db.settings = snapshot.settings;
+      if (db.settings?.geminiApiKey) localStorage.setItem('gemini_api_key', db.settings.geminiApiKey);
+      if (Array.isArray(snapshot.sourceFolders)) db.sourceFolders = snapshot.sourceFolders;
       if (Array.isArray(snapshot.folders)) db.folders = snapshot.folders;
       if (Array.isArray(snapshot.tests)) db.tests = snapshot.tests;
       if (Array.isArray(snapshot.trash)) db.trash = snapshot.trash;
@@ -2312,15 +2387,21 @@ window.FigureStore = FigureStore;
       if (Array.isArray(snapshot.history)) db.history = snapshot.history;
       _skipNextSchedule = true;
       DB.save();
-      setDriveStatus('Drive restore complete. Reloading...', '#27ae60');
+      if (typeof window.checkGeminiApiKeyStatus === 'function') window.checkGeminiApiKeyStatus();
+      setDriveStatus('Drive restore complete. Reloading...', '#27ae60', '', 'ok');
       setTimeout(() => location.reload(), 1000);
     } catch(e) {
-      setDriveStatus(e.message || 'Drive restore failed.', '#e74c3c');
+      setDriveStatus(e.message || 'Drive restore failed.', '#e74c3c', 'Restore failed', 'error');
     }
   };
 
   window.scheduleGoogleDriveSave = function() {
-    if (!_accessToken) return;
+    if (!_accessToken) {
+      if (localStorage.getItem(DRIVE_ENABLED_KEY) === '1') {
+        setDriveStatus('Drive needs reconnection before backup.', '#e74c3c', 'Reconnect Drive', 'error');
+      }
+      return;
+    }
     if (_skipNextSchedule) { _skipNextSchedule = false; return; }
     if (_busy) { _pending = true; return; }
     if (_timer) clearTimeout(_timer);
@@ -3521,7 +3602,9 @@ const OCR = (() => {
 
   // ── AI Tagging ────────────────────────────────────────────
   async function aiTagQuestions(questions, onProgress) {
-    const apiKey = (localStorage.getItem('gemini_api_key') || '').replace(/['"]/g, '').trim();
+    const apiKey = typeof window.getGeminiApiKey === 'function'
+      ? window.getGeminiApiKey()
+      : (localStorage.getItem('gemini_api_key') || '').replace(/['"]/g, '').trim();
     if (!apiKey || !questions.length) return;
     if (onProgress) onProgress(0, questions.length);
 
@@ -3563,6 +3646,7 @@ const OCR = (() => {
       const byItem = new Map(parsed.map(row => [Number(row.item), String(row.tag || '').trim()]).filter(([, tag]) => tag));
       questions.forEach(q => { q.tags = [byItem.get(Number(q.n)) || 'Untagged']; });
     } catch (_) {
+      if (typeof window.setGeminiNotice === 'function') window.setGeminiNotice('Gemini failed', 'error');
       questions.forEach(q => { q.tags = ['Untagged']; });
     }
     if (onProgress) onProgress(questions.length, questions.length);
@@ -3613,7 +3697,9 @@ const OCR = (() => {
       }));
     });
 
-    const apiKey = (localStorage.getItem('gemini_api_key') || '').replace(/['"]/g, '').trim();
+    const apiKey = typeof window.getGeminiApiKey === 'function'
+      ? window.getGeminiApiKey()
+      : (localStorage.getItem('gemini_api_key') || '').replace(/['"]/g, '').trim();
     if (apiKey) {
       await aiTagQuestions(matched, (done, total) =>
         report(92 + Math.round((done / total) * 7), `AI tagging… (${done}/${total})`));
@@ -4557,12 +4643,15 @@ function syncHintPanel() {
 }
 
 async function requestHint() {
-  const apiKey = (localStorage.getItem('gemini_api_key') || '').replace(/['"]/g, '').trim();
+  const apiKey = typeof window.getGeminiApiKey === 'function'
+    ? window.getGeminiApiKey()
+    : (localStorage.getItem('gemini_api_key') || '').replace(/['"]/g, '').trim();
   const btn    = document.getElementById('btn-hint');
   const panel  = document.getElementById('hint-panel');
   if (!btn || !panel) return;
 
   if (!apiKey) {
+    if (typeof window.setGeminiNotice === 'function') window.setGeminiNotice('Add Gemini API key', 'warn');
     panel.style.display = 'block';
     panel.innerHTML = `<div class="hint-item">Add your Gemini API key in Settings to use hints.<button class="hint-error-btn" onclick="App.openSettings()">Open Settings</button></div>`;
     return;
@@ -4625,6 +4714,7 @@ async function requestHint() {
     _renderHints();
     _updateHintButton();
   } catch(e) {
+    if (typeof window.setGeminiNotice === 'function') window.setGeminiNotice('Gemini failed', 'error');
     _updateHintButton();
     panel.style.display = 'block';
     if (!document.getElementById('hint-err')) {
@@ -4643,13 +4733,46 @@ function saveGeminiKey(val) {
   const db = DB.get();
   db.settings.geminiApiKey = key;
   DB.save();
+  checkGeminiApiKeyStatus();
 }
 
 function loadGeminiKeyToSettings() {
   const inp = document.getElementById('settings-gemini-key');
   if (!inp) return;
-  inp.value = localStorage.getItem('gemini_api_key') || DB.get().settings.geminiApiKey || '';
+  inp.value = getGeminiApiKey();
 }
+
+function setGeminiNotice(text, state = 'warn') {
+  const alert = document.getElementById('gemini-alert');
+  if (!alert) return;
+  if (!text) {
+    alert.className = 'gemini-alert';
+    alert.textContent = '';
+    return;
+  }
+  alert.textContent = text;
+  alert.className = 'gemini-alert show' + (state === 'error' ? ' error' : state === 'ok' ? ' ok' : '');
+}
+
+function getGeminiApiKey() {
+  const localKey = (localStorage.getItem('gemini_api_key') || '').replace(/['"]/g, '').trim();
+  if (localKey) return localKey;
+  const savedKey = (DB.get().settings?.geminiApiKey || '').replace(/['"]/g, '').trim();
+  if (savedKey) {
+    localStorage.setItem('gemini_api_key', savedKey);
+    return savedKey;
+  }
+  return '';
+}
+
+function checkGeminiApiKeyStatus() {
+  const key = getGeminiApiKey();
+  setGeminiNotice(key ? '' : 'Add Gemini API key', key ? 'ok' : 'warn');
+}
+
+window.getGeminiApiKey = getGeminiApiKey;
+window.setGeminiNotice = setGeminiNotice;
+window.checkGeminiApiKeyStatus = checkGeminiApiKeyStatus;
 
 </script>
 <script>
@@ -7338,6 +7461,8 @@ document.addEventListener('DOMContentLoaded', () => {
   localStorage.removeItem('nbme_pin_v1');
   App.init();
   if (typeof updateHintUsageCounter === 'function') updateHintUsageCounter();
+  if (typeof checkGeminiApiKeyStatus === 'function') checkGeminiApiKeyStatus();
+  if (typeof autoConnectGoogleDrive === 'function') autoConnectGoogleDrive();
   restoreNavSidebarState();
   // Close calculator popup when leaving the quiz screen
   const _qs = document.getElementById('screen-quiz');
