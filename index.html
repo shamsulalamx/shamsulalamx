@@ -1654,13 +1654,13 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
   <div class="modal-box" style="max-width:500px;">
     <h3>Settings</h3>
     <div class="form-group" style="margin-top:12px;">
-      <label class="form-label">Gemini API Key</label>
-      <p style="font-size:12px;color:#5a6a7a;margin-bottom:8px;">Used for AI-powered question hints and tagging.</p>
-      <input type="password" class="form-input" id="settings-gemini-key" placeholder="AIza..." autocomplete="off" oninput="saveGeminiKey(this.value)">
+      <label class="form-label">Gemini AI</label>
+      <p style="font-size:12px;color:#5a6a7a;margin-bottom:8px;">AI-powered tagging and hints run through secure Netlify Functions. The Gemini API key must be set as a Netlify environment variable, not entered in this browser.</p>
+      <div id="gemini-settings-status" style="font-size:11px;color:#5a6a7a;margin-top:6px;">Checking Gemini backend...</div>
     </div>
     <div class="form-group" style="margin-top:12px;">
       <label class="form-label">Google Drive Backup</label>
-      <p style="font-size:12px;color:#5a6a7a;margin-bottom:8px;">Stores tests and original question images in your Google Drive. Requires opening the app from http://localhost:8080.</p>
+      <p style="font-size:12px;color:#5a6a7a;margin-bottom:8px;">Stores tests and original question images in your Google Drive. Use the deployed HTTPS Netlify URL. Local development also works from http://localhost:8888 or http://localhost:8080 after those origins are added in Google Cloud Console.</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
         <button class="btn-modal" onclick="connectGoogleDrive()">Connect Drive</button>
         <button class="btn-modal" onclick="saveGoogleDriveNow()">Backup Now</button>
@@ -1743,6 +1743,7 @@ const DB = (() => {
   }
 
   function isUnsafeStorageValue(key, value) {
+    if (key === 'geminiApiKey') return true;
     if (key === 'dataUrl' || key === '_figureData') return true;
     if (key === 'highlights') return true;
     if (key === '_range') return true;
@@ -2077,6 +2078,10 @@ window.FigureStore = FigureStore;
    GOOGLE DRIVE BACKUP — Manifest + original figure files
 ============================================================ */
 (function() {
+  // Google Cloud Console after Netlify deployment:
+  // Authorized JavaScript origin: https://MY-NETLIFY-SITE.netlify.app
+  // Optional local dev origins: http://localhost:8888 and http://localhost:8080
+  // Authorized redirect URI: not required by this Google Identity Services token flow.
   const DRIVE_CLIENT_ID = '274374578651-5edirahp87c5hpv69donfpvcr81tmidk.apps.googleusercontent.com';
   const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
   const DRIVE_FOLDER_NAME = 'NBME Self-Assessment Suite';
@@ -2104,8 +2109,10 @@ window.FigureStore = FigureStore;
     setDriveNotice(noticeText, noticeState);
   }
 
-  function localHostRequired() {
-    return location.origin === 'http://localhost:8080';
+  function isDriveOriginAllowed() {
+    return location.protocol === 'https:' ||
+      location.origin === 'http://localhost:8080' ||
+      location.origin === 'http://localhost:8888';
   }
 
   function waitForGoogleIdentity() {
@@ -2121,8 +2128,8 @@ window.FigureStore = FigureStore;
   }
 
   async function ensureDriveAuth(promptMode = '') {
-    if (!localHostRequired()) {
-      throw new Error('Open the app from http://localhost:8080 before connecting Google Drive.');
+    if (!isDriveOriginAllowed()) {
+      throw new Error('Open the deployed HTTPS app before connecting Google Drive.');
     }
     if (_accessToken) return _accessToken;
     await waitForGoogleIdentity();
@@ -2194,10 +2201,12 @@ window.FigureStore = FigureStore;
 
   function driveDbSnapshot() {
     const db = DB.get();
+    const settings = Object.assign({}, db.settings || {});
+    delete settings.geminiApiKey;
     return JSON.parse(JSON.stringify({
       version: 1,
       updatedAt: new Date().toISOString(),
-      settings: db.settings || {},
+      settings,
       sourceFolders: db.sourceFolders,
       folders: db.folders,
       tests: db.tests,
@@ -2207,6 +2216,7 @@ window.FigureStore = FigureStore;
       notes: db.notes || [],
       history: db.history
     }, (key, value) => {
+      if (key === 'geminiApiKey') return undefined;
       if (key === 'dataUrl' || key === '_figureData' || key === 'highlights') return undefined;
       if (key === '_range' || key === 'blob' || key === 'base64') return undefined;
       if (key === 'src' && typeof value === 'string' && /^data:image\//i.test(value)) return undefined;
@@ -2328,8 +2338,8 @@ window.FigureStore = FigureStore;
       setDriveStatus('Drive backup is not enabled.', '#5a6a7a', 'Enable Drive backup', 'warn');
       return;
     }
-    if (!localHostRequired()) {
-      setDriveStatus('Open from http://localhost:8080 to auto-connect Drive.', '#f0a500', 'Open localhost for Drive', 'warn');
+    if (!isDriveOriginAllowed()) {
+      setDriveStatus('Open the deployed HTTPS app to auto-connect Drive.', '#f0a500', 'Open hosted app for Drive', 'warn');
       return;
     }
     try {
@@ -2376,7 +2386,8 @@ window.FigureStore = FigureStore;
       await restoreFiguresFromDrive(snapshot);
       const db = DB.get();
       if (snapshot.settings && typeof snapshot.settings === 'object') db.settings = snapshot.settings;
-      if (db.settings?.geminiApiKey) localStorage.setItem('gemini_api_key', db.settings.geminiApiKey);
+      if (db.settings?.geminiApiKey) delete db.settings.geminiApiKey;
+      localStorage.removeItem('gemini_api_key');
       if (Array.isArray(snapshot.sourceFolders)) db.sourceFolders = snapshot.sourceFolders;
       if (Array.isArray(snapshot.folders)) db.folders = snapshot.folders;
       if (Array.isArray(snapshot.tests)) db.tests = snapshot.tests;
@@ -3602,10 +3613,7 @@ const OCR = (() => {
 
   // ── AI Tagging ────────────────────────────────────────────
   async function aiTagQuestions(questions, onProgress) {
-    const apiKey = typeof window.getGeminiApiKey === 'function'
-      ? window.getGeminiApiKey()
-      : (localStorage.getItem('gemini_api_key') || '').replace(/['"]/g, '').trim();
-    if (!apiKey || !questions.length) return;
+    if (!questions.length) return;
     if (onProgress) onProgress(0, questions.length);
 
     const payload = questions.map(q => ({
@@ -3616,33 +3624,9 @@ const OCR = (() => {
       explanation: String(q.explanation || '').slice(0, 1200)
     }));
 
-    const prompt =
-      'Create exactly one hyperspecific USMLE topic tag for each item.\n' +
-      'Each tag must name the exact diagnosis, drug, adverse effect, mechanism, management step, or tested association.\n' +
-      'Avoid broad labels like Pharmacology, Neurology, Alzheimer disease, or Cardiology.\n' +
-      'Good examples: "Alzheimer treatment: cholinesterase inhibitor first line", "Pramipexole adverse effect: impulse control disorder", "Myasthenia gravis: anti-AChR antibody postsynaptic blockade".\n' +
-      'Return ONLY valid JSON array in this exact shape: [{"item":1,"tag":"specific tag"}].\n' +
-      'Use 6-12 words per tag when possible.\n' +
-      JSON.stringify(payload);
-
     try {
-      const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-              temperature: 0.2,
-              maxOutputTokens: Math.max(512, questions.length * 24),
-              thinkingConfig: { thinkingBudget: 0 }
-            }
-          }) }
-      );
-      if (!resp.ok) throw new Error('API ' + resp.status);
-      const data = await resp.json();
-      const raw  = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
-      const m    = raw.match(/\[[\s\S]*\]/);
-      const parsed = m ? JSON.parse(m[0]) : [];
+      const data = await callGeminiFunction('/.netlify/functions/gemini-tagging', { questions: payload });
+      const parsed = Array.isArray(data?.tags) ? data.tags : [];
       const byItem = new Map(parsed.map(row => [Number(row.item), String(row.tag || '').trim()]).filter(([, tag]) => tag));
       questions.forEach(q => { q.tags = [byItem.get(Number(q.n)) || 'Untagged']; });
     } catch (_) {
@@ -3697,15 +3681,8 @@ const OCR = (() => {
       }));
     });
 
-    const apiKey = typeof window.getGeminiApiKey === 'function'
-      ? window.getGeminiApiKey()
-      : (localStorage.getItem('gemini_api_key') || '').replace(/['"]/g, '').trim();
-    if (apiKey) {
-      await aiTagQuestions(matched, (done, total) =>
-        report(92 + Math.round((done / total) * 7), `AI tagging… (${done}/${total})`));
-    } else {
-      matched.forEach(q => { q.tags = ['Untagged']; });
-    }
+    await aiTagQuestions(matched, (done, total) =>
+      report(92 + Math.round((done / total) * 7), `AI tagging… (${done}/${total})`));
 
     report(100, `Done! Extracted ${matched.length} questions.`);
     return matched;
@@ -4643,19 +4620,9 @@ function syncHintPanel() {
 }
 
 async function requestHint() {
-  const apiKey = typeof window.getGeminiApiKey === 'function'
-    ? window.getGeminiApiKey()
-    : (localStorage.getItem('gemini_api_key') || '').replace(/['"]/g, '').trim();
   const btn    = document.getElementById('btn-hint');
   const panel  = document.getElementById('hint-panel');
   if (!btn || !panel) return;
-
-  if (!apiKey) {
-    if (typeof window.setGeminiNotice === 'function') window.setGeminiNotice('Add Gemini API key', 'warn');
-    panel.style.display = 'block';
-    panel.innerHTML = `<div class="hint-item">Add your Gemini API key in Settings to use hints.<button class="hint-error-btn" onclick="App.openSettings()">Open Settings</button></div>`;
-    return;
-  }
 
   if (_hintLevel >= 1) return;
 
@@ -4677,34 +4644,12 @@ async function requestHint() {
   const choices = (q.o || []).map(o => `${o.l}) ${o.t}`).join('\n');
   const stemImage = await getStemImageForHint(q);
 
-  const prompts = [
-    `You are a medical education tutor helping a student work through a multiple choice question. Read the question stem from the attached image when present. Give one direct, efficient hint that points to the key reasoning step without explicitly giving the answer or naming the correct choice.\nParsed stem fallback: ${stem}\nAnswer choices: ${choices}\nPrefer one sentence. Use two sentences only if needed. No preamble.`
-  ];
-  const parts = [{ text: prompts[_hintLevel] }];
-  if (stemImage) parts.push({ inlineData: stemImage });
-
   btn.textContent = '💡 Thinking...';
   btn.disabled = true;
 
   try {
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts }],
-          generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens: 90,
-            thinkingConfig: { thinkingBudget: 0 }
-          }
-        })
-      }
-    );
-    if (!resp.ok) throw new Error('API ' + resp.status);
-    const data = await resp.json();
-    const hintText = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    const data = await callGeminiFunction('/.netlify/functions/gemini-hint', { stem, choices, stemImage });
+    const hintText = String(data?.hint || '').trim();
     if (!hintText) throw new Error('empty');
     q.hint = hintText;
     DB.updateTest(test.id, { questions: test.questions });
@@ -4721,25 +4666,34 @@ async function requestHint() {
       const err = document.createElement('div');
       err.id = 'hint-err';
       err.className = 'hint-item';
-      err.innerHTML = `Hint unavailable. Check your API key in Settings.<button class="hint-error-btn" onclick="App.openSettings()">Open Settings</button>`;
+      err.innerHTML = `Hint unavailable. Check Gemini setup in Settings.<button class="hint-error-btn" onclick="App.openSettings()">Open Settings</button>`;
       panel.appendChild(err);
     }
   }
 }
 
-function saveGeminiKey(val) {
-  const key = val.trim();
-  localStorage.setItem('gemini_api_key', key);
-  const db = DB.get();
-  db.settings.geminiApiKey = key;
-  DB.save();
-  checkGeminiApiKeyStatus();
+async function callGeminiFunction(endpoint, payload) {
+  const resp = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload || {})
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    const message = data?.error || 'Gemini backend failed';
+    throw new Error(message);
+  }
+  if (typeof window.setGeminiNotice === 'function') window.setGeminiNotice('', 'ok');
+  return data;
 }
 
-function loadGeminiKeyToSettings() {
-  const inp = document.getElementById('settings-gemini-key');
-  if (!inp) return;
-  inp.value = getGeminiApiKey();
+function clearLegacyGeminiKey() {
+  localStorage.removeItem('gemini_api_key');
+  const db = DB.get();
+  if (db.settings?.geminiApiKey) {
+    delete db.settings.geminiApiKey;
+    DB.save();
+  }
 }
 
 function setGeminiNotice(text, state = 'warn') {
@@ -4754,25 +4708,38 @@ function setGeminiNotice(text, state = 'warn') {
   alert.className = 'gemini-alert show' + (state === 'error' ? ' error' : state === 'ok' ? ' ok' : '');
 }
 
-function getGeminiApiKey() {
-  const localKey = (localStorage.getItem('gemini_api_key') || '').replace(/['"]/g, '').trim();
-  if (localKey) return localKey;
-  const savedKey = (DB.get().settings?.geminiApiKey || '').replace(/['"]/g, '').trim();
-  if (savedKey) {
-    localStorage.setItem('gemini_api_key', savedKey);
-    return savedKey;
+async function checkGeminiApiKeyStatus() {
+  clearLegacyGeminiKey();
+  const settings = document.getElementById('gemini-settings-status');
+  if (location.protocol === 'file:') {
+    if (settings) {
+      settings.textContent = 'Gemini requires the deployed Netlify app or Netlify local dev server.';
+      settings.style.color = '#e74c3c';
+    }
+    setGeminiNotice('Use hosted app for Gemini', 'warn');
+    return;
   }
-  return '';
+  try {
+    const resp = await fetch('/.netlify/functions/gemini-analysis', { method: 'GET' });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.configured) throw new Error(data?.error || 'Gemini is not configured.');
+    if (settings) {
+      settings.textContent = 'Gemini backend is configured.';
+      settings.style.color = '#27ae60';
+    }
+    setGeminiNotice('', 'ok');
+  } catch (_) {
+    if (settings) {
+      settings.textContent = 'Gemini backend is not available. Set GEMINI_API_KEY in Netlify, then redeploy.';
+      settings.style.color = '#e74c3c';
+    }
+    setGeminiNotice('Configure Gemini env', 'error');
+  }
 }
 
-function checkGeminiApiKeyStatus() {
-  const key = getGeminiApiKey();
-  setGeminiNotice(key ? '' : 'Add Gemini API key', key ? 'ok' : 'warn');
-}
-
-window.getGeminiApiKey = getGeminiApiKey;
 window.setGeminiNotice = setGeminiNotice;
 window.checkGeminiApiKeyStatus = checkGeminiApiKeyStatus;
+window.callGeminiFunction = callGeminiFunction;
 
 </script>
 <script>
@@ -7178,7 +7145,7 @@ const App = (() => {
   }
 
   function openSettings() {
-    loadGeminiKeyToSettings();
+    if (typeof checkGeminiApiKeyStatus === 'function') checkGeminiApiKeyStatus();
     document.getElementById('modal-settings').style.display = 'flex';
   }
 

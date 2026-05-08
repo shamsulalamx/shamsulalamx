@@ -185,8 +185,9 @@ Implemented behavior:
 
 Important operational note:
 
-- The app must be served from `http://localhost:8080` for Google Drive OAuth because the Google Cloud OAuth origin is configured for that origin.
-- Opening `index.html` directly with `file://` still works for local use, but not for Drive connection.
+- For Netlify deployment, Google Drive OAuth should use the deployed HTTPS origin, for example `https://MY-NETLIFY-SITE.netlify.app`.
+- Local development may use `http://localhost:8888` or `http://localhost:8080` only if those origins are added in Google Cloud Console.
+- Opening `index.html` directly with `file://` is not supported for Drive or Gemini.
 
 ### Supabase
 
@@ -211,6 +212,8 @@ Gemini is still used for:
 
 - one hyperspecific tag per question
 - one hint per question
+
+Gemini calls now run through Netlify Functions. The API key belongs only in the Netlify `GEMINI_API_KEY` environment variable and must not be stored in frontend JavaScript, localStorage, or Google Drive backups.
 
 The model string must remain:
 
@@ -319,11 +322,7 @@ Recent verification after the latest PDF naming update:
 - Inline JavaScript syntax check passed with `node --check`.
 - `git diff --check` passed.
 
-At the time this file was created, no browser automation pass was run on the file URL. The app is currently being used from:
-
-```text
-file:///Users/shamsulalam/Desktop/NBME%20Self-Assessment%20Suite/index.html
-```
+For deployment and sync testing, use the deployed HTTPS Netlify URL or Netlify local dev. Do not test Drive or Gemini from a `file://` URL.
 
 ## High-Risk Areas
 

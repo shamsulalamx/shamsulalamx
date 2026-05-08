@@ -9,9 +9,10 @@ Last verified from `PROJECT_STATUS_2026-05-08.md`.
 - Do not split the app into external CSS or JavaScript files.
 - Old split files may exist, but they are not the active implementation.
 - Keep the Gemini model string exactly `gemini-2.5-flash`.
+- Gemini API calls must go through Netlify Functions. Do not put Gemini API keys in frontend JavaScript, localStorage, or Google Drive backups.
 - Supabase is not active. Do not reintroduce Supabase unless explicitly requested.
 - Keep full-quality question stems, figures, and exhibits in IndexedDB via `FigureStore` or in Google Drive. Do not store large image data in localStorage.
-- Google Drive OAuth requires opening the app from `http://localhost:8080`, not `file://`.
+- Google Drive OAuth should use the deployed HTTPS Netlify origin. Local development may use `http://localhost:8888` or `http://localhost:8080` only if those origins are added in Google Cloud Console. `file://` is not supported for Drive or Gemini.
 
 ## Active App
 
@@ -22,6 +23,7 @@ Main inline modules:
 - `DB`: localStorage metadata, source folders, subfolders, tests, marks, flags, notes, history, and settings.
 - `FigureStore`: IndexedDB image storage for question stems, figures, exhibits, and restored Drive images.
 - Google Drive backup: Drive folder, manifest, image upload, and restore.
+- Netlify Functions: secure Gemini tagging, hint, and analysis requests.
 - `OCR`: PDF extraction, OCR fallback, parsing, stem crop generation, and answer parsing.
 - `Quiz`: test-taking engine, timers, answer selection, hints, stem-image rendering, highlighting, and navigation.
 - `Results`: score report, review mode, analytics, and PDF report generation.
