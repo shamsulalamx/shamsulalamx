@@ -4535,6 +4535,12 @@ const Results = (() => {
   let _reviewIdx = 0;
   let _inReview  = false;
 
+  function escapeHTML(str) {
+    return String(str || '').replace(/[&<>"']/g, ch => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+  }
+
   function show(testId, entry, results, questions) {
     _testId = testId; _entry = entry; _results = results; _questions = questions;
     _inReview = false;
@@ -4759,7 +4765,7 @@ const Results = (() => {
 
   function toggleCurrentFlag() { toggleFlagReview(_reviewIdx); }
 
-  function downloadTestReport() {
+  async function downloadTestReport() {
     if (!window.jspdf) { alert('PDF library not loaded. Check your internet connection.'); return; }
     const jsPDF = window.jspdf.jsPDF;
     const doc   = new jsPDF({ unit: 'mm', format: 'a4' });
@@ -4775,6 +4781,9 @@ const Results = (() => {
     const skipped = _results.filter(r => r.chosen === null).length;
     const wrong   = _results.filter(r => r.answered && !r.correct).length;
     const avgTime = Math.round(_results.reduce((a,r) => a + Math.max(0, Math.min(r.time || 0, 3600)), 0) / total);
+    const folder = DB.getFolders().find(f => f.id === test.folderId);
+    const folderName = folder?.name || 'Unfiled';
+    const reportTitle = `${folderName} ${test.name}`.trim();
 
     const NAVY = [30, 58, 95], BLUE = [41, 128, 185], WHITE = [255,255,255],
           LGRAY = [240, 242, 245], DGRAY = [80, 100, 120], BLACK = [20, 30, 45],
@@ -4792,7 +4801,7 @@ const Results = (() => {
       // subtle page footer
       doc.setFont('helvetica','normal'); doc.setFontSize(8);
       doc.setTextColor(160,170,185);
-      doc.text(`${test.name} — Page ${pageNum}`, PW/2, PH - 6, { align: 'center' });
+      doc.text(`${reportTitle} — Page ${pageNum}`, PW/2, PH - 6, { align: 'center' });
       y = MT;
     }
 
@@ -4803,18 +4812,125 @@ const Results = (() => {
       doc.line(ML, y, PW - MR, y); y += 3;
     }
 
+    function plainTextFromHTML(html) {
+      const div = document.createElement('div');
+      div.innerHTML = html || '';
+      return div.textContent || div.innerText || '';
+    }
+
+    function stemText(q) {
+      return plainTextFromHTML(window.buildStemHTML(q.t || '')).replace(/\s{3,}/g, ' ').trim();
+    }
+
+    function normalizePdfText(text) {
+      return String(text || '')
+        .normalize('NFKD')
+        .replace(/[\u00a0\u1680\u180e\u2000-\u200b\u202f\u205f\u3000\ufeff]/g, ' ')
+        .replace(/[₀⁰]/g, '0').replace(/[₁¹]/g, '1').replace(/[₂²]/g, '2')
+        .replace(/[₃³]/g, '3').replace(/[₄⁴]/g, '4').replace(/[₅⁵]/g, '5')
+        .replace(/[₆⁶]/g, '6').replace(/[₇⁷]/g, '7').replace(/[₈⁸]/g, '8')
+        .replace(/[₉⁹]/g, '9')
+        .replace(/[αΑ]/g, 'alpha').replace(/[βΒ]/g, 'beta').replace(/[γΓ]/g, 'gamma')
+        .replace(/[µ]/g, 'u').replace(/[≤]/g, '<=').replace(/[≥]/g, '>=')
+        .replace(/[–—−]/g, '-').replace(/[“”„]/g, '"').replace(/[‘’]/g, "'")
+        .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, '')
+        .replace(/[ \t]{2,}/g, ' ')
+        .replace(/\s+([),.;:!?])/g, '$1')
+        .replace(/([([])\s+/g, '$1')
+        .trim();
+    }
+
+    function explanationParts(q) {
+      const correctOpt = (q.o || []).find(o => o.l === q.c);
+      const correctLine = q.c ? normalizePdfText(`${q.c}) ${correctOpt?.t || ''}`) : '';
+      const paras = String(q.explanation || '')
+        .split(/\n\n+/)
+        .map(p => normalizePdfText(p.replace(/\s+/g, ' ')))
+        .filter(Boolean);
+      return { correctLine, paras };
+    }
+
+    function drawLines(lines, x, startY, lineHeight) {
+      lines.forEach((line, idx) => {
+        doc.text(line, x, startY + idx * lineHeight);
+      });
+    }
+
+    async function getImageDataUrl(img) {
+      if (img.dataUrl) return img.dataUrl;
+      if (img.figureKey && window.FigureStore) {
+        const local = await window.FigureStore.get(img.figureKey).catch(() => null);
+        if (local) return local;
+      }
+      if (typeof window.loadFigureFromGoogleDrive === 'function') {
+        return await window.loadFigureFromGoogleDrive(img).catch(() => null);
+      }
+      return null;
+    }
+
+    async function addQuestionImages(q, allowPageBreak = true) {
+      const images = q.images || [];
+      const hasStemCrop = images.some(img => img.kind === 'stem');
+      const displayImages = hasStemCrop ? images.filter(img => img.kind === 'stem') : images;
+      for (const img of displayImages) {
+        const dataUrl = await getImageDataUrl(img);
+        if (!dataUrl) continue;
+        await new Promise(resolve => {
+          const image = new Image();
+          image.onload = () => {
+            const maxW = CW;
+            const maxH = 110;
+            const remainingH = Math.max(30, PH - MB - y - 8);
+            const allowedH = allowPageBreak ? maxH : Math.min(maxH, remainingH);
+            const scale = Math.min(maxW / image.width, allowedH / image.height, 1);
+            const w = image.width * scale;
+            const h = image.height * scale;
+            if (allowPageBreak) checkY(h + 4);
+            try { doc.addImage(dataUrl, 'PNG', ML, y, w, h); }
+            catch (_) {
+              try { doc.addImage(dataUrl, 'JPEG', ML, y, w, h); } catch (_) {}
+            }
+            y += h + 4;
+            resolve();
+          };
+          image.onerror = () => resolve();
+          image.src = dataUrl;
+        });
+      }
+    }
+
+    function addWrappedText(text, x, width, lineHeight, opts = {}) {
+      const clean = normalizePdfText(text);
+      if (!clean) return;
+      setFont(opts.style || 'normal', opts.size || 8.5);
+      setColor(opts.color || BLACK);
+      const lines = doc.splitTextToSize(clean, width);
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (opts.allowPageBreak === false && y + lineHeight + 1 > PH - MB - 8) {
+          doc.text('...', x, y);
+          y += lineHeight;
+          break;
+        }
+        if (opts.allowPageBreak !== false && y + lineHeight + 1 > PH - MB - 8) {
+          if (typeof opts.onPageBreak === 'function') opts.onPageBreak();
+          else checkY(lineHeight + 1);
+          setFont(opts.style || 'normal', opts.size || 8.5);
+          setColor(opts.color || BLACK);
+        }
+        doc.text(line, x, y);
+        y += lineHeight;
+      }
+    }
+
     // ── HEADER ─────────────────────────────────────────────────────────────
     setFill(NAVY); doc.rect(0, 0, PW, 22, 'F');
     setFont('bold', 15); setColor(WHITE);
-    doc.text('NBME Self-Assessment Report', ML, 10);
+    doc.text(reportTitle, ML, 10);
     setFont('normal', 8); setColor([180, 200, 220]);
     doc.text(new Date(_entry.date).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' }), PW - MR, 10, { align:'right' });
     doc.text(`Attempt ${_entry.attemptNum} · Duration: ${Quiz.fmtTime(_entry.totSecs)}`, PW - MR, 15.5, { align:'right' });
     y = 28;
-
-    // Test name
-    setFont('bold', 14); setColor(NAVY);
-    doc.text(test.name, ML, y); y += 7;
 
     // Grade ribbon
     const ribbonColor = pct>=80?GREEN:pct>=70?BLUE:pct>=60?AMBER:RED;
@@ -4843,134 +4959,202 @@ const Results = (() => {
     y += 20;
     hRule(LGRAY);
 
-    // ── TOPIC ANALYSIS ──────────────────────────────────────────────────────
+    // ── TEST ANALYSIS ──────────────────────────────────────────────────────
     setFont('bold', 10); setColor(NAVY);
-    doc.text('TOPIC ANALYSIS', ML, y); y += 5;
+    doc.text('Test analysis', ML, y); y += 5;
 
-    const reviewTags = [];
+    const correctTags = [];
     const seenReviewTags = new Set();
+    const reviewTags = [];
+    const seenCorrectTags = new Set();
     _questions.forEach((q, i) => {
       const r = _results[i];
-      if (!r || !r.answered || r.correct) return;
       const tag = (q.tags && q.tags.length) ? q.tags[0] : 'Untagged';
-      if (seenReviewTags.has(tag)) return;
-      seenReviewTags.add(tag);
-      reviewTags.push(tag);
+      if (!r || !r.answered) return;
+      if (r.correct) {
+        if (seenCorrectTags.has(tag)) return;
+        seenCorrectTags.add(tag);
+        correctTags.push(tag);
+      } else {
+        if (seenReviewTags.has(tag)) return;
+        seenReviewTags.add(tag);
+        reviewTags.push(tag);
+      }
     });
 
-    if (reviewTags.length === 0) {
-      setFont('italic', 9); setColor(DGRAY);
-      doc.text('No incorrect answers.', ML, y); y += 6;
-    } else {
-      setFont('bold', 8); setColor(RED);
-      doc.text('Needs Review', ML, y);
-      y += 4;
+    const analysisTop = y;
+    const colGap = 8;
+    const colW = (CW - colGap) / 2;
+    const maxAnalysisY = PH - MB - 10;
 
-      reviewTags.forEach(tag => {
-        checkY(6);
-        setFont('normal', 7.5); setColor(BLACK);
-        const tagLines = doc.splitTextToSize(`• ${tag}`, CW);
-        doc.text(tagLines, ML, y);
-        y += tagLines.length * 4;
-        y += 6;
-      });
+    function drawTagColumn(title, tags, emptyText, x) {
+      let colY = analysisTop;
+      setFont('bold', 8); setColor(BLACK);
+      doc.text(title, x, colY); colY += 5;
+      const list = tags.length ? tags.map(tag => `• ${tag}`) : [emptyText];
+      for (let i = 0; i < list.length; i++) {
+        setFont(tags.length ? 'normal' : 'italic', 6.7);
+        setColor(tags.length ? BLACK : DGRAY);
+        const lines = doc.splitTextToSize(list[i], colW);
+        if (colY + lines.length * 3.2 > maxAnalysisY) {
+          const remaining = list.length - i;
+          setFont('italic', 6.7); setColor(DGRAY);
+          doc.text(`+ ${remaining} more`, x, colY);
+          colY += 3.2;
+          break;
+        }
+        doc.text(lines, x, colY);
+        colY += lines.length * 3.2 + 1;
+      }
+      return colY;
     }
-    y += 2; hRule(LGRAY);
 
-    // ── QUESTION REVIEW ─────────────────────────────────────────────────────
-    setFont('bold', 10); setColor(NAVY);
-    doc.text('QUESTION REVIEW', ML, y); y += 6;
+    const leftY = drawTagColumn('Correct', correctTags, 'No correct answered question tags.', ML);
+    const rightY = drawTagColumn('Needs Review', reviewTags, 'No incorrect answered question tags.', ML + colW + colGap);
+    y = Math.max(leftY, rightY) + 3;
+    hRule(LGRAY);
 
-    _questions.forEach((q, i) => {
+    for (let i = 0; i < _questions.length; i++) {
+      addPage();
+      const q = _questions[i];
       const r   = _results[i];
       const cor = r.answered && r.correct;
       const wrg = r.answered && !r.correct;
       const skp = !r.answered;
-      const flg = DB.isFlagged(_testId, q.n);
 
-      // Estimate height needed: header + stem (variable) + options + explanation
-      const stemLines = doc.splitTextToSize(q.t || '', CW - 12).length;
-      const optLines  = (q.o || []).reduce((s, o) => s + doc.splitTextToSize(`${o.l}) ${o.t}`, CW - 20).length, 0);
-      const expLines  = q.explanation ? doc.splitTextToSize(q.explanation, CW - 12).length : 0;
-      const estH      = 8 + stemLines * 4.2 + optLines * 3.8 + (expLines ? expLines * 3.8 + 6 : 0) + 6;
-      if (estH > PH - 2 * MB) {
-        // very long question — just start a new page if needed
-        checkY(30);
-      } else {
-        checkY(estH);
+      const cardX = ML;
+      const cardW = CW;
+      const cardStartY = y;
+      const headerH = 9;
+      const headerFill = cor ? [232, 245, 233] : wrg ? [255, 235, 238] : [245, 247, 250];
+      const headerBorder = cor ? [200, 230, 201] : wrg ? [255, 205, 210] : [237, 241, 245];
+      const resultColor = cor ? [46, 125, 50] : wrg ? [198, 40, 40] : DGRAY;
+      const resultLabel = cor ? 'Correct' : wrg ? 'Incorrect' : skp ? 'Skipped' : '';
+
+      function continueQuestionPage() {
+        addPage();
+        setFill(headerFill); setDraw(headerBorder);
+        doc.rect(cardX, y, cardW, headerH, 'FD');
+        setFill(NAVY);
+        doc.roundedRect(cardX + 4, y + 2.1, 18, 4.8, 1, 1, 'F');
+        setFont('bold', 6.3); setColor(WHITE);
+        doc.text(`Q${i + 1}`, cardX + 13, y + 5.45, { align: 'center' });
+        setFont('bold', 8.2); setColor(resultColor);
+        doc.text(`${resultLabel} continued`, cardX + 26, y + 5.8);
+        y += headerH + 5;
       }
 
-      // Question header bar
-      const barColor = cor ? GREEN : wrg ? RED : skp ? AMBER : LGRAY;
-      setFill(barColor); doc.rect(ML, y, CW, 6.5, 'F');
-      setFont('bold', 8); setColor(WHITE);
-      const qLabel = `Q${i+1}${flg ? ' 🏳' : ''}`;
-      doc.text(qLabel, ML + 2, y + 4.5);
-      const resultLabel = cor ? '✓ Correct' : wrg ? '✗ Incorrect' : skp ? '— Skipped' : '';
-      if (resultLabel) doc.text(resultLabel, PW - MR - 2, y + 4.5, { align:'right' });
-      y += 7.5;
+      function ensureQuestionSpace(needed) {
+        if (y + needed > PH - MB - 8) continueQuestionPage();
+      }
 
-      // Tags
+      setFill(headerFill); setDraw(headerBorder);
+      doc.rect(cardX, y, cardW, headerH, 'FD');
+      setFill(NAVY);
+      doc.roundedRect(cardX + 4, y + 2.1, 12, 4.8, 1, 1, 'F');
+      setFont('bold', 6.8); setColor(WHITE);
+      doc.text(`Q${i + 1}`, cardX + 10, y + 5.45, { align: 'center' });
+      setFont('bold', 8.2); setColor(resultColor);
+      doc.text(resultLabel, cardX + 20, y + 5.8);
+      y += headerH + 4;
+
       if (q.tags && q.tags.length) {
-        setFont('italic', 7); setColor(DGRAY);
-        doc.text(q.tags.join(' · '), ML + 2, y); y += 4;
+        let tagX = cardX + 4;
+        let tagY = y;
+        for (const tag of q.tags) {
+          const tagText = String(tag || '').trim();
+          if (!tagText) continue;
+          const tagW = Math.min(cardW - 8, doc.getTextWidth(tagText) + 8);
+          if (tagX + tagW > cardX + cardW - 4) {
+            tagX = cardX + 4;
+            tagY += 5.5;
+          }
+          setFill([227, 242, 253]); setDraw([227, 242, 253]);
+          doc.roundedRect(tagX, tagY, tagW, 4.4, 2, 2, 'FD');
+          setFont('bold', 6.3); setColor([13, 71, 161]);
+          doc.text(tagText, tagX + 4, tagY + 3.15);
+          tagX += tagW + 2;
+        }
+        y = tagY + 8;
       }
 
-      // Stem
-      setFont('normal', 9); setColor(BLACK);
-      const stemTxt = doc.splitTextToSize(q.t || '(No stem)', CW - 4);
-      doc.text(stemTxt, ML + 2, y);
-      y += stemTxt.length * 4.2 + 2;
+      const hasStemCrop = !!(q.images && q.images.some(img => img.kind === 'stem'));
+      if (hasStemCrop) await addQuestionImages(q, false);
+      else addWrappedText(stemText(q) || '(No stem)', cardX + 4, cardW - 8, 4.2, { size: 8.8, onPageBreak: continueQuestionPage });
+      y += 4;
 
-      // Options
-      (q.o || []).forEach(opt => {
-        checkY(5);
+      const optX = cardX + 4;
+      const optW = cardW - 8;
+      setDraw([200, 208, 218]);
+      for (const opt of (q.o || [])) {
         const isCorrect = opt.l === q.c;
         const isChosen  = r.chosen === opt.l;
-        let prefix = '  ';
-        if (isCorrect && isChosen) { setColor(GREEN);  prefix = '✓ '; }
-        else if (isCorrect)        { setColor(GREEN);  prefix = '✓ '; }
-        else if (isChosen)         { setColor(RED);    prefix = '✗ '; }
-        else                       { setColor(DGRAY); }
-        setFont(isCorrect ? 'bold' : 'normal', 8.5);
-        const optLines = doc.splitTextToSize(`${prefix}${opt.l}) ${opt.t}`, CW - 10);
-        doc.text(optLines, ML + 6, y);
-        y += optLines.length * 3.8 + 0.5;
-      });
-      setColor(BLACK);
-
-      // Explanation
-      if (q.explanation) {
-        checkY(10);
-        y += 1;
-        setFill([245, 247, 250]); setDraw([200, 210, 225]);
-        // draw background — estimate height
-        const expT = doc.splitTextToSize(q.explanation, CW - 12);
-        const expH = expT.length * 3.8 + 5;
-        checkY(expH);
-        doc.setFillColor(245, 247, 250); doc.rect(ML, y, CW, expH, 'F');
-        doc.setDrawColor(30, 58, 95); doc.setLineWidth(0.8);
-        doc.line(ML, y, ML, y + expH);
-        doc.setLineWidth(0.3);
-        setFont('bold', 7.5); setColor(NAVY);
-        doc.text('Explanation', ML + 3, y + 3.5);
-        setFont('normal', 8); setColor(BLACK);
-        doc.text(expT, ML + 3, y + 7);
-        y += expH + 2;
+        const isStriken = r.strikethrough && r.strikethrough.includes(opt.l);
+        const rowFill = isCorrect ? [232, 245, 233] : (isChosen && !isCorrect) ? [255, 235, 238] : WHITE;
+        const indicator = isCorrect && isChosen ? 'Your Answer' : isCorrect ? 'Correct' : isChosen ? 'Your Answer' : '';
+        const textLines = doc.splitTextToSize(normalizePdfText(`${opt.l}) ${opt.t}`), optW - 32);
+        const rowH = Math.max(8.5, textLines.length * 3.8 + 4);
+        ensureQuestionSpace(rowH + 2);
+        setFill(rowFill); setDraw([237, 241, 245]);
+        doc.rect(optX, y, optW, rowH, 'FD');
+        setDraw(isChosen && !isCorrect ? RED : BLUE);
+        doc.circle(optX + 5.2, y + 4.6, 2.1, 'S');
+        if (isChosen || isCorrect) {
+          setFill(isChosen && !isCorrect ? RED : BLUE);
+          doc.circle(optX + 5.2, y + 4.6, 0.95, 'F');
+        }
+        setFont('bold', 8.2); setColor(NAVY);
+        doc.text(`${opt.l})`, optX + 10, y + 5.5);
+        setFont(isCorrect || isChosen ? 'bold' : 'normal', 8.2);
+        setColor(isStriken ? DGRAY : BLACK);
+        drawLines(textLines.map((line, idx) => idx === 0 ? line.replace(/^[A-K]\)\s*/, '') : line), optX + 20, y + 5.5, 3.8);
+        if (isStriken) {
+          doc.setLineWidth(0.2); setDraw(DGRAY);
+          doc.line(optX + 20, y + 5.2, optX + optW - 8, y + 5.2);
+        }
+        if (indicator) {
+          setFont('bold', 6.8);
+          setColor(isCorrect ? GREEN : RED);
+          doc.text(indicator, optX + optW - 4, y + 5.5, { align: 'right' });
+        }
+        y += rowH;
       }
       y += 4;
-    });
+
+      if (q.explanation) {
+        const expX = cardX + 4;
+        const expW = cardW - 8;
+        const exp = explanationParts(q);
+        ensureQuestionSpace(14);
+        setDraw([200, 208, 218]); setFill(WHITE);
+        doc.rect(expX, y, expW, 10, 'S');
+        setFill(BLUE);
+        doc.rect(expX, y, 1.2, 10, 'F');
+        setFont('bold', 7.2); setColor(NAVY);
+        doc.text('ANSWER EXPLANATION', expX + 4, y + 6);
+        y += 14;
+        if (exp.correctLine) {
+          addWrappedText(exp.correctLine, expX + 4, expW - 8, 3.8, { size: 8, style: 'bold', onPageBreak: continueQuestionPage });
+          y += 1;
+        }
+        exp.paras.forEach(para => {
+          addWrappedText(para, expX + 4, expW - 8, 3.8, { size: 8, onPageBreak: continueQuestionPage });
+          y += 2;
+        });
+      }
+      y += 6;
+      y += 8;
+    }
 
     // ── PAGE FOOTERS for page 1 ──────────────────────────────────────────────
     doc.setPage(1);
     doc.setFont('helvetica','normal'); doc.setFontSize(8);
     doc.setTextColor(160,170,185);
-    doc.text(`${test.name} — Page 1`, PW/2, PH - 6, { align:'center' });
+    doc.text(`${reportTitle} — Page 1`, PW/2, PH - 6, { align:'center' });
 
     // ── SAVE ────────────────────────────────────────────────────────────────
-    const dateStr = new Date(_entry.date).toISOString().slice(0,10);
-    const safeName = (test.name || 'Report').replace(/[^a-zA-Z0-9_\-]/g, '_');
-    doc.save(`${safeName}_${dateStr}.pdf`);
+    const safeName = reportTitle.replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim() || 'Score Report';
+    doc.save(`${safeName}.pdf`);
   }
 
   return { show, openReview, reviewPrev, reviewNext, closeReview, toggleFlagReview, toggleCurrentFlag, downloadTestReport };
@@ -5167,7 +5351,9 @@ const App = (() => {
     menu.innerHTML = `
       <div class="ctx-item" onclick="Quiz.startTest('${test.id}')">▶ Start / Resume</div>
       <div class="ctx-item" onclick="App.startRenameTest('${test.id}')">✏️ Rename</div>
-      <div class="ctx-item" onclick="App.viewHistory('${test.id}')">📊 History</div>
+      ${test.status === 'completed'
+        ? `<div class="ctx-item" onclick="App.showScoreReport('${test.id}')">📊 Score Report</div>`
+        : `<div class="ctx-item" onclick="App.viewHistory('${test.id}')">📊 History</div>`}
       <div class="ctx-item ctx-danger" onclick="App.trashTest('${test.id}')">🗑 Move to Trash</div>`;
     styleContextMenu(menu);
     document.body.appendChild(menu);
@@ -5260,7 +5446,9 @@ const App = (() => {
         <div class="test-card-actions">
           <button class="btn-card primary" onclick="Quiz.startTest('${test.id}')">▶ ${test.status==='in_progress'?'Resume':'Start'}</button>
           ${test.status==='completed' ? `<button class="btn-card" onclick="App.reviewTest('${test.id}')">Review Test</button>` : ''}
-          <button class="btn-card" onclick="App.viewHistory('${test.id}')">📊</button>
+          ${test.status==='completed'
+            ? `<button class="btn-card" onclick="App.showScoreReport('${test.id}')">Score Report</button>`
+            : `<button class="btn-card" onclick="App.viewHistory('${test.id}')">📊</button>`}
           <button class="btn-card" onclick="App.startRenameTest('${test.id}')">✏️</button>
           <button class="btn-card danger" onclick="App.trashTest('${test.id}')">🗑</button>
         </div>
@@ -5806,6 +5994,14 @@ const App = (() => {
       </div>`;
     });
     content.innerHTML = html;
+  }
+
+  function showScoreReport(testId) {
+    const test = DB.getTest(testId);
+    if (!test) return;
+    const latest = DB.getHistory(testId)[0];
+    if (!latest || !latest.results) { toast('No completed attempt found.', 2000); return; }
+    Results.show(testId, latest, latest.results, test.questions);
   }
 
   // ── Generate Test Modal ────────────────────────────────────
@@ -6730,6 +6926,7 @@ const App = (() => {
     trashTest,
     generateInFolder,
     viewHistory,
+    showScoreReport,
     retakeTest,
     reviewTest,
     closeReviewTest,
