@@ -80,3 +80,16 @@ module.exports = {
   json,
   readJsonBody
 };
+
+exports.handler = async () => {
+  try {
+    requireGeminiApiKey();
+
+    return json(200, {
+      ok: true,
+      model: GEMINI_MODEL
+    });
+  } catch (error) {
+    return handleError(error);
+  }
+};
