@@ -423,6 +423,7 @@ Recent verification after the latest local parser/render stabilization:
 - Local debug exports confirmed stable parser/render counts in the affected workflow.
 - Temporary question-specific debug instrumentation was removed after confirmation.
 - Existing saved/generated quizzes may not automatically reflect parser or render fixes. Regenerate or explicitly reparse rather than silently mutating stored user data.
+- Gemini local verification intentionally skipped to avoid Netlify redeploy/API usage during early Electron migration.
 
 For deployment and sync testing, use the deployed HTTPS Netlify URL or Netlify local dev. Do not test Drive or Gemini from a `file://` URL.
 
