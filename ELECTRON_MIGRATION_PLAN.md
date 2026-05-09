@@ -87,6 +87,19 @@ This file should track migration stages, decisions, risks, verification checkpoi
 - Define app-data folder layout.
 - Decide how local metadata, generated quizzes, parser debug artifacts, and image assets should be stored.
 - Avoid destructive migration of existing browser data.
+- Stage 8 is design-only until an explicit storage migration is approved.
+- Proposed future layout under the Electron user data directory:
+  - `quizzes/`: generated quiz metadata and question JSON.
+  - `sources/`: original imported PDFs, documents, screenshots, transcripts, and other source files.
+  - `ocr/raw/`: raw OCR and PDF text extraction output.
+  - `ocr/normalized/`: normalized blocks before semantic parsing.
+  - `parsed/questions/`: parsed question objects before quiz generation.
+  - `debug/snapshots/`: focused parser/debug snapshots and export bundles.
+  - `parser-runs/`: per-import run manifests, counts, warnings, and source-number audits.
+  - `backups/`: local backup snapshots separate from Google Drive sync.
+  - `settings/`: desktop-only settings that should not live in browser localStorage.
+  - `logs/`: local application and import logs.
+- Do not create these folders, move `FigureStore` images, migrate localStorage, or add filesystem IPC during Stage 8.
 
 ### Stage 9: Design Text/Image/Hybrid Render-Mode Layer
 
