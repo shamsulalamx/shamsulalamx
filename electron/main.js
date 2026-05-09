@@ -4,6 +4,9 @@ const path = require('path');
 const DEFAULT_DEV_URL = 'http://localhost:8888';
 const devUrl = process.env.NBME_ELECTRON_URL || DEFAULT_DEV_URL;
 
+// Main process boundary:
+// Owns Electron window lifecycle and loading the existing HTTP-served app only.
+// App logic, parser/OCR/render behavior, Gemini, Drive, and storage remain in index.html.
 function createWindow() {
   const win = new BrowserWindow({
     width: 1440,

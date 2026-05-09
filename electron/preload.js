@@ -1,2 +1,3 @@
-// Stage 1 preload is intentionally empty.
-// No renderer APIs, IPC channels, storage migration, or privileged bridges are exposed yet.
+// Preload boundary:
+// Intentionally exposes no renderer APIs yet.
+// Future filesystem, app-data, debug export, or native dialog helpers should use narrow bridges here.
