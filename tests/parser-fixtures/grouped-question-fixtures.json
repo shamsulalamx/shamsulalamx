@@ -1,0 +1,200 @@
+{
+  "normalStandalone": {
+    "itemMap": {
+      "1": [
+        "1. A 50-year-old woman has persistent sadness and poor sleep for 6 weeks.",
+        "A) Bipolar disorder",
+        "B) Major depressive disorder",
+        "C) Panic disorder",
+        "D) Schizophrenia",
+        "E) Social anxiety disorder"
+      ]
+    },
+    "expect": {
+      "count": 1,
+      "grouped": false,
+      "choices": 5
+    }
+  },
+  "standaloneLongWrappedStem": {
+    "itemMap": {
+      "2": [
+        "2. A 62-year-old man is brought to the emergency department because of progressive confusion, gait instability, and difficulty remembering recent events after many years of alcohol use.",
+        "Physical examination shows horizontal nystagmus and a wide-based gait.",
+        "A) Donepezil",
+        "B) Haloperidol",
+        "C) Lorazepam",
+        "D) Thiamine",
+        "E) Valproic acid"
+      ]
+    },
+    "expect": {
+      "count": 1,
+      "grouped": false,
+      "choices": 5
+    }
+  },
+  "standaloneImageTable": {
+    "itemMap": {
+      "3": [
+        "3. A patient has the laboratory findings shown.",
+        "Serum Na+ 121 mEq/L Cl- 86 mEq/L K+ 3.0 mEq/L",
+        "A) Adrenal insufficiency",
+        "B) Diabetes insipidus",
+        "C) Primary polydipsia",
+        "D) SIADH",
+        "E) Vomiting"
+      ]
+    },
+    "expect": {
+      "count": 1,
+      "grouped": false,
+      "choices": 5
+    }
+  },
+  "groupedTwoItemAnxiety": {
+    "itemMap": {
+      "33": [
+        "The response options for the next 2 items are the same. Select one answer for each item in the set.",
+        "For each patient with anxiety symptoms, select the most appropriate pharmacotherapy.",
+        "A) Bupropion",
+        "B) Chlorpromazine",
+        "C) Fluoxetine",
+        "D) Haloperidol",
+        "E) Imipramine",
+        "F) Lorazepam",
+        "G) Perphenazine",
+        "H) Propranolol",
+        "33. A 47-year-old man has had tension and hand tremors for 1 month. He has been treated for bipolar disorder with lithium carbonate for 6 months."
+      ],
+      "34": [
+        "For each patient with anxiety symptoms, select the most appropriate pharmacotherapy.",
+        "A) Bupropion",
+        "B) Chlorpromazine",
+        "C) Fluoxetine",
+        "D) Haloperidol",
+        "E) Imipramine",
+        "F) Lorazepam",
+        "G) Perphenazine",
+        "H) Propranolol",
+        "34. An otherwise healthy 25-year-old man comes to the physician because he has a severe fear of flying and must attend an essential business meeting in Europe in 2 days."
+      ]
+    },
+    "expect": {
+      "count": 2,
+      "grouped": true,
+      "choices": 8,
+      "rangeStart": 33,
+      "rangeEnd": 34
+    }
+  },
+  "groupedAHAnswerBank": {
+    "itemMap": {
+      "10": [
+        "The answer options for the next 2 items are the same.",
+        "For each patient, select the most likely diagnosis.",
+        "A) Acute stress disorder",
+        "B) Adjustment disorder",
+        "C) Bipolar I disorder",
+        "D) Delusional disorder",
+        "E) Generalized anxiety disorder",
+        "F) Major depressive disorder",
+        "G) Panic disorder",
+        "H) Social anxiety disorder",
+        "10. A 30-year-old woman has daily excessive worry for 8 months."
+      ],
+      "11": [
+        "11. A 22-year-old man has episodic palpitations and fear of dying that peak within minutes."
+      ]
+    },
+    "expect": {
+      "count": 2,
+      "grouped": true,
+      "choices": 8,
+      "rangeStart": 10,
+      "rangeEnd": 11
+    }
+  },
+  "groupedSpanningPages": {
+    "itemMap": {
+      "20": [
+        "The response options for the next 2 items are the same.",
+        "For each patient with abnormal behavior, select the most likely affected brain region.",
+        "A) Amygdaloid nucleus",
+        "B) Caudate nucleus",
+        "C) Medial geniculate nucleus",
+        "D) Nucleus basalis of Meynert",
+        "E) Red nucleus",
+        "F) Substantia nigra",
+        "G) Subthalamic nucleus",
+        "20. A 70-year-old woman has progressive memory loss."
+      ],
+      "21": [
+        "21. A 55-year-old man has sudden flinging movements of the right arm."
+      ]
+    },
+    "metaMap": {
+      "20": { "sourcePageNumbers": [8] },
+      "21": { "sourcePageNumbers": [8, 9] }
+    },
+    "expect": {
+      "count": 2,
+      "grouped": true,
+      "choices": 7,
+      "rangeStart": 20,
+      "rangeEnd": 21
+    }
+  },
+  "adjacentNormalNotGrouped": {
+    "itemMap": {
+      "40": [
+        "40. A 40-year-old man has a tremor.",
+        "A) Bupropion",
+        "B) Fluoxetine",
+        "C) Lithium",
+        "D) Propranolol",
+        "E) Sertraline"
+      ],
+      "41": [
+        "41. A 45-year-old woman has insomnia.",
+        "A) Buspirone",
+        "B) Haloperidol",
+        "C) Lorazepam",
+        "D) Methylphenidate",
+        "E) Naltrexone"
+      ]
+    },
+    "expect": {
+      "count": 2,
+      "grouped": false,
+      "choices": 5
+    }
+  },
+  "explanationAlignment": {
+    "itemMap": {
+      "50": [
+        "The response options for the next 2 items are the same.",
+        "For each patient, select the best medication.",
+        "A) Bupropion",
+        "B) Fluoxetine",
+        "C) Haloperidol",
+        "D) Lorazepam",
+        "E) Propranolol",
+        "50. A patient has social anxiety before public speaking."
+      ],
+      "51": [
+        "51. A patient has generalized anxiety and depressed mood."
+      ]
+    },
+    "answerMap": {
+      "50": { "correct": "E", "explanation": "Propranolol is useful for performance anxiety." },
+      "51": { "correct": "B", "explanation": "Fluoxetine can treat anxiety with depression." }
+    },
+    "expect": {
+      "count": 2,
+      "grouped": true,
+      "choices": 5,
+      "answers": { "50": "E", "51": "B" }
+    }
+  }
+}

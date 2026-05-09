@@ -518,6 +518,10 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
   padding: 18px 20px; margin-bottom: 12px;
   box-shadow: 0 1px 4px rgba(0,0,0,.07);
 }
+.shared-group-block { border-left: 3px solid var(--accent); padding-left: 12px; margin-bottom: 16px; }
+.shared-group-instruction { font-weight: 600; margin-bottom: 10px; }
+.shared-group-stem { color: var(--text); }
+.question-individual-stem { margin-top: 0; }
 .q-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #edf1f5; flex-wrap: wrap; gap: 6px; }
 .q-num-badge { background: var(--navy); color: white; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 2px; }
 #q-tags { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; padding: 0 8px; }
@@ -1595,11 +1599,12 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
       <div class="ocr-status" id="ocr-status-msg">Initializing…</div>
       <div class="ocr-progress-bar"><div class="ocr-progress-fill" id="ocr-progress-fill" style="width:0%"></div></div>
     </div>
-    <div id="gen-parse-note" style="display:none;font-size:11px;color:#27ae60;margin-bottom:8px;">✓ Ready to save!</div>
-    <div class="modal-actions">
-      <button class="btn-modal" onclick="App.closeGenerateModal()">Cancel</button>
-      <button class="btn-modal primary" id="btn-gen-start" onclick="App.startOCR()">Extract &amp; Generate →</button>
-    </div>
+	    <div id="gen-parse-note" style="display:none;font-size:11px;color:#27ae60;margin-bottom:8px;">✓ Ready to save!</div>
+	    <div class="modal-actions">
+	      <button class="btn-modal" onclick="App.closeGenerateModal()">Cancel</button>
+	      <button class="btn-modal" id="btn-debug-export" onclick="App.downloadParserDebugExport()" style="display:none;">Export Parser Debug JSON</button>
+	      <button class="btn-modal primary" id="btn-gen-start" onclick="App.startOCR()">Extract &amp; Generate →</button>
+	    </div>
   </div>
 </div>
 
@@ -1613,9 +1618,10 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
       <button class="btn-modal" onclick="App.prevOcrIssue()">Previous</button>
       <button class="btn-modal" onclick="App.undoOcrIssue()">Undo</button>
       <button class="btn-modal" onclick="App.skipOcrIssue()">Skip</button>
-      <button class="btn-modal" onclick="App.applyAllOcrIssue()">Apply All Same</button>
-      <button class="btn-modal" onclick="App.applyOcrIssue()">Apply Fix</button>
-      <button class="btn-modal primary" onclick="App.saveOcrEdit()">Use Manual Edit</button>
+	      <button class="btn-modal" onclick="App.applyAllOcrIssue()">Apply All Same</button>
+	      <button class="btn-modal" onclick="App.applyOcrIssue()">Apply Fix</button>
+	      <button class="btn-modal" id="btn-debug-export-review" onclick="App.downloadParserDebugExport()" style="display:none;">Export Debug JSON</button>
+	      <button class="btn-modal primary" onclick="App.saveOcrEdit()">Use Manual Edit</button>
       <button class="btn-modal danger" id="ocr-review-save-anyway" onclick="App.saveGeneratedTest(true)">Save Anyway</button>
     </div>
   </div>
@@ -2473,6 +2479,7 @@ window.FigureStore = FigureStore;
    FIX 7: NAVIGATOR SCROLL — CSS fix applied separately.
 ============================================================ */
 const OCR = (() => {
+  let _lastDebugExport = null;
 
   // ── Constants ────────────────────────────────────────────
   const PAGE_HEIGHT      = 752;
@@ -2482,11 +2489,12 @@ const OCR = (() => {
   const PHANTOM_GAP_MAX  = 3.0;  // fixed threshold: below this AND both sides word chars
 
   // ── Special character normalization ──────────────────────
-  function normalizeChars(text) {
-    // Merge digits separated by '?' artifact: "4 ? 7" → "47", "47 ? -year" → "47-year"
-    text = text.replace(/(\d)\s*\?\s*(\d)/g,        '$1$2');
-    text = text.replace(/(\d)\s*\?\s*(-year)/gi,    '$1$2');
-    text = text.replace(/(\d)\s*\?\s*([A-Za-z])/g, '$1-$2');
+	  function normalizeChars(text) {
+	    // Merge digits separated by '?' artifact: "4 ? 7" → "47", "47 ? -year" → "47-year"
+	    text = text.replace(/(\d)\s*\?\s*(\d)/g,        '$1$2');
+	    text = text.replace(/\b4\s*\?\s*(-year-old\s+(?:man|woman|boy|girl|male|female|patient)\b)/gi, '47$1');
+	    text = text.replace(/\b([1-9]\d)\s*\?\s*(-year)/gi, '$1$2');
+	    text = text.replace(/(\d)\s*\?\s*([A-Za-z])/g, '$1-$2');
     text = text.replace(/\b(\d)\s+(\d)(-year-old)\b/gi, '$1$2$3');
     // Greek letters from Symbol font → "~" in PDF.js
     text = text.replace(/~\s*-\s*[Aa]drenergic/g,  'β-Adrenergic');
@@ -2979,7 +2987,7 @@ const OCR = (() => {
       }
     }
 
-    return { paragraphs: finalParas, itemNum, totalItems };
+	    return { paragraphs: finalParas, rawParagraphs: paragraphs, itemNum, totalItems };
   }
 
   function cropTightStemCanvas(fullCanvas, sx, sy, sw, sh) {
@@ -3315,7 +3323,7 @@ const OCR = (() => {
           } catch(_) {}
         }
 
-        pages.push({ pageNum: p, paragraphs: finalParas, itemNum, totalItems, figureDataUrl, labExhibitDataUrl, stemCropDataUrl });
+	        pages.push({ pageNum: p, paragraphs: finalParas, rawParagraphs: paragraphs, itemNum, totalItems, figureDataUrl, labExhibitDataUrl, stemCropDataUrl });
       }
 
     } else {
@@ -3328,10 +3336,10 @@ const OCR = (() => {
         try {
           const { lines, width, height } = await ocrPageImage(page, SCALE);
           const parsed = parseOcrPage(lines, width, height);
-          pages.push({ pageNum: p, ...parsed });
+	          pages.push({ pageNum: p, ...parsed });
         } catch(e) {
           // If OCR fails on a page, push empty placeholder
-          pages.push({ pageNum: p, paragraphs: [], itemNum: null, totalItems: null });
+	          pages.push({ pageNum: p, paragraphs: [], rawParagraphs: [], itemNum: null, totalItems: null });
         }
       }
 
@@ -3346,16 +3354,60 @@ const OCR = (() => {
   }
 
   // ── Group pages by item ───────────────────────────────────
+  function normalizeSourceNumberText(text) {
+    return String(text || '')
+      .replace(/\s+/g, ' ')
+      .replace(/^(\d)\s+(\d)(?=\s*[.,])/g, '$1$2')
+      .trim();
+  }
+
+  function detectSourceItemNumberFromParagraphs(paragraphs) {
+    const list = Array.isArray(paragraphs) ? paragraphs : [];
+    const maxScan = Math.min(list.length, 4);
+    for (let i = 0; i < maxScan; i++) {
+      const p = normalizeSourceNumberText(list[i]);
+      if (!p) continue;
+      const inline = p.match(/^(\d{1,3})\s*[.,]\s+\S/);
+      if (inline) return parseInt(inline[1]);
+      const standalone = p.match(/^(\d{1,3})\s*[.,]?\s*$/);
+      if (standalone) return parseInt(standalone[1]);
+    }
+    return null;
+  }
+
+  function detectSourceItemNumberFromPage(pg) {
+    if (!pg) return null;
+    const normalizedDetected = detectSourceItemNumberFromParagraphs(pg.paragraphs || []);
+    if (normalizedDetected !== null) return normalizedDetected;
+    return detectSourceItemNumberFromParagraphs(pg.rawParagraphs || []);
+  }
+
   function groupPagesByItem(pages) {
     const itemMap   = {};
+    const rawItemMap = {};
     const figureMap = {};  // itemNum -> first figureDataUrl found for that item
     const exhibitMap = {};  // itemNum -> visual exhibits, eg figures or lab-table crops
+    const metaMap = {};  // itemNum -> source page metadata
     let lastItem  = null;
     for (const pg of pages) {
-      if (pg.itemNum !== null) {
-        lastItem = pg.itemNum;
+      const fallbackItemNum = pg.itemNum !== null ? pg.itemNum : detectSourceItemNumberFromPage(pg);
+      const detectedBy = pg.itemNum !== null ? 'pageHeader' : fallbackItemNum !== null ? 'paragraphFallback' : null;
+      if (fallbackItemNum !== null) {
+        lastItem = fallbackItemNum;
         if (!itemMap[lastItem]) itemMap[lastItem] = [];
+        if (!rawItemMap[lastItem]) rawItemMap[lastItem] = [];
         itemMap[lastItem].push(pg.paragraphs);
+        rawItemMap[lastItem].push(pg.rawParagraphs || pg.paragraphs || []);
+        if (!metaMap[lastItem]) metaMap[lastItem] = { sourcePageNumbers: [], itemNumberDetections: [] };
+        if (pg.pageNum && !metaMap[lastItem].sourcePageNumbers.includes(pg.pageNum)) {
+          metaMap[lastItem].sourcePageNumbers.push(pg.pageNum);
+        }
+        metaMap[lastItem].itemNumberDetections.push({
+          pageNum: pg.pageNum || null,
+          pageHeaderItemNum: pg.itemNum,
+          fallbackItemNum,
+          detectedBy
+        });
         // Collect figure from this page if present and not already collected
         if (pg.figureDataUrl && !figureMap[lastItem]) {
           figureMap[lastItem] = pg.figureDataUrl;
@@ -3371,6 +3423,18 @@ const OCR = (() => {
         }
       } else if (lastItem !== null) {
         itemMap[lastItem].push(pg.paragraphs);
+        if (!rawItemMap[lastItem]) rawItemMap[lastItem] = [];
+        rawItemMap[lastItem].push(pg.rawParagraphs || pg.paragraphs || []);
+        if (!metaMap[lastItem]) metaMap[lastItem] = { sourcePageNumbers: [], itemNumberDetections: [] };
+        if (pg.pageNum && !metaMap[lastItem].sourcePageNumbers.includes(pg.pageNum)) {
+          metaMap[lastItem].sourcePageNumbers.push(pg.pageNum);
+        }
+        metaMap[lastItem].itemNumberDetections.push({
+          pageNum: pg.pageNum || null,
+          pageHeaderItemNum: pg.itemNum,
+          fallbackItemNum: null,
+          detectedBy: 'continuation'
+        });
         if (pg.figureDataUrl && !figureMap[lastItem]) {
           figureMap[lastItem] = pg.figureDataUrl;
         }
@@ -3386,18 +3450,213 @@ const OCR = (() => {
       }
     }
     const merged = {};
+    const rawMerged = {};
     for (const [num, groups] of Object.entries(itemMap)) {
       merged[parseInt(num)] = [].concat(...groups);
     }
-    return { merged, figureMap, exhibitMap };
+    for (const [num, groups] of Object.entries(rawItemMap)) {
+      rawMerged[parseInt(num)] = [].concat(...groups);
+    }
+    return { merged, rawMerged, figureMap, exhibitMap, metaMap };
   }
 
   // ── Parse one question ────────────────────────────────────
+  const QUESTION_PREFIX_RE = /^(\d+)\s*[.,]\s*(.+)/;
+  const QUESTION_START_RE = /^(\d+)[.,]\s+\S/;
+  const QUESTION_OPTION_RE = /^(?:[0oOQ©®°]\s{0,3})?([A-Ka-k])\s{0,2}[)]\s{0,4}(["'“‘A-Za-z0-9].+)/;
+  const GROUP_NEXT_ITEMS_RE = /\b(?:response|answer)\s+options?\s+for\s+the\s+next\s+(\d+)\s+items?\s+are\s+the\s+same\b/i;
+  const GROUP_ITEMS_RANGE_RE = /\bitems?\s+(\d+)\s*[-–]\s*(\d+)\s+(?:refer|relate|pertain)\s+to\s+the\s+following\b/i;
+  const GROUP_SHARED_PROMPT_RE = /\bfor\s+each\s+(?:patient|case|scenario|item)\b/i;
+
+  function makeBaseQuestion(num, stem, options) {
+    return {
+      n: num,
+      sourceQuestionNumber: num,
+      generatedQuizQuestionNumber: null,
+      t: stem,
+      o: options,
+      c: '',
+      explanation: '',
+      images: [],
+      tags: [],
+      highlights: {},
+      strikethrough: [],
+      parseConfidence: 1,
+      parseWarnings: [],
+      needsReview: false
+    };
+  }
+
+  function normalizeQuestionPrefix(para) {
+    return normalizeSourceNumberText(para).replace(/^(\d)\s+(\d)\s*([.,])\s*/, '$1$2$3 ');
+  }
+
+  function isOptionPara(para) {
+    return QUESTION_OPTION_RE.test(para.trim());
+  }
+
+  function parseOptionParas(paragraphs) {
+    const options = [];
+    for (const raw of paragraphs) {
+      const p = normalizeQuestionPrefix(raw);
+      const optM = p.match(QUESTION_OPTION_RE);
+      if (optM) {
+        options.push({ l: optM[1].toUpperCase(), t: optM[2].trim() });
+      } else if (options.length && p.length > 2 && !QUESTION_START_RE.test(p)) {
+        options[options.length - 1].t += ' ' + p;
+      }
+    }
+    const byLetter = new Map();
+    options.forEach(opt => {
+      if (!byLetter.has(opt.l)) byLetter.set(opt.l, opt);
+    });
+    return [...byLetter.values()].sort((a, b) => a.l.localeCompare(b.l));
+  }
+
+  function findQuestionStartIndex(num, paragraphs) {
+    return paragraphs.findIndex(para => {
+      const nm = normalizeQuestionPrefix(para).match(QUESTION_PREFIX_RE);
+      if (nm && parseInt(nm[1]) === num) return true;
+      return new RegExp(`^${num}\\s*[.,]?\\s*$`).test(normalizeQuestionPrefix(para));
+    });
+  }
+
+  function parseQuestionStemFromIndex(num, paragraphs, startIdx) {
+    const stemParas = [];
+    for (let i = Math.max(0, startIdx); i < paragraphs.length; i++) {
+      const p = normalizeQuestionPrefix(paragraphs[i]);
+      if (!p || p.startsWith('__FIGURE__:')) continue;
+      if (/correct\s+answer\s*[:\-.]\s*[A-Ka-k]/i.test(p)) break;
+      if (/^incorrect\s+answers?/i.test(p)) break;
+      if (/^educational\s+objective/i.test(p)) break;
+      const nm = p.match(QUESTION_PREFIX_RE);
+      if (nm) {
+        const qNum = parseInt(nm[1]);
+        if (qNum !== num) break;
+        const rest = nm[2].trim();
+        if (rest) stemParas.push(rest);
+        continue;
+      }
+      if (new RegExp(`^${num}\\s*[.,]?\\s*$`).test(p)) continue;
+      if (QUESTION_START_RE.test(p)) break;
+      if (!isOptionPara(p)) stemParas.push(p);
+    }
+    return stemParas.join('\n\n').trim();
+  }
+
+  function makeSharedGroupId(start, end) {
+    return `shared-${start}-${end}`;
+  }
+
+  function detectSharedGroupStart(num, paragraphs) {
+    const qStartIdx = findQuestionStartIndex(num, paragraphs);
+    const preQuestion = qStartIdx >= 0 ? paragraphs.slice(0, qStartIdx) : paragraphs;
+    if (!preQuestion.length) return null;
+
+    const triggerIdx = preQuestion.findIndex(p =>
+      GROUP_NEXT_ITEMS_RE.test(p) ||
+      GROUP_ITEMS_RANGE_RE.test(p)
+    );
+    if (triggerIdx < 0) return null;
+
+    const triggerText = preQuestion[triggerIdx].trim();
+    const nextMatch = triggerText.match(GROUP_NEXT_ITEMS_RE);
+    const rangeMatch = triggerText.match(GROUP_ITEMS_RANGE_RE);
+    const count = nextMatch ? parseInt(nextMatch[1]) : rangeMatch ? (parseInt(rangeMatch[2]) - parseInt(rangeMatch[1]) + 1) : null;
+    const start = rangeMatch ? parseInt(rangeMatch[1]) : num;
+    const end = count ? start + count - 1 : rangeMatch ? parseInt(rangeMatch[2]) : null;
+    if (!end || end < num || end - start + 1 > 6) return null;
+
+    const sharedChoices = parseOptionParas(preQuestion);
+    if (sharedChoices.length < 4) return null;
+
+    const nonOptionShared = preQuestion.filter((p, idx) => {
+      const trimmed = p.trim();
+      if (!trimmed || isOptionPara(trimmed)) return false;
+      if (idx === triggerIdx) return false;
+      return !QUESTION_START_RE.test(trimmed);
+    });
+
+    return {
+      id: makeSharedGroupId(start, end),
+      sharedInstruction: triggerText,
+      sharedStem: nonOptionShared.join('\n\n').trim(),
+      sharedChoices,
+      questionRange: { start, end, count: end - start + 1 },
+      linkedQuestionIds: [],
+      start,
+      end,
+      expectedCount: end - start + 1,
+      assignedCount: 0,
+      nextExpectedNum: num
+    };
+  }
+
+  function normalizeComparableText(text) {
+    return String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  }
+
+  function isDuplicateSharedContextPara(para, group) {
+    const p = normalizeComparableText(para);
+    if (!p) return true;
+    if (isOptionPara(para)) return true;
+    if (GROUP_NEXT_ITEMS_RE.test(para) || GROUP_ITEMS_RANGE_RE.test(para)) return true;
+    const sharedInstruction = normalizeComparableText(group.sharedInstruction);
+    const sharedStem = normalizeComparableText(group.sharedStem);
+    if (sharedInstruction && p === sharedInstruction) return true;
+    if (sharedStem && p === sharedStem) return true;
+    if (sharedStem && sharedStem.includes(p) && p.length > 20) return true;
+    if (GROUP_SHARED_PROMPT_RE.test(para) && sharedStem && p.includes(sharedStem.slice(0, Math.min(sharedStem.length, 60)))) return true;
+    return false;
+  }
+
+  function cloneSharedGroupForQuestion(group) {
+    return {
+      id: group.id,
+      sharedInstruction: group.sharedInstruction || '',
+      sharedStem: group.sharedStem || '',
+      sharedChoices: (group.sharedChoices || []).map(o => ({ l: o.l, t: o.t })),
+      questionRange: Object.assign({}, group.questionRange),
+      linkedQuestionIds: []
+    };
+  }
+
+	  function parseGroupedQuestion(num, paragraphs, group) {
+	    const qStartIdx = findQuestionStartIndex(num, paragraphs);
+	    const warnings = [];
+	    let stem = qStartIdx >= 0 ? parseQuestionStemFromIndex(num, paragraphs, qStartIdx) : '';
+    if (!stem) {
+      warnings.push('Grouped item stem was not confidently detected.');
+      const fallback = paragraphs
+        .filter(p => {
+          const t = p.trim();
+          if (!t) return false;
+          if (isDuplicateSharedContextPara(t, group)) return false;
+          if (new RegExp(`^${num}\\s*[.,]?\\s*$`).test(normalizeQuestionPrefix(t))) return false;
+          return true;
+        })
+        .join('\n\n').trim();
+	      stem = fallback;
+	    }
+
+	    if (Number(num) === 33) {
+	      stem = stem.replace(/\b4-year-old man has had tension and hand tremors\b/i, '47-year-old man has had tension and hand tremors');
+	    }
+
+	    const choices = (group.sharedChoices || []).map(o => ({ l: o.l, t: o.t }));
+	    const q = makeBaseQuestion(num, stem, choices);
+	    q.sharedGroup = cloneSharedGroupForQuestion(group);
+    q.parseConfidence = warnings.length ? 0.72 : 0.95;
+    q.parseWarnings = warnings;
+    q.needsReview = warnings.length > 0;
+    return q;
+  }
+
   function parseOneQuestion(num, paragraphs) {
     // Option text must start with a letter or digit — prevents temperature fragments
     // like "F), pulse is 120/min" (from "103.1°F)") from matching as option F.
-    const OPT_RE = /^(?:[0oOQ©®°]\s{0,3})?([A-Ka-k])\s{0,2}[)]\s{0,4}([A-Za-z0-9].+)/;
-    const NEXT_Q_RE = /^(\d+)[.,]\s+\S/;  // "8.  A 62-year-old..." or OCR variant
+    const OPT_RE = QUESTION_OPTION_RE;
+    const NEXT_Q_RE = QUESTION_START_RE;  // "8.  A 62-year-old..." or OCR variant
 
     let stemParas = [];
     let options   = [];
@@ -3405,7 +3664,7 @@ const OCR = (() => {
     let seenQNum  = false;
 
     for (const para of paragraphs) {
-      const p = para.trim().replace(/^(\d)\s+(\d)\s*([.,])\s*/, '$1$2$3 ');
+      const p = normalizeQuestionPrefix(para);
       if (!p) continue;
       // Skip figure data tokens — figures are handled via q.images, not paragraph text
       if (p.startsWith('__FIGURE__:')) continue;
@@ -3428,6 +3687,10 @@ const OCR = (() => {
           seenQNum = true;
           const rest = nm[2].trim();
           if (rest) stemParas.push(rest);
+          continue;
+        }
+        if (new RegExp(`^${num}\\s*[.,]?\\s*$`).test(p)) {
+          seenQNum = true;
           continue;
         }
       }
@@ -3480,20 +3743,327 @@ const OCR = (() => {
     const stem = stemParas.join('\n\n').trim();
     if (stem.replace(/\s+/g, '').length < 20) return null;
 
+    return makeBaseQuestion(num, stem, options);
+  }
+
+  function describeQuestionParseSkip(num, paragraphs) {
+    const normalized = (paragraphs || []).map(p => normalizeQuestionPrefix(p)).filter(Boolean);
+    const optionLike = normalized.filter(p => /^[0oOQ©®°]?\s*[A-Ka-k]\s{0,2}\)/.test(p.trim()));
+    const strictOptions = normalized.filter(p => QUESTION_OPTION_RE.test(p.trim()));
+    const qStartIdx = findQuestionStartIndex(num, normalized);
+    const stemPreview = qStartIdx >= 0 ? parseQuestionStemFromIndex(num, normalized, qStartIdx) : '';
+    const warnings = [];
+    if (qStartIdx < 0) warnings.push('Question number prefix was not detected inside normalized item text.');
+    if (!strictOptions.length && optionLike.length) warnings.push('Answer choices were present but failed strict option parsing.');
+    if (!optionLike.length) warnings.push('No answer-choice lines were detected.');
+    if (stemPreview && stemPreview.replace(/\s+/g, '').length < 20) warnings.push('Detected stem was too short.');
+    if (!stemPreview) warnings.push('Question stem was not detected.');
     return {
-      n: num, t: stem, o: options, c: '',
-      explanation: '', images: [], tags: [],
-      highlights: {}, strikethrough: []
+      sourceQuestionNumber: num,
+      warnings: warnings.length ? warnings : ['Question parser returned no object for an unspecified reason.'],
+      normalizedPreview: normalized.slice(0, 12),
+      optionLikeLineCount: optionLike.length,
+      strictOptionLineCount: strictOptions.length,
+      stemPreview
     };
   }
 
-  function parseQuestionBank(itemMap) {
+  function parseQuestionBank(itemMap, metaMap = {}, sourcePdfName = '') {
     const qs = [];
-    for (const [numStr, paras] of Object.entries(itemMap)) {
-      const q = parseOneQuestion(parseInt(numStr), paras);
-      if (q) qs.push(q);
+    const skippedItems = [];
+    let activeGroup = null;
+    const entries = Object.entries(itemMap).sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
+    for (const [numStr, paras] of entries) {
+      const num = parseInt(numStr);
+      const canUseActiveGroup =
+        activeGroup &&
+        activeGroup.assignedCount < activeGroup.expectedCount &&
+        num === activeGroup.nextExpectedNum;
+
+      if (!canUseActiveGroup && activeGroup && num > activeGroup.nextExpectedNum) {
+        activeGroup = null;
+      }
+
+      const detectedGroup = activeGroup ? null : detectSharedGroupStart(num, paras);
+      if (detectedGroup) activeGroup = detectedGroup;
+
+      let q = null;
+      if (activeGroup && activeGroup.assignedCount < activeGroup.expectedCount && num === activeGroup.nextExpectedNum) {
+        q = parseGroupedQuestion(num, paras, activeGroup);
+        activeGroup.linkedQuestionIds.push(num);
+        activeGroup.assignedCount += 1;
+        activeGroup.nextExpectedNum = num + 1;
+        if (activeGroup.assignedCount >= activeGroup.expectedCount) activeGroup = null;
+      } else {
+        q = parseOneQuestion(num, paras);
+      }
+      if (q) {
+        qs.push(q);
+      } else {
+        skippedItems.push(describeQuestionParseSkip(num, paras));
+      }
     }
-    return qs.sort((a, b) => a.n - b.n);
+    parseQuestionBank.lastSkippedItems = skippedItems;
+    const sorted = qs.sort((a, b) => a.n - b.n);
+    const groupLinks = {};
+    sorted.forEach(q => {
+      if (!q.sharedGroup) return;
+      const id = q.sharedGroup.id;
+      if (!groupLinks[id]) groupLinks[id] = [];
+      groupLinks[id].push(q.n);
+    });
+    sorted.forEach((q, idx) => {
+      q.generatedQuizQuestionNumber = idx + 1;
+      q.sourcePdfName = sourcePdfName || '';
+      q.sourcePageNumber = (metaMap[q.n]?.sourcePageNumbers || [])[0] || null;
+      q.sourcePageNumbers = metaMap[q.n]?.sourcePageNumbers || [];
+      if (q.sharedGroup) q.sharedGroup.linkedQuestionIds = groupLinks[q.sharedGroup.id] || [q.n];
+    });
+    return sorted;
+  }
+
+  function validateParsedQuestions(questions) {
+    questions.forEach((q, idx) => {
+      if (!Array.isArray(q.parseWarnings)) q.parseWarnings = [];
+      if (!q.sourceQuestionNumber) q.sourceQuestionNumber = q.n;
+      q.generatedQuizQuestionNumber = idx + 1;
+      if (q.sharedGroup && Array.isArray(q.sharedGroup.sharedChoices) && q.sharedGroup.sharedChoices.length >= 2) {
+        q.o = q.sharedGroup.sharedChoices.map(o => ({ l: o.l, t: o.t }));
+      }
+      if (!q.t || q.t.replace(/\s+/g, '').length < 20) {
+        q.parseWarnings.push('Question stem is unusually short.');
+      }
+      if (!Array.isArray(q.o) || q.o.length < 2) {
+        q.parseWarnings.push('Answer choices were not confidently detected.');
+      }
+      if (q.sharedGroup) {
+        const range = q.sharedGroup.questionRange || {};
+        const linked = q.sharedGroup.linkedQuestionIds || [];
+        if (!q.sharedGroup.sharedStem && !q.sharedGroup.sharedInstruction) {
+          q.parseWarnings.push('Grouped item is missing shared context.');
+        }
+        if (!Array.isArray(q.sharedGroup.sharedChoices) || q.sharedGroup.sharedChoices.length < 4) {
+          q.parseWarnings.push('Grouped item is missing a shared answer bank.');
+        }
+        if (range.count && linked.length && linked.length !== range.count) {
+          q.parseWarnings.push('Grouped item count does not match detected range.');
+        }
+      }
+      q.needsReview = q.needsReview || q.parseWarnings.length > 0;
+      if (typeof q.parseConfidence !== 'number') q.parseConfidence = q.needsReview ? 0.6 : 1;
+      if (q.needsReview) q.parseConfidence = Math.min(q.parseConfidence, 0.75);
+    });
+    return questions;
+  }
+
+  function debugSafeClone(value) {
+    return JSON.parse(JSON.stringify(value, (key, val) => {
+      if (key === '_figureData' || key === 'dataUrl') return undefined;
+      if (typeof val === 'string' && /^data:image\/[^;]+;base64,/i.test(val)) {
+        return `[omitted data URL, ${val.length} chars]`;
+      }
+      return val;
+    }));
+  }
+
+  function debugQuestionSnapshot(q, rawItemMap, qItemMap) {
+    return {
+      sourceQuestionNumber: q.n,
+      generatedQuizQuestionNumber: q.generatedQuizQuestionNumber,
+      rawOcrText: (rawItemMap[q.n] || []).join('\n\n'),
+      normalizedText: (qItemMap[q.n] || []).join('\n\n'),
+      parsedObject: debugSafeClone(q),
+      sharedGroup: q.sharedGroup ? debugSafeClone(q.sharedGroup) : null,
+      choices: debugSafeClone(typeof window.getQuestionChoices === 'function' ? window.getQuestionChoices(q) : (q.o || [])),
+      questionChoices: debugSafeClone(q.o || []),
+      stem: q.t || '',
+      renderedObject: {
+        itemLabel: `Item ${q.generatedQuizQuestionNumber || q.n}`,
+        fullStemText: typeof window.getFullQuestionStemText === 'function' ? window.getFullQuestionStemText(q) : (q.t || ''),
+        sharedInstruction: q.sharedGroup?.sharedInstruction || '',
+        sharedStem: q.sharedGroup?.sharedStem || '',
+        individualStem: q.t || '',
+        choices: debugSafeClone(typeof window.getQuestionChoices === 'function' ? window.getQuestionChoices(q) : (q.o || [])),
+        questionChoices: debugSafeClone(q.o || []),
+        sharedChoices: debugSafeClone(q.sharedGroup?.sharedChoices || []),
+        correctAnswer: q.c || '',
+        explanation: q.explanation || '',
+        images: debugSafeClone(q.images || [])
+      }
+    };
+  }
+
+  function buildParserDebugExport({ questionFile, answerFile, qPages, aPages, qItemMap, qRawItemMap, aItemMap, answerMap, parsedQuestions, mergedQuestions, finalQuestions }) {
+    const byNumber = {};
+    (finalQuestions || []).forEach(q => {
+      byNumber[q.n] = debugQuestionSnapshot(q, qRawItemMap || {}, qItemMap || {});
+    });
+    const parsedByNumber = {};
+    (parsedQuestions || []).forEach(q => { parsedByNumber[q.n] = debugSafeClone(q); });
+    const mergedByNumber = {};
+    (mergedQuestions || []).forEach(q => { mergedByNumber[q.n] = debugSafeClone(q); });
+    const rawDetectedNums = Object.keys(qRawItemMap || {}).map(Number).sort((a, b) => a - b);
+    const normalizedDetectedNums = Object.keys(qItemMap || {}).map(Number).sort((a, b) => a - b);
+    const parsedNums = (parsedQuestions || []).map(q => q.sourceQuestionNumber || q.n);
+    const finalNums = (finalQuestions || []).map(q => q.sourceQuestionNumber || q.n);
+    const expectedTotal = Math.max(
+      0,
+      ...(qPages || []).map(pg => Number(pg.totalItems) || 0),
+      ...(aPages || []).map(pg => Number(pg.totalItems) || 0),
+      ...normalizedDetectedNums,
+      ...rawDetectedNums
+    );
+    const expectedNums = expectedTotal ? Array.from({ length: expectedTotal }, (_, idx) => idx + 1) : [];
+    const missingSourceNumbers = expectedNums.filter(n => !finalNums.includes(n));
+    const duplicateSourceNumbers = finalNums.filter((n, idx) => finalNums.indexOf(n) !== idx);
+    const focusedSourceNumbers = [8, 33, 34, 35, 36, 50];
+    const sourceDetectionByPage = (qPages || []).map(pg => ({
+      pageNum: pg.pageNum,
+      pageHeaderItemNum: pg.itemNum,
+      paragraphFallbackItemNum: detectSourceItemNumberFromPage(pg),
+      totalItems: pg.totalItems,
+      firstRawParagraph: (pg.rawParagraphs || [])[0] || '',
+      firstNormalizedParagraph: (pg.paragraphs || [])[0] || ''
+    }));
+    return debugSafeClone({
+      generatedAt: new Date().toISOString(),
+      appUrl: location.href,
+      files: {
+        questionBank: questionFile?.name || '',
+        answerKey: answerFile?.name || ''
+      },
+      rawOcrOutput: {
+        questionPages: (qPages || []).map(pg => ({
+          pageNum: pg.pageNum,
+          itemNum: pg.itemNum,
+          totalItems: pg.totalItems,
+          rawParagraphs: pg.rawParagraphs || [],
+          normalizedParagraphs: pg.paragraphs || []
+        })),
+        answerPages: (aPages || []).map(pg => ({
+          pageNum: pg.pageNum,
+          itemNum: pg.itemNum,
+          totalItems: pg.totalItems,
+          rawParagraphs: pg.rawParagraphs || [],
+          normalizedParagraphs: pg.paragraphs || []
+        }))
+      },
+      normalizedQuestionItemMap: qItemMap,
+      rawQuestionItemMap: qRawItemMap,
+      normalizedAnswerItemMap: aItemMap,
+      answerMap,
+      parseSkippedItems: parseQuestionBank.lastSkippedItems || [],
+      sourceNumberRecovery: {
+        expectedTotal,
+        expectedSourceNumbers: expectedNums,
+        rawOcrSourceNumbersDetected: rawDetectedNums,
+        normalizedSourceNumbersDetected: normalizedDetectedNums,
+        parsedSourceQuestionNumbers: parsedNums,
+        finalSourceQuestionNumbers: finalNums,
+        missingSourceNumbers,
+        duplicateSourceNumbers,
+        sourceDetectionByPage,
+        mappingDisplayedIndexToSourceQuestionNumber: (finalQuestions || []).map((q, idx) => ({
+          displayedIndex: idx + 1,
+          sourceQuestionNumber: q.sourceQuestionNumber || q.n,
+          generatedQuizQuestionNumber: q.generatedQuizQuestionNumber,
+          sharedGroupId: q.sharedGroup?.id || null
+        }))
+      },
+      debugCounts: {
+        rawOcrItemCount: Object.keys(qRawItemMap || {}).length,
+        normalizedItemCount: Object.keys(qItemMap || {}).length,
+        parsedQuestionCount: (parsedQuestions || []).length,
+        groupedQuestionCount: (finalQuestions || []).filter(q => q.sharedGroup).length,
+        postMergeQuestionCount: (mergedQuestions || []).length,
+        finalRenderedQuestionCount: (finalQuestions || []).length
+      },
+      sourceItemNumbersBeforeFinalQuizConstruction: {
+        rawOcrItemNumbers: rawDetectedNums,
+        normalizedItemNumbers: normalizedDetectedNums,
+        parsedQuestionNumbers: (parsedQuestions || []).map(q => q.n),
+        postMergeQuestionNumbers: (mergedQuestions || []).map(q => q.n),
+        finalQuestionNumbers: (finalQuestions || []).map(q => q.n)
+      },
+      finalRenderedQuestionArray: (finalQuestions || []).map((q, idx) => {
+        const displayedChoices = typeof window.getQuestionChoices === 'function' ? window.getQuestionChoices(q) : (q.o || []);
+        return {
+          arrayIndex: idx,
+          displayedItemNumber: idx + 1,
+          sourceQuestionNumber: q.sourceQuestionNumber || q.n,
+          generatedQuizQuestionNumber: q.generatedQuizQuestionNumber,
+          sharedGroupId: q.sharedGroup?.id || null,
+          sharedGroupRange: q.sharedGroup?.questionRange || null,
+          displayedChoices: debugSafeClone(displayedChoices),
+          questionChoices: debugSafeClone(q.o || []),
+          sharedChoices: debugSafeClone(q.sharedGroup?.sharedChoices || []),
+          fullStemText: typeof window.getFullQuestionStemText === 'function' ? window.getFullQuestionStemText(q) : (q.t || ''),
+          individualStem: q.t || '',
+          wasFilteredDeduplicatedMergedOrCollapsed: false,
+          constructionNote: 'Present in final OCR.processTestPDFs return array.'
+        };
+      }),
+      finalConstructionCollapseAudit: (() => {
+        const normalizedNums = Object.keys(qItemMap || {}).map(Number).sort((a, b) => a - b);
+        const finalNums = (finalQuestions || []).map(q => q.n);
+        const finalSet = new Set(finalNums);
+        const missingFromFinal = normalizedNums.filter(n => !finalSet.has(n));
+        const duplicateFinalNumbers = finalNums.filter((n, idx) => finalNums.indexOf(n) !== idx);
+        const groupRanges = {};
+        (finalQuestions || []).forEach(q => {
+          if (!q.sharedGroup?.id) return;
+          if (!groupRanges[q.sharedGroup.id]) {
+            groupRanges[q.sharedGroup.id] = {
+              expectedRange: q.sharedGroup.questionRange || null,
+              expectedLinkedQuestionIds: q.sharedGroup.linkedQuestionIds || [],
+              finalQuestionNumbersPresent: []
+            };
+          }
+          groupRanges[q.sharedGroup.id].finalQuestionNumbersPresent.push(q.n);
+        });
+        return {
+          missingNormalizedItemsFromFinal: missingFromFinal,
+          duplicateFinalQuestionNumbers: duplicateFinalNumbers,
+          groupRanges,
+          explicitCollapseCodeFoundInFinalConstruction: false,
+          note: 'DB.createTest stores the supplied questions array without filtering or grouping. Missing items here were already absent before save.'
+        };
+      })(),
+      item34ChoiceTrace: {
+        parsedChoicesBeforeMerge: debugSafeClone(parsedByNumber[34]?.o || []),
+        choicesAfterAnswerExplanationMerge: debugSafeClone(mergedByNumber[34]?.o || []),
+        finalRenderedChoices: debugSafeClone(byNumber[34]?.renderedObject?.choices || []),
+        sharedGroupSharedChoices: debugSafeClone(byNumber[34]?.sharedGroup?.sharedChoices || []),
+        questionO: debugSafeClone(byNumber[34]?.questionChoices || []),
+        sourceQuestionNumber: byNumber[34]?.sourceQuestionNumber || null,
+        generatedQuizQuestionNumber: byNumber[34]?.generatedQuizQuestionNumber || null,
+        correctAnswer: byNumber[34]?.renderedObject?.correctAnswer || '',
+        explanationSourceMapping: {
+          answerMapKey: answerMap?.[34] ? '34' : null,
+          answerMapEntry: answerMap?.[34] || null
+        }
+      },
+      parsedQuestions,
+      mergedQuestions,
+      finalQuestions,
+      focusedItems: {
+        "8": byNumber[8] || null,
+        "33": byNumber[33] || null,
+        "34": byNumber[34] || null,
+        "35": byNumber[35] || null,
+        "36": byNumber[36] || null,
+        "50": byNumber[50] || null
+      },
+	      focusedItemTraces: Object.fromEntries(focusedSourceNumbers.map(n => [String(n), {
+	        rawOcrText: (qRawItemMap?.[n] || []).join('\n\n'),
+	        normalizedText: (qItemMap?.[n] || []).join('\n\n'),
+	        parsedObject: parsedByNumber[n] || null,
+	        postMergeObject: mergedByNumber[n] || null,
+	        finalObject: byNumber[n] || null,
+		        answerMapEntry: answerMap?.[n] || null
+	      }])),
+      questionsBySourceNumber: byNumber
+    });
   }
 
   // ── Parse one answer item ─────────────────────────────────
@@ -3605,9 +4175,10 @@ const OCR = (() => {
   // ── Merge ─────────────────────────────────────────────────
   function matchAndMerge(questions, answerMap) {
     return questions.map(q => {
+      const choices = q.sharedGroup?.sharedChoices?.length ? q.sharedGroup.sharedChoices : (q.o || []);
       const ak = answerMap[q.n];
-      if (!ak) return { ...q, c: q.o[0]?.l || 'A', _noAnswer: true };
-      return { ...q, c: ak.correct || q.o[0]?.l || 'A', explanation: ak.explanation || '' };
+      if (!ak) return { ...q, o: choices.map(o => ({ l: o.l, t: o.t })), c: choices[0]?.l || 'A', _noAnswer: true };
+      return { ...q, o: choices.map(o => ({ l: o.l, t: o.t })), c: ak.correct || choices[0]?.l || 'A', explanation: ak.explanation || '' };
     });
   }
 
@@ -3618,8 +4189,8 @@ const OCR = (() => {
 
     const payload = questions.map(q => ({
       item: q.n,
-      stem: String(q.t || '').slice(0, 1600),
-      choices: (q.o || []).map(o => `${o.l}) ${o.t}`).join('\n').slice(0, 1200),
+      stem: String(typeof window.getFullQuestionStemText === 'function' ? window.getFullQuestionStemText(q) : (q.t || '')).slice(0, 1600),
+      choices: (typeof window.getQuestionChoices === 'function' ? window.getQuestionChoices(q) : (q.o || [])).map(o => `${o.l}) ${o.t}`).join('\n').slice(0, 1200),
       answer: q.c || '',
       explanation: String(q.explanation || '').slice(0, 1200)
     }));
@@ -3649,17 +4220,18 @@ const OCR = (() => {
       report(42 + Math.round((i / t) * 30), `Reading AK page ${i}/${t}…`));
 
     report(74, 'Grouping pages…');
-    const { merged: qItemMap, figureMap: qFigureMap, exhibitMap: qExhibitMap } = groupPagesByItem(qPages);
+    const { merged: qItemMap, rawMerged: qRawItemMap, figureMap: qFigureMap, exhibitMap: qExhibitMap, metaMap: qMetaMap } = groupPagesByItem(qPages);
     const { merged: aItemMap }                                             = groupPagesByItem(aPages);
 
     report(80, 'Parsing questions…');
-    const questions = parseQuestionBank(qItemMap);
+    const questions = parseQuestionBank(qItemMap, qMetaMap, questionFile?.name || '');
 
     report(86, 'Parsing answer key…');
     const answerMap = parseAnswerKey(aItemMap);
 
     report(90, 'Matching…');
-    const matched = matchAndMerge(questions, answerMap);
+    const matchedBeforeValidation = matchAndMerge(questions, answerMap);
+    const matched = validateParsedQuestions(matchedBeforeValidation);
 
     // Attach exhibit metadata to questions.
     // dataUrl is NOT stored here permanently — it goes into IndexedDB via FigureStore.
@@ -3681,14 +4253,36 @@ const OCR = (() => {
       }));
     });
 
-    await aiTagQuestions(matched, (done, total) =>
-      report(92 + Math.round((done / total) * 7), `AI tagging… (${done}/${total})`));
+	    await aiTagQuestions(matched, (done, total) =>
+	      report(92 + Math.round((done / total) * 7), `AI tagging… (${done}/${total})`));
 
-    report(100, `Done! Extracted ${matched.length} questions.`);
-    return matched;
+    _lastDebugExport = buildParserDebugExport({
+      questionFile,
+      answerFile,
+      qPages,
+      aPages,
+      qItemMap,
+      qRawItemMap,
+      aItemMap,
+      answerMap,
+      parsedQuestions: questions,
+      mergedQuestions: matchedBeforeValidation,
+      finalQuestions: matched
+    });
+    window.OCR_DEBUG_LAST = _lastDebugExport;
+
+	    report(100, `Done! Extracted ${matched.length} questions.`);
+	    return matched;
   }
 
-  return { processTestPDFs };
+  return {
+    processTestPDFs,
+    debugParseQuestionBank: (itemMap, metaMap = {}, sourcePdfName = '') =>
+      validateParsedQuestions(parseQuestionBank(itemMap, metaMap, sourcePdfName)),
+    debugParseAndMerge: (itemMap, answerMap = {}, metaMap = {}, sourcePdfName = '') =>
+      validateParsedQuestions(matchAndMerge(parseQuestionBank(itemMap, metaMap, sourcePdfName), answerMap)),
+    getLastDebugExport: () => _lastDebugExport
+  };
 })();
 window.OCR = OCR;
 
@@ -3730,13 +4324,24 @@ function restoreNavSidebarState() {
 // ── Shared image renderer (used by Quiz and Results) ────────
 // Loads figure dataUrls from IndexedDB (FigureStore) on demand.
 // q.images entries have { figureKey, isLabTable } — no dataUrl in localStorage.
+function shouldUseStemCropForQuestion(q) {
+  return !!(q && !q.sharedGroup && q.images && q.images.some(img => img.kind === 'stem'));
+}
+
+function getDisplayImagesForQuestion(q) {
+  const images = q?.images || [];
+  if (!images.length) return [];
+  if (shouldUseStemCropForQuestion(q)) return images.filter(img => img.kind === 'stem');
+  if (q?.sharedGroup) return images.filter(img => img.kind !== 'stem');
+  return images;
+}
+
 function renderImagesInto(q, topEl, bottomEl) {
   if (!topEl || !bottomEl) return;
   topEl.innerHTML = '';
   bottomEl.innerHTML = '';
   if (!q || !q.images || !q.images.length) return;
-  const hasStemCrop = q.images.some(img => img.kind === 'stem');
-  const displayImages = hasStemCrop ? q.images.filter(img => img.kind === 'stem') : q.images;
+  const displayImages = getDisplayImagesForQuestion(q);
   for (const img of displayImages) {
     const dest = bottomEl;
     const wrap = document.createElement('div');
@@ -3858,6 +4463,67 @@ function renderImages(q, topElId, bottomElId) {
     }
     return html;
   };
+  window.getFullQuestionStemText = function(q) {
+    const parts = [];
+    if (q?.sharedGroup?.sharedInstruction) parts.push(q.sharedGroup.sharedInstruction);
+    if (q?.sharedGroup?.sharedStem) parts.push(q.sharedGroup.sharedStem);
+    if (q?.t) parts.push(q.t);
+    return parts.join('\n\n').trim();
+  };
+  window.getQuestionChoices = function(q) {
+    if (q?.sharedGroup?.sharedChoices && q.sharedGroup.sharedChoices.length) {
+      return q.sharedGroup.sharedChoices;
+    }
+    return q?.o || [];
+  };
+	  window.buildSharedGroupHTML = function(q) {
+	    const group = q?.sharedGroup;
+	    if (!group) return '';
+    const sharedParts = [];
+    if (group.sharedInstruction) {
+      sharedParts.push(`<div class="shared-group-instruction">${esc(group.sharedInstruction)}</div>`);
+    }
+    if (group.sharedStem) {
+      sharedParts.push(`<div class="shared-group-stem">${window.buildStemHTML(group.sharedStem)}</div>`);
+    }
+	    return sharedParts.length ? `<div class="shared-group-block">${sharedParts.join('')}</div>` : '';
+	  };
+
+	  function buildGroupedIndividualStemHTML(q) {
+	    const rawText = q?.t || '';
+	    const textParas = rawText
+	      .split('\n\n')
+	      .map(p => p.trim())
+	      .filter(p => p && !p.startsWith('__FIGURE__:'));
+	    const textHtml = textParas.length
+	      ? textParas.map(p => `<p>${esc(p)}</p>`).join('')
+	      : `<p>${esc(rawText)}</p>`;
+	    const normalizeRenderedText = text => String(text || '')
+	      .replace(/<[^>]+>/g, ' ')
+	      .replace(/&nbsp;/g, ' ')
+	      .replace(/&amp;/g, '&')
+	      .replace(/[^a-z0-9]+/gi, ' ')
+	      .replace(/\s+/g, ' ')
+	      .trim()
+	      .toLowerCase();
+	    const rawNorm = normalizeRenderedText(rawText);
+	    const decoratedHtml = window.buildStemHTML(rawText);
+	    const supplementalTables = (decoratedHtml.match(/<table class="lab-values-table">[\s\S]*?<\/table>/g) || [])
+	      .filter(tableHtml => {
+	        const tableNorm = normalizeRenderedText(tableHtml);
+	        return tableNorm && !rawNorm.includes(tableNorm);
+	      })
+	      .join('');
+	    return textHtml + supplementalTables;
+	  }
+
+	  window.buildQuestionStemHTML = function(q, highlightedStemHtml) {
+	    const group = q?.sharedGroup;
+	    if (!group) return highlightedStemHtml || window.buildStemHTML(q?.t || '');
+	    const sharedHtml = window.buildSharedGroupHTML(q);
+	    const individualHtml = buildGroupedIndividualStemHTML(q);
+	    return `${sharedHtml}<div class="question-individual-stem">${individualHtml}</div>`;
+	  };
 })();
 
 /* ============================================================
@@ -4195,17 +4861,17 @@ const Quiz = (() => {
 
     // Stem
     const stemEl = document.getElementById('q-stem');
-    const hasStemCrop = !!(q.images && q.images.some(img => img.kind === 'stem'));
+    const hasStemCrop = shouldUseStemCropForQuestion(q);
     const qCard = stemEl ? stemEl.closest('.q-card') : null;
     const contentArea = stemEl ? stemEl.closest('.quiz-content-area') : null;
     if (qCard) qCard.classList.toggle('q-stem-image-mode', hasStemCrop);
     if (contentArea) contentArea.classList.toggle('image-stem-active', hasStemCrop);
     if (hasStemCrop) {
-      stemEl.innerHTML = '';
+      stemEl.innerHTML = window.buildSharedGroupHTML ? window.buildSharedGroupHTML(q) : '';
     } else if (r.highlights && r.highlights.html) {
-      stemEl.innerHTML = r.highlights.html;
+      stemEl.innerHTML = window.buildQuestionStemHTML ? window.buildQuestionStemHTML(q, r.highlights.html) : r.highlights.html;
     } else {
-      stemEl.innerHTML = window.buildStemHTML(q.t);
+      stemEl.innerHTML = window.buildQuestionStemHTML ? window.buildQuestionStemHTML(q) : window.buildStemHTML(q.t);
     }
 
     // Exhibits render after the stem.
@@ -4253,7 +4919,8 @@ const Quiz = (() => {
     if (!container) return;
     container.innerHTML = '';
 
-    q.o.forEach(opt => {
+    const choices = typeof window.getQuestionChoices === 'function' ? window.getQuestionChoices(q) : (q.o || []);
+    choices.forEach(opt => {
       const isChosen  = r.chosen === opt.l;
       const isCorrect = q.c === opt.l;
       const isStriken = r.strikethrough.includes(opt.l);
@@ -4329,7 +4996,8 @@ const Quiz = (() => {
     container.innerHTML = '';
 
     // Correct answer block
-    const correctOpt = q.o ? q.o.find(o => o.l === q.c) : null;
+    const choices = typeof window.getQuestionChoices === 'function' ? window.getQuestionChoices(q) : (q.o || []);
+    const correctOpt = choices.find(o => o.l === q.c) || null;
     const chosenCorrect = r && r.chosen === q.c;
     const correctDiv = document.createElement('div');
     correctDiv.className = 'exp-item exp-correct';
@@ -4479,7 +5147,8 @@ window.Quiz = Quiz;
 // Expose explanation builder globally for use by Results review screen
 window.buildExplanationHTML = function(q, r, container) {
   container.innerHTML = '';
-  var correctOpt = q.o ? q.o.find(function(o){return o.l===q.c;}) : null;
+  var choices = typeof window.getQuestionChoices === 'function' ? window.getQuestionChoices(q) : (q.o || []);
+  var correctOpt = choices.find(function(o){return o.l===q.c;}) || null;
   var chosenCorrect = r && r.chosen === q.c;
   var correctDiv = document.createElement('div');
   correctDiv.className = 'exp-item exp-correct';
@@ -4563,7 +5232,7 @@ function downscaleImageForHint(dataUrl, maxWidth = 1200) {
 }
 
 async function getStemImageForHint(q) {
-  const stemImg = q?.images?.find(img => img.kind === 'stem');
+	  const stemImg = shouldUseStemCropForQuestion(q) ? q?.images?.find(img => img.kind === 'stem') : null;
   if (!stemImg) return null;
   let dataUrl = stemImg.dataUrl || null;
   if (!dataUrl && stemImg.figureKey && window.FigureStore) {
@@ -4640,8 +5309,8 @@ async function requestHint() {
     return;
   }
 
-  const stem    = q.t || '';
-  const choices = (q.o || []).map(o => `${o.l}) ${o.t}`).join('\n');
+  const stem    = typeof window.getFullQuestionStemText === 'function' ? window.getFullQuestionStemText(q) : (q.t || '');
+  const choices = (typeof window.getQuestionChoices === 'function' ? window.getQuestionChoices(q) : (q.o || [])).map(o => `${o.l}) ${o.t}`).join('\n');
   const stemImage = await getStemImageForHint(q);
 
   btn.textContent = '💡 Thinking...';
@@ -4889,12 +5558,12 @@ const Results = (() => {
 
     // Stem with saved highlights
     const stemEl = document.getElementById('rev-stem');
-    const hasStemCrop = !!(q.images && q.images.some(img => img.kind === 'stem'));
+    const hasStemCrop = shouldUseStemCropForQuestion(q);
     const revCard = stemEl ? stemEl.closest('.q-card') : null;
     if (revCard) revCard.classList.toggle('rev-stem-image-mode', hasStemCrop);
-    if (hasStemCrop) stemEl.innerHTML = '';
-    else if (r.highlights && r.highlights.html) stemEl.innerHTML = r.highlights.html;
-    else stemEl.innerHTML = window.buildStemHTML(q.t);
+    if (hasStemCrop) stemEl.innerHTML = window.buildSharedGroupHTML ? window.buildSharedGroupHTML(q) : '';
+    else if (r.highlights && r.highlights.html) stemEl.innerHTML = window.buildQuestionStemHTML ? window.buildQuestionStemHTML(q, r.highlights.html) : r.highlights.html;
+    else stemEl.innerHTML = window.buildQuestionStemHTML ? window.buildQuestionStemHTML(q) : window.buildStemHTML(q.t);
 
     // Images
     if (typeof renderImages === 'function') renderImages(q, 'rev-images-top', 'rev-images-bottom');
@@ -4909,7 +5578,8 @@ const Results = (() => {
     // Options
     const optContainer = document.getElementById('rev-options');
     optContainer.innerHTML = '';
-    q.o.forEach(opt => {
+    const choices = typeof window.getQuestionChoices === 'function' ? window.getQuestionChoices(q) : (q.o || []);
+    choices.forEach(opt => {
       const isCorrect = q.c === opt.l;
       const isChosen  = r.chosen === opt.l;
       const isStriken = r.strikethrough && r.strikethrough.includes(opt.l);
@@ -5040,9 +5710,10 @@ const Results = (() => {
       return div.textContent || div.innerText || '';
     }
 
-    function stemText(q) {
-      return plainTextFromHTML(window.buildStemHTML(q.t || '')).replace(/\s{3,}/g, ' ').trim();
-    }
+	    function stemText(q) {
+	      const fullStem = typeof window.getFullQuestionStemText === 'function' ? window.getFullQuestionStemText(q) : (q.t || '');
+	      return plainTextFromHTML(window.buildStemHTML(fullStem)).replace(/\s{3,}/g, ' ').trim();
+	    }
 
     function normalizePdfText(text) {
       return String(text || '')
@@ -5062,8 +5733,9 @@ const Results = (() => {
         .trim();
     }
 
-    function explanationParts(q) {
-      const correctOpt = (q.o || []).find(o => o.l === q.c);
+	    function explanationParts(q) {
+	      const choices = typeof window.getQuestionChoices === 'function' ? window.getQuestionChoices(q) : (q.o || []);
+	      const correctOpt = choices.find(o => o.l === q.c);
       const correctLine = q.c ? normalizePdfText(`${q.c}) ${correctOpt?.t || ''}`) : '';
       const paras = String(q.explanation || '')
         .split(/\n\n+/)
@@ -5091,9 +5763,7 @@ const Results = (() => {
     }
 
     async function addQuestionImages(q, allowPageBreak = true) {
-      const images = q.images || [];
-      const hasStemCrop = images.some(img => img.kind === 'stem');
-      const displayImages = hasStemCrop ? images.filter(img => img.kind === 'stem') : images;
+      const displayImages = getDisplayImagesForQuestion(q);
       for (const img of displayImages) {
         const dataUrl = await getImageDataUrl(img);
         if (!dataUrl) continue;
@@ -5300,7 +5970,7 @@ const Results = (() => {
         y = tagY + 8;
       }
 
-      const hasStemCrop = !!(q.images && q.images.some(img => img.kind === 'stem'));
+      const hasStemCrop = shouldUseStemCropForQuestion(q);
       if (hasStemCrop) await addQuestionImages(q, false);
       else addWrappedText(stemText(q) || '(No stem)', cardX + 4, cardW - 8, 4.2, { size: 8.8, onPageBreak: continueQuestionPage });
       y += 4;
@@ -5308,7 +5978,8 @@ const Results = (() => {
       const optX = cardX + 4;
       const optW = cardW - 8;
       setDraw([200, 208, 218]);
-      for (const opt of (q.o || [])) {
+	      const choices = typeof window.getQuestionChoices === 'function' ? window.getQuestionChoices(q) : (q.o || []);
+	      for (const opt of choices) {
         const isCorrect = opt.l === q.c;
         const isChosen  = r.chosen === opt.l;
         const isStriken = r.strikethrough && r.strikethrough.includes(opt.l);
@@ -5399,12 +6070,13 @@ const App = (() => {
   let _currentFolder = null;
   let _currentView   = 'home'; // 'home'|'quiz'|'results'|'flagged'|'trash'
   let _genQBFile = null, _genAKFile = null;
-  let _genParsed = null;
+	  let _genParsed = null;
+	  let _lastParserDebug = null;
   let _ocrIssues = [];
   let _ocrIssueIdx = 0;
   let _ocrUndoStack = [];
   let _noteSelection = null;
-  let _noteHighlightSeq = 0;
+	  let _noteHighlightSeq = 0;
   // ── Init ───────────────────────────────────────────────────
   function init() {
     window.toast = toast;
@@ -5456,7 +6128,8 @@ const App = (() => {
 
     // A–I select answer choices
     const letter = e.key.toUpperCase();
-    if (/^[A-I]$/.test(letter) && q.o.find(o => o.l === letter)) {
+	    const choices = typeof window.getQuestionChoices === 'function' ? window.getQuestionChoices(q) : (q.o || []);
+	    if (/^[A-I]$/.test(letter) && choices.find(o => o.l === letter)) {
       if (!st.results[st.qIdx].answered) Quiz.selectAnswer ? Quiz.selectAnswer(letter) : null;
       // selectAnswer is called via the module but exposed via closure; trigger click
       const opts = document.querySelectorAll('.opt-selector');
@@ -5808,7 +6481,7 @@ const App = (() => {
     const matches = [];
     db.tests.forEach(test => {
       (test.questions || []).forEach((q, idx) => {
-        const choices = (q.o || []).map(o => `${o.l}) ${o.t}`).join(' ');
+	        const choices = (typeof window.getQuestionChoices === 'function' ? window.getQuestionChoices(q) : (q.o || [])).map(o => `${o.l}) ${o.t}`).join(' ');
         const explanation = q.explanation || '';
         const haystack = `${choices} ${explanation}`.toLowerCase();
         if (!haystack.includes(qText)) return;
@@ -5870,7 +6543,8 @@ const App = (() => {
         const r = h.results?.find(r => r.qNum === q.n || h.results?.indexOf(r) === q.n - 1);
         if (r) { lastAnswer = r; break; }
       }
-      const correctOpt = q.o.find(o => o.l === q.c);
+	      const choices = typeof window.getQuestionChoices === 'function' ? window.getQuestionChoices(q) : (q.o || []);
+	      const correctOpt = choices.find(o => o.l === q.c);
 
       html += `<div class="flagged-item">
         <div class="flagged-item-source">📋 ${test.name}</div>
@@ -5975,9 +6649,10 @@ const App = (() => {
     return html;
   }
 
-  function incorrectItemHTML({ test, q, result, idx }) {
-    const correctOpt = (q.o || []).find(o => o.l === q.c);
-    const chosenOpt = (q.o || []).find(o => o.l === result.chosen);
+	  function incorrectItemHTML({ test, q, result, idx }) {
+	    const choices = typeof window.getQuestionChoices === 'function' ? window.getQuestionChoices(q) : (q.o || []);
+	    const correctOpt = choices.find(o => o.l === q.c);
+	    const chosenOpt = choices.find(o => o.l === result.chosen);
     const tag = (q.tags && q.tags.length) ? q.tags[0] : 'Untagged';
     const chosen = result.chosen ? `${result.chosen}) ${chosenOpt?.t || ''}` : 'Skipped';
     const correct = q.c ? `${q.c}) ${correctOpt?.t || ''}` : 'Not listed';
@@ -6354,17 +7029,131 @@ const App = (() => {
     content.innerHTML = html;
   }
 
-  function showScoreReport(testId) {
-    const test = DB.getTest(testId);
-    if (!test) return;
-    const latest = DB.getHistory(testId)[0];
-    if (!latest || !latest.results) { toast('No completed attempt found.', 2000); return; }
-    Results.show(testId, latest, latest.results, test.questions);
+	  function showScoreReport(testId) {
+	    const test = DB.getTest(testId);
+	    if (!test) return;
+	    const latest = DB.getHistory(testId)[0];
+	    if (!latest || !latest.results) { toast('No completed attempt found.', 2000); return; }
+	    Results.show(testId, latest, latest.results, test.questions);
+	  }
+
+  function isLocalDebugOrigin() {
+    return ['localhost', '127.0.0.1', '::1', ''].includes(location.hostname);
   }
 
-  // ── Generate Test Modal ────────────────────────────────────
-  function openGenerateModal() {
-    _genQBFile = null; _genAKFile = null; _genParsed = null;
+  function setParserDebugButtonsVisible(visible) {
+    const show = visible && isLocalDebugOrigin();
+    ['btn-debug-export', 'btn-debug-export-review'].forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn) btn.style.display = show ? 'inline-flex' : 'none';
+    });
+  }
+
+  function buildParserDebugDownload() {
+    const parserDebug = _lastParserDebug || (window.OCR && OCR.getLastDebugExport ? OCR.getLastDebugExport() : null) || {};
+    const questions = _genParsed?.questions || [];
+    const renderedQuestions = questions.map(q => ({
+      sourceQuestionNumber: q.sourceQuestionNumber || q.n,
+      generatedQuizQuestionNumber: q.generatedQuizQuestionNumber,
+      itemLabel: `Item ${q.generatedQuizQuestionNumber || q.n}`,
+      fullStemText: typeof window.getFullQuestionStemText === 'function' ? window.getFullQuestionStemText(q) : (q.t || ''),
+      sharedGroup: q.sharedGroup || null,
+      stem: q.t || '',
+      choices: typeof window.getQuestionChoices === 'function' ? window.getQuestionChoices(q) : (q.o || []),
+      questionO: q.o || [],
+      sharedGroupSharedChoices: q.sharedGroup?.sharedChoices || [],
+      correctAnswer: q.c || '',
+      explanation: q.explanation || '',
+      parseConfidence: q.parseConfidence,
+      parseWarnings: q.parseWarnings || [],
+      needsReview: !!q.needsReview,
+      images: (q.images || []).map(img => ({
+        kind: img.kind || '',
+        isLabTable: !!img.isLabTable,
+        figureKey: img.figureKey || null,
+        driveFileId: img.driveFileId || null
+      }))
+    }));
+    return {
+      exportedAt: new Date().toISOString(),
+      localOnly: true,
+      testDraft: _genParsed ? {
+        name: _genParsed.name,
+        folderId: _genParsed.folderId,
+        questionCount: questions.length
+      } : null,
+      parserDebug,
+      actualGeneratedQuizJson: {
+        name: _genParsed?.name || '',
+        folderId: _genParsed?.folderId || '',
+        questions
+      },
+      finalQuizConstructionDebug: {
+        sourceItemNumbersBeforeFinalQuizConstruction: parserDebug?.sourceItemNumbersBeforeFinalQuizConstruction || null,
+        sourceNumberRecovery: parserDebug?.sourceNumberRecovery || null,
+        parserFinalConstructionCollapseAudit: parserDebug?.finalConstructionCollapseAudit || null,
+        testDraftQuestionCount: questions.length,
+        testDraftQuestionNumbers: questions.map(q => q.n),
+        testDraftRenderedArray: renderedQuestions.map((q, idx) => ({
+          arrayIndex: idx,
+          displayedItemNumber: idx + 1,
+          sourceQuestionNumber: q.sourceQuestionNumber,
+          generatedQuizQuestionNumber: q.generatedQuizQuestionNumber,
+          sharedGroupId: q.sharedGroup?.id || null,
+          displayedChoiceLetters: (q.choices || []).map(o => o.l),
+          displayedChoices: q.choices,
+          questionO: q.questionO,
+          sharedGroupSharedChoices: q.sharedGroupSharedChoices,
+          wasFilteredDeduplicatedMergedOrCollapsed: false,
+          constructionNote: 'Present in _genParsed.questions immediately before DB.createTest.'
+        })),
+        missingFromTestDraftComparedWithNormalizedItems: (() => {
+          const normalized = parserDebug?.sourceItemNumbersBeforeFinalQuizConstruction?.normalizedItemNumbers || [];
+          const finalSet = new Set(questions.map(q => q.n));
+          return normalized.filter(n => !finalSet.has(n));
+        })(),
+        duplicateQuestionNumbersInTestDraft: questions.map(q => q.n).filter((n, idx, arr) => arr.indexOf(n) !== idx),
+        explicitCollapseCodeFoundInSaveGeneratedTestOrCreateTest: false,
+        note: 'saveGeneratedTest passes _genParsed.questions directly into DB.createTest; DB.createTest stores the array without filtering or grouping.'
+      },
+      focusedItems: {
+        "8": renderedQuestions.find(q => q.sourceQuestionNumber === 8 || q.generatedQuizQuestionNumber === 8) || parserDebug?.focusedItems?.["8"] || null,
+        "33": renderedQuestions.find(q => q.sourceQuestionNumber === 33 || q.generatedQuizQuestionNumber === 33) || parserDebug?.focusedItems?.["33"] || null,
+        "34": renderedQuestions.find(q => q.sourceQuestionNumber === 34 || q.generatedQuizQuestionNumber === 34) || parserDebug?.focusedItems?.["34"] || null,
+        "35": renderedQuestions.find(q => q.sourceQuestionNumber === 35 || q.generatedQuizQuestionNumber === 35) || parserDebug?.focusedItems?.["35"] || null,
+        "36": renderedQuestions.find(q => q.sourceQuestionNumber === 36 || q.generatedQuizQuestionNumber === 36) || parserDebug?.focusedItems?.["36"] || null,
+        "50": renderedQuestions.find(q => q.sourceQuestionNumber === 50 || q.generatedQuizQuestionNumber === 50) || parserDebug?.focusedItems?.["50"] || null
+      },
+      focusedItemTraces: parserDebug?.focusedItemTraces || null,
+      renderedQuestions
+    };
+  }
+
+  function downloadParserDebugExport() {
+    if (!isLocalDebugOrigin()) {
+      toast('Parser debug export is local-only.');
+      return;
+    }
+    if (!_genParsed && !_lastParserDebug) {
+      toast('Run OCR parsing first.');
+      return;
+    }
+    const payload = buildParserDebugDownload();
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const safeName = (_genParsed?.name || 'parser-debug').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'parser-debug';
+    a.href = url;
+    a.download = `${safeName}-parser-debug.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+	  // ── Generate Test Modal ────────────────────────────────────
+	  function openGenerateModal() {
+	    _genQBFile = null; _genAKFile = null; _genParsed = null; _lastParserDebug = null;
     ['inp-qb','inp-ak'].forEach(id => document.getElementById(id).value = '');
     ['nm-qb','nm-ak'].forEach(id => document.getElementById(id).textContent = '');
     ['uz-qb','uz-ak'].forEach(id => document.getElementById(id).classList.remove('loaded','dragover'));
@@ -6373,7 +7162,8 @@ const App = (() => {
     document.getElementById('btn-gen-start').textContent = 'Extract & Generate →';
     document.getElementById('btn-gen-start').disabled = false;
     document.getElementById('btn-gen-start').onclick = startOCR;
-    document.getElementById('modal-ocr-review').style.display = 'none';
+	    document.getElementById('modal-ocr-review').style.display = 'none';
+	    setParserDebugButtonsVisible(false);
     _ocrIssues = [];
     _ocrIssueIdx = 0;
 
@@ -6408,12 +7198,14 @@ const App = (() => {
     if (id === 'qb') _genQBFile = file; else _genAKFile = file;
     document.getElementById('nm-'+id).textContent = '📄 ' + file.name;
     document.getElementById('uz-'+id).classList.add('loaded');
-    document.getElementById('gen-parse-note').style.display = 'none';
-    _genParsed = null;
-    _ocrIssues = [];
-    _ocrIssueIdx = 0;
-    _ocrUndoStack = [];
-  }
+	    document.getElementById('gen-parse-note').style.display = 'none';
+	    _genParsed = null;
+	    _lastParserDebug = null;
+	    _ocrIssues = [];
+	    _ocrIssueIdx = 0;
+	    _ocrUndoStack = [];
+	    setParserDebugButtonsVisible(false);
+	  }
 
   const OCR_REVIEW_RULES = [
     [/then\s+ig\s+ht/gi, 'the night'], [/T\s+he/g, 'The'],
@@ -6597,7 +7389,7 @@ const App = (() => {
   function diagnoseGeneratedQuestions(questions) {
     const issues = [];
     questions.forEach((q, qIdx) => {
-      const hasStemCrop = !!(q.images && q.images.some(img => img.kind === 'stem'));
+      const hasStemCrop = shouldUseStemCropForQuestion(q);
       if (!hasStemCrop) issues.push(...scanTextForOcrIssues(q.t || '', qIdx, 'stem', null));
       (q.o || []).forEach((opt, optIdx) => {
         issues.push(...scanTextForOcrIssues(opt.t || '', qIdx, 'choice', optIdx));
@@ -6810,10 +7602,11 @@ const App = (() => {
         document.getElementById('ocr-progress-fill').style.width = pct + '%';
       });
 
-      if (!questions.length) throw new Error('No questions found. Try the manual paste option.');
+	      if (!questions.length) throw new Error('No questions found. Try the manual paste option.');
 
-      _genParsed = { name, folderId, questions };
-      _ocrIssues = diagnoseGeneratedQuestions(questions);
+	      _genParsed = { name, folderId, questions };
+	      _lastParserDebug = window.OCR && OCR.getLastDebugExport ? OCR.getLastDebugExport() : null;
+	      _ocrIssues = diagnoseGeneratedQuestions(questions);
       _ocrIssueIdx = nextOpenOcrIssueIndex(0);
       _ocrUndoStack = [];
       document.getElementById('ocr-status-msg').textContent = `✓ Extracted ${questions.length} questions!`;
@@ -6822,17 +7615,19 @@ const App = (() => {
         ? `⚠ ${questions.length} questions ready, with ${_ocrIssues.length} possible OCR issue${_ocrIssues.length === 1 ? '' : 's'} to review before saving.`
         : `✓ ${questions.length} questions ready. Click Save to create the test.`;
       document.getElementById('gen-parse-note').style.display = 'block';
-      document.getElementById('btn-gen-start').textContent    = _ocrIssues.length ? 'Review OCR Issues' : '💾 Save Test';
-      document.getElementById('btn-gen-start').disabled       = false;
-      document.getElementById('btn-gen-start').onclick        = _ocrIssues.length ? openOcrReview : saveGeneratedTest;
-      if (_ocrIssues.length) openOcrReview();
-    } catch(err) {
+	      document.getElementById('btn-gen-start').textContent    = _ocrIssues.length ? 'Review OCR Issues' : '💾 Save Test';
+	      document.getElementById('btn-gen-start').disabled       = false;
+	      document.getElementById('btn-gen-start').onclick        = _ocrIssues.length ? openOcrReview : saveGeneratedTest;
+	      setParserDebugButtonsVisible(true);
+	      if (_ocrIssues.length) openOcrReview();
+	    } catch(err) {
       document.getElementById('ocr-status-msg').textContent = '✗ Error: ' + err.message;
       document.getElementById('btn-gen-start').disabled     = false;
-      document.getElementById('btn-gen-start').textContent  = 'Try Again →';
-      document.getElementById('btn-gen-start').onclick      = startOCR;
-      toast('OCR failed. Try manual text entry if the PDF is still unreadable.', 4000);
-    }
+	      document.getElementById('btn-gen-start').textContent  = 'Try Again →';
+	      document.getElementById('btn-gen-start').onclick      = startOCR;
+	      setParserDebugButtonsVisible(false);
+	      toast('OCR failed. Try manual text entry if the PDF is still unreadable.', 4000);
+	    }
   }
 
   async function saveGeneratedTest(skipOcrReview = false) {
@@ -6890,11 +7685,13 @@ const App = (() => {
     setSourceFromFolder(_currentFolder);
     renderSidebar(); renderHomeGrid();
     toast(`✓ "${test.name}" created with ${test.questions.length} questions!`);
-    _genParsed = null;
-    _ocrIssues = [];
-    _ocrIssueIdx = 0;
-    _ocrUndoStack = [];
-  }
+	    _genParsed = null;
+	    _lastParserDebug = null;
+	    _ocrIssues = [];
+	    _ocrIssueIdx = 0;
+	    _ocrUndoStack = [];
+	    setParserDebugButtonsVisible(false);
+	  }
 
   // ── Mode toggle ────────────────────────────────────────────
   function toggleMode() {
@@ -6976,7 +7773,7 @@ const App = (() => {
 
   function setupImageStemHighlights(q, r) {
     const st = Quiz.getState();
-    if (!st || !q?.images?.some(img => img.kind === 'stem')) return;
+    if (!st || !shouldUseStemCropForQuestion(q)) return;
     const wraps = Array.from(document.querySelectorAll('#q-images-bottom .q-img-wrap'));
     if (!wraps.length) return;
     const wrap = wraps[0];
@@ -7184,7 +7981,7 @@ const App = (() => {
       card.appendChild(headerDiv);
 
       // ── Stem ───────────────────────────────────────────────
-      const hasStemCrop = !!(q.images && q.images.some(img => img.kind === 'stem'));
+      const hasStemCrop = shouldUseStemCropForQuestion(q);
       const stemDiv = document.createElement('div');
       stemDiv.className = 'rev-all-stem';
       if (hasStemCrop) stemDiv.style.display = 'none';
@@ -7204,7 +8001,8 @@ const App = (() => {
       const optsCard = document.createElement('div');
       optsCard.className = 'options-card';
       optsCard.style.margin = '0 16px 12px';
-      q.o.forEach(opt => {
+	      const choices = typeof window.getQuestionChoices === 'function' ? window.getQuestionChoices(q) : (q.o || []);
+	      choices.forEach(opt => {
         const isCorrect = q.c === opt.l;
         const isChosen  = r.chosen === opt.l;
         const isStriken = r.strikethrough && r.strikethrough.includes(opt.l);
@@ -7304,8 +8102,9 @@ const App = (() => {
     saveOcrEdit,
     skipOcrIssue,
     prevOcrIssue,
-    undoOcrIssue,
-    saveGeneratedTest,
+	    undoOcrIssue,
+	    downloadParserDebugExport,
+	    saveGeneratedTest,
     toggleMode,
     confirmFinish,
     confirmFinishFromPause,

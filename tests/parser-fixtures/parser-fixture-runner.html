@@ -1,0 +1,97 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Parser Fixture Runner</title>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 24px; color: #172033; }
+    h1 { font-size: 20px; margin: 0 0 16px; }
+    iframe { width: 1px; height: 1px; position: absolute; left: -9999px; }
+    .pass { color: #176b39; }
+    .fail { color: #a52714; }
+    pre { background: #f5f7fa; border: 1px solid #d9e0e8; padding: 12px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>Parser Fixture Runner</h1>
+  <div id="summary">Running...</div>
+  <pre id="details"></pre>
+  <iframe id="app-frame" src="../../index.html"></iframe>
+  <script>
+    function assert(condition, message, failures) {
+      if (!condition) failures.push(message);
+    }
+
+    function validateCase(name, fixture, questions) {
+      const failures = [];
+      const expect = fixture.expect || {};
+      assert(questions.length === expect.count, `${name}: expected ${expect.count} questions, got ${questions.length}`, failures);
+
+      const grouped = questions.filter(q => q.sharedGroup);
+      if (expect.grouped) {
+        assert(grouped.length === questions.length, `${name}: expected every question to be grouped`, failures);
+        grouped.forEach(q => {
+          assert(q.sharedGroup.questionRange.start === expect.rangeStart || expect.rangeStart == null, `${name}: wrong group range start`, failures);
+          assert(q.sharedGroup.questionRange.end === expect.rangeEnd || expect.rangeEnd == null, `${name}: wrong group range end`, failures);
+          assert((q.o || []).length === expect.choices, `${name}: item ${q.n} expected ${expect.choices} choices, got ${(q.o || []).length}`, failures);
+          assert(q.t && !q.t.includes('The response options for the next'), `${name}: item ${q.n} duplicated shared instruction inside individual stem`, failures);
+          assert(q.sharedGroup.sharedInstruction || q.sharedGroup.sharedStem, `${name}: item ${q.n} missing shared context`, failures);
+        });
+      } else {
+        assert(grouped.length === 0, `${name}: ordinary questions were incorrectly grouped`, failures);
+        questions.forEach(q => {
+          assert((q.o || []).length === expect.choices, `${name}: item ${q.n} expected ${expect.choices} choices, got ${(q.o || []).length}`, failures);
+        });
+      }
+
+      if (expect.answers) {
+        questions.forEach(q => {
+          const expectedAnswer = expect.answers[String(q.n)];
+          if (expectedAnswer) assert(q.c === expectedAnswer, `${name}: item ${q.n} expected answer ${expectedAnswer}, got ${q.c}`, failures);
+        });
+      }
+
+      questions.forEach((q, idx) => {
+        assert(q.sourceQuestionNumber === q.n, `${name}: source question number not preserved for item ${q.n}`, failures);
+        assert(q.generatedQuizQuestionNumber === idx + 1, `${name}: generated quiz number not preserved for item ${q.n}`, failures);
+      });
+
+      return failures;
+    }
+
+    async function run() {
+      const frame = document.getElementById('app-frame');
+      await new Promise(resolve => frame.addEventListener('load', resolve, { once: true }));
+      const app = frame.contentWindow;
+      const fixtures = await fetch('./grouped-question-fixtures.json').then(r => r.json());
+      const logs = [];
+      let failed = 0;
+
+      for (const [name, fixture] of Object.entries(fixtures)) {
+        const questions = fixture.answerMap
+          ? app.OCR.debugParseAndMerge(fixture.itemMap, fixture.answerMap, fixture.metaMap || {}, `${name}.pdf`)
+          : app.OCR.debugParseQuestionBank(fixture.itemMap, fixture.metaMap || {}, `${name}.pdf`);
+        const failures = validateCase(name, fixture, questions);
+        if (failures.length) {
+          failed += 1;
+          logs.push(`FAIL ${name}\n${failures.map(f => `  - ${f}`).join('\n')}`);
+        } else {
+          logs.push(`PASS ${name}`);
+        }
+      }
+
+      const total = Object.keys(fixtures).length;
+      const summary = document.getElementById('summary');
+      summary.className = failed ? 'fail' : 'pass';
+      summary.textContent = failed ? `${failed}/${total} fixture groups failed` : `${total}/${total} fixture groups passed`;
+      document.getElementById('details').textContent = logs.join('\n\n');
+    }
+
+    run().catch(err => {
+      document.getElementById('summary').className = 'fail';
+      document.getElementById('summary').textContent = 'Runner failed';
+      document.getElementById('details').textContent = err && err.stack ? err.stack : String(err);
+    });
+  </script>
+</body>
+</html>

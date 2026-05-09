@@ -1,14 +1,15 @@
 # NBME Self-Assessment Suite Project Status
 
-Last updated: 2026-05-08 00:45 EDT
+Last updated: 2026-05-08 20:15 EDT
 
-This file captures the current working state after the landing-page library rehaul and PDF report naming update. It supersedes older status files where they conflict.
+This file captures the current working state after the landing-page library rehaul, PDF report naming update, and local grouped-question parser/render stabilization. It supersedes older status files where they conflict.
 
 ## Core Rules
 
 - `index.html` is the authoritative working app.
 - Keep active app edits inside `index.html`.
-- Do not split the app into external CSS or JS files.
+- Do not split the current browser app into external CSS or JS files.
+- The Electron migration may add Electron-specific scaffolding such as `package.json`, `electron/main.js`, and `electron/preload.js`. That does not change `index.html` being the current authoritative browser app.
 - The old split files still exist, but they are not the active implementation:
   - `app.js`
   - `db.js`
@@ -22,11 +23,12 @@ This file captures the current working state after the landing-page library reha
 - Do not reintroduce Supabase unless explicitly requested.
 - Keep full-quality question and figure images in IndexedDB or Google Drive. Do not put image data back into localStorage.
 - Google Drive OAuth requires opening the app from `http://localhost:8080`, not `file://`, when connecting or syncing Drive.
+- The app is currently private/personal use only. Future Electron security decisions, including local user-provided API key storage or OAuth token storage, should be evaluated in that context and revisited if public distribution is ever planned.
 
 ## Current File State
 
 - Active app: `index.html`
-- Current size: 7359 lines, about 330 KB.
+- Informational snapshot at time of this file: `index.html` is about 8250 lines and 364 KB. Treat this as a timestamped reference, not a required invariant.
 - Previous handoffs:
   - `PROJECT_STATUS_2026-05-06.md`
   - `PROJECT_STATUS_2026-05-07.md`
@@ -34,7 +36,11 @@ This file captures the current working state after the landing-page library reha
 - Latest visible git commit: `8bbc663 Complete landing page rehaul`
 - Current uncommitted working tree at time of this file:
   - Modified: `.DS_Store`
+- Additional current local-only working changes:
+  - Modified: `index.html`
+  - Added: `tests/`
 - `.DS_Store` is unrelated and should not be touched unless explicitly requested.
+- No commit, push, or Netlify deploy has been performed for the current local parser/render stabilization work.
 
 ## Current Architecture
 
@@ -49,6 +55,93 @@ Main inlined modules:
 - `Quiz`: test-taking engine, timers, answer selection, hints, stem-image rendering, highlighting, and navigation.
 - `Results`: post-submit score page, review mode, analytics, and PDF report generation.
 - `App`: landing page, source-folder routing, sidebar navigation, home/search/notes/incorrect/marked/flagged/trash views, subfolders, modals, and test generation.
+
+## Current Stable Parser And Rendering State
+
+The grouped-question pipeline is currently stable and locally verified.
+
+Confirmed behavior:
+
+- OCR, normalization, parsing, answer/explanation merge, final quiz construction, and rendering preserve the expected source question count.
+- Parser/render counts match expected source question counts.
+- No unintended question loss is currently observed across OCR, normalization, parsing, merge, final quiz construction, and rendering.
+- Source-number recovery is functioning when an OCR page has no parsed header item number but the normalized paragraph text contains a recoverable item number.
+- Source-question numbering is preserved separately from generated quiz display order.
+- Source-number audits and final-count integrity checks are functioning.
+- Quoted answer-choice parsing is functioning.
+- Grouped-question carry-forward logic is functioning.
+- Grouped shared instructions and shared stems render correctly.
+- Grouped answer banks render once, use `sharedGroup.sharedChoices` as the authoritative choice source, and remain independently selectable and independently scored for each linked question.
+- Grouped rendering order is stable: shared instruction, shared stem, individual parsed stem, then one selectable answer-choice section.
+- Grouped rendering prioritizes structured parsed text over cropped stem-image layout when stem crops would duplicate or misorder grouped content.
+- Duplicate lab/table fragments are suppressed in grouped rendering when they are already present in the parsed individual stem.
+- OCR normalization fixes for damaged screenshot-based text are functioning and should remain conservative.
+- Temporary question-specific debugging instrumentation has been removed.
+
+General parser/debug infrastructure preserved:
+
+- Local-only parser debug export buttons.
+- Raw OCR and normalized OCR export data.
+- Focused debug exports.
+- Source-number recovery audits.
+- Grouped range audits.
+- Final rendered question array audits.
+- `parseSkippedItems` diagnostics for parser misses.
+- Parser fixtures and grouped-question fixtures.
+- Quoted-choice parser checks.
+- Local-only debug tooling should stay hidden or disabled in production unless intentionally exposed.
+- Parser debug artifacts may contain copyrighted or private exam content and should remain local/private.
+
+Operational status:
+
+- This stabilized state is local only.
+- No commit, push, pull request, or Netlify deployment has been performed for this work.
+- Gemini, Google Drive, Netlify Functions, and deployment settings were intentionally left unchanged.
+- Saved/generated quizzes created before parser or render fixes may be stale. Do not silently mutate existing saved quizzes; regenerate or explicitly reparse them.
+
+## Future Importer And Render Architecture
+
+The next planned phase is Electron migration.
+
+The first Electron step should wrap the current stable app without changing app behavior. Avoid rewrites during the initial migration.
+
+Future architecture should preserve the current browser behavior while separating importer, parser, review, and renderer responsibilities more clearly.
+
+Planned direction:
+
+- All source types should normalize into a common intermediate format before quiz generation.
+- Do not overfit importers to NBME. Use source adapters for multiple modalities, including PDFs, DOCX, pasted text, Anki, audio/podcast transcripts, video transcripts, and lecture notes.
+- The common intermediate format should preserve raw OCR, normalized text, parsed structured question data, source numbering metadata, answer/explanation mappings, confidence, warnings, and available stem/image crops.
+- Future render architecture should support per-question text, image, and hybrid render modes.
+- Render mode should be reviewable and editable by the user before final quiz generation when confidence is low or content type is ambiguous.
+- Render behavior should be driven by metadata, parse confidence, available structured content, and content type, not by historical question numbers.
+- The importer should preserve both parsed text and stem/image crops when available so the app can choose the safest render mode without losing source evidence.
+- Future architecture is moving toward a canonical intermediate question schema that separates OCR repair, normalization, semantic parsing, rendering, and persistence.
+- Future architecture may further separate OCR cleanup, semantic parsing, and render adaptation to reduce coupling and regression risk.
+
+Render-mode decision policy:
+
+- Text mode for clean structured stems and grouped questions.
+- Image mode for figure-heavy, layout-sensitive, or OCR-corrupted stems.
+- Hybrid mode for usable text plus figures, tables, or images.
+- User review and override per question.
+
+Unresolved Electron Gemini decision:
+
+- Keep Netlify Functions initially.
+- Later consider Electron main-process Gemini calls with a user-provided local key, or a hybrid mode.
+- Do not decide this prematurely.
+
+## Historical Implementation And Debugging Notes
+
+The following notes are historical debugging findings only. They should not be treated as active architectural logic, permanent assumptions, or source-question-specific behavior.
+
+- Grouped-question rendering previously duplicated answer banks when cropped source-layout stems included the shared answer bank and the selectable choices rendered again below.
+- Shared answer-bank ordering issues were caused by render/layout selection after parser grouping was already correct.
+- Grouped carry-forward debugging showed that a shared group must remain active until the expected number of linked questions is assigned, even when later questions repeat only the shared stem or answer bank.
+- Dropped-question recovery debugging showed that item pages should not be discarded solely because the OCR header item number is missing when paragraph-level item numbers are recoverable.
+- OCR damage recovery examples included damaged age text, quoted answer choices, and duplicate lab/table fragments extracted from text already present in the stem.
+- Historical source item numbers used during debugging are examples only and should not be encoded as future architectural rules.
 
 ## Landing Page And Folder System
 
@@ -262,16 +355,17 @@ The counter is stored in localStorage under:
 gemini_hint_usage_v1
 ```
 
-## Question Stem Images
+## Render Modes And Stem Assets
 
-The current app direction is image-first for question stems.
+The current app supports image-based stems for ordinary non-grouped questions and structured parsed text for grouped questions when crops would duplicate or misorder grouped content. Future work should formalize this into text, image, and hybrid render modes.
 
 Implemented:
 
 - Cropped PDF stem images are generated from the original PDF page.
 - The crop removes the NBME item number area on the left.
-- Parsed text stems are hidden when a stem image exists.
-- Stem images are rendered as the main question stem.
+- Parsed text stems are hidden when a stem image exists for ordinary non-grouped questions.
+- For grouped questions, structured parsed text is preferred when a stem crop would preserve the source-layout answer bank above the patient stem or otherwise duplicate grouped content.
+- Stem images are rendered as the main question stem when the selected render mode is image-based.
 - Figures and exhibits remain attached through `q.images`.
 - Images use IndexedDB through `FigureStore`.
 - Google Drive backup preserves question images for use across devices.
@@ -317,10 +411,14 @@ Important implementation detail:
 
 ## Current Verification
 
-Recent verification after the latest PDF naming update:
+Recent verification after the latest local parser/render stabilization:
 
-- Inline JavaScript syntax check passed with `node --check`.
-- `git diff --check` passed.
+- Inline JavaScript syntax check passed.
+- Grouped parser fixtures passed.
+- Quoted A-E answer-choice parsing check passed.
+- Local debug exports confirmed stable parser/render counts in the affected workflow.
+- Temporary question-specific debug instrumentation was removed after confirmation.
+- Existing saved/generated quizzes may not automatically reflect parser or render fixes. Regenerate or explicitly reparse rather than silently mutating stored user data.
 
 For deployment and sync testing, use the deployed HTTPS Netlify URL or Netlify local dev. Do not test Drive or Gemini from a `file://` URL.
 
@@ -332,11 +430,17 @@ Use extra caution around:
 - `FigureStore`, because it owns large local images.
 - Google Drive backup/restore, because it is the durable cross-device image path.
 - OCR parsing and stem crop logic, because previous spacing fixes became unstable when handled with broad token surgery.
+- Avoid broad OCR normalization rules. OCR fixes should be conservative, traceable, and covered by fixtures because broad spacing/token cleanup previously caused instability.
 - PDF report generation, because jsPDF layout is sensitive to font state, page breaks, and text normalization.
 - Landing/source-folder routing, because it now determines which subfolders are visible and where new tests are created.
 
 ## Recommended Next Steps
 
+- Begin the Electron migration as the next planned phase.
+- Start Electron migration by wrapping the current stable app without behavior changes.
+- During Electron migration, preserve the current local browser behavior before changing importer or renderer architecture.
+- Design the future importer around a common intermediate format shared by PDFs, DOCX, pasted text, Anki, audio/podcast transcripts, video transcripts, lecture notes, screenshots, and future source types.
+- Add a reviewable render-mode decision layer so each question can be displayed as text, image, or hybrid based on metadata, confidence, and content type.
 - Browser-check the landing page after refresh:
   - Home shows 8 top-level folder cards plus the add card.
   - Existing folders appear inside NBME.
