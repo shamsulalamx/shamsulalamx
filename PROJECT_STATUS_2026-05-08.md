@@ -33,14 +33,12 @@ This file captures the current working state after the landing-page library reha
   - `PROJECT_STATUS_2026-05-06.md`
   - `PROJECT_STATUS_2026-05-07.md`
 - Current handoff: `PROJECT_STATUS_2026-05-08.md`
-- Latest visible git commit: `8bbc663 Complete landing page rehaul`
+- Stable local checkpoint commit: `2ba4b1d Stabilize parser/render pipeline before Electron migration`
+- Local branch status at documentation update: `main` is ahead of `origin/main` by one commit.
 - Current uncommitted working tree at time of this file:
-  - Modified: `.DS_Store`
-- Additional current local-only working changes:
-  - Modified: `index.html`
-  - Added: `tests/`
+  - Reusable documentation/prompt files are being organized for continuity across ChatGPT/Codex accounts.
 - `.DS_Store` is unrelated and should not be touched unless explicitly requested.
-- No commit, push, or Netlify deploy has been performed for the current local parser/render stabilization work.
+- No push or Netlify deploy has been performed after checkpoint `2ba4b1d` from this checkout.
 
 ## Current Architecture
 
@@ -95,7 +93,11 @@ General parser/debug infrastructure preserved:
 Operational status:
 
 - This stabilized state is local only.
-- No commit, push, pull request, or Netlify deployment has been performed for this work.
+- Stable local checkpoint commit exists: `2ba4b1d`.
+- Electron work has not started yet.
+- Browser app remains the stable baseline and fallback.
+- No push, pull request, or Netlify deployment has been performed after checkpoint `2ba4b1d` from this checkout.
+- Documentation and reusable prompt files are being organized for continuity across ChatGPT/Codex accounts.
 - Gemini, Google Drive, Netlify Functions, and deployment settings were intentionally left unchanged.
 - Saved/generated quizzes created before parser or render fixes may be stale. Do not silently mutate existing saved quizzes; regenerate or explicitly reparse them.
 
@@ -104,6 +106,8 @@ Operational status:
 The next planned phase is Electron migration.
 
 The first Electron step should wrap the current stable app without changing app behavior. Avoid rewrites during the initial migration.
+
+Electron work should begin locally and should not trigger Netlify deployments initially.
 
 Future architecture should preserve the current browser behavior while separating importer, parser, review, and renderer responsibilities more clearly.
 

@@ -49,6 +49,7 @@ The local grouped-question pipeline is stable and verified locally. The current 
 - OCR normalization fixes for damaged screenshot-based text are active and should remain conservative.
 - Temporary question-specific debugging instrumentation has been removed.
 - Saved/generated quizzes created before parser or render fixes may be stale. Do not silently mutate existing saved quizzes; regenerate or explicitly reparse them.
+- Fixture and debug infrastructure is part of the parser/render safety net and should be preserved.
 
 ## Future Importer And Render Direction
 
