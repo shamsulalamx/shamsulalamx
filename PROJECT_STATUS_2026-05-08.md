@@ -94,7 +94,7 @@ Operational status:
 
 - This stabilized state is local only.
 - Stable local checkpoint commit exists: `2ba4b1d`.
-- Electron work has not started yet.
+- Electron Stage 1 dev scaffolding has been added and Stage 2 local HTTP loading has been verified.
 - Browser app remains the stable baseline and fallback.
 - No push, pull request, or Netlify deployment has been performed after checkpoint `2ba4b1d` from this checkout.
 - Documentation and reusable prompt files are being organized for continuity across ChatGPT/Codex accounts.
@@ -423,7 +423,12 @@ Recent verification after the latest local parser/render stabilization:
 - Local debug exports confirmed stable parser/render counts in the affected workflow.
 - Temporary question-specific debug instrumentation was removed after confirmation.
 - Existing saved/generated quizzes may not automatically reflect parser or render fixes. Regenerate or explicitly reparse rather than silently mutating stored user data.
+- Electron Stage 2 verification passed: the Electron dev wrapper loads the existing app over `http://localhost:8888`.
+- Electron does not use `file://` for the app load path.
+- Browser/Netlify mode still works and remains the stable fallback.
+- Basic Electron interaction verification passed.
 - Gemini local verification intentionally skipped to avoid Netlify redeploy/API usage during early Electron migration.
+- No parser, render, OCR, Gemini, or Google Drive logic was modified for Stage 2 verification.
 
 For deployment and sync testing, use the deployed HTTPS Netlify URL or Netlify local dev. Do not test Drive or Gemini from a `file://` URL.
 

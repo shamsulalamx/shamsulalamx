@@ -153,6 +153,14 @@ For each stage, verify:
 
 Append future entries here.
 
+### 2026-05-09
+
+- Stage: 2, load existing `index.html` in Electron.
+- Change: Documentation-only verification entry; no runtime or app-logic changes.
+- Verification: Electron successfully loaded the existing app over `http://localhost:8888`; `file://` was not used; browser/Netlify mode still works; basic Electron interaction verification passed.
+- Decision: Keep Gemini routed through Netlify Functions for now. Local Gemini verification remains intentionally skipped during early Electron migration.
+- Rollback notes: No parser, render, OCR, Gemini, Drive, storage, packaging, or deployment changes were made for this verification.
+
 ### Entry Template
 
 - Date:
