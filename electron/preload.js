@@ -6,5 +6,7 @@ const desktopInfo = Object.freeze({
 
 // Preload boundary:
 // Exposes only readonly desktop-mode detection for now.
-// Future filesystem, app-data, debug export, or native dialog helpers should use narrow bridges here.
+// Future local helpers should be narrow methods only:
+// app-data path lookup, open debug folder, save debug export, and native file dialogs.
+// Do not expose direct filesystem access, raw IPC wrappers, or broad Node APIs.
 contextBridge.exposeInMainWorld('nbmeDesktop', desktopInfo);

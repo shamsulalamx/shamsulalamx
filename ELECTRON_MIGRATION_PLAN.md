@@ -67,6 +67,9 @@ This file should track migration stages, decisions, risks, verification checkpoi
 - Add local-only helpers where Electron provides clear value.
 - Keep parser/debug exports local and private.
 - Avoid replacing existing browser debug tooling prematurely.
+- Use narrow preload/main IPC only when a helper is implemented.
+- Candidate future helpers: app-data path lookup, open debug folder, save debug export, and native file dialogs.
+- Do not expose direct filesystem access, raw IPC wrappers, or broad Node APIs to the renderer.
 
 ### Stage 6: Preserve Netlify Gemini Initially
 
