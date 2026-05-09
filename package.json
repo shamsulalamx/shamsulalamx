@@ -1,0 +1,13 @@
+{
+  "name": "nbme-self-assessment-suite",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local Electron development wrapper for the existing NBME Self-Assessment Suite browser app.",
+  "main": "electron/main.js",
+  "scripts": {
+    "electron:dev": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^30.5.1"
+  }
+}
