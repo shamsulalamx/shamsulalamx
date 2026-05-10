@@ -1691,6 +1691,11 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
     <div id="notes-cluster-preview" class="notes-concept-preview">
       <div class="notes-import-empty">No clusters generated.</div>
     </div>
+    <div class="notes-import-section-title">Coverage Summary</div>
+    <div id="notes-coverage-status" class="notes-import-summary">Coverage will appear after clusters are selected.</div>
+    <div id="notes-coverage-preview" class="notes-concept-preview">
+      <div class="notes-import-empty">No coverage summary available.</div>
+    </div>
     <div class="notes-import-section-title">Question Draft Preview</div>
     <div id="notes-draft-status" class="notes-import-summary">Draft scaffolds will appear after concepts are extracted. They require human or AI review before use.</div>
     <div id="notes-ai-status" class="notes-import-summary" style="display:none;"></div>
@@ -7040,6 +7045,8 @@ const App = (() => {
     const conceptPreview = document.getElementById('notes-concept-preview');
     const clusterStatus = document.getElementById('notes-cluster-status');
     const clusterPreview = document.getElementById('notes-cluster-preview');
+    const coverageStatus = document.getElementById('notes-coverage-status');
+    const coveragePreview = document.getElementById('notes-coverage-preview');
     const targetQuestionCount = document.getElementById('notes-target-question-count');
     const reviewFilter = document.getElementById('notes-review-filter');
     const reviewSort = document.getElementById('notes-review-sort');
@@ -7060,6 +7067,8 @@ const App = (() => {
     if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concepts extracted.</div>';
     if (clusterStatus) clusterStatus.textContent = 'Clusters will appear after concepts are extracted.';
     if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No clusters generated.</div>';
+    if (coverageStatus) coverageStatus.textContent = 'Coverage will appear after clusters are selected.';
+    if (coveragePreview) coveragePreview.innerHTML = '<div class="notes-import-empty">No coverage summary available.</div>';
     if (targetQuestionCount) targetQuestionCount.value = '';
     _notesReviewTableDisplay.filter = 'all';
     _notesReviewTableDisplay.sort = 'newest';
@@ -7245,6 +7254,8 @@ const App = (() => {
     const conceptPreview = document.getElementById('notes-concept-preview');
     const clusterStatus = document.getElementById('notes-cluster-status');
     const clusterPreview = document.getElementById('notes-cluster-preview');
+    const coverageStatus = document.getElementById('notes-coverage-status');
+    const coveragePreview = document.getElementById('notes-coverage-preview');
     const targetQuestionCount = document.getElementById('notes-target-question-count');
     const draftStatus = document.getElementById('notes-draft-status');
     const draftPreview = document.getElementById('notes-draft-preview');
@@ -7265,6 +7276,11 @@ const App = (() => {
       clusterStatus.style.color = '#5a6a7a';
     }
     if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No clusters generated.</div>';
+    if (coverageStatus) {
+      coverageStatus.textContent = 'Waiting for selected clusters...';
+      coverageStatus.style.color = '#5a6a7a';
+    }
+    if (coveragePreview) coveragePreview.innerHTML = '<div class="notes-import-empty">No coverage summary available.</div>';
     if (targetQuestionCount) targetQuestionCount.value = '';
     if (draftStatus) {
       draftStatus.textContent = 'Waiting for extracted concepts...';
@@ -7289,6 +7305,7 @@ const App = (() => {
       renderNotesImportPreview(blocks, file.name);
       renderNotesConceptPreview(concepts);
       renderNotesClusterPreview();
+      renderNotesCoverageSummary();
       renderNotesQuestionDraftPreview(drafts);
       renderNotesBatchRefinementPreview();
     } catch (err) {
@@ -7836,6 +7853,7 @@ const App = (() => {
     _notesImportPreview.concepts = selectedConcepts;
     _notesImportPreview.drafts = buildNotesQuestionDrafts(selectedConcepts);
     resetNotesBatchQueueForDraftChange();
+    renderNotesCoverageSummary();
     renderNotesQuestionDraftPreview(_notesImportPreview.drafts);
     renderNotesBatchRefinementPreview();
   }
@@ -7910,6 +7928,130 @@ const App = (() => {
         </div>
       </details>`;
     }).join('');
+  }
+
+  function coverageSectionLabelForCluster(cluster) {
+    const firstConcept = cluster?.representativeConcept || cluster?.concepts?.[0] || {};
+    const blockId = firstConcept.sourceBlockIds?.[0] || cluster?.sourceBlockIds?.[0] || '';
+    const block = (_notesImportPreview?.blocks || []).find(entry => entry.blockId === blockId);
+    const path = Array.isArray(block?.sectionPath) && block.sectionPath.length ? block.sectionPath.join(' / ') : '';
+    return path || firstConcept.sectionLabel || firstConcept.sectionKey || cluster?.sectionKey || 'Unsectioned';
+  }
+
+  function coverageTopicLabelForCluster(cluster) {
+    return cluster?.title || cluster?.representativeConcept?.topic || cluster?.educationalObjective || 'Untitled topic';
+  }
+
+  function getCoverageBucket(map, sectionPath, topic) {
+    const key = `${sectionPath}||${topic}`;
+    if (!map.has(key)) {
+      map.set(key, {
+        sectionPath,
+        topic,
+        selectedClusters: 0,
+        deterministicDrafts: 0,
+        refinedDrafts: 0,
+        approvedDrafts: 0,
+        duplicateWarnings: 0,
+        clusterIds: new Set(),
+        draftIds: new Set()
+      });
+    }
+    return map.get(key);
+  }
+
+  function buildNotesCoverageSummary() {
+    const clusters = _notesImportPreview?.conceptClusters || [];
+    const selectedIds = new Set(_notesImportPreview?.selectedClusterIds || []);
+    const drafts = _notesImportPreview?.drafts || [];
+    const refinedDrafts = _notesImportPreview?.refinedDrafts || {};
+    const reviewStatuses = _notesImportPreview?.refinedReviewStatus || {};
+    const duplicateMap = buildRefinedDraftDuplicateWarningMap();
+    const clusterById = new Map(clusters.map(cluster => [cluster.clusterId, cluster]));
+    const draftById = new Map(drafts.map(draft => [draft.draftId, draft]));
+    const buckets = new Map();
+
+    clusters.filter(cluster => selectedIds.has(cluster.clusterId)).forEach(cluster => {
+      const bucket = getCoverageBucket(buckets, coverageSectionLabelForCluster(cluster), coverageTopicLabelForCluster(cluster));
+      bucket.selectedClusters += 1;
+      bucket.clusterIds.add(cluster.clusterId);
+    });
+
+    drafts.forEach(draft => {
+      const cluster = clusterById.get(draft.clusterId) || {};
+      const topic = cluster.clusterId ? coverageTopicLabelForCluster(cluster) : (draft.sourceConceptId || 'Untitled topic');
+      const bucket = getCoverageBucket(buckets, coverageSectionLabelForCluster(cluster), topic);
+      bucket.deterministicDrafts += 1;
+      bucket.draftIds.add(draft.draftId);
+    });
+
+    Object.entries(refinedDrafts).forEach(([draftId]) => {
+      const draft = draftById.get(draftId) || {};
+      const cluster = clusterById.get(draft.clusterId) || {};
+      const topic = cluster.clusterId ? coverageTopicLabelForCluster(cluster) : (draft.sourceConceptId || draftId || 'Untitled topic');
+      const bucket = getCoverageBucket(buckets, coverageSectionLabelForCluster(cluster), topic);
+      bucket.refinedDrafts += 1;
+      if (reviewStatuses[draftId] === 'approved') bucket.approvedDrafts += 1;
+      bucket.duplicateWarnings += duplicateMap[draftId]?.length || 0;
+      bucket.draftIds.add(draftId);
+    });
+
+    return Array.from(buckets.values()).map(bucket => Object.assign(bucket, {
+      clusterIds: Array.from(bucket.clusterIds),
+      draftIds: Array.from(bucket.draftIds)
+    })).sort((a, b) => a.sectionPath.localeCompare(b.sectionPath) || a.topic.localeCompare(b.topic));
+  }
+
+  function renderNotesCoverageFlags(bucket) {
+    const flags = [];
+    if (bucket.selectedClusters >= 3 || bucket.deterministicDrafts >= 3) flags.push('high redundancy');
+    if (bucket.selectedClusters > 0 && bucket.refinedDrafts === 0) flags.push('zero refined drafts');
+    if (bucket.duplicateWarnings >= 2) flags.push('many duplicate warnings');
+    return flags.length
+      ? `<div>${flags.map(flag => `<span class="notes-concept-warning">${escapeHTML(flag)}</span>`).join('')}</div>`
+      : '';
+  }
+
+  function renderNotesCoverageSummary() {
+    const status = document.getElementById('notes-coverage-status');
+    const preview = document.getElementById('notes-coverage-preview');
+    if (!status || !preview) return;
+    const rows = buildNotesCoverageSummary();
+    const selectedClusters = rows.reduce((sum, row) => sum + row.selectedClusters, 0);
+    const deterministicDrafts = rows.reduce((sum, row) => sum + row.deterministicDrafts, 0);
+    const refinedDrafts = rows.reduce((sum, row) => sum + row.refinedDrafts, 0);
+    const approvedDrafts = rows.reduce((sum, row) => sum + row.approvedDrafts, 0);
+    const flaggedRows = rows.filter(row =>
+      row.selectedClusters >= 3 ||
+      row.deterministicDrafts >= 3 ||
+      (row.selectedClusters > 0 && row.refinedDrafts === 0) ||
+      row.duplicateWarnings >= 2
+    ).length;
+    status.style.color = '#5a6a7a';
+    status.textContent = `${rows.length} section/topic bucket${rows.length === 1 ? '' : 's'} shown. Selected clusters: ${selectedClusters}; deterministic drafts: ${deterministicDrafts}; refined drafts: ${refinedDrafts}; approved drafts: ${approvedDrafts}; flagged buckets: ${flaggedRows}. Display only.`;
+    if (!rows.length) {
+      preview.innerHTML = '<div class="notes-import-empty">No coverage summary available.</div>';
+      return;
+    }
+    preview.innerHTML = rows.map((row, idx) => `<details class="notes-concept-card" ${idx < 6 ? 'open' : ''}>
+      <summary class="notes-concept-summary">
+        <div class="notes-concept-head">
+          <span class="notes-concept-topic">${escapeHTML(row.topic)}</span>
+          <span class="notes-concept-confidence">${row.refinedDrafts} refined</span>
+        </div>
+        <div class="notes-concept-meta">${escapeHTML(row.sectionPath)}</div>
+      </summary>
+      <div class="notes-concept-body">
+        <div>Selected clusters: ${row.selectedClusters}</div>
+        <div>Generated deterministic drafts: ${row.deterministicDrafts}</div>
+        <div>Refined drafts: ${row.refinedDrafts}</div>
+        <div>Approved drafts: ${row.approvedDrafts}</div>
+        <div>Duplicate warnings: ${row.duplicateWarnings}</div>
+        <div>Cluster IDs: ${escapeHTML(row.clusterIds.join(', ') || 'None')}</div>
+        <div>Draft IDs: ${escapeHTML(row.draftIds.join(', ') || 'None')}</div>
+        ${renderNotesCoverageFlags(row)}
+      </div>
+    </details>`).join('');
   }
 
   function sourceSnippetSentence(text) {
@@ -7992,6 +8134,7 @@ const App = (() => {
     updateApprovedDraftExportButton();
     updateApprovedDraftCreateTestButton();
     renderApprovedQuizObjectPreview();
+    renderNotesCoverageSummary();
     if (!preview) return;
     if (!drafts.length) {
       preview.innerHTML = '<div class="notes-import-empty">No question drafts generated.</div>';
