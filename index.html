@@ -1796,6 +1796,11 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
     <div id="anki-cluster-preview" class="notes-draft-preview">
       <div class="notes-import-empty">No clusters generated.</div>
     </div>
+    <div class="notes-import-section-title">Anki Variant Draft Preview</div>
+    <div id="anki-variant-status" class="notes-import-summary">Variant drafts will appear after clusters are analyzed.</div>
+    <div id="anki-variant-preview" class="notes-draft-preview">
+      <div class="notes-import-empty">No variant drafts generated.</div>
+    </div>
     <div class="modal-actions">
       <button type="button" class="btn-modal" onclick="App.clearAnkiTextImportPreview()">Clear</button>
       <button type="button" class="btn-modal primary" onclick="App.closeAnkiTextImportPreview()">Done</button>
@@ -7090,6 +7095,8 @@ const App = (() => {
     const conceptPreview = document.getElementById('anki-concept-preview');
     const clusterStatus = document.getElementById('anki-cluster-status');
     const clusterPreview = document.getElementById('anki-cluster-preview');
+    const variantStatus = document.getElementById('anki-variant-status');
+    const variantPreview = document.getElementById('anki-variant-preview');
     if (input) input.value = '';
     if (status) status.textContent = 'Choose a .txt file exported from Anki as Notes in Plain Text.';
     if (diagnostics) diagnostics.innerHTML = '<div class="notes-import-empty">No Anki text file loaded.</div>';
@@ -7098,6 +7105,8 @@ const App = (() => {
     if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concept candidates extracted.</div>';
     if (clusterStatus) clusterStatus.textContent = 'Clusters will appear after concept candidates are extracted.';
     if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No clusters generated.</div>';
+    if (variantStatus) variantStatus.textContent = 'Variant drafts will appear after clusters are analyzed.';
+    if (variantPreview) variantPreview.innerHTML = '<div class="notes-import-empty">No variant drafts generated.</div>';
   }
 
   async function previewAnkiTextExport(input) {
@@ -7109,6 +7118,8 @@ const App = (() => {
     const conceptPreview = document.getElementById('anki-concept-preview');
     const clusterStatus = document.getElementById('anki-cluster-status');
     const clusterPreview = document.getElementById('anki-cluster-preview');
+    const variantStatus = document.getElementById('anki-variant-status');
+    const variantPreview = document.getElementById('anki-variant-preview');
     if (!file) return;
 
     const lowerName = String(file.name || '').toLowerCase();
@@ -7121,6 +7132,8 @@ const App = (() => {
       if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concept candidates extracted.</div>';
       if (clusterStatus) clusterStatus.textContent = 'No clusters generated.';
       if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No clusters generated.</div>';
+      if (variantStatus) variantStatus.textContent = 'No variant drafts generated.';
+      if (variantPreview) variantPreview.innerHTML = '<div class="notes-import-empty">No variant drafts generated.</div>';
       return;
     }
 
@@ -7133,6 +7146,8 @@ const App = (() => {
       if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concept candidates extracted.</div>';
       if (clusterStatus) clusterStatus.textContent = 'No clusters generated.';
       if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No clusters generated.</div>';
+      if (variantStatus) variantStatus.textContent = 'No variant drafts generated.';
+      if (variantPreview) variantPreview.innerHTML = '<div class="notes-import-empty">No variant drafts generated.</div>';
       return;
     }
 
@@ -7141,8 +7156,10 @@ const App = (() => {
       const result = parseAnkiTextExport(text, file.name);
       const conceptResult = extractAnkiConceptCandidates(result.normalizedCards);
       const clusterResult = clusterAnkiConceptCandidates(conceptResult.candidates);
+      const variantResult = buildAnkiVariantDrafts(clusterResult);
       result.conceptResult = conceptResult;
       result.clusterResult = clusterResult;
+      result.variantResult = variantResult;
       _ankiImportPreview = result;
       if (status) {
         status.textContent = `Parsed ${result.normalizedCards.length} Anki note${result.normalizedCards.length === 1 ? '' : 's'} and extracted ${conceptResult.totalCount} concept candidate${conceptResult.totalCount === 1 ? '' : 's'} for preview only. No quiz data was saved.`;
@@ -7151,6 +7168,7 @@ const App = (() => {
       renderAnkiCardPreview(result.normalizedCards);
       renderAnkiConceptPreview(conceptResult);
       renderAnkiClusterPreview(clusterResult);
+      renderAnkiVariantPreview(variantResult);
     } catch (err) {
       _ankiImportPreview = null;
       if (status) status.textContent = `Unable to preview Anki text export: ${err?.message || 'Unknown parse error.'}`;
@@ -7160,6 +7178,8 @@ const App = (() => {
       if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concept candidates extracted.</div>';
       if (clusterStatus) clusterStatus.textContent = 'No clusters generated.';
       if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No clusters generated.</div>';
+      if (variantStatus) variantStatus.textContent = 'No variant drafts generated.';
+      if (variantPreview) variantPreview.innerHTML = '<div class="notes-import-empty">No variant drafts generated.</div>';
     }
   }
 
@@ -8171,6 +8191,363 @@ const App = (() => {
         `;
       }).join('')}
       ${clusters.length > 18 ? `<div class="notes-import-empty">Showing first 18 of ${clusters.length} clusters.</div>` : ''}
+    `;
+  }
+
+  function getAnkiClusterVariantTextBlob(cluster) {
+    return (cluster?.members || []).map(member => [
+      member.conceptText || '',
+      member.noteType || '',
+      member.deckPath?.join(' :: ') || '',
+      member.tagsExact?.join(' ') || '',
+      (member.sourceSnippets || []).map(snippet => snippet.contextSnippet || snippet.sourceSnippet || '').join(' '),
+      (member.clozeEntries || []).map(entry => `${entry.deletedText || ''} ${entry.hint || ''}`).join(' ')
+    ].join(' ')).join(' | ');
+  }
+
+  function getAnkiClusterVariantAnchorLabel(cluster) {
+    const labels = uniqueAnkiStrings((cluster?.members || []).map(member => createAnkiSourceSnippet(member.conceptText || '', 96)).filter(Boolean));
+    return labels[0] || cluster?.primaryTags?.[0] || cluster?.deckPaths?.[0] || 'Shared concept';
+  }
+
+  function getAnkiClusterVariantSiblingLabel(cluster) {
+    const labels = uniqueAnkiStrings((cluster?.members || []).map(member => createAnkiSourceSnippet(member.conceptText || '', 96)).filter(Boolean));
+    return labels[1] || cluster?.primaryTags?.[1] || '';
+  }
+
+  function isAnkiStrongVariantCluster(cluster) {
+    return !!(cluster && cluster.memberCount >= 2 && cluster.confidence === 'high' && (cluster.sharedStrongTags || []).length > 0);
+  }
+
+  function analyzeAnkiClusterManagementEvidence(cluster) {
+    const blob = normalizeAnkiSimilarityText(getAnkiClusterVariantTextBlob(cluster));
+    const patterns = [
+      /best next step\b/g,
+      /\bnext step\b/g,
+      /\binitial management\b/g,
+      /\bmanagement\b/g,
+      /\btreat(?:ment|s|ing)?\b/g,
+      /\btherapy\b/g,
+      /\bfirst line\b/g,
+      /\bhow would you manage\b/g,
+      /\bwhat is the next step\b/g,
+      /\bwhat is the best treatment\b/g
+    ];
+    const phrases = [];
+    patterns.forEach(pattern => {
+      const match = blob.match(pattern);
+      if (match && match[0]) phrases.push(match[0]);
+    });
+    const supported = phrases.some(phrase => /best next step|next step|initial management|best treatment|how would you manage/.test(phrase)) || phrases.length >= 2;
+    return { supported, phrases: uniqueAnkiStrings(phrases).slice(0, 3), evidenceScore: phrases.length };
+  }
+
+  function analyzeAnkiClusterContrastEvidence(cluster) {
+    const members = Array.isArray(cluster?.members) ? cluster.members : [];
+    const labels = uniqueAnkiStrings(members.map(member => createAnkiSourceSnippet(member.conceptText || '', 96)).filter(Boolean));
+    if (labels.length < 2 || members.length < 2) {
+      return { supported: false, phrases: [], siblingLabel: '', evidenceScore: 0 };
+    }
+
+    const blob = normalizeAnkiSimilarityText(getAnkiClusterVariantTextBlob(cluster));
+    const explicitMatches = [];
+    [
+      /\bvs\b/g,
+      /\bversus\b/g,
+      /\bdifferentiat(?:e|ion)\b/g,
+      /\bdistinguish(?:es|ed|ing)?\b/g,
+      /\bcontrast\b/g,
+      /\bcompare(?:s|d|ing)?\b/g,
+      /\bbetween\b/g
+    ].forEach(pattern => {
+      const match = blob.match(pattern);
+      if (match && match[0]) explicitMatches.push(match[0]);
+    });
+
+    let pairwiseSupport = 0;
+    for (let i = 0; i < members.length; i += 1) {
+      for (let j = i + 1; j < members.length; j += 1) {
+        const score = getAnkiTextSimilarityScore(members[i], members[j]);
+        if (score > pairwiseSupport) pairwiseSupport = score;
+      }
+    }
+
+    const supported = explicitMatches.length > 0 || ((cluster.sharedStrongTags || []).length > 0 && pairwiseSupport >= 0.25 && pairwiseSupport <= 0.85);
+    return {
+      supported,
+      phrases: uniqueAnkiStrings(explicitMatches).slice(0, 3),
+      siblingLabel: labels[1] || '',
+      evidenceScore: explicitMatches.length + (pairwiseSupport ? 1 : 0)
+    };
+  }
+
+  function deterministicAnkiChoiceIndex(seed, mod = 5) {
+    let hash = 2166136261;
+    const text = String(seed || '');
+    for (let i = 0; i < text.length; i += 1) {
+      hash ^= text.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return Math.abs(hash >>> 0) % mod;
+  }
+
+  function buildAnkiVariantChoices(variantType, cluster, support) {
+    const labels = ['A', 'B', 'C', 'D', 'E'];
+    const anchorLabel = support.anchorLabel || getAnkiClusterVariantAnchorLabel(cluster);
+    const siblingLabel = support.siblingLabel || getAnkiClusterVariantSiblingLabel(cluster);
+    const correctText = {
+      recognition: `Shared concept: ${anchorLabel}`,
+      management: `Next-step scaffold: ${support.managementLabel || anchorLabel}`,
+      differentiation: `Distinguishing scaffold: ${support.contrastLabel || anchorLabel}`
+    }[variantType] || `Shared concept: ${anchorLabel}`;
+    const correctRationale = {
+      recognition: 'Placeholder rationale: repeated exact tags and source snippets support the shared concept.',
+      management: 'Placeholder rationale: explicit management language in the source cards supports a next-step scaffold.',
+      differentiation: 'Placeholder rationale: sibling cards provide contrast evidence for a discriminating scaffold.'
+    }[variantType] || 'Placeholder rationale.';
+    const distractors = {
+      recognition: [
+        { text: 'Broader tag-only reading', rationale: 'Placeholder rationale: broad tags alone are not strong enough.' },
+        { text: siblingLabel ? `Related but unsupported reading: ${siblingLabel}` : 'Related but unsupported reading', rationale: 'Placeholder rationale: related cards still need source support.' },
+        { text: 'Deck-proximity guess', rationale: 'Placeholder rationale: deck proximity alone is weak.' },
+        { text: 'Mixed-clue decoy', rationale: 'Placeholder rationale: this does not follow the shared source signal.' }
+      ],
+      management: [
+        { text: 'Recognition-only reading', rationale: 'Placeholder rationale: this stays at concept level and ignores next-step wording.' },
+        { text: 'Broad tag guess', rationale: 'Placeholder rationale: broad tags are metadata, not facts.' },
+        { text: siblingLabel ? `Sibling-concept reading: ${siblingLabel}` : 'Sibling-concept reading', rationale: 'Placeholder rationale: sibling cards are not a management substitute.' },
+        { text: 'Unsupported action', rationale: 'Placeholder rationale: do not invent management facts.' }
+      ],
+      differentiation: [
+        { text: siblingLabel ? `Sibling concept: ${siblingLabel}` : 'Sibling concept', rationale: 'Placeholder rationale: contrast evidence should be explicit.' },
+        { text: 'Broader category reading', rationale: 'Placeholder rationale: broad categories are not discriminators.' },
+        { text: 'Tag-only guess', rationale: 'Placeholder rationale: exact tags help organize, not decide.' },
+        { text: 'Unrelated alternative', rationale: 'Placeholder rationale: unrelated decoys are not supported by the cluster.' }
+      ]
+    }[variantType] || [];
+
+    const correctIndex = deterministicAnkiChoiceIndex([cluster.id, variantType, anchorLabel, siblingLabel].join('|'), 5);
+    const pool = distractors.slice(0, 4);
+    pool.splice(correctIndex, 0, { text: correctText, rationale: correctRationale, isCorrect: true });
+    return pool.map((choice, idx) => ({
+      label: labels[idx],
+      text: choice.text,
+      rationale: choice.rationale,
+      isCorrect: !!choice.isCorrect
+    }));
+  }
+
+  function buildAnkiVariantDraft(cluster, variantType, support) {
+    const anchorLabel = support.anchorLabel || getAnkiClusterVariantAnchorLabel(cluster);
+    const siblingLabel = support.siblingLabel || getAnkiClusterVariantSiblingLabel(cluster);
+    const choices = buildAnkiVariantChoices(variantType, cluster, support);
+    const correctChoice = choices.find(choice => choice.isCorrect) || choices[0];
+    const sourceCardIds = (cluster.members || []).map(member => member.id);
+    const sourceCardOrders = (cluster.members || []).map(member => member.sourceCardOrder || member.sourceCardIndex || member.originalRow || null);
+    const tagsExact = uniqueAnkiStrings((cluster.members || []).flatMap(member => member.tagsExact || []));
+    const tagsNormalized = uniqueAnkiStrings((cluster.members || []).flatMap(member => member.tagsNormalized || []));
+    const deckPaths = uniqueAnkiStrings((cluster.members || []).map(member => member.deckPath?.length ? member.deckPath.join(' > ') : 'Not mapped'));
+    const sourceSnippets = (cluster.members || []).map(member => ({
+      sourceCardId: member.id,
+      sourceCardIndex: member.sourceCardIndex || null,
+      sourceCardOrder: member.sourceCardOrder || member.sourceCardIndex || member.originalRow || null,
+      originalRow: member.originalRow || null,
+      originalLine: member.originalLine || null,
+      clozeNumber: member.clozeNumber || null,
+      fieldIndexes: member.sourceFieldIndexes || [],
+      snippets: member.sourceSnippets || []
+    }));
+    const clozeProvenance = (cluster.members || []).flatMap(member => (member.clozeEntries || []).map(entry => ({
+      sourceCardId: member.id,
+      sourceCardIndex: member.sourceCardIndex || null,
+      sourceCardOrder: member.sourceCardOrder || member.sourceCardIndex || member.originalRow || null,
+      originalRow: member.originalRow || null,
+      originalLine: member.originalLine || null,
+      clozeNumber: entry.clozeNumber,
+      fieldIndex: entry.fieldIndex,
+      deletedText: entry.deletedText || '',
+      hint: entry.hint || '',
+      raw: entry.raw || ''
+    })));
+    const sourceCardWarnings = uniqueAnkiStrings((cluster.members || []).flatMap(member => member.warnings || []));
+    const variantWarnings = uniqueAnkiStrings([
+      ...((cluster.warnings || [])),
+      ...sourceCardWarnings,
+      'Deterministic scaffold only. Review required before any quiz use.'
+    ]);
+    return {
+      id: `anki-variant-${cluster.clusterIndex}-${variantType}`,
+      clusterId: cluster.id,
+      clusterIndex: cluster.clusterIndex,
+      variantType,
+      anchorLabel,
+      siblingLabel: siblingLabel || '',
+      stemScaffold: {
+        recognition: 'Which choice best matches the shared concept supported by the exact tags, deck path, and repeated source snippets?',
+        management: 'Which next-step scaffold is best supported by the source cards without inventing unsupported management facts?',
+        differentiation: 'Which choice best distinguishes the primary concept from the related sibling-card contrast in this cluster?'
+      }[variantType] || 'Which choice best matches the cluster scaffold?',
+      choices,
+      provisionalCorrectAnswer: correctChoice.label,
+      teachingPoint: {
+        recognition: 'Use repeated exact tags and repeated source snippets to anchor the recognition scaffold.',
+        management: 'Only generate next-step scaffolds when explicit management language is present in the source text.',
+        differentiation: 'Only generate contrast scaffolds when sibling cards provide real contrast evidence.'
+      }[variantType] || 'Deterministic scaffold only. Review required.',
+      placeholderDistractorRationales: choices.filter(choice => !choice.isCorrect).map(choice => choice.rationale),
+      sourceCardIds,
+      sourceCardOrders,
+      sourceCardCount: sourceCardIds.length,
+      tagsExact,
+      tagsNormalized,
+      deckPaths,
+      clozeProvenance,
+      sourceSnippets,
+      warnings: variantWarnings,
+      confidence: variantType === 'recognition' && cluster.confidence === 'high' ? 'medium' : 'low',
+      sourceProof: {
+        managementEvidence: variantType === 'management' ? support.managementEvidence : null,
+        contrastEvidence: variantType === 'differentiation' ? support.contrastEvidence : null
+      }
+    };
+  }
+
+  function buildAnkiVariantDrafts(clusterResult) {
+    const clusters = Array.isArray(clusterResult?.clusters) ? clusterResult.clusters : [];
+    const drafts = [];
+    const skippedClusters = [];
+
+    clusters.forEach(cluster => {
+      if (!isAnkiStrongVariantCluster(cluster)) {
+        skippedClusters.push({
+          clusterIndex: cluster.clusterIndex,
+          clusterId: cluster.id,
+          reasons: uniqueAnkiStrings([
+            cluster.memberCount < 2 ? 'Too few concepts in cluster.' : '',
+            cluster.confidence !== 'high' ? 'Cluster confidence is too low for draft generation.' : '',
+            !(cluster.sharedStrongTags || []).length ? 'No shared exact tag support.' : ''
+          ].filter(Boolean))
+        });
+        return;
+      }
+
+      const anchorLabel = getAnkiClusterVariantAnchorLabel(cluster);
+      const siblingLabel = getAnkiClusterVariantSiblingLabel(cluster);
+      const managementEvidence = analyzeAnkiClusterManagementEvidence(cluster);
+      const contrastEvidence = analyzeAnkiClusterContrastEvidence(cluster);
+      const support = {
+        anchorLabel,
+        siblingLabel,
+        managementEvidence,
+        contrastEvidence,
+        managementLabel: managementEvidence.phrases[0] || anchorLabel,
+        contrastLabel: siblingLabel || anchorLabel
+      };
+
+      drafts.push(buildAnkiVariantDraft(cluster, 'recognition', support));
+      if (managementEvidence.supported) drafts.push(buildAnkiVariantDraft(cluster, 'management', support));
+      if (contrastEvidence.supported) drafts.push(buildAnkiVariantDraft(cluster, 'differentiation', support));
+    });
+
+    const warnings = uniqueAnkiStrings([
+      ...(clusterResult?.warnings || []),
+      ...skippedClusters.flatMap(item => item.reasons || [])
+    ]);
+
+    return {
+      drafts,
+      draftCount: drafts.length,
+      strongClusterCount: clusters.filter(isAnkiStrongVariantCluster).length,
+      clusterCount: clusters.length,
+      rawConceptCount: clusterResult?.conceptCount || 0,
+      conceptsPerCluster: clusters.map(cluster => cluster.memberCount),
+      recognitionCount: drafts.filter(draft => draft.variantType === 'recognition').length,
+      managementCount: drafts.filter(draft => draft.variantType === 'management').length,
+      differentiationCount: drafts.filter(draft => draft.variantType === 'differentiation').length,
+      skippedClusters,
+      warnings
+    };
+  }
+
+  function renderAnkiVariantPreview(result) {
+    const status = document.getElementById('anki-variant-status');
+    const preview = document.getElementById('anki-variant-preview');
+    if (!status || !preview) return;
+
+    const drafts = Array.isArray(result?.drafts) ? result.drafts : [];
+    if (!drafts.length) {
+      const skippedCount = Array.isArray(result?.skippedClusters) ? result.skippedClusters.length : 0;
+      status.textContent = skippedCount
+        ? `No strong clusters met the draft guardrails. ${skippedCount} cluster${skippedCount === 1 ? '' : 's'} were skipped.`
+        : 'No variant drafts generated from the clusters.';
+      preview.innerHTML = '<div class="notes-import-empty">No variant drafts generated.</div>';
+      return;
+    }
+
+    const warningCount = Array.isArray(result?.warnings) ? result.warnings.length : 0;
+    status.textContent = `${result.draftCount} deterministic variant draft${result.draftCount === 1 ? '' : 's'} generated from ${result.strongClusterCount} strong cluster${result.strongClusterCount === 1 ? '' : 's'}. Preview only.`;
+
+    const cards = drafts.slice(0, 18).map(draft => {
+      const choiceHtml = (draft.choices || []).map(choice => `
+        <div style="border:1px solid ${choice.isCorrect ? '#7aa7d9' : '#d7e0e9'};background:${choice.isCorrect ? '#eef5fb' : '#fff'};border-radius:4px;padding:8px 10px;margin-top:6px;">
+          <div><strong>${escapeHTML(choice.label)}.</strong> ${escapeHTML(choice.text)}${choice.isCorrect ? ' <span style="color:#2f6f9f;">(provisional correct answer)</span>' : ''}</div>
+          <div class="notes-draft-meta">${escapeHTML(choice.rationale || '')}</div>
+        </div>
+      `).join('');
+      const warnings = Array.isArray(draft.warnings) ? draft.warnings : [];
+      const provenance = JSON.stringify({
+        id: draft.id,
+        clusterId: draft.clusterId,
+        clusterIndex: draft.clusterIndex,
+        variantType: draft.variantType,
+        provisionalCorrectAnswer: draft.provisionalCorrectAnswer,
+        sourceCardIds: draft.sourceCardIds,
+        sourceCardOrders: draft.sourceCardOrders,
+        tagsExact: draft.tagsExact,
+        tagsNormalized: draft.tagsNormalized,
+        deckPaths: draft.deckPaths,
+        clozeProvenance: draft.clozeProvenance,
+        sourceSnippets: draft.sourceSnippets,
+        sourceProof: draft.sourceProof
+      }, null, 2);
+      return `
+        <div class="notes-draft-card">
+          <div class="notes-draft-title">Cluster ${escapeHTML(String(draft.clusterIndex))} · ${escapeHTML(draft.variantType)} scaffold · provisional ${escapeHTML(draft.provisionalCorrectAnswer)}</div>
+          <div class="notes-draft-meta">Source cards: ${escapeHTML((draft.sourceCardIds || []).join(', ') || 'None')} · Orders: ${escapeHTML((draft.sourceCardOrders || []).map(value => String(value)).join(', ') || 'None')}</div>
+          <div class="notes-draft-meta">Tags: ${escapeHTML((draft.tagsExact || []).join(' ') || 'None')} · Deck paths: ${escapeHTML((draft.deckPaths || []).join(' | ') || 'Not mapped')}</div>
+          <div style="margin-top:8px;">${escapeHTML(draft.stemScaffold || '')}</div>
+          <div class="notes-draft-meta" style="margin-top:8px;">Teaching point: ${escapeHTML(draft.teachingPoint || '')}</div>
+          <div class="notes-draft-meta">Placeholder distractor rationales: ${escapeHTML((draft.placeholderDistractorRationales || []).join(' | ') || 'None')}</div>
+          ${warnings.length ? `<div style="color:#8a5a00;margin-top:8px;">${escapeHTML(warnings.join(' '))}</div>` : '<div class="notes-import-empty">No draft warnings.</div>'}
+          <details open>
+            <summary>Choices</summary>
+            <div class="notes-draft-body">${choiceHtml}</div>
+          </details>
+          <details>
+            <summary>Provenance</summary>
+            <pre style="white-space:pre-wrap;overflow:auto;margin-top:8px;">${escapeHTML(provenance)}</pre>
+          </details>
+        </div>
+      `;
+    }).join('');
+
+    preview.innerHTML = `
+      <div class="notes-import-stats">
+        <span><strong>Raw concepts</strong> ${escapeHTML(String(result.rawConceptCount || 0))}</span>
+        <span><strong>Cluster count</strong> ${escapeHTML(String(result.clusterCount || 0))}</span>
+        <span><strong>Concepts per cluster</strong> ${escapeHTML((result.conceptsPerCluster || []).join(', ') || 'None')}</span>
+        <span><strong>Warnings</strong> ${escapeHTML(String(warningCount || 0))}</span>
+      </div>
+      <div class="notes-import-stats" style="margin-top:8px;">
+        <span><strong>Strong clusters used</strong> ${escapeHTML(String(result.strongClusterCount || 0))}</span>
+        <span><strong>Draft variants</strong> ${escapeHTML(String(result.draftCount || 0))}</span>
+        <span><strong>Recognition</strong> ${escapeHTML(String(result.recognitionCount || 0))}</span>
+        <span><strong>Management</strong> ${escapeHTML(String(result.managementCount || 0))}</span>
+        <span><strong>Differentiation</strong> ${escapeHTML(String(result.differentiationCount || 0))}</span>
+        <span><strong>Skipped clusters</strong> ${escapeHTML(String((result.skippedClusters || []).length))}</span>
+      </div>
+      ${cards}
+      ${drafts.length > 18 ? `<div class="notes-import-empty">Showing first 18 of ${drafts.length} variant drafts.</div>` : ''}
     `;
   }
 
