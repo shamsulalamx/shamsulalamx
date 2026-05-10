@@ -1832,6 +1832,27 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
   </div>
 </div>
 
+<!-- ═══ OME PDF IMPORT PREVIEW MODAL ═══ -->
+<div id="modal-ome-import" class="modal-overlay">
+  <div class="modal-box" style="max-width:780px;">
+    <h3>OME PDF Structure Preview</h3>
+    <p>This preview accepts a single OME PDF and uses PDF.js text extraction only. It does not use OCR, generate questions, save quizzes, or modify stored data.</p>
+    <div class="form-group">
+      <label class="form-label">OME PDF</label>
+      <input type="file" class="form-input" id="ome-pdf-input" accept=".pdf" onchange="App.previewOmePdfImport(this)">
+    </div>
+    <div id="ome-import-status" class="notes-import-summary">Choose one .pdf file from the OME source folder.</div>
+    <div class="notes-import-section-title">OME Structure Preview</div>
+    <div id="ome-structure-preview" class="notes-draft-preview">
+      <div class="notes-import-empty">No OME structure preview loaded.</div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn-modal" onclick="App.clearOmePdfImportPreview()">Clear</button>
+      <button type="button" class="btn-modal primary" onclick="App.closeOmePdfImportPreview()">Done</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ NEW FOLDER MODAL ═══ -->
 <div id="modal-new-folder" class="modal-overlay">
   <div class="modal-box" style="max-width:380px;">
@@ -1903,7 +1924,7 @@ const DB = (() => {
     { id: 'src-nbme', name: 'NBME', order: 0, sourceType: 'nbme', workflows: ['pdf-test-import'] },
     { id: 'src-uworld', name: 'UWorld', order: 1, sourceType: 'uworld-notes', workflows: ['docx-notes-preview'] },
     { id: 'src-anki', name: 'Anki', order: 2, sourceType: 'anki', workflows: ['anki-text-preview'] },
-    { id: 'src-ome', name: 'OME', order: 3, sourceType: 'ome', workflows: [] },
+    { id: 'src-ome', name: 'OME', order: 3, sourceType: 'ome', workflows: ['ome-pdf-preview'] },
     { id: 'src-divine-podcasts', name: 'Divine Podcasts', order: 4, sourceType: 'divine', workflows: [] },
     { id: 'src-mehlman', name: 'Mehlman', order: 5, sourceType: 'mehlman', workflows: [] },
     { id: 'src-images-and-tables', name: 'Images and Tables', order: 6, sourceType: 'images-tables', workflows: [] },
@@ -1948,7 +1969,7 @@ const DB = (() => {
         if (existing.order == null) existing.order = src.order;
         if (!existing.sourceType) existing.sourceType = src.sourceType;
         if (!Array.isArray(existing.workflows)) existing.workflows = src.workflows.slice();
-        if (src.id === 'src-anki') {
+        if (src.id === 'src-anki' || src.id === 'src-ome') {
           src.workflows.forEach(workflow => {
             if (!existing.workflows.includes(workflow)) existing.workflows.push(workflow);
           });
@@ -6296,10 +6317,11 @@ const App = (() => {
   let _ocrIssues = [];
   let _ocrIssueIdx = 0;
 	  let _ocrUndoStack = [];
-	  let _noteSelection = null;
-	  let _noteHighlightSeq = 0;
+  let _noteSelection = null;
+  let _noteHighlightSeq = 0;
   let _notesImportPreview = null;
   let _ankiImportPreview = null;
+  let _omeImportPreview = null;
   const _notesRefinePending = new Set();
   const _notesBatchRefinementCache = new Map();
   let _notesBatchRunTimer = null;
@@ -6481,6 +6503,7 @@ const App = (() => {
     if (workflows.includes('pdf-test-import')) return 'pdf-test-import';
     if (workflows.includes('docx-notes-preview')) return 'docx-notes-preview';
     if (workflows.includes('anki-text-preview')) return 'anki-text-preview';
+    if (workflows.includes('ome-pdf-preview')) return 'ome-pdf-preview';
     return null;
   }
 
@@ -6489,6 +6512,7 @@ const App = (() => {
     if (workflow === 'pdf-test-import') return '＋ Generate Test';
     if (workflow === 'docx-notes-preview') return 'Import DOCX Preview';
     if (workflow === 'anki-text-preview') return 'Import Anki Text Preview';
+    if (workflow === 'ome-pdf-preview') return 'Import OME PDF Preview';
     return '';
   }
 
@@ -6496,6 +6520,7 @@ const App = (() => {
     const workflow = getSourceWorkflow(sourceId);
     if (workflow === 'docx-notes-preview') return 'Use DOCX notes import preview from this library.';
     if (workflow === 'anki-text-preview') return 'Use Anki plain-text import preview from this library.';
+    if (workflow === 'ome-pdf-preview') return 'Use OME PDF structure preview from this library.';
     if (workflow === 'pdf-test-import') return 'No tests in this folder yet.';
     return 'No import workflow is available for this library yet.';
   }
@@ -6508,6 +6533,10 @@ const App = (() => {
     }
     if (workflow === 'anki-text-preview') {
       openAnkiTextImportPreview();
+      return;
+    }
+    if (workflow === 'ome-pdf-preview') {
+      openOmePdfImportPreview();
       return;
     }
     if (workflow === 'pdf-test-import') {
@@ -7097,6 +7126,442 @@ const App = (() => {
     DB.deleteNote(id);
     showNotes();
     toast('Note deleted.');
+  }
+
+  function openOmePdfImportPreview() {
+    const modal = document.getElementById('modal-ome-import');
+    if (modal) modal.style.display = 'flex';
+    updateOmeStructurePreview();
+  }
+
+  function closeOmePdfImportPreview() {
+    const modal = document.getElementById('modal-ome-import');
+    if (modal) modal.style.display = 'none';
+  }
+
+  function clearOmePdfImportPreview() {
+    _omeImportPreview = null;
+    const input = document.getElementById('ome-pdf-input');
+    const status = document.getElementById('ome-import-status');
+    const preview = document.getElementById('ome-structure-preview');
+    if (input) input.value = '';
+    if (status) status.textContent = 'Choose one .pdf file from the OME source folder.';
+    if (preview) preview.innerHTML = '<div class="notes-import-empty">No OME structure preview loaded.</div>';
+  }
+
+  function updateOmeStructurePreview() {
+    renderOmeStructurePreview(_omeImportPreview);
+  }
+
+  function uniqueOmeStrings(values) {
+    const seen = new Set();
+    const out = [];
+    (Array.isArray(values) ? values : []).forEach(value => {
+      const text = String(value || '').trim();
+      if (!text || seen.has(text)) return;
+      seen.add(text);
+      out.push(text);
+    });
+    return out;
+  }
+
+  function normalizeOmeText(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function createOmeSourceSnippet(value, maxLength = 180) {
+    const text = normalizeOmeText(value);
+    if (!text) return '';
+    if (text.length <= maxLength) return text;
+    return `${text.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+  }
+
+  function getOmeItemMetrics(item) {
+    const transform = Array.isArray(item?.transform) ? item.transform : [];
+    return {
+      x: Number(transform[4] || 0),
+      y: Number(transform[5] || 0),
+      fontSize: Math.abs(Number(transform[3] || item?.height || 0)) || Number(item?.height || 0) || 0
+    };
+  }
+
+  function groupOmeTextItemsIntoLines(items) {
+    const lines = [];
+    let current = null;
+    const yTolerance = 2.4;
+
+    const pushCurrent = () => {
+      if (!current) return;
+      const textRaw = current.textParts.join(' ').replace(/\s+/g, ' ').trim();
+      const textNormalized = normalizeOmeText(textRaw);
+      lines.push({
+        items: current.items.slice(),
+        textRaw,
+        textNormalized,
+        xMin: current.xMin,
+        xMax: current.xMax,
+        y: current.y,
+        maxFontSize: current.maxFontSize,
+        itemCount: current.items.length
+      });
+      current = null;
+    };
+
+    (Array.isArray(items) ? items : []).forEach(item => {
+      const text = normalizeOmeText(item?.str);
+      if (!text) return;
+      const metrics = getOmeItemMetrics(item);
+      if (!current) {
+        current = {
+          items: [item],
+          textParts: [text],
+          xMin: metrics.x,
+          xMax: metrics.x,
+          y: metrics.y,
+          maxFontSize: metrics.fontSize
+        };
+        return;
+      }
+      if (Math.abs(metrics.y - current.y) <= yTolerance) {
+        current.items.push(item);
+        current.textParts.push(text);
+        current.xMin = Math.min(current.xMin, metrics.x);
+        current.xMax = Math.max(current.xMax, metrics.x);
+        current.maxFontSize = Math.max(current.maxFontSize, metrics.fontSize);
+        current.y = (current.y * (current.items.length - 1) + metrics.y) / current.items.length;
+        return;
+      }
+      pushCurrent();
+      current = {
+        items: [item],
+        textParts: [text],
+        xMin: metrics.x,
+        xMax: metrics.x,
+        y: metrics.y,
+        maxFontSize: metrics.fontSize
+      };
+    });
+
+    pushCurrent();
+    return lines;
+  }
+
+  function isOmeHeadingLine(text, line, pageMedianFontSize) {
+    const normalized = normalizeOmeText(text);
+    if (!normalized) return false;
+    const wordCount = normalized.split(/\s+/).filter(Boolean).length;
+    const shortEnough = normalized.length <= 90 && wordCount <= 12;
+    const noTerminalPunctuation = !/[.?!:]$/.test(normalized);
+    const numbered = /^\d+(?:\.\d+)*\s+\S/.test(normalized);
+    const allCaps = /[A-Z]/.test(normalized) && normalized === normalized.toUpperCase();
+    const titleCase = /^[A-Z0-9][A-Za-z0-9 ,:/()'’\-]+$/.test(normalized);
+    const fontBoost = pageMedianFontSize > 0 && (line?.maxFontSize || 0) >= pageMedianFontSize * 1.15;
+    return shortEnough && noTerminalPunctuation && (numbered || allCaps || titleCase || fontBoost);
+  }
+
+  function detectOmeHeadingLevel(text) {
+    const normalized = normalizeOmeText(text);
+    const match = normalized.match(/^(\d+(?:\.\d+)*)\s+/);
+    if (match) {
+      return Math.min(4, match[1].split('.').length);
+    }
+    return 1;
+  }
+
+  function updateOmeHeadingStack(stack, headingText, level) {
+    const normalized = normalizeOmeText(headingText).replace(/[:\s]+$/g, '');
+    const next = Array.isArray(stack) ? stack.slice(0, Math.max(0, level - 1)) : [];
+    next[level - 1] = normalized;
+    return next.filter(Boolean);
+  }
+
+  function detectOmeBlockType(text, line, pageMedianFontSize) {
+    const normalized = normalizeOmeText(text);
+    if (!normalized) return 'paragraph';
+    if (/^(?:figure|fig\.?|diagram|flowchart|illustration)\b/i.test(normalized)) return 'diagramRef';
+    if (/^(?:table|chart|exhibit)\b/i.test(normalized) || /\s\|\s/.test(normalized) || /\t/.test(text)) return 'tableOrChartRef';
+    if (/^(?:algorithm\b|step\s*\d+[:.)-]?|(?:\d+|[ivxlcdm]+)[.)]\s+(?:assess|obtain|give|start|stop|treat|manage|monitor|consider|if|when|then|perform|repeat|order|replace|evaluate)\b)/i.test(normalized)) {
+      return 'algorithmStep';
+    }
+    if (isOmeHeadingLine(normalized, line, pageMedianFontSize)) return 'heading';
+    if (/^(?:[-•*]|\d+[.)]|[a-zA-Z][.)])\s+/.test(normalized)) return 'listItem';
+    return 'paragraph';
+  }
+
+  function getMedianOmeFontSize(lines) {
+    const sizes = (Array.isArray(lines) ? lines : [])
+      .map(line => Number(line.maxFontSize || 0))
+      .filter(size => Number.isFinite(size) && size > 0)
+      .sort((a, b) => a - b);
+    if (!sizes.length) return 0;
+    const mid = Math.floor(sizes.length / 2);
+    return sizes.length % 2 ? sizes[mid] : (sizes[mid - 1] + sizes[mid]) / 2;
+  }
+
+  function getOmeColumnWarnings(lines, pageNumber) {
+    const warnings = [];
+    const xStarts = (Array.isArray(lines) ? lines : [])
+      .map(line => Number(line.xMin || 0))
+      .filter(x => Number.isFinite(x))
+      .sort((a, b) => a - b);
+    if (xStarts.length < 4) return warnings;
+    const bands = [];
+    const mergeThreshold = 96;
+    xStarts.forEach(x => {
+      const band = bands.find(entry => Math.abs(entry.center - x) <= mergeThreshold);
+      if (band) {
+        band.count += 1;
+        band.center = (band.center * (band.count - 1) + x) / band.count;
+      } else {
+        bands.push({ center: x, count: 1 });
+      }
+    });
+    const strongBands = bands.filter(entry => entry.count >= 3);
+    if (strongBands.length >= 2) {
+      const [left, right] = strongBands.slice().sort((a, b) => a.center - b.center);
+      if (Math.abs(right.center - left.center) >= 140) {
+        warnings.push(`Page ${pageNumber}: possible multi-column layout; block order may be ambiguous.`);
+      }
+    }
+    return warnings;
+  }
+
+  function buildOmePageStructure({ pageNumber, textContent, sourceName, sourceHash, headingStack, orderStart }) {
+    const items = Array.isArray(textContent?.items)
+      ? textContent.items.filter(item => normalizeOmeText(item?.str))
+      : [];
+    const lines = groupOmeTextItemsIntoLines(items);
+    const pageWarnings = [];
+    const pageTextChars = lines.reduce((sum, line) => sum + (line.textNormalized?.length || 0), 0);
+    if (!items.length) {
+      pageWarnings.push(`Page ${pageNumber}: no text layer items detected. This page may be image-only or OCR-heavy.`);
+    } else if (pageTextChars < 80) {
+      pageWarnings.push(`Page ${pageNumber}: sparse text layer. This page may be image-only or OCR-heavy.`);
+    }
+    pageWarnings.push(...getOmeColumnWarnings(lines, pageNumber));
+
+    const pageMedianFontSize = getMedianOmeFontSize(lines);
+    const blocks = [];
+    let nextHeadingStack = Array.isArray(headingStack) ? headingStack.slice() : [];
+
+    lines.forEach((line, lineIdx) => {
+      const blockType = detectOmeBlockType(line.textNormalized, line, pageMedianFontSize);
+      const blockWarnings = [];
+      let sectionPath = nextHeadingStack.slice();
+
+      if (blockType === 'heading') {
+        const headingLevel = detectOmeHeadingLevel(line.textNormalized);
+        nextHeadingStack = updateOmeHeadingStack(nextHeadingStack, line.textNormalized, headingLevel);
+        sectionPath = nextHeadingStack.slice();
+        if (!pageMedianFontSize || line.maxFontSize < pageMedianFontSize * 1.05) {
+          blockWarnings.push('Heading detected heuristically from text shape.');
+        }
+      } else if (blockType === 'algorithmStep' && !/^(?:algorithm|step|if|when|then)/i.test(line.textNormalized)) {
+        blockWarnings.push('Algorithm step detected heuristically from numbered or instructional text.');
+      }
+
+      const warnings = uniqueOmeStrings([
+        ...blockWarnings,
+        ...pageWarnings.filter(warning => /column|sparse text layer|image-only|OCR-heavy/i.test(warning))
+      ]);
+      const confidence = warnings.length ? 'low' : (blockType === 'paragraph' ? 'high' : 'medium');
+      const blockOrder = orderStart + blocks.length + 1;
+      blocks.push({
+        sourceType: 'ome',
+        sourceName,
+        sourceHash,
+        pageNumber,
+        blockId: `ome-block-${pageNumber}-${lineIdx + 1}`,
+        blockType,
+        order: blockOrder,
+        pageOrder: lineIdx + 1,
+        textRaw: line.textRaw,
+        textNormalized: line.textNormalized,
+        sourceSnippet: createOmeSourceSnippet(line.textNormalized),
+        sectionPath,
+        confidence,
+        warnings
+      });
+    });
+
+    const headings = blocks.filter(block => block.blockType === 'heading').map(block => block.textNormalized);
+    return {
+      pageNumber,
+      pageBlockCount: blocks.length,
+      lineCount: lines.length,
+      textItemCount: items.length,
+      warnings: uniqueOmeStrings(pageWarnings),
+      headings,
+      blocks,
+      headingStack: nextHeadingStack
+    };
+  }
+
+  async function extractOmePdfStructure(file) {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const sourceHash = await sha256Hex(bytes);
+    const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+    const pages = [];
+    const blocks = [];
+    const allWarnings = [];
+    const allHeadings = [];
+    let headingStack = [];
+    let order = 0;
+
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const textContent = await page.getTextContent({ normalizeWhitespace: false, disableCombineTextItems: false });
+      const pageResult = buildOmePageStructure({
+        pageNumber,
+        textContent,
+        sourceName: file.name,
+        sourceHash,
+        headingStack,
+        orderStart: order
+      });
+      headingStack = pageResult.headingStack;
+      order += pageResult.pageBlockCount;
+      pages.push({
+        pageNumber: pageResult.pageNumber,
+        blockCount: pageResult.pageBlockCount,
+        lineCount: pageResult.lineCount,
+        textItemCount: pageResult.textItemCount,
+        headings: pageResult.headings,
+        warnings: pageResult.warnings,
+        blocks: pageResult.blocks
+      });
+      blocks.push(...pageResult.blocks);
+      allWarnings.push(...pageResult.warnings);
+      allHeadings.push(...pageResult.headings);
+    }
+
+    const warnings = uniqueOmeStrings([
+      ...allWarnings,
+      ...(blocks.length ? [] : ['No text blocks were extracted from the PDF.'])
+    ]);
+
+    return {
+      sourceType: 'ome',
+      sourceName: file.name,
+      sourceHash,
+      pageCount: pdf.numPages,
+      blockCount: blocks.length,
+      warningCount: warnings.length,
+      pages,
+      blocks,
+      headings: uniqueOmeStrings(allHeadings),
+      warnings
+    };
+  }
+
+  async function previewOmePdfImport(input) {
+    const file = input?.files?.[0];
+    const status = document.getElementById('ome-import-status');
+    const preview = document.getElementById('ome-structure-preview');
+    if (!file) return;
+
+    const lowerName = String(file.name || '').toLowerCase();
+    if (!lowerName.endsWith('.pdf')) {
+      _omeImportPreview = null;
+      if (status) status.textContent = 'Unsupported file type. Choose one .pdf file from the OME source folder.';
+      if (preview) preview.innerHTML = '<div class="notes-import-empty">Only .pdf files are accepted.</div>';
+      return;
+    }
+
+    if (status) status.textContent = 'Reading OME PDF structure with PDF.js...';
+    if (preview) preview.innerHTML = '<div class="notes-import-empty">Extracting page-ordered text blocks...</div>';
+
+    try {
+      const structure = await extractOmePdfStructure(file);
+      _omeImportPreview = structure;
+      if (status) {
+        status.textContent = structure.warningCount
+          ? `Parsed ${structure.pageCount} page${structure.pageCount === 1 ? '' : 's'} and extracted ${structure.blockCount} block${structure.blockCount === 1 ? '' : 's'} with ${structure.warningCount} warning${structure.warningCount === 1 ? '' : 's'}.`
+          : `Parsed ${structure.pageCount} page${structure.pageCount === 1 ? '' : 's'} and extracted ${structure.blockCount} block${structure.blockCount === 1 ? '' : 's'} from the OME PDF preview.`;
+      }
+      renderOmeStructurePreview(structure);
+    } catch (err) {
+      _omeImportPreview = null;
+      if (status) status.textContent = `Unable to preview OME PDF: ${err?.message || 'Unknown parse error.'}`;
+      if (preview) preview.innerHTML = '<div class="notes-import-empty">No OME structure preview loaded.</div>';
+    }
+  }
+
+  function renderOmeStructurePreview(result) {
+    const preview = document.getElementById('ome-structure-preview');
+    if (!preview) return;
+
+    const pages = Array.isArray(result?.pages) ? result.pages : [];
+    const blocks = Array.isArray(result?.blocks) ? result.blocks : [];
+    const warnings = Array.isArray(result?.warnings) ? result.warnings : [];
+    const headings = Array.isArray(result?.headings) ? result.headings : [];
+
+    if (!pages.length) {
+      preview.innerHTML = warnings.length
+        ? `<div class="notes-draft-card"><div class="notes-draft-title">Preview warnings</div><div class="notes-draft-meta">${escapeHTML(warnings.join(' '))}</div></div>`
+        : '<div class="notes-import-empty">No OME structure preview loaded.</div>';
+      return;
+    }
+
+    const summary = `
+      <div class="notes-import-stats">
+        <span><strong>Pages</strong> ${escapeHTML(String(result.pageCount || 0))}</span>
+        <span><strong>Blocks</strong> ${escapeHTML(String(result.blockCount || 0))}</span>
+        <span><strong>Warnings</strong> ${escapeHTML(String(result.warningCount || 0))}</span>
+      </div>
+      <div class="notes-import-stats" style="margin-top:8px;">
+        <span><strong>Source</strong> ${escapeHTML(String(result.sourceName || ''))}</span>
+        <span><strong>Detected headings</strong> ${escapeHTML(String(headings.length || 0))}</span>
+        <span><strong>Source hash</strong> ${escapeHTML(String(result.sourceHash || ''))}</span>
+      </div>
+    `;
+
+    const headingPreview = headings.length
+      ? `<div class="notes-draft-card" style="margin-top:10px;"><div class="notes-draft-title">Detected Headings</div><div class="notes-draft-meta">${headings.slice(0, 12).map(heading => escapeHTML(heading)).join(' · ')}</div></div>`
+      : '<div class="notes-import-empty">No headings detected yet.</div>';
+
+    const warningPreview = warnings.length
+      ? `<div class="notes-draft-card" style="margin-top:10px;"><div class="notes-draft-title">Layout Ambiguity Warnings</div><div class="notes-draft-meta">${warnings.map(warning => escapeHTML(warning)).join('<br>')}</div></div>`
+      : '<div class="notes-import-empty">No layout ambiguity warnings.</div>';
+
+    const pageCards = pages.map(page => {
+      const pageWarnings = Array.isArray(page.warnings) ? page.warnings : [];
+      const pageHeadings = Array.isArray(page.headings) ? page.headings : [];
+      const pageBlocks = Array.isArray(page.blocks) ? page.blocks : [];
+      const pageBlockHtml = pageBlocks.map(block => {
+        const sectionPath = Array.isArray(block.sectionPath) && block.sectionPath.length ? block.sectionPath.join(' > ') : 'None';
+        const blockWarnings = Array.isArray(block.warnings) ? block.warnings : [];
+        return `
+          <details class="notes-draft-card" style="margin-top:8px;">
+            <summary class="notes-draft-summary">
+              <div class="notes-draft-title">${escapeHTML(block.blockId)} · ${escapeHTML(block.blockType)} · ${escapeHTML(block.confidence)}</div>
+              <div class="notes-draft-meta">Order ${escapeHTML(String(block.order || 0))} · Page ${escapeHTML(String(block.pageNumber || page.pageNumber || 0))}</div>
+            </summary>
+            <div class="notes-draft-body">
+              <div class="notes-draft-meta"><strong>Section path:</strong> ${escapeHTML(sectionPath)}</div>
+              ${blockWarnings.length ? `<div style="color:#8a5a00;margin-top:8px;">${blockWarnings.map(warning => escapeHTML(warning)).join('<br>')}</div>` : '<div class="notes-import-empty">No block warnings.</div>'}
+              <div style="margin-top:8px;"><strong>Snippet:</strong></div>
+              <div style="white-space:pre-wrap;">${escapeHTML(block.sourceSnippet || block.textNormalized || '')}</div>
+            </div>
+          </details>
+        `;
+      }).join('');
+      return `
+        <details class="notes-draft-card" ${page.pageNumber === 1 ? 'open' : ''} style="margin-top:10px;">
+          <summary class="notes-draft-summary">
+            <div class="notes-draft-title">Page ${escapeHTML(String(page.pageNumber))}</div>
+            <div class="notes-draft-meta">${escapeHTML(String(page.blockCount || 0))} blocks · ${escapeHTML(String(page.textItemCount || 0))} text items · ${escapeHTML(String((page.warnings || []).length || 0))} warnings</div>
+          </summary>
+          <div class="notes-draft-body">
+            ${pageHeadings.length ? `<div class="notes-draft-meta"><strong>Headings:</strong> ${pageHeadings.map(heading => escapeHTML(heading)).join(' · ')}</div>` : '<div class="notes-import-empty">No headings detected on this page.</div>'}
+            ${pageWarnings.length ? `<div style="color:#8a5a00;margin-top:8px;">${pageWarnings.map(warning => escapeHTML(warning)).join('<br>')}</div>` : '<div class="notes-import-empty">No page layout warnings.</div>'}
+            ${pageBlockHtml || '<div class="notes-import-empty">No blocks extracted on this page.</div>'}
+          </div>
+        </details>
+      `;
+    }).join('');
+
+    preview.innerHTML = `${summary}${headingPreview}${warningPreview}${pageCards}`;
   }
 
   function openAnkiTextImportPreview() {
@@ -12735,6 +13200,10 @@ const App = (() => {
     createTestFromApprovedRefinedDrafts,
     updateApprovedDraftCreateTestButton,
     deleteNote,
+    openOmePdfImportPreview,
+    closeOmePdfImportPreview,
+    clearOmePdfImportPreview,
+    previewOmePdfImport,
     downloadNotesDocx,
     downloadNotesPdf,
     toggleMarkedFolder,
