@@ -1786,6 +1786,11 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
     <div id="anki-card-preview" class="notes-draft-preview">
       <div class="notes-import-empty">No normalized cards available.</div>
     </div>
+    <div class="notes-import-section-title">Anki Concept Preview</div>
+    <div id="anki-concept-status" class="notes-import-summary">Concept candidates will appear after parsing.</div>
+    <div id="anki-concept-preview" class="notes-draft-preview">
+      <div class="notes-import-empty">No concept candidates extracted.</div>
+    </div>
     <div class="modal-actions">
       <button type="button" class="btn-modal" onclick="App.clearAnkiTextImportPreview()">Clear</button>
       <button type="button" class="btn-modal primary" onclick="App.closeAnkiTextImportPreview()">Done</button>
@@ -7076,10 +7081,14 @@ const App = (() => {
     const status = document.getElementById('anki-import-status');
     const diagnostics = document.getElementById('anki-import-diagnostics');
     const preview = document.getElementById('anki-card-preview');
+    const conceptStatus = document.getElementById('anki-concept-status');
+    const conceptPreview = document.getElementById('anki-concept-preview');
     if (input) input.value = '';
     if (status) status.textContent = 'Choose a .txt file exported from Anki as Notes in Plain Text.';
     if (diagnostics) diagnostics.innerHTML = '<div class="notes-import-empty">No Anki text file loaded.</div>';
     if (preview) preview.innerHTML = '<div class="notes-import-empty">No normalized cards available.</div>';
+    if (conceptStatus) conceptStatus.textContent = 'Concept candidates will appear after parsing.';
+    if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concept candidates extracted.</div>';
   }
 
   async function previewAnkiTextExport(input) {
@@ -7087,6 +7096,8 @@ const App = (() => {
     const status = document.getElementById('anki-import-status');
     const diagnostics = document.getElementById('anki-import-diagnostics');
     const preview = document.getElementById('anki-card-preview');
+    const conceptStatus = document.getElementById('anki-concept-status');
+    const conceptPreview = document.getElementById('anki-concept-preview');
     if (!file) return;
 
     const lowerName = String(file.name || '').toLowerCase();
@@ -7095,6 +7106,8 @@ const App = (() => {
       if (status) status.textContent = 'Unsupported .apkg file. Export Notes in Plain Text first.';
       if (diagnostics) diagnostics.innerHTML = '<div class="notes-import-empty">.apkg import is not enabled in this preview.</div>';
       if (preview) preview.innerHTML = '<div class="notes-import-empty">No normalized cards available.</div>';
+      if (conceptStatus) conceptStatus.textContent = 'No concept candidates extracted.';
+      if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concept candidates extracted.</div>';
       return;
     }
 
@@ -7103,23 +7116,30 @@ const App = (() => {
       if (status) status.textContent = 'Unsupported file type. Choose a .txt export from Anki Notes in Plain Text.';
       if (diagnostics) diagnostics.innerHTML = '<div class="notes-import-empty">Only .txt files are accepted.</div>';
       if (preview) preview.innerHTML = '<div class="notes-import-empty">No normalized cards available.</div>';
+      if (conceptStatus) conceptStatus.textContent = 'No concept candidates extracted.';
+      if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concept candidates extracted.</div>';
       return;
     }
 
     try {
       const text = await file.text();
       const result = parseAnkiTextExport(text, file.name);
+      const conceptResult = extractAnkiConceptCandidates(result.normalizedCards);
+      result.conceptResult = conceptResult;
       _ankiImportPreview = result;
       if (status) {
-        status.textContent = `Parsed ${result.normalizedCards.length} Anki note${result.normalizedCards.length === 1 ? '' : 's'} for preview only. No quiz data was saved.`;
+        status.textContent = `Parsed ${result.normalizedCards.length} Anki note${result.normalizedCards.length === 1 ? '' : 's'} and extracted ${conceptResult.totalCount} concept candidate${conceptResult.totalCount === 1 ? '' : 's'} for preview only. No quiz data was saved.`;
       }
       renderAnkiImportDiagnostics(result);
       renderAnkiCardPreview(result.normalizedCards);
+      renderAnkiConceptPreview(conceptResult);
     } catch (err) {
       _ankiImportPreview = null;
       if (status) status.textContent = `Unable to preview Anki text export: ${err?.message || 'Unknown parse error.'}`;
       if (diagnostics) diagnostics.innerHTML = '<div class="notes-import-empty">Parse failed before diagnostics could be generated.</div>';
       if (preview) preview.innerHTML = '<div class="notes-import-empty">No normalized cards available.</div>';
+      if (conceptStatus) conceptStatus.textContent = 'No concept candidates extracted.';
+      if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concept candidates extracted.</div>';
     }
   }
 
@@ -7336,7 +7356,7 @@ const App = (() => {
         ...headerTags,
         ...splitAnkiTags(meta.columnMap.tags !== null ? rawFields[meta.columnMap.tags] : '')
       ];
-      const dedupedExactTags = Array.from(new Set(exactTags));
+      const exactTagsPreserved = exactTags.filter(Boolean);
       const tagsRaw = meta.columnMap.tags !== null ? String(rawFields[meta.columnMap.tags] || '') : '';
       const deckRaw = meta.columnMap.deck !== null ? String(rawFields[meta.columnMap.deck] || '').trim() : '';
       const noteTypeRaw = meta.columnMap.noteType !== null ? String(rawFields[meta.columnMap.noteType] || '').trim() : '';
@@ -7350,14 +7370,17 @@ const App = (() => {
 
       return {
         id: `anki-card-${idx + 1}`,
+        sourceCardIndex: idx + 1,
+        sourceCardOrder: idx + 1,
         originalRow: row.originalRow,
         originalLine: row.originalLine,
         rawFields,
         cleanedFields,
         noteFields,
+        noteFieldIndexes,
         tagsRaw,
-        tagsExact: dedupedExactTags,
-        tagsNormalized: dedupedExactTags.map(normalizeAnkiTag).filter(Boolean),
+        tagsExact: exactTagsPreserved,
+        tagsNormalized: exactTagsPreserved.map(normalizeAnkiTag).filter(Boolean),
         deckPath: deckRaw ? deckRaw.split('::').map(part => part.trim()).filter(Boolean) : [],
         deckRaw,
         noteType: noteTypeRaw || inferredNoteType,
@@ -7395,6 +7418,11 @@ const App = (() => {
     return String(tag || '').trim().toLowerCase();
   }
 
+  function isBroadAnkiTag(tag) {
+    const normalized = normalizeAnkiTag(tag).replace(/[\s_-]+/g, '');
+    return ['step1', 'step2', 'medicine', 'uworld', 'anki', 'general', 'misc', 'review', 'highyield', 'hy'].includes(normalized);
+  }
+
   function extractAnkiClozes(text) {
     const clozes = [];
     const pattern = /\{\{c(\d+)::([\s\S]*?)(?:::([\s\S]*?))?\}\}/g;
@@ -7408,6 +7436,183 @@ const App = (() => {
       });
     }
     return clozes;
+  }
+
+  function createAnkiSourceSnippet(value, maxLength = 180) {
+    const text = String(value || '').replace(/\r/g, '').replace(/\s+/g, ' ').trim();
+    if (!text) return '';
+    if (text.length <= maxLength) return text;
+    return `${text.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+  }
+
+  function buildAnkiClozeContextSnippet(fieldText, clozeEntries) {
+    const entries = Array.isArray(clozeEntries) ? clozeEntries : [clozeEntries];
+    let snippet = String(fieldText || '');
+    entries.forEach(entry => {
+      if (!entry?.raw) return;
+      const replacement = entry.deletedText ? `[[${entry.deletedText}]]` : '[...]';
+      snippet = snippet.replace(entry.raw, replacement);
+    });
+    return createAnkiSourceSnippet(snippet);
+  }
+
+  function hasAnkiHtmlLeftovers(value) {
+    const text = String(value || '');
+    return /<\/?[a-z][^>]*>/i.test(text) || /&(?:nbsp|amp|lt|gt|quot|#\d+);/i.test(text);
+  }
+
+  function uniqueAnkiStrings(values) {
+    const seen = new Set();
+    const out = [];
+    values.forEach(value => {
+      const text = String(value || '').trim();
+      if (!text || seen.has(text)) return;
+      seen.add(text);
+      out.push(text);
+    });
+    return out;
+  }
+
+  function collectAnkiCardWarnings(card) {
+    const warnings = [];
+    const hasDeck = !!(card?.deckRaw || (card?.deckPath || []).length);
+    const hasTags = Array.isArray(card?.tagsExact) && card.tagsExact.length > 0;
+    if (!hasDeck) warnings.push('Missing deck hierarchy.');
+    if (!hasTags) warnings.push('Missing exact tags.');
+    else if (card.tagsExact.every(tag => isBroadAnkiTag(tag))) warnings.push('Only broad tags found; not treated as a strong signal.');
+    if ((card.noteFields || []).some(hasAnkiHtmlLeftovers) || (card.cleanedFields || []).some(hasAnkiHtmlLeftovers)) {
+      warnings.push('Noisy HTML leftovers detected in source text.');
+    }
+    return uniqueAnkiStrings(warnings);
+  }
+
+  function extractAnkiConceptCandidates(cards) {
+    const candidates = [];
+    const sourceCards = Array.isArray(cards) ? cards : [];
+
+    sourceCards.forEach(card => {
+      const baseWarnings = collectAnkiCardWarnings(card);
+      const clozeEntries = Array.isArray(card.clozeDeletions) ? card.clozeDeletions.slice() : [];
+      const clozeGroups = clozeEntries.reduce((groups, entry) => {
+        const key = String(entry.clozeNumber);
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(entry);
+        return groups;
+      }, {});
+      const clozeNumbers = Object.keys(clozeGroups).map(Number).sort((a, b) => a - b);
+
+      clozeNumbers.forEach(clozeNumber => {
+        const entries = clozeGroups[String(clozeNumber)].slice().sort((a, b) => (a.fieldIndex - b.fieldIndex) || String(a.raw).localeCompare(String(b.raw)));
+        const sourceFieldIndexes = Array.from(new Set(entries.map(entry => entry.fieldIndex))).sort((a, b) => a - b);
+        const warnings = [...baseWarnings];
+        const deletedTexts = entries.map(entry => String(entry.deletedText || '').trim()).filter(Boolean);
+        if (!deletedTexts.length) warnings.push(`Empty cloze deletion for c${clozeNumber}.`);
+        if (deletedTexts.some(text => text.length < 3)) warnings.push(`Very short deleted text in c${clozeNumber}.`);
+        if (entries.length > 1) warnings.push(`Multiple c${clozeNumber} deletions preserved as a same-number group.`);
+        const sourceSnippets = entries.map(entry => {
+          const fieldText = card.cleanedFields?.[entry.fieldIndex] || '';
+          return {
+            fieldIndex: entry.fieldIndex,
+            sourceSnippet: createAnkiSourceSnippet(fieldText),
+            contextSnippet: buildAnkiClozeContextSnippet(fieldText, entry),
+            deletedText: String(entry.deletedText || '').trim(),
+            hint: String(entry.hint || '').trim(),
+            raw: String(entry.raw || '')
+          };
+        });
+        if (sourceSnippets.some(snippet => hasAnkiHtmlLeftovers(snippet.sourceSnippet) || hasAnkiHtmlLeftovers(snippet.contextSnippet))) {
+          warnings.push('Noisy HTML leftovers detected in source snippets.');
+        }
+        candidates.push({
+          id: `anki-concept-${card.sourceCardIndex || card.originalRow}-c${clozeNumber}`,
+          sourceKind: 'cloze',
+          sourceCardIndex: card.sourceCardIndex || card.originalRow || null,
+          sourceCardOrder: card.sourceCardOrder || card.sourceCardIndex || card.originalRow || null,
+          originalRow: card.originalRow || null,
+          originalLine: card.originalLine || null,
+          guid: card.guid || '',
+          noteType: card.noteType || 'Unknown',
+          deckRaw: card.deckRaw || '',
+          deckPath: Array.isArray(card.deckPath) ? card.deckPath.slice() : [],
+          tagsExact: Array.isArray(card.tagsExact) ? card.tagsExact.slice() : [],
+          tagsNormalized: Array.isArray(card.tagsNormalized) ? card.tagsNormalized.slice() : [],
+          sourceHash: card.sourceHash || '',
+          clozeNumber,
+          clozeEntries: entries.map(entry => ({
+            clozeNumber: entry.clozeNumber,
+            fieldIndex: entry.fieldIndex,
+            deletedText: String(entry.deletedText || '').trim(),
+            hint: String(entry.hint || '').trim(),
+            raw: String(entry.raw || ''),
+            sourceSnippet: createAnkiSourceSnippet(card.cleanedFields?.[entry.fieldIndex] || ''),
+            contextSnippet: buildAnkiClozeContextSnippet(card.cleanedFields?.[entry.fieldIndex] || '', entry)
+          })),
+          sourceFieldIndex: sourceFieldIndexes[0] ?? null,
+          sourceFieldIndexes,
+          sourceSnippets,
+          clozeTexts: deletedTexts,
+          conceptText: deletedTexts[0] || `Cloze c${clozeNumber}`,
+          warnings: uniqueAnkiStrings(warnings),
+          confidence: warnings.length ? 'low' : 'high'
+        });
+      });
+
+      const noteFields = Array.isArray(card.noteFields) ? card.noteFields.slice() : [];
+      if (!clozeNumbers.length && noteFields.length) {
+        const noteFieldIndexes = Array.isArray(card.noteFieldIndexes) ? card.noteFieldIndexes.slice() : noteFields.map((_, idx) => idx);
+        const warnings = [...baseWarnings];
+        const explicitBasic = String(card.noteType || '').trim().toLowerCase() === 'basic';
+        if (!explicitBasic) warnings.push('Basic mapping inferred from plain-text fields.');
+        if (noteFields.length < 2) warnings.push('Only one note field found; Basic front/back mapping is incomplete.');
+        if (noteFields.length > 2) warnings.push('More than two note fields found; Basic front/back mapping is ambiguous.');
+        const sourceSnippets = noteFields.map((fieldText, idx) => ({
+          fieldIndex: noteFieldIndexes[idx] ?? idx,
+          sourceSnippet: createAnkiSourceSnippet(fieldText),
+          contextSnippet: createAnkiSourceSnippet(fieldText)
+        }));
+        if (sourceSnippets.some(snippet => hasAnkiHtmlLeftovers(snippet.sourceSnippet) || hasAnkiHtmlLeftovers(snippet.contextSnippet))) {
+          warnings.push('Noisy HTML leftovers detected in source snippets.');
+        }
+        const frontText = noteFields[0] || '';
+        const backText = noteFields[1] || '';
+        candidates.push({
+          id: `anki-concept-${card.sourceCardIndex || card.originalRow}-basic`,
+          sourceKind: 'basic',
+          sourceCardIndex: card.sourceCardIndex || card.originalRow || null,
+          sourceCardOrder: card.sourceCardOrder || card.sourceCardIndex || card.originalRow || null,
+          originalRow: card.originalRow || null,
+          originalLine: card.originalLine || null,
+          guid: card.guid || '',
+          noteType: card.noteType || 'Unknown',
+          deckRaw: card.deckRaw || '',
+          deckPath: Array.isArray(card.deckPath) ? card.deckPath.slice() : [],
+          tagsExact: Array.isArray(card.tagsExact) ? card.tagsExact.slice() : [],
+          tagsNormalized: Array.isArray(card.tagsNormalized) ? card.tagsNormalized.slice() : [],
+          sourceHash: card.sourceHash || '',
+          sourceFieldIndex: noteFieldIndexes[0] ?? null,
+          sourceFieldIndexes: noteFieldIndexes,
+          sourceSnippets,
+          frontFieldIndex: noteFieldIndexes[0] ?? null,
+          backFieldIndex: noteFieldIndexes[1] ?? null,
+          frontText: createAnkiSourceSnippet(frontText),
+          backText: createAnkiSourceSnippet(backText),
+          conceptText: frontText || backText || `Basic card ${card.sourceCardIndex || card.originalRow || ''}`.trim(),
+          warnings: uniqueAnkiStrings(warnings),
+          confidence: warnings.length ? 'low' : 'high'
+        });
+      }
+    });
+
+    const clozeCount = candidates.filter(candidate => candidate.sourceKind === 'cloze').length;
+    const basicCount = candidates.filter(candidate => candidate.sourceKind === 'basic').length;
+    const warningCount = candidates.reduce((sum, candidate) => sum + (Array.isArray(candidate.warnings) ? candidate.warnings.length : 0), 0);
+    return {
+      candidates,
+      totalCount: candidates.length,
+      clozeCount,
+      basicCount,
+      warningCount
+    };
   }
 
   function renderAnkiImportDiagnostics(result) {
@@ -7469,6 +7674,105 @@ const App = (() => {
         </details>
       </div>
     `).join('') + (cards.length > visibleCards.length ? `<div class="notes-import-empty">Showing first ${visibleCards.length} of ${cards.length} normalized cards.</div>` : '');
+  }
+
+  function renderAnkiConceptPreview(result) {
+    const status = document.getElementById('anki-concept-status');
+    const preview = document.getElementById('anki-concept-preview');
+    if (!status || !preview) return;
+
+    const candidates = Array.isArray(result?.candidates) ? result.candidates : [];
+    if (!candidates.length) {
+      status.textContent = 'No concept candidates extracted from the normalized cards.';
+      preview.innerHTML = '<div class="notes-import-empty">No concept candidates extracted.</div>';
+      return;
+    }
+
+    status.textContent = `${result.totalCount} concept candidate${result.totalCount === 1 ? '' : 's'} extracted from normalized Anki cards. Preview only.`;
+    const warningSummary = result.warningCount
+      ? `${result.warningCount} warning${result.warningCount === 1 ? '' : 's'}`
+      : 'No concept warnings';
+
+    preview.innerHTML = `
+      <div class="notes-import-stats">
+        <span><strong>Total concepts</strong> ${escapeHTML(String(result.totalCount || 0))}</span>
+        <span><strong>Cloze-derived</strong> ${escapeHTML(String(result.clozeCount || 0))}</span>
+        <span><strong>Basic-derived</strong> ${escapeHTML(String(result.basicCount || 0))}</span>
+        <span><strong>Warnings</strong> ${escapeHTML(warningSummary)}</span>
+      </div>
+      ${candidates.slice(0, 24).map(candidate => {
+        const warnings = Array.isArray(candidate.warnings) ? candidate.warnings : [];
+        const sourceFields = Array.isArray(candidate.sourceFieldIndexes) ? candidate.sourceFieldIndexes.map(index => index + 1).join(', ') : 'Not mapped';
+        const deckLabel = candidate.deckPath?.length ? candidate.deckPath.join(' > ') : 'Not mapped';
+        const tagLabel = candidate.tagsExact?.length ? candidate.tagsExact.join(' ') : 'None';
+        const snippetLines = Array.isArray(candidate.sourceSnippets)
+          ? candidate.sourceSnippets.map(snippet => {
+            const idx = Number.isFinite(snippet.fieldIndex) ? snippet.fieldIndex + 1 : '?';
+            const prefix = snippet.contextSnippet || snippet.sourceSnippet || '';
+            return `<li><strong>Field ${escapeHTML(String(idx))}</strong> ${escapeHTML(prefix)}</li>`;
+          }).join('')
+          : '';
+        const clozeDetails = candidate.sourceKind === 'cloze' && Array.isArray(candidate.clozeEntries)
+          ? `<div class="notes-draft-meta">Cloze group c${escapeHTML(String(candidate.clozeNumber))}${candidate.clozeEntries.length > 1 ? ` · ${escapeHTML(String(candidate.clozeEntries.length))} same-number entries preserved` : ''}</div>
+             <ul style="margin:8px 0 0 18px;padding:0;">${candidate.clozeEntries.map(entry => `
+              <li><strong>Field ${escapeHTML(String((entry.fieldIndex ?? 0) + 1))}</strong> ${escapeHTML(entry.deletedText || '[empty]')}${entry.hint ? ` <span style="color:#5a6a7a;">(${escapeHTML(entry.hint)})</span>` : ''}</li>
+            `).join('')}</ul>` : '';
+        const basicDetails = candidate.sourceKind === 'basic'
+          ? `<div class="notes-draft-meta">Basic front/back preview${candidate.frontFieldIndex !== null && candidate.backFieldIndex !== null ? ` · front field ${escapeHTML(String(candidate.frontFieldIndex + 1))} · back field ${escapeHTML(String(candidate.backFieldIndex + 1))}` : ''}</div>`
+          : '';
+        return `
+          <div class="notes-draft-card">
+            <div class="notes-draft-title">
+              Card ${escapeHTML(String(candidate.sourceCardIndex || candidate.originalRow || '?'))} · ${escapeHTML(candidate.sourceKind === 'cloze' ? `Cloze c${candidate.clozeNumber}` : 'Basic fields')}
+              · ${escapeHTML(candidate.confidence === 'low' ? 'Low confidence' : 'High confidence')}
+            </div>
+            <div class="notes-draft-meta">
+              Row ${escapeHTML(String(candidate.originalRow || '?'))} · Line ${escapeHTML(String(candidate.originalLine || '?'))}${candidate.guid ? ` · GUID ${escapeHTML(candidate.guid)}` : ''}
+            </div>
+            <div class="notes-draft-meta">
+              Deck: ${escapeHTML(deckLabel)} · Tags: ${escapeHTML(tagLabel)} · Source fields: ${escapeHTML(sourceFields)} · Hash: ${escapeHTML(candidate.sourceHash || 'None')}
+            </div>
+            <div style="margin-top:8px;">${escapeHTML(candidate.conceptText || 'No concept text')}</div>
+            ${basicDetails}
+            ${clozeDetails}
+            <details>
+              <summary>Provenance and warnings</summary>
+              <div class="notes-draft-body">
+                ${warnings.length ? `<div style="color:#8a5a00;margin-bottom:8px;">${escapeHTML(warnings.join(' '))}</div>` : '<div class="notes-import-empty">No concept warnings.</div>'}
+                <div class="notes-draft-meta">Exact tags: ${escapeHTML(candidate.tagsExact?.length ? candidate.tagsExact.join(' ') : 'None')}</div>
+                <div class="notes-draft-meta">Normalized tags: ${escapeHTML(candidate.tagsNormalized?.length ? candidate.tagsNormalized.join(' ') : 'None')}</div>
+                <div class="notes-draft-meta">Deck raw: ${escapeHTML(candidate.deckRaw || 'Not mapped')}</div>
+                <pre style="white-space:pre-wrap;overflow:auto;margin-top:8px;">${escapeHTML(JSON.stringify({
+                  id: candidate.id,
+                  sourceKind: candidate.sourceKind,
+                  sourceCardIndex: candidate.sourceCardIndex,
+                  sourceCardOrder: candidate.sourceCardOrder,
+                  originalRow: candidate.originalRow,
+                  originalLine: candidate.originalLine,
+                  guid: candidate.guid,
+                  noteType: candidate.noteType,
+                  deckRaw: candidate.deckRaw,
+                  deckPath: candidate.deckPath,
+                  tagsExact: candidate.tagsExact,
+                  tagsNormalized: candidate.tagsNormalized,
+                  sourceHash: candidate.sourceHash,
+                  sourceFieldIndex: candidate.sourceFieldIndex,
+                  sourceFieldIndexes: candidate.sourceFieldIndexes,
+                  sourceSnippets: candidate.sourceSnippets,
+                  clozeNumber: candidate.clozeNumber || null,
+                  clozeEntries: candidate.clozeEntries || [],
+                  conceptText: candidate.conceptText,
+                  confidence: candidate.confidence,
+                  warnings: warnings
+                }, null, 2))}</pre>
+              </div>
+            </details>
+            ${snippetLines ? `<details><summary>Source snippets</summary><ul style="margin:8px 0 0 18px;padding:0;">${snippetLines}</ul></details>` : ''}
+          </div>
+        `;
+      }).join('')}
+      ${candidates.length > 24 ? `<div class="notes-import-empty">Showing first 24 of ${candidates.length} concept candidates.</div>` : ''}
+    `;
   }
 
   function openNotesImportPreview() {
