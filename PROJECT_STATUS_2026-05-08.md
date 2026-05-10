@@ -57,6 +57,7 @@ Main inlined modules:
 - `Quiz`: test-taking engine, timers, answer selection, hints, stem-image rendering, highlighting, and navigation.
 - `Results`: post-submit score page, review mode, analytics, and PDF report generation.
 - `App`: landing page, source-folder routing, sidebar navigation, home/search/notes/incorrect/marked/flagged/trash views, subfolders, modals, and test generation.
+- Anki text-import pipeline: plain-text `.txt` import only, normalized card preview, cloze/basic concept extraction, tag-first clustering, deterministic variant draft preview, review controls, approved-variant JSON export, quiz-object preview, and controlled save into real tests.
 
 ## Current Stable Parser And Rendering State
 
@@ -182,6 +183,41 @@ Current safeguards:
 - UWorld save into a real test requires approved refined drafts, valid quiz-object preview, explicit UWorld save target, nonempty inline test name, and inline review confirmation.
 - Browser `prompt()`/`confirm()` are not part of the UWorld save flow.
 - Live Gemini validation/testing is intentionally deferred to conserve API credits.
+
+## Anki Notes Pipeline Status
+
+Status: Anki v1 implementation complete, pending real-world validation.
+
+Current Anki flow:
+
+```text
+plain-text Anki export (.txt only)
+→ normalized cards
+→ cloze/basic concept extraction
+→ tag-first clustering
+→ deterministic variant draft preview
+→ review controls
+→ approved-variant JSON export
+→ quiz-object preview
+→ controlled save into real tests
+```
+
+Current Anki safeguards:
+
+- `.apkg` is intentionally unsupported in Anki v1.
+- Anki v1 does not use Gemini yet.
+- Approved variants only are eligible for export, quiz-object preview, and controlled save.
+- The Anki save path requires an explicit Anki subfolder target, a nonempty test name, and an inline review confirmation.
+- Anki provenance stays separate from UWorld provenance and quiz-object review state.
+- The Anki and UWorld pipelines remain isolated.
+
+Unresolved validation tasks:
+
+- Validate the plain-text Anki import flow against several real `.txt` exports.
+- Verify explicit target selection and new-folder creation in the Anki save path.
+- Verify controlled save into a real test with approved variants only.
+- Verify approved-variant JSON export and quiz-object preview with mixed note types and cloze groups.
+- Confirm no cross-talk with the UWorld DOCX pipeline.
 
 Current UWorld batch flow:
 

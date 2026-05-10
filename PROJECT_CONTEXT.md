@@ -33,6 +33,7 @@ Main inline modules:
 - `Quiz`: test-taking engine, timers, answer selection, hints, stem-image rendering, highlighting, and navigation.
 - `Results`: score report, review mode, analytics, and PDF report generation.
 - `App`: study library landing page, source-folder routing, sidebar navigation, modals, search, notes, incorrect, marked, flagged, trash, and test generation.
+- Anki text-import pipeline: plain-text `.txt` import only, no `.apkg` support, normalized card preview, cloze/basic concept extraction, tag-first clustering, deterministic variant draft preview, review controls, approved-variant JSON export, quiz-object preview, and controlled save into real tests.
 - UWorld DOCX pipeline: DOCX import, normalized blocks, concept extraction, deterministic clustering/deduplication, selected clusters, deterministic draft scaffolds, one-at-a-time Electron-local Gemini refinement, live batch queue controls, review controls, duplicate warnings, coverage summaries, preflight safeguards, approved draft JSON export, quiz-object preview, and controlled save into real tests.
 
 ## Current Stable Parser And Rendering State
@@ -104,6 +105,33 @@ UWorld saves require approved AI-refined drafts, valid quiz-object previews, an 
 
 Live batch refinement is implemented as a conservative one-at-a-time Electron main Gemini queue using the existing `window.nbmeDesktop.ai.refineUWorldDraft(...)` bridge. The queue includes draft-hash caching, duplicate skipping, pause/cancel/retry controls, failure stopping, visible progress, preflight confirmation, duplicate refined-question warnings, and section/topic coverage summaries. Live Gemini validation/testing is intentionally deferred to conserve API credits. Netlify Functions remain transitional/rollback support, and no app-data storage migration has been performed.
 
+## Anki Notes Pipeline
+
+Status: Anki v1 implementation complete, pending real-world validation.
+
+Current Anki flow:
+
+```text
+plain-text Anki export (.txt only)
+→ normalized cards
+→ cloze/basic concept extraction
+→ tag-first clustering
+→ deterministic variant draft preview
+→ review controls
+→ approved-variant JSON export
+→ quiz-object preview
+→ controlled save into real tests
+```
+
+Current Anki safeguards:
+
+- `.apkg` is intentionally unsupported in Anki v1.
+- Anki v1 uses deterministic preview and save logic only. No Gemini is used in the Anki path yet.
+- Approved variants only are eligible for export, quiz-object preview, and controlled save.
+- The Anki save path requires an explicit Anki subfolder target, a nonempty test name, and an inline review confirmation.
+- Anki provenance is preserved separately from quiz-object preview data.
+- Anki and UWorld pipelines remain isolated.
+
 ## Historical Debugging Notes
 
 The following are historical implementation/debugging findings only. They should not be treated as permanent architecture assumptions or active question-number-specific logic:
@@ -143,6 +171,7 @@ Use extra caution around:
 - PDF report generation, because jsPDF layout is sensitive to font state, page breaks, and text normalization.
 - Landing/source-folder routing, because it determines which subfolders are visible and where new tests are created.
 - UWorld selected-cluster and save-target routing, because it determines which draft candidates are generated and where approved refined drafts are saved.
+- Anki controlled-save routing, because it determines which approved variant quiz objects are exported, previewed, and saved into a real test.
 - `deno.lock` is currently untracked and should not be touched unless explicitly requested.
 
 ## Current Handoff

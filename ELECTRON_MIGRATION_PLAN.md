@@ -23,6 +23,8 @@ Ownership: this file is the staged Electron roadmap. Durable architecture rules 
 - UWorld DOCX pipeline is implemented inside the current app and now includes normalized blocks, concept extraction, deterministic clustering/deduplication, selected clusters, deterministic draft scaffolds, one-at-a-time Electron-local Gemini refinement, live batch queue controls, review controls, duplicate warnings, section/topic coverage summaries, preflight safeguards, approved JSON export, quiz-object preview, and controlled save into real tests.
 - Electron-local UWorld Gemini refinement uses Electron main/preload. The renderer never receives the API key, and `GEMINI_API_KEY` is read from `process.env` only.
 - UWorld v1 implementation complete, pending real-world validation.
+- Anki v1 is implemented inside the current app using plain-text `.txt` imports only, cloze/basic concept extraction, tag-first clustering, deterministic variant draft preview, review controls, approved-variant JSON export, quiz-object preview, and controlled save into real tests.
+- Anki v1 intentionally does not use Gemini yet.
 - Live Gemini validation/testing is intentionally deferred to conserve API credits.
 - Primary local origin is `http://localhost:8888`; secondary/fallback local origin is `http://localhost:8080`.
 - Localhost dev loading remains intentional during migration. Packaged/local app loading should come later, after storage and service boundaries are verified.
@@ -35,6 +37,7 @@ Ownership: this file is the staged Electron roadmap. Durable architecture rules 
 - Avoid rewrites initially.
 - Avoid breaking the stable parser/render pipeline.
 - Preserve parser/debug tooling.
+- Keep NBME, UWorld, and Anki pipelines isolated from one another.
 - Preserve current Google Drive behavior initially.
 - Preserve Netlify/browser rollback behavior while routing Electron-local UWorld refinement through Electron main/preload.
 - Avoid Netlify deploys during local Electron iteration.
@@ -150,6 +153,34 @@ selected clusters
 ```
 
 Remaining validation should use real imported UWorld notes and a small confirmed batch before any large run.
+
+### Anki Notes Pipeline
+
+Status: Anki v1 implementation complete, pending real-world validation.
+
+Current flow:
+
+```text
+plain-text Anki export (.txt only)
+→ normalized cards
+→ cloze/basic concept extraction
+→ tag-first clustering
+→ deterministic variant draft preview
+→ review controls
+→ approved-variant JSON export
+→ quiz-object preview
+→ controlled save into real tests
+```
+
+Safeguards:
+
+- `.apkg` is intentionally unsupported.
+- Anki v1 uses deterministic logic only and does not call Gemini yet.
+- Approved variants only are eligible for preview, export, and save.
+- Anki save requires an explicit Anki subfolder, a nonempty test name, and an inline confirmation checkbox.
+- Anki provenance is preserved separately from quiz-object preview data.
+- Keep the Anki pipeline isolated from the NBME parser/OCR/render path and from the UWorld DOCX path.
+- Do not migrate app data yet.
 
 ### Stage 7: Preserve Or Adapt Drive Workflow
 

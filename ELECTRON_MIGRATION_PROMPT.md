@@ -15,6 +15,8 @@ Ownership: this prompt is operational guidance for Electron work. Durable rules 
 - Electron dev scaffolding and planning have started.
 - UWorld DOCX pipeline is implemented end-to-end: DOCX import → normalized blocks → concept extraction → deterministic clustering/deduplication → selected clusters → deterministic draft scaffolds → one-at-a-time Electron-local Gemini refinement → live batch queue → review controls → duplicate warnings and coverage summaries → approved draft JSON export → quiz-object preview → controlled save into real tests.
 - UWorld v1 implementation complete, pending real-world validation.
+- Anki v1 is implemented in the current app using plain-text `.txt` imports only, cloze/basic concept extraction, tag-first clustering, deterministic variant draft preview, review controls, approved-variant JSON export, quiz-object preview, and controlled save into real tests.
+- Anki v1 intentionally does not use Gemini yet.
 - Live Gemini validation/testing is intentionally deferred to conserve API credits.
 - Netlify deploy credits are limited; avoid Netlify deploys during local Electron iteration.
 - The app is currently private/personal use only.
@@ -26,6 +28,7 @@ Ownership: this prompt is operational guidance for Electron work. Durable rules 
 - Avoid rewrites during the first migration step.
 - Keep the current web/Netlify version working.
 - Preserve parser/debug tooling and local-only debug safeguards.
+- Keep NBME, UWorld, and Anki pipelines isolated from each other.
 - Preserve current Google Drive behavior initially.
 - Preserve Netlify/browser fallback behavior while using Electron main/preload for Electron-local UWorld Gemini refinement.
 - Use staged migration with small verifiable steps.
@@ -72,6 +75,19 @@ Ownership: this prompt is operational guidance for Electron work. Durable rules 
 - Current batch queue design is selected clusters → deterministic drafts → one-at-a-time queue → cache by draft hash → pause/cancel/retry → preflight confirmation → review-gated save.
 - Real-world validation remains unresolved: test a small live Gemini batch with real imported notes before large runs.
 - `deno.lock` remains untracked and should not be touched unless explicitly requested.
+
+## Anki Notes Guidance
+
+- Anki v1 is complete for plain-text `.txt` imports, deterministic concept extraction, clustering, variant drafts, review, export, quiz-object preview, and controlled save.
+- `.apkg` is intentionally unsupported.
+- Anki v1 does not call Gemini yet.
+- Approved variants only are eligible for export, quiz-object preview, and save.
+- The Anki save flow requires an explicit Anki subfolder, a nonempty test name, and a review confirmation checkbox.
+- Preserve Anki provenance separately from UWorld provenance.
+- Keep the Anki path isolated from the NBME parser/OCR/render path and from the UWorld DOCX path.
+- No app-data migration has been approved yet.
+
+Anki v1 implementation complete, pending real-world validation.
 
 ## Storage Strategy
 
