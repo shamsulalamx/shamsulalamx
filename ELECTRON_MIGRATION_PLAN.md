@@ -116,6 +116,27 @@ This file should track migration stages, decisions, risks, verification checkpoi
   - Keep Google Drive manifest compatibility so browser and Electron backups can coexist during transition.
 - Do not silently mutate stored quizzes, localStorage, IndexedDB images, or Google Drive backups during any storage migration.
 
+### Future Desktop PDF/OCR Workflow Strategy
+
+- Current browser workflow remains authoritative: two PDF inputs, browser drag/drop, PDF.js/Tesseract extraction, OCR review, in-memory parser debug state, and local-only JSON debug download.
+- Highest-friction areas to improve later in Electron:
+  - repeated manual selection of question and answer PDFs
+  - no folder import or batch queue
+  - debug artifacts exist only as manual downloads unless saved immediately
+  - OCR raw output, normalized blocks, parsed questions, and final render audits are not retained as a run history
+  - failed parser runs are difficult to compare against later successful runs
+  - local-only debug exports require the user to manage filenames and locations manually
+- Future Electron-only improvements should be staged behind narrow preload/main helpers:
+  - drag/drop PDFs using the existing browser workflow first, then add desktop file-path awareness only when needed
+  - folder import for paired question/answer PDFs after a pairing convention is defined
+  - batch processing with an explicit queue, per-file status, and no automatic quiz save on parse failure
+  - parser snapshot history saved under `parser-runs/` and `debug/snapshots/`
+  - OCR artifacts saved under `ocr/raw/`, `ocr/normalized/`, and `parsed/questions/`
+  - debug export save/open-folder helpers using narrow IPC, not direct renderer filesystem access
+  - local logs under `logs/` for import events, errors, counts, warnings, and user-approved corrections
+- Future parser runs should be tracked with immutable run manifests containing run ID, timestamps, app version/checkpoint, source file names and hashes, parser settings, expected count, stage counts, missing/duplicate source numbers, grouped range audits, warnings, output artifact paths, and whether a quiz was saved.
+- Do not change parser logic, OCR normalization, grouped rendering, or save behavior while adding run tracking.
+
 ### Stage 9: Design Text/Image/Hybrid Render-Mode Layer
 
 - Define per-question render mode metadata.
