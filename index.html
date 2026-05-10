@@ -1801,6 +1801,11 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
     <div id="anki-variant-preview" class="notes-draft-preview">
       <div class="notes-import-empty">No variant drafts generated.</div>
     </div>
+    <div class="notes-import-section-title">Anki Quiz Object Preview</div>
+    <div id="anki-quiz-object-status" class="notes-import-summary">Approve Anki variant drafts to preview quiz-question objects. Nothing is saved.</div>
+    <div id="anki-quiz-object-preview" class="notes-draft-preview">
+      <div class="notes-import-empty">No approved Anki variants converted.</div>
+    </div>
     <div class="modal-actions">
       <button type="button" class="btn-modal" id="anki-export-approved" onclick="App.exportApprovedAnkiVariantsJson()" disabled>Export Approved Anki Variants JSON</button>
       <button type="button" class="btn-modal" onclick="App.clearAnkiTextImportPreview()">Clear</button>
@@ -7098,6 +7103,8 @@ const App = (() => {
     const clusterPreview = document.getElementById('anki-cluster-preview');
     const variantStatus = document.getElementById('anki-variant-status');
     const variantPreview = document.getElementById('anki-variant-preview');
+    const quizObjectStatus = document.getElementById('anki-quiz-object-status');
+    const quizObjectPreview = document.getElementById('anki-quiz-object-preview');
     if (input) input.value = '';
     if (status) status.textContent = 'Choose a .txt file exported from Anki as Notes in Plain Text.';
     if (diagnostics) diagnostics.innerHTML = '<div class="notes-import-empty">No Anki text file loaded.</div>';
@@ -7108,6 +7115,8 @@ const App = (() => {
     if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No clusters generated.</div>';
     if (variantStatus) variantStatus.textContent = 'Variant drafts will appear after clusters are analyzed.';
     if (variantPreview) variantPreview.innerHTML = '<div class="notes-import-empty">No variant drafts generated.</div>';
+    if (quizObjectStatus) quizObjectStatus.textContent = 'Approve Anki variant drafts to preview quiz-question objects. Nothing is saved.';
+    if (quizObjectPreview) quizObjectPreview.innerHTML = '<div class="notes-import-empty">No approved Anki variants converted.</div>';
     updateAnkiVariantExportButton();
   }
 
@@ -7122,6 +7131,8 @@ const App = (() => {
     const clusterPreview = document.getElementById('anki-cluster-preview');
     const variantStatus = document.getElementById('anki-variant-status');
     const variantPreview = document.getElementById('anki-variant-preview');
+    const quizObjectStatus = document.getElementById('anki-quiz-object-status');
+    const quizObjectPreview = document.getElementById('anki-quiz-object-preview');
     if (!file) return;
 
     const lowerName = String(file.name || '').toLowerCase();
@@ -7136,6 +7147,8 @@ const App = (() => {
       if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No clusters generated.</div>';
       if (variantStatus) variantStatus.textContent = 'No variant drafts generated.';
       if (variantPreview) variantPreview.innerHTML = '<div class="notes-import-empty">No variant drafts generated.</div>';
+      if (quizObjectStatus) quizObjectStatus.textContent = 'Approve Anki variant drafts to preview quiz-question objects. Nothing is saved.';
+      if (quizObjectPreview) quizObjectPreview.innerHTML = '<div class="notes-import-empty">No approved Anki variants converted.</div>';
       updateAnkiVariantExportButton();
       return;
     }
@@ -7151,6 +7164,8 @@ const App = (() => {
       if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No clusters generated.</div>';
       if (variantStatus) variantStatus.textContent = 'No variant drafts generated.';
       if (variantPreview) variantPreview.innerHTML = '<div class="notes-import-empty">No variant drafts generated.</div>';
+      if (quizObjectStatus) quizObjectStatus.textContent = 'Approve Anki variant drafts to preview quiz-question objects. Nothing is saved.';
+      if (quizObjectPreview) quizObjectPreview.innerHTML = '<div class="notes-import-empty">No approved Anki variants converted.</div>';
       updateAnkiVariantExportButton();
       return;
     }
@@ -7184,6 +7199,8 @@ const App = (() => {
       if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No clusters generated.</div>';
       if (variantStatus) variantStatus.textContent = 'No variant drafts generated.';
       if (variantPreview) variantPreview.innerHTML = '<div class="notes-import-empty">No variant drafts generated.</div>';
+      if (quizObjectStatus) quizObjectStatus.textContent = 'Approve Anki variant drafts to preview quiz-question objects. Nothing is saved.';
+      if (quizObjectPreview) quizObjectPreview.innerHTML = '<div class="notes-import-empty">No approved Anki variants converted.</div>';
       updateAnkiVariantExportButton();
     }
   }
@@ -8599,6 +8616,7 @@ const App = (() => {
       ${drafts.length > 18 ? `<div class="notes-import-empty">Showing first 18 of ${drafts.length} variant drafts.</div>` : ''}
     `;
     updateAnkiVariantExportButton();
+    renderAnkiQuizObjectPreview();
   }
 
   function setAnkiVariantReviewStatus(draftId, status) {
@@ -8631,6 +8649,160 @@ const App = (() => {
     btn.title = approvedCount > 0
       ? 'Export approved Anki variant drafts as JSON.'
       : 'Approve at least one Anki variant draft before exporting.';
+  }
+
+  function buildAnkiVariantQuizExplanation(draft) {
+    const labels = ['A', 'B', 'C', 'D', 'E'];
+    const rationales = labels.map(label => {
+      const choice = Array.isArray(draft?.choices) ? draft.choices.find(item => item?.label === label) : null;
+      return `${label}: ${choice?.rationale || ''}`;
+    }).join('\n');
+    return [
+      draft?.teachingPoint || '',
+      draft?.stemScaffold ? `Stem scaffold: ${draft.stemScaffold}` : '',
+      rationales ? `Choice rationales:\n${rationales}` : ''
+    ].filter(Boolean).join('\n\n').trim();
+  }
+
+  function convertApprovedAnkiVariantToQuizObject(draft, idx) {
+    const quizQuestion = {
+      n: idx + 1,
+      sourceQuestionNumber: idx + 1,
+      generatedQuizQuestionNumber: idx + 1,
+      t: draft?.stemScaffold || '',
+      o: Array.isArray(draft?.choices) ? draft.choices.map(choice => ({ l: choice.label, t: choice.text })) : [],
+      c: draft?.provisionalCorrectAnswer || '',
+      explanation: buildAnkiVariantQuizExplanation(draft),
+      tags: ['Anki', 'Preview', draft?.variantType || 'variant'],
+      images: [],
+      parseConfidence: draft?.confidence || 'low',
+      parseWarnings: Array.isArray(draft?.warnings) ? draft.warnings.slice() : []
+    };
+
+    const provenance = {
+      sourceType: 'anki-text',
+      sourceName: _ankiImportPreview?.fileName || '',
+      sourceHash: _ankiImportPreview?.sourceHash || '',
+      draftId: draft?.id || '',
+      clusterId: draft?.clusterId || '',
+      clusterIndex: draft?.clusterIndex ?? null,
+      variantType: draft?.variantType || '',
+      sourceCardIds: Array.isArray(draft?.sourceCardIds) ? draft.sourceCardIds.slice() : [],
+      sourceCardOrders: Array.isArray(draft?.sourceCardOrders) ? draft.sourceCardOrders.slice() : [],
+      sourceGuids: Array.isArray(draft?.sourceGuids) ? draft.sourceGuids.slice() : [],
+      sourceNoteTypes: Array.isArray(draft?.sourceNoteTypes) ? draft.sourceNoteTypes.slice() : [],
+      sourceDeckRaws: Array.isArray(draft?.sourceDeckRaws) ? draft.sourceDeckRaws.slice() : [],
+      sourceDeckPathValues: Array.isArray(draft?.sourceDeckPathValues) ? draft.sourceDeckPathValues.map(path => Array.isArray(path) ? path.slice() : []) : [],
+      tagsExact: Array.isArray(draft?.tagsExact) ? draft.tagsExact.slice() : [],
+      tagsNormalized: Array.isArray(draft?.tagsNormalized) ? draft.tagsNormalized.slice() : [],
+      clozeProvenance: Array.isArray(draft?.clozeProvenance) ? draft.clozeProvenance.map(entry => ({ ...entry })) : [],
+      warnings: Array.isArray(draft?.warnings) ? draft.warnings.slice() : [],
+      sourceSnippets: Array.isArray(draft?.sourceSnippets) ? draft.sourceSnippets.map(snippet => ({
+        ...(snippet && typeof snippet === 'object' ? snippet : {}),
+        snippets: Array.isArray(snippet?.snippets)
+          ? snippet.snippets.map(item => (item && typeof item === 'object' ? { ...item } : item))
+          : []
+      })) : [],
+      sourceProof: draft?.sourceProof ? { ...draft.sourceProof } : null
+    };
+
+    return { quizQuestion, provenance };
+  }
+
+  function validateAnkiQuizObjectPreviewItem(item) {
+    const errors = [];
+    const labels = ['A', 'B', 'C', 'D', 'E'];
+    const q = item?.quizQuestion || {};
+    const provenance = item?.provenance || {};
+    if (!Number.isFinite(q.n)) errors.push('missing question number');
+    if (!Number.isFinite(q.sourceQuestionNumber)) errors.push('missing source question number');
+    if (!Number.isFinite(q.generatedQuizQuestionNumber)) errors.push('missing generated question number');
+    if (!nonemptyString(q.t)) errors.push('missing stem');
+    if (!Array.isArray(q.o) || q.o.length !== 5) errors.push('must have exactly five answer choices');
+    else q.o.forEach((choice, idx) => {
+      if (choice?.l !== labels[idx]) errors.push('answer choices must be labeled A-E in order');
+      if (!nonemptyString(choice?.t)) errors.push(`choice ${labels[idx]} is missing text`);
+    });
+    if (!labels.includes(q.c)) errors.push('correct answer must be A-E');
+    if (!nonemptyString(q.explanation)) errors.push('missing explanation');
+    if (!Array.isArray(q.tags)) errors.push('missing tags');
+    if (!Array.isArray(q.images)) errors.push('missing images array');
+    if (!nonemptyString(provenance.sourceType)) errors.push('missing source type provenance');
+    if (!nonemptyString(provenance.sourceName)) errors.push('missing source name provenance');
+    if (!nonemptyString(provenance.sourceHash)) errors.push('missing source hash provenance');
+    if (!nonemptyString(provenance.draftId)) errors.push('missing draft provenance');
+    if (!nonemptyString(provenance.clusterId)) errors.push('missing cluster provenance');
+    if (!Number.isFinite(provenance.clusterIndex)) errors.push('missing cluster index provenance');
+    if (!nonemptyString(provenance.variantType)) errors.push('missing variant type provenance');
+    if (!Array.isArray(provenance.sourceCardIds) || !provenance.sourceCardIds.length) errors.push('missing source card IDs provenance');
+    if (!Array.isArray(provenance.sourceCardOrders) || provenance.sourceCardOrders.length !== provenance.sourceCardIds.length) errors.push('missing source card orders provenance');
+    if (!Array.isArray(provenance.sourceGuids) || provenance.sourceGuids.length !== provenance.sourceCardIds.length) errors.push('missing GUID provenance');
+    if (!Array.isArray(provenance.sourceNoteTypes) || provenance.sourceNoteTypes.length !== provenance.sourceCardIds.length) errors.push('missing note type provenance');
+    if (!Array.isArray(provenance.sourceDeckRaws) || provenance.sourceDeckRaws.length !== provenance.sourceCardIds.length) errors.push('missing deckRaw provenance');
+    if (!Array.isArray(provenance.sourceDeckPathValues) || provenance.sourceDeckPathValues.length !== provenance.sourceCardIds.length) errors.push('missing deckPath provenance');
+    if (!Array.isArray(provenance.tagsExact)) errors.push('missing exact tags provenance');
+    if (!Array.isArray(provenance.clozeProvenance)) errors.push('missing cloze provenance');
+    if (!Array.isArray(provenance.warnings)) errors.push('missing warnings provenance');
+    if (!Array.isArray(provenance.sourceSnippets) || !provenance.sourceSnippets.length) errors.push('missing source snippets provenance');
+    return { ok: errors.length === 0, errors };
+  }
+
+  function getApprovedAnkiQuizObjectPreviewValidation() {
+    const approved = getApprovedAnkiVariantDrafts();
+    const items = approved.map(({ draft }, idx) => convertApprovedAnkiVariantToQuizObject(draft, idx));
+    const errors = items.flatMap((item, idx) => validateAnkiQuizObjectPreviewItem(item).map(error => `Quiz object ${idx + 1}: ${error}`));
+    return { items, errors };
+  }
+
+  function renderAnkiQuizObjectPreview() {
+    const status = document.getElementById('anki-quiz-object-status');
+    const preview = document.getElementById('anki-quiz-object-preview');
+    if (!status || !preview) return;
+
+    const approved = getApprovedAnkiVariantDrafts();
+    if (!approved.length) {
+      status.textContent = 'Approve Anki variant drafts to preview quiz-question objects. Nothing is saved.';
+      preview.innerHTML = '<div class="notes-import-empty">No approved Anki variants converted.</div>';
+      return;
+    }
+
+    const { items, errors } = getApprovedAnkiQuizObjectPreviewValidation();
+    if (errors.length) {
+      const message = `Anki quiz object preview blocked: ${errors[0]}`;
+      status.textContent = message;
+      preview.innerHTML = `
+        <div class="notes-draft-card">
+          <div class="notes-draft-title">Validation errors</div>
+          <div class="notes-draft-meta">Preview blocked until approved variants contain complete quiz-object provenance.</div>
+          <div style="color:#8a5a00;margin-top:8px;">${escapeHTML(errors.join(' '))}</div>
+        </div>
+      `;
+      return;
+    }
+
+    status.textContent = `${items.length} approved Anki variant${items.length === 1 ? '' : 's'} converted into quiz-question object previews. Nothing was saved.`;
+    preview.innerHTML = items.map((item, idx) => {
+      const quizJson = JSON.stringify(item.quizQuestion, null, 2);
+      const provenanceJson = JSON.stringify(item.provenance, null, 2);
+      return `
+        <details class="notes-draft-card" ${idx < 2 ? 'open' : ''}>
+          <summary class="notes-draft-summary">
+            <div class="notes-draft-title">Quiz Object ${idx + 1}: ${escapeHTML(item.provenance.variantType || 'variant')} · ${escapeHTML(item.quizQuestion.c || '?')}</div>
+            <div class="notes-draft-meta">preview only · not saved · ${escapeHTML(item.provenance.draftId || '')}</div>
+          </summary>
+          <div class="notes-draft-body">
+            <details open>
+              <summary>Quiz object JSON</summary>
+              <pre style="white-space:pre-wrap;overflow:auto;margin-top:8px;">${escapeHTML(quizJson)}</pre>
+            </details>
+            <details>
+              <summary>Provenance JSON</summary>
+              <pre style="white-space:pre-wrap;overflow:auto;margin-top:8px;">${escapeHTML(provenanceJson)}</pre>
+            </details>
+          </div>
+        </details>
+      `;
+    }).join('');
   }
 
   function validateApprovedAnkiVariantExportPayload(payload) {
