@@ -1877,6 +1877,26 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
     <div id="ome-quiz-object-preview" class="notes-draft-preview">
       <div class="notes-import-empty">No approved OME drafts converted.</div>
     </div>
+    <div class="notes-import-section-title">Save Approved OME Drafts</div>
+    <div class="form-group">
+      <label class="form-label">OME Subfolder</label>
+      <select class="form-input" id="ome-create-test-target" onchange="App.updateApprovedOmeDraftCreateTestButton()">
+        <option value="">Choose an OME subfolder</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Test name</label>
+      <input type="text" class="form-input" id="ome-create-test-name" value="OME Drafts Test" oninput="App.updateApprovedOmeDraftCreateTestButton()">
+    </div>
+    <label class="check-row" style="margin:8px 0 0;">
+      <input type="checkbox" id="ome-create-test-reviewed" onchange="App.updateApprovedOmeDraftCreateTestButton()">
+      <span>I reviewed and approve these quiz objects for test creation.</span>
+    </label>
+    <div id="ome-create-test-diagnostics" class="notes-import-summary">Save readiness will appear after approved drafts are available.</div>
+    <div id="ome-create-test-error" class="notes-import-summary" style="display:none;color:#8a5a00;"></div>
+    <div class="modal-actions" style="justify-content:flex-start;margin-top:10px;">
+      <button type="button" class="btn-modal primary" id="ome-create-test-approved" onclick="App.createTestFromApprovedOmeDrafts()" disabled>Create Test from Approved OME Drafts</button>
+    </div>
     <div class="modal-actions" style="justify-content:flex-start;margin-top:10px;">
       <button type="button" class="btn-modal" id="ome-export-approved" onclick="App.exportApprovedOmeDraftsJson()" disabled>Export Approved OME Drafts JSON</button>
     </div>
@@ -7166,10 +7186,16 @@ const App = (() => {
   function openOmePdfImportPreview() {
     const modal = document.getElementById('modal-ome-import');
     if (modal) modal.style.display = 'flex';
+    const saveName = document.getElementById('ome-create-test-name');
+    const saveReviewed = document.getElementById('ome-create-test-reviewed');
+    if (saveName) saveName.value = 'OME Drafts Test';
+    if (saveReviewed) saveReviewed.checked = false;
+    renderOmeDraftSaveTargetSelector(false);
     updateOmeStructurePreview();
     renderOmeConceptPreview(_omeImportPreview?.conceptResult || null);
     renderOmeClusterPreview(_omeImportPreview?.conceptResult?.clusterResult || null);
     renderOmeDraftPreview(_omeImportPreview?.draftResult || null);
+    updateApprovedOmeDraftCreateTestButton();
   }
 
   function closeOmePdfImportPreview() {
@@ -7190,6 +7216,13 @@ const App = (() => {
     const targetInput = document.getElementById('ome-draft-target');
     const draftStatus = document.getElementById('ome-draft-status');
     const draftPreview = document.getElementById('ome-draft-preview');
+    const quizObjectStatus = document.getElementById('ome-quiz-object-status');
+    const quizObjectPreview = document.getElementById('ome-quiz-object-preview');
+    const saveTarget = document.getElementById('ome-create-test-target');
+    const saveName = document.getElementById('ome-create-test-name');
+    const saveReviewed = document.getElementById('ome-create-test-reviewed');
+    const saveDiagnostics = document.getElementById('ome-create-test-diagnostics');
+    const saveError = document.getElementById('ome-create-test-error');
     if (input) input.value = '';
     if (status) status.textContent = 'Choose one .pdf file from the OME source folder.';
     if (preview) preview.innerHTML = '<div class="notes-import-empty">No OME structure preview loaded.</div>';
@@ -7201,8 +7234,20 @@ const App = (() => {
     if (targetInput) targetInput.value = '0';
     if (draftStatus) draftStatus.textContent = 'Choose OME clusters to generate deterministic draft scaffolds.';
     if (draftPreview) draftPreview.innerHTML = '<div class="notes-import-empty">No OME draft scaffolds generated.</div>';
+    if (quizObjectStatus) quizObjectStatus.textContent = 'Approve OME drafts to preview internal quiz-question objects. Nothing is saved.';
+    if (quizObjectPreview) quizObjectPreview.innerHTML = '<div class="notes-import-empty">No approved OME drafts converted.</div>';
+    if (saveTarget) saveTarget.value = '';
+    if (saveName) saveName.value = 'OME Drafts Test';
+    if (saveReviewed) saveReviewed.checked = false;
+    if (saveDiagnostics) saveDiagnostics.textContent = 'Save readiness will appear after approved drafts are available.';
+    if (saveError) {
+      saveError.style.display = 'none';
+      saveError.textContent = '';
+    }
+    renderOmeDraftSaveTargetSelector(false);
     setOmeDraftExportError('');
     updateOmeDraftExportButton();
+    updateApprovedOmeDraftCreateTestButton();
   }
 
   function updateOmeStructurePreview() {
@@ -8828,6 +8873,7 @@ const App = (() => {
     if (!approved.length) {
       status.textContent = 'Approve OME draft scaffolds to preview internal quiz-question objects. Nothing is saved.';
       preview.innerHTML = '<div class="notes-import-empty">No approved OME drafts converted.</div>';
+      updateApprovedOmeDraftCreateTestButton();
       return;
     }
 
@@ -8841,6 +8887,7 @@ const App = (() => {
           <div style="color:#8a5a00;margin-top:8px;">${escapeHTML(errors.join(' '))}</div>
         </div>
       `;
+      updateApprovedOmeDraftCreateTestButton();
       return;
     }
 
@@ -8867,6 +8914,233 @@ const App = (() => {
         </details>
       `;
     }).join('');
+    updateApprovedOmeDraftCreateTestButton();
+  }
+
+  function getOmeSourceFolder() {
+    return DB.get().sourceFolders.find(source => source.sourceType === 'ome') || DB.getSourceFolder('src-ome') || null;
+  }
+
+  function getOmeSubfolders() {
+    const source = getOmeSourceFolder();
+    return source ? DB.getFolders(source.id) : [];
+  }
+
+  function renderOmeDraftSaveTargetSelector(preserveSelection = true) {
+    const select = document.getElementById('ome-create-test-target');
+    if (!select) return;
+    const previousValue = preserveSelection ? select.value : '';
+    const folders = getOmeSubfolders();
+    const source = getOmeSourceFolder();
+    const folderOptions = folders.map(folder => `<option value="${escapeHTML(folder.id)}">${escapeHTML(folder.name)}</option>`).join('');
+    const newFolderOption = !folders.length ? '<option value="__new__">Create new OME Notes folder</option>' : '';
+    select.innerHTML = `<option value="">Choose an OME subfolder</option>${folderOptions}${newFolderOption}`;
+    const selectedValue = Array.from(select.options).some(option => option.value === previousValue) ? previousValue : '';
+    select.value = selectedValue;
+    if (!source && !folders.length) select.value = '';
+  }
+
+  function getSelectedOmeDraftSaveTarget() {
+    const selectedValue = document.getElementById('ome-create-test-target')?.value || '';
+    const source = getOmeSourceFolder();
+    if (selectedValue === '__new__') {
+      return { ok: !!source, mode: 'new-folder', source, folder: null, error: source ? '' : 'OME source folder is unavailable.' };
+    }
+    if (!selectedValue) return { ok: false, mode: 'none', source, folder: null, error: 'Choose an OME subfolder before creating a test.' };
+    const folder = getOmeSubfolders().find(item => item.id === selectedValue);
+    if (!folder) return { ok: false, mode: 'missing-folder', source, folder: null, error: 'Selected OME subfolder was not found.' };
+    return { ok: true, mode: 'existing-folder', source, folder, error: '' };
+  }
+
+  function getOmeDraftSaveInputs() {
+    const testName = (document.getElementById('ome-create-test-name')?.value || '').trim();
+    const reviewed = !!document.getElementById('ome-create-test-reviewed')?.checked;
+    return { testName, reviewed };
+  }
+
+  function setOmeDraftSaveError(message) {
+    const el = document.getElementById('ome-create-test-error');
+    if (!el) return;
+    el.style.display = message ? 'block' : 'none';
+    el.textContent = message || '';
+  }
+
+  function renderOmeDraftSaveDiagnostics(items, errors, target, readiness, inputs, lastMessage = '', counts = null) {
+    const el = document.getElementById('ome-create-test-diagnostics');
+    if (!el) return;
+    const selectedValue = document.getElementById('ome-create-test-target')?.value || '';
+    const approvedCount = getApprovedOmeDrafts().length;
+    const targetLabel = selectedValue
+      ? selectedValue === '__new__' ? 'Create new OME Notes folder' : `${target?.folder?.name || 'Unknown folder'} (${selectedValue})`
+      : 'None selected';
+    const validationLabel = errors.length ? `Blocked: ${errors[0]}` : 'Passed';
+    const readinessLabel = readiness.ok ? 'Ready' : `Blocked: ${readiness.message}`;
+    el.innerHTML = [
+      `<div><strong>Selected target:</strong> ${escapeHTML(targetLabel)}</div>`,
+      `<div><strong>Test name valid:</strong> ${inputs.testName ? 'Yes' : 'No'}</div>`,
+      `<div><strong>Review confirmation checked:</strong> ${inputs.reviewed ? 'Yes' : 'No'}</div>`,
+      `<div><strong>Approved count:</strong> ${approvedCount}</div>`,
+      `<div><strong>Quiz object previews:</strong> ${items.length}</div>`,
+      `<div><strong>Validation status:</strong> ${escapeHTML(validationLabel)}</div>`,
+      `<div><strong>Save readiness:</strong> ${escapeHTML(readinessLabel)}</div>`,
+      counts ? `<div><strong>DB tests before/after:</strong> ${counts.before} / ${counts.after}</div>` : '',
+      lastMessage ? `<div><strong>Last save result/error:</strong> ${escapeHTML(lastMessage)}</div>` : ''
+    ].filter(Boolean).join('');
+  }
+
+  function getApprovedOmeDraftCreateTestReadiness(items, errors, target, inputs) {
+    if (!items.length) return { ok: false, message: 'Approve at least one OME draft before creating a test.' };
+    if (errors.length) return { ok: false, message: `Cannot create test: ${errors[0]}` };
+    if (!target?.ok) return { ok: false, message: target?.error || 'Choose an OME subfolder before creating a test.' };
+    if (!inputs.testName) return { ok: false, message: 'Enter a test name before creating a test.' };
+    if (!inputs.reviewed) return { ok: false, message: 'Confirm that you reviewed and approve these quiz objects before creating a test.' };
+    return { ok: true, message: '' };
+  }
+
+  function updateApprovedOmeDraftCreateTestButton() {
+    const btn = document.getElementById('ome-create-test-approved');
+    if (!btn) return;
+    const { items, errors } = getApprovedOmeQuizObjectPreviewValidation();
+    const target = getSelectedOmeDraftSaveTarget();
+    const inputs = getOmeDraftSaveInputs();
+    const readiness = getApprovedOmeDraftCreateTestReadiness(items, errors, target, inputs);
+    btn.disabled = !readiness.ok;
+    btn.textContent = items.length > 0 ? `Create Test from Approved OME Drafts (${items.length})` : 'Create Test from Approved OME Drafts';
+    btn.title = readiness.message;
+    setOmeDraftSaveError(readiness.ok ? '' : readiness.message);
+    renderOmeDraftSaveDiagnostics(items, errors, target, readiness, inputs);
+  }
+
+  function createTestFromApprovedOmeDrafts() {
+    const { items, errors } = getApprovedOmeQuizObjectPreviewValidation();
+    const target = getSelectedOmeDraftSaveTarget();
+    const inputs = getOmeDraftSaveInputs();
+    const readiness = getApprovedOmeDraftCreateTestReadiness(items, errors, target, inputs);
+    const selectedValue = document.getElementById('ome-create-test-target')?.value || '';
+
+    if (!readiness.ok) {
+      const blockedState = {
+        clickHandlerFired: true,
+        sourceId: target?.source?.id || null,
+        sourceType: target?.source?.sourceType || null,
+        selectedTargetValue: selectedValue,
+        selectedTargetMode: target?.mode || null,
+        selectedFolderId: target?.folder?.id || null,
+        approvedOmeDraftCount: getApprovedOmeDrafts().length,
+        quizObjectPreviewCount: items.length,
+        validationErrors: errors,
+        dbCreateTestReached: false
+      };
+      console.warn('OME draft save blocked:', blockedState);
+      setOmeDraftSaveError(readiness.message);
+      renderOmeDraftSaveDiagnostics(items, errors, target, readiness, inputs, `Blocked: ${readiness.message}`);
+      toast(readiness.message, 8000);
+      return;
+    }
+    setOmeDraftSaveError('');
+
+    try {
+      const testName = inputs.testName;
+      const targetFolderName = target.folder?.name || 'OME Notes';
+      const source = target.source || getOmeSourceFolder();
+      const beforeCount = DB.get().tests.length;
+      const questions = items.map(item => {
+        const question = JSON.parse(JSON.stringify(item.quizQuestion));
+        question.omeDraftProvenance = JSON.parse(JSON.stringify({
+          ...(item.provenance || {}),
+          targetFolderId: target.folder?.id || null,
+          targetFolderName,
+          savedAt: new Date().toISOString()
+        }));
+        return question;
+      });
+      const immediateErrors = questions.flatMap((question, idx) => validateOmeQuizObjectPreviewItem({
+        quizQuestion: question,
+        provenance: question.omeDraftProvenance || {}
+      }).errors.map(error => `Question ${idx + 1}: ${error}`));
+      if (immediateErrors.length) {
+        const message = `Cannot create test: ${immediateErrors[0]}`;
+        console.warn('OME draft save failed validation before DB.createTest:', {
+          selectedTargetValue: selectedValue,
+          approvedOmeDraftCount: getApprovedOmeDrafts().length,
+          quizObjectPreviewCount: questions.length,
+          validationErrors: immediateErrors,
+          dbCreateTestReached: false
+        });
+        setOmeDraftSaveError(message);
+        renderOmeDraftSaveDiagnostics(items, immediateErrors, target, { ok: false, message }, inputs, `Failed: ${message}`, { before: beforeCount, after: beforeCount });
+        toast(message, 8000);
+        return;
+      }
+
+      const targetFolder = target.folder || DB.createFolder(targetFolderName, source?.id || 'src-ome');
+      if (!targetFolder?.id) {
+        const message = 'Could not resolve the selected OME target folder.';
+        console.warn('OME draft save failed:', { selectedTargetValue: selectedValue, dbCreateTestReached: false, message });
+        setOmeDraftSaveError(message);
+        renderOmeDraftSaveDiagnostics(items, errors, target, readiness, inputs, `Failed: ${message}`, { before: beforeCount, after: beforeCount });
+        toast(message, 8000);
+        return;
+      }
+
+      const test = DB.createTest(targetFolder.id, testName, questions);
+      const afterCount = DB.get().tests.length;
+      const saved = !!test && afterCount === beforeCount + 1;
+      if (!saved) {
+        const message = test
+          ? `DB.createTest returned a test, but DB test count changed from ${beforeCount} to ${afterCount}.`
+          : 'DB.createTest did not save the test. Storage may be full.';
+        console.warn('OME draft save failed:', {
+          selectedTargetValue: selectedValue,
+          resolvedTargetFolderId: targetFolder.id,
+          approvedOmeDraftCount: getApprovedOmeDrafts().length,
+          quizObjectPreviewCount: items.length,
+          validationErrors: errors,
+          testName,
+          reviewed: inputs.reviewed,
+          dbCreateTestArgs: { folderId: targetFolder.id, name: testName, questionCount: questions.length },
+          dbCreateTestReturn: test,
+          testsBefore: beforeCount,
+          testsAfter: afterCount,
+          uiRefreshStarted: false
+        });
+        setOmeDraftSaveError(message);
+        renderOmeDraftSaveDiagnostics(items, errors, target, readiness, inputs, `Failed: ${message}`, { before: beforeCount, after: afterCount });
+        toast(message, 8000);
+        return;
+      }
+
+      const lastMessage = `Saved ${questions.length} quiz object${questions.length === 1 ? '' : 's'} to "${testName}" in ${targetFolder.name}.`;
+      console.info('OME draft save succeeded:', {
+        selectedTargetValue: selectedValue,
+        resolvedTargetFolderId: targetFolder.id,
+        approvedOmeDraftCount: getApprovedOmeDrafts().length,
+        quizObjectPreviewCount: items.length,
+        validationErrors: errors,
+        testName,
+        reviewed: inputs.reviewed,
+        dbCreateTestArgs: { folderId: targetFolder.id, name: testName, questionCount: questions.length },
+        testId: test?.id || null,
+        testsBefore: beforeCount,
+        testsAfter: afterCount,
+        uiRefreshStarted: true
+      });
+      const resolvedTarget = { ...target, mode: 'existing-folder', folder: targetFolder, ok: true, error: '' };
+      renderOmeDraftSaveTargetSelector(true);
+      if (target.mode === 'new-folder') {
+        const saveTarget = document.getElementById('ome-create-test-target');
+        if (saveTarget && targetFolder?.id) saveTarget.value = targetFolder.id;
+      }
+      setOmeDraftSaveError('');
+      renderOmeDraftSaveDiagnostics(items, errors, resolvedTarget, readiness, inputs, lastMessage, { before: beforeCount, after: afterCount });
+      toast(lastMessage, 4000);
+    } catch (err) {
+      const message = `Failed to create OME test: ${err?.message || 'Unknown save error.'}`;
+      console.warn('OME draft save failed with exception:', err);
+      setOmeDraftSaveError(message);
+      renderOmeDraftSaveDiagnostics(items, errors, target, { ok: false, message }, inputs, message);
+      toast(message, 8000);
+    }
   }
 
   function buildOmePageStructure({ pageNumber, textContent, sourceName, sourceHash, headingStack, orderStart }) {
@@ -9008,10 +9282,24 @@ const App = (() => {
       _omeImportPreview = null;
       if (status) status.textContent = 'Unsupported file type. Choose one .pdf file from the OME source folder.';
       if (preview) preview.innerHTML = '<div class="notes-import-empty">Only .pdf files are accepted.</div>';
+      const saveTarget = document.getElementById('ome-create-test-target');
+      const saveName = document.getElementById('ome-create-test-name');
+      const saveReviewed = document.getElementById('ome-create-test-reviewed');
+      const saveDiagnostics = document.getElementById('ome-create-test-diagnostics');
+      const saveError = document.getElementById('ome-create-test-error');
+      if (saveTarget) saveTarget.value = '';
+      if (saveName) saveName.value = 'OME Drafts Test';
+      if (saveReviewed) saveReviewed.checked = false;
+      if (saveDiagnostics) saveDiagnostics.textContent = 'Save readiness will appear after approved drafts are available.';
+      if (saveError) {
+        saveError.style.display = 'none';
+        saveError.textContent = '';
+      }
       setOmeDraftExportError('');
       renderOmeConceptPreview(null);
       renderOmeClusterPreview(null);
       renderOmeDraftPreview(null);
+      updateApprovedOmeDraftCreateTestButton();
       return;
     }
 
@@ -9035,6 +9323,7 @@ const App = (() => {
         structure.targetQuestionCount
       );
       _omeImportPreview = structure;
+      renderOmeDraftSaveTargetSelector(false);
       if (status) {
         status.textContent = structure.warningCount
           ? `Parsed ${structure.pageCount} page${structure.pageCount === 1 ? '' : 's'} and extracted ${structure.blockCount} block${structure.blockCount === 1 ? '' : 's'} with ${structure.warningCount} warning${structure.warningCount === 1 ? '' : 's'}.`
@@ -9048,9 +9337,23 @@ const App = (() => {
       _omeImportPreview = null;
       if (status) status.textContent = `Unable to preview OME PDF: ${err?.message || 'Unknown parse error.'}`;
       if (preview) preview.innerHTML = '<div class="notes-import-empty">No OME structure preview loaded.</div>';
+      const saveTarget = document.getElementById('ome-create-test-target');
+      const saveName = document.getElementById('ome-create-test-name');
+      const saveReviewed = document.getElementById('ome-create-test-reviewed');
+      const saveDiagnostics = document.getElementById('ome-create-test-diagnostics');
+      const saveError = document.getElementById('ome-create-test-error');
+      if (saveTarget) saveTarget.value = '';
+      if (saveName) saveName.value = 'OME Drafts Test';
+      if (saveReviewed) saveReviewed.checked = false;
+      if (saveDiagnostics) saveDiagnostics.textContent = 'Save readiness will appear after approved drafts are available.';
+      if (saveError) {
+        saveError.style.display = 'none';
+        saveError.textContent = '';
+      }
       renderOmeConceptPreview(null);
       renderOmeClusterPreview(null);
       renderOmeDraftPreview(null);
+      updateApprovedOmeDraftCreateTestButton();
     }
   }
 
@@ -14772,6 +15075,8 @@ const App = (() => {
     clearOmePdfImportPreview,
     previewOmePdfImport,
     setOmeDraftReviewStatus,
+    updateApprovedOmeDraftCreateTestButton,
+    createTestFromApprovedOmeDrafts,
     exportApprovedOmeDraftsJson,
     updateOmeClusterSelection,
     selectAllOmeClusters,
