@@ -143,6 +143,24 @@ This file should track migration stages, decisions, risks, verification checkpoi
 - Support text mode, image mode, and hybrid mode.
 - Preserve both parsed text and stem/image crops when available.
 - Make render mode reviewable/editable by the user.
+- Current behavior is implicit: ordinary non-grouped questions with a `stem` image hide parsed stem text and render the stem crop; grouped questions suppress `stem` images and prefer structured shared instruction, shared stem, individual stem, and one selectable answer bank.
+- Future render-mode data should be per-question metadata, not hardcoded by source question number.
+- Recommended future question fields:
+  - `renderMode`: `text`, `image`, or `hybrid`.
+  - `renderModeSource`: `auto`, `parser`, or `manual`.
+  - `renderConfidence`: numeric or categorical confidence for the selected mode.
+  - `renderWarnings`: non-destructive warnings such as OCR corruption, short stem, duplicated answer bank risk, missing stem crop, or layout contamination.
+  - `textStem`: structured parsed stem text retained even when image mode is selected.
+  - `stemImage`: reference to the selected stem crop, using existing image metadata and `figureKey`.
+  - `supplementalImages`: figure, table, lab, and exhibit references that render outside the main stem.
+  - `manualRenderOverride`: user-selected override with timestamp and prior mode.
+- Render selection strategy:
+  - `text` for clean structured stems and all grouped questions unless explicitly reviewed otherwise.
+  - `image` for OCR-corrupted or layout-sensitive ordinary questions when a reliable stem crop exists.
+  - `hybrid` for usable parsed text with separate figures, tables, or exhibits.
+  - Grouped questions must keep shared choices authoritative and must not render a stem crop that duplicates or misorders an answer bank.
+- Store both text and image evidence when available so a later user review can switch modes without reparsing.
+- Do not change current rendering, grouped behavior, parser logic, or stored quiz shape until a separate implementation stage is approved.
 
 ### Stage 10: Package Later Only After Stable Dev Mode
 
