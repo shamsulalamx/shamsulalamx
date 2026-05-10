@@ -1730,6 +1730,10 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
       <button type="button" class="btn-card" onclick="App.clearNotesBatchRefinementQueue()">Clear Queue</button>
     </div>
     <div id="notes-batch-status" class="notes-import-summary">Build a queue from selected cluster drafts. Live runs use Electron Gemini one at a time.</div>
+    <label class="check-row" style="margin:8px 0 0;">
+      <input type="checkbox" id="notes-batch-preflight-confirm" onchange="App.updateNotesBatchPreflight()">
+      <span>I reviewed the batch preflight summary and understand this may use Gemini API quota.</span>
+    </label>
     <div id="notes-batch-preview" class="notes-draft-preview">
       <div class="notes-import-empty">No batch queue built.</div>
     </div>
@@ -7053,6 +7057,7 @@ const App = (() => {
     const draftStatus = document.getElementById('notes-draft-status');
     const draftPreview = document.getElementById('notes-draft-preview');
     const batchStatus = document.getElementById('notes-batch-status');
+    const batchPreflightConfirm = document.getElementById('notes-batch-preflight-confirm');
     const batchPreview = document.getElementById('notes-batch-preview');
     const quizObjectStatus = document.getElementById('notes-quiz-object-status');
     const quizObjectPreview = document.getElementById('notes-quiz-object-preview');
@@ -7077,6 +7082,7 @@ const App = (() => {
     if (draftStatus) draftStatus.textContent = 'Draft scaffolds will appear after concepts are extracted. They require human or AI review before use.';
     if (draftPreview) draftPreview.innerHTML = '<div class="notes-import-empty">No question drafts generated.</div>';
     if (batchStatus) batchStatus.textContent = 'Build a queue from selected cluster drafts. Live runs use Electron Gemini one at a time.';
+    if (batchPreflightConfirm) batchPreflightConfirm.checked = false;
     if (batchPreview) batchPreview.innerHTML = '<div class="notes-import-empty">No batch queue built.</div>';
     clearNotesBatchQueueState();
     if (quizObjectStatus) quizObjectStatus.textContent = 'Approve AI-refined drafts to preview internal quiz-question objects. Nothing is saved.';
@@ -7260,6 +7266,7 @@ const App = (() => {
     const draftStatus = document.getElementById('notes-draft-status');
     const draftPreview = document.getElementById('notes-draft-preview');
     const batchStatus = document.getElementById('notes-batch-status');
+    const batchPreflightConfirm = document.getElementById('notes-batch-preflight-confirm');
     const batchPreview = document.getElementById('notes-batch-preview');
     if (status) {
       status.textContent = 'Reading DOCX preview...';
@@ -7291,6 +7298,7 @@ const App = (() => {
       batchStatus.textContent = 'Waiting for selected cluster drafts...';
       batchStatus.style.color = '#5a6a7a';
     }
+    if (batchPreflightConfirm) batchPreflightConfirm.checked = false;
     if (batchPreview) batchPreview.innerHTML = '<div class="notes-import-empty">No batch queue built.</div>';
     clearNotesBatchQueueState();
     try {
@@ -8329,6 +8337,11 @@ const App = (() => {
     }
   }
 
+  function resetNotesBatchPreflightConfirmation() {
+    const checkbox = document.getElementById('notes-batch-preflight-confirm');
+    if (checkbox) checkbox.checked = false;
+  }
+
   function resetNotesBatchQueueForDraftChange() {
     clearNotesBatchQueueState();
     if (_notesImportPreview) {
@@ -8414,6 +8427,7 @@ const App = (() => {
       return;
     }
     clearNotesBatchQueueState();
+    resetNotesBatchPreflightConfirmation();
     const seenHashes = new Set();
     let liveRequestCount = 0;
     const items = _notesImportPreview.drafts.map((draft, idx) => {
@@ -8619,6 +8633,12 @@ const App = (() => {
     if (!_notesImportPreview.batchRefinementQueue) buildNotesBatchRefinementQueue();
     const queue = _notesImportPreview.batchRefinementQueue;
     if (!queue) return;
+    if (!document.getElementById('notes-batch-preflight-confirm')?.checked) {
+      queue.status = 'preflight';
+      renderNotesBatchRefinementPreview();
+      toast('Review the batch preflight summary and check the confirmation box before running live Gemini refinement.', 8000);
+      return;
+    }
     if (typeof window.nbmeDesktop?.ai?.refineUWorldDraft !== 'function') {
       queue.status = 'blocked';
       renderNotesBatchRefinementPreview();
@@ -8630,6 +8650,10 @@ const App = (() => {
     queue.status = 'running';
     clearNotesBatchQueueState();
     processNextLiveBatchItem();
+  }
+
+  function updateNotesBatchPreflight() {
+    renderNotesBatchRefinementPreview();
   }
 
   function pauseNotesBatchRefinementQueue() {
@@ -8712,6 +8736,39 @@ const App = (() => {
     }
   }
 
+  function getNotesBatchPreflightSummary(queue, counts) {
+    const coverageRows = buildNotesCoverageSummary();
+    const coverageGapRows = coverageRows.filter(row => row.selectedClusters > 0 && row.refinedDrafts === 0);
+    const duplicateWarnings = coverageRows.reduce((sum, row) => sum + row.duplicateWarnings, 0);
+    const skippedItems = counts.skipped || 0;
+    return {
+      selectedClusters: _notesImportPreview?.selectedClusterIds?.length || 0,
+      estimatedGeminiCalls: counts.remainingModelCalls,
+      duplicateWarnings,
+      skippedItems,
+      coverageGapRows
+    };
+  }
+
+  function renderNotesBatchPreflight(queue, counts) {
+    const summary = getNotesBatchPreflightSummary(queue, counts);
+    const checked = !!document.getElementById('notes-batch-preflight-confirm')?.checked;
+    const gaps = summary.coverageGapRows.length
+      ? summary.coverageGapRows.slice(0, 6).map(row => `<div>${escapeHTML(row.sectionPath)} / ${escapeHTML(row.topic)}</div>`).join('')
+      : '<div>None detected.</div>';
+    return `<div class="notes-draft-teaching" style="margin-bottom:10px;">
+      <strong>Live batch preflight:</strong>
+      <div>Selected clusters: ${summary.selectedClusters}</div>
+      <div>Estimated Gemini calls: ${summary.estimatedGeminiCalls}</div>
+      <div>Duplicate warnings: ${summary.duplicateWarnings}</div>
+      <div>Skipped queue items: ${summary.skippedItems}</div>
+      <div>Coverage gaps with zero refined drafts:</div>
+      ${gaps}
+      <div style="color:#8a5a00;margin-top:6px;">Cost warning: live refinement may use paid Gemini API quota. Processing remains one item at a time.</div>
+      <div>Confirmation: ${checked ? 'checked' : 'not checked'}</div>
+    </div>`;
+  }
+
   function renderNotesBatchRefinementPreview() {
     const status = document.getElementById('notes-batch-status');
     const preview = document.getElementById('notes-batch-preview');
@@ -8750,7 +8807,8 @@ const App = (() => {
       <div>Estimated remaining Gemini calls: ${counts.remainingModelCalls}</div>
       <div>Current item: ${escapeHTML(currentItem?.draftId || 'None')}</div>
     </div>`;
-    preview.innerHTML = safetyWarnings + progressSummary + queue.items.map((item, idx) => {
+    const preflightSummary = renderNotesBatchPreflight(queue, counts);
+    preview.innerHTML = safetyWarnings + preflightSummary + progressSummary + queue.items.map((item, idx) => {
       const refined = item.refinedDraft
         ? `<div class="notes-draft-teaching" style="margin-top:8px;"><strong>Refined output:</strong> added to review as pending approval.<br>${escapeHTML(item.refinedDraft.teachingPoint || '')}</div>`
         : '';
@@ -10438,6 +10496,7 @@ const App = (() => {
     deselectAllNotesClusters,
     buildNotesBatchRefinementQueue,
     runNotesBatchRefinementQueue,
+    updateNotesBatchPreflight,
     pauseNotesBatchRefinementQueue,
     cancelRemainingNotesBatchRefinement,
     retryFailedNotesBatchRefinement,
