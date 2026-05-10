@@ -1802,6 +1802,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
       <div class="notes-import-empty">No variant drafts generated.</div>
     </div>
     <div class="modal-actions">
+      <button type="button" class="btn-modal" id="anki-export-approved" onclick="App.exportApprovedAnkiVariantsJson()" disabled>Export Approved Anki Variants JSON</button>
       <button type="button" class="btn-modal" onclick="App.clearAnkiTextImportPreview()">Clear</button>
       <button type="button" class="btn-modal primary" onclick="App.closeAnkiTextImportPreview()">Done</button>
     </div>
@@ -7107,6 +7108,7 @@ const App = (() => {
     if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No clusters generated.</div>';
     if (variantStatus) variantStatus.textContent = 'Variant drafts will appear after clusters are analyzed.';
     if (variantPreview) variantPreview.innerHTML = '<div class="notes-import-empty">No variant drafts generated.</div>';
+    updateAnkiVariantExportButton();
   }
 
   async function previewAnkiTextExport(input) {
@@ -7134,6 +7136,7 @@ const App = (() => {
       if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No clusters generated.</div>';
       if (variantStatus) variantStatus.textContent = 'No variant drafts generated.';
       if (variantPreview) variantPreview.innerHTML = '<div class="notes-import-empty">No variant drafts generated.</div>';
+      updateAnkiVariantExportButton();
       return;
     }
 
@@ -7148,6 +7151,7 @@ const App = (() => {
       if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No clusters generated.</div>';
       if (variantStatus) variantStatus.textContent = 'No variant drafts generated.';
       if (variantPreview) variantPreview.innerHTML = '<div class="notes-import-empty">No variant drafts generated.</div>';
+      updateAnkiVariantExportButton();
       return;
     }
 
@@ -7180,6 +7184,7 @@ const App = (() => {
       if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No clusters generated.</div>';
       if (variantStatus) variantStatus.textContent = 'No variant drafts generated.';
       if (variantPreview) variantPreview.innerHTML = '<div class="notes-import-empty">No variant drafts generated.</div>';
+      updateAnkiVariantExportButton();
     }
   }
 
@@ -7216,6 +7221,7 @@ const App = (() => {
 
     return {
       fileName,
+      sourceHash: fallbackTextHash(normalizedText),
       headers: headerResult.headers,
       separator,
       rowCount: rows.length,
@@ -8370,6 +8376,11 @@ const App = (() => {
       raw: entry.raw || ''
     })));
     const sourceCardWarnings = uniqueAnkiStrings((cluster.members || []).flatMap(member => member.warnings || []));
+    const sourceGuids = (cluster.members || []).map(member => member.guid || '');
+    const sourceNoteTypes = (cluster.members || []).map(member => member.noteType || '');
+    const sourceDeckRaws = (cluster.members || []).map(member => member.deckRaw || '');
+    const sourceDeckPathValues = (cluster.members || []).map(member => member.deckPath || []);
+    const sourceHashes = (cluster.members || []).map(member => member.sourceHash || '');
     const variantWarnings = uniqueAnkiStrings([
       ...((cluster.warnings || [])),
       ...sourceCardWarnings,
@@ -8398,6 +8409,19 @@ const App = (() => {
       sourceCardIds,
       sourceCardOrders,
       sourceCardCount: sourceCardIds.length,
+      sourceGuids,
+      sourceNoteTypes,
+      sourceDeckRaws,
+      sourceDeckPathValues,
+      sourceHashes,
+      sourceHash: fallbackTextHash(JSON.stringify({
+        clusterId: cluster.id,
+        variantType,
+        sourceCardIds,
+        sourceCardOrders,
+        sourceGuids,
+        sourceHashes
+      })),
       tagsExact,
       tagsNormalized,
       deckPaths,
@@ -8477,12 +8501,14 @@ const App = (() => {
 
     const drafts = Array.isArray(result?.drafts) ? result.drafts : [];
     const reviewStatus = result?.reviewStatus || {};
+    updateAnkiVariantExportButton();
     if (!drafts.length) {
       const skippedCount = Array.isArray(result?.skippedClusters) ? result.skippedClusters.length : 0;
       status.textContent = skippedCount
         ? `No strong clusters met the draft guardrails. ${skippedCount} cluster${skippedCount === 1 ? '' : 's'} were skipped.`
         : 'No variant drafts generated from the clusters.';
       preview.innerHTML = '<div class="notes-import-empty">No variant drafts generated.</div>';
+      updateAnkiVariantExportButton();
       return;
     }
 
@@ -8572,6 +8598,7 @@ const App = (() => {
       ${cards}
       ${drafts.length > 18 ? `<div class="notes-import-empty">Showing first 18 of ${drafts.length} variant drafts.</div>` : ''}
     `;
+    updateAnkiVariantExportButton();
   }
 
   function setAnkiVariantReviewStatus(draftId, status) {
@@ -8582,6 +8609,162 @@ const App = (() => {
     _ankiImportPreview.variantResult.reviewStatus = _ankiImportPreview.variantResult.reviewStatus || {};
     _ankiImportPreview.variantResult.reviewStatus[draftId] = status;
     renderAnkiVariantPreview(_ankiImportPreview.variantResult);
+  }
+
+  function getApprovedAnkiVariantDrafts() {
+    const result = _ankiImportPreview?.variantResult;
+    const drafts = Array.isArray(result?.drafts) ? result.drafts : [];
+    const reviewStatus = result?.reviewStatus || {};
+    return drafts
+      .filter(draft => reviewStatus[draft.id] === 'approved')
+      .map(draft => ({ draftId: draft.id, draft }));
+  }
+
+  function updateAnkiVariantExportButton() {
+    const btn = document.getElementById('anki-export-approved');
+    if (!btn) return;
+    const approvedCount = getApprovedAnkiVariantDrafts().length;
+    btn.disabled = approvedCount < 1;
+    btn.textContent = approvedCount > 0
+      ? `Export Approved Anki Variants JSON (${approvedCount})`
+      : 'Export Approved Anki Variants JSON';
+    btn.title = approvedCount > 0
+      ? 'Export approved Anki variant drafts as JSON.'
+      : 'Approve at least one Anki variant draft before exporting.';
+  }
+
+  function validateApprovedAnkiVariantExportPayload(payload) {
+    const errors = [];
+    const labels = ['A', 'B', 'C', 'D', 'E'];
+
+    if (payload?.exportType !== 'anki-approved-variant-drafts-preview') errors.push('Invalid export type.');
+    if (payload?.exportVersion !== 1) errors.push('Invalid export version.');
+    if (!nonemptyString(payload?.exportedAt)) errors.push('Missing export timestamp.');
+    if (!payload?.source || payload.source.sourceType !== 'anki-text') errors.push('Missing Anki source metadata.');
+    if (!nonemptyString(payload?.source?.sourceName)) errors.push('Missing source name.');
+    if (!nonemptyString(payload?.source?.sourceHash)) errors.push('Missing source hash.');
+    if (!Number.isFinite(payload?.approvedCount)) errors.push('Missing approved count.');
+    if (payload?.approvedCount !== payload?.drafts?.length) errors.push('Approved count does not match the exported draft array.');
+    if (!Array.isArray(payload?.drafts) || payload.drafts.length < 1) errors.push('Draft array is empty.');
+
+    (payload?.drafts || []).forEach((entry, idx) => {
+      const prefix = `Draft ${idx + 1}`;
+      if (entry.reviewStatus !== 'approved') errors.push(`${prefix}: review status is not approved.`);
+      if (!nonemptyString(entry.draftId)) errors.push(`${prefix}: missing draft ID.`);
+      if (!nonemptyString(entry.clusterId)) errors.push(`${prefix}: missing cluster ID.`);
+      if (!Number.isFinite(entry.clusterIndex)) errors.push(`${prefix}: missing cluster index.`);
+      if (!nonemptyString(entry.sourceName)) errors.push(`${prefix}: missing source name.`);
+      if (!nonemptyString(entry.sourceHash)) errors.push(`${prefix}: missing source hash.`);
+      if (!nonemptyString(entry.variantType)) errors.push(`${prefix}: missing variant type.`);
+      if (!nonemptyString(entry.teachingPoint)) errors.push(`${prefix}: missing teaching point.`);
+      if (!labels.includes(entry.provisionalCorrectAnswer)) errors.push(`${prefix}: provisional correct answer must be A-E.`);
+      if (!Array.isArray(entry.sourceCardIds) || !entry.sourceCardIds.length || entry.sourceCardIds.some(id => !nonemptyString(id))) errors.push(`${prefix}: missing source card IDs.`);
+      if (!Array.isArray(entry.sourceCardOrders) || entry.sourceCardOrders.length !== entry.sourceCardIds.length || entry.sourceCardOrders.some(order => order === null || order === undefined || order === '')) errors.push(`${prefix}: missing source card orders.`);
+      if (!Array.isArray(entry.sourceGuids) || entry.sourceGuids.length !== entry.sourceCardIds.length) errors.push(`${prefix}: missing source GUID provenance.`);
+      if (!Array.isArray(entry.sourceNoteTypes) || entry.sourceNoteTypes.length !== entry.sourceCardIds.length || entry.sourceNoteTypes.some(value => !nonemptyString(value))) errors.push(`${prefix}: missing note type provenance.`);
+      if (!Array.isArray(entry.sourceDeckRaws) || entry.sourceDeckRaws.length !== entry.sourceCardIds.length || entry.sourceDeckRaws.some(value => !nonemptyString(value))) errors.push(`${prefix}: missing deckRaw provenance.`);
+      if (!Array.isArray(entry.sourceDeckPathValues) || entry.sourceDeckPathValues.length !== entry.sourceCardIds.length || entry.sourceDeckPathValues.some(value => !Array.isArray(value) || !value.length)) errors.push(`${prefix}: missing deckPath provenance.`);
+      if (!Array.isArray(entry.tagsExact)) errors.push(`${prefix}: missing exact tags provenance.`);
+      if (!Array.isArray(entry.tagsNormalized)) errors.push(`${prefix}: missing normalized tags provenance.`);
+      if (!Array.isArray(entry.clozeProvenance)) errors.push(`${prefix}: missing cloze provenance.`);
+      if (!Array.isArray(entry.sourceSnippets) || !entry.sourceSnippets.length) errors.push(`${prefix}: missing source snippets provenance.`);
+      if (!Array.isArray(entry.warnings)) errors.push(`${prefix}: missing warnings provenance.`);
+      if (!Array.isArray(entry.choices) || entry.choices.length !== 5) {
+        errors.push(`${prefix}: must contain exactly five choices.`);
+      } else {
+        entry.choices.forEach((choice, choiceIdx) => {
+          if (choice?.label !== labels[choiceIdx]) errors.push(`${prefix}: choice labels must be A-E in order.`);
+          if (!nonemptyString(choice?.text)) errors.push(`${prefix}: choice ${labels[choiceIdx]} is missing text.`);
+          if (!nonemptyString(choice?.rationale)) errors.push(`${prefix}: choice ${labels[choiceIdx]} is missing rationale.`);
+        });
+      }
+      if (!Array.isArray(entry.placeholderDistractorRationales)) errors.push(`${prefix}: missing placeholder distractor rationales.`);
+      if (entry.placeholderDistractorRationales?.length !== 4) errors.push(`${prefix}: placeholder distractor rationales must contain four entries.`);
+    });
+
+    return { ok: errors.length === 0, errors };
+  }
+
+  function exportApprovedAnkiVariantsJson() {
+    const approved = getApprovedAnkiVariantDrafts();
+    if (!approved.length) {
+      const message = 'Approve at least one Anki variant draft before exporting.';
+      toast(message, 8000);
+      const status = document.getElementById('anki-variant-status');
+      if (status) status.textContent = message;
+      updateAnkiVariantExportButton();
+      return;
+    }
+
+    const sourceName = _ankiImportPreview?.fileName || '';
+    const sourceHash = _ankiImportPreview?.sourceHash || fallbackTextHash(JSON.stringify({
+      sourceName,
+      draftIds: approved.map(item => item.draft.id),
+      sourceCardIds: approved.flatMap(item => item.draft.sourceCardIds || []),
+      sourceHashes: approved.flatMap(item => item.draft.sourceHashes || [])
+    }));
+
+    const payload = {
+      exportType: 'anki-approved-variant-drafts-preview',
+      exportVersion: 1,
+      exportedAt: new Date().toISOString(),
+      approvedCount: approved.length,
+      source: {
+        sourceType: 'anki-text',
+        sourceName,
+        sourceHash
+      },
+      drafts: approved.map(({ draft }) => ({
+        reviewStatus: 'approved',
+        draftId: draft.id,
+        clusterId: draft.clusterId,
+        clusterIndex: draft.clusterIndex,
+        sourceName,
+        sourceHash: draft.sourceHash || sourceHash,
+        sourceCardIds: Array.isArray(draft.sourceCardIds) ? draft.sourceCardIds.slice() : [],
+        sourceCardOrders: Array.isArray(draft.sourceCardOrders) ? draft.sourceCardOrders.slice() : [],
+        sourceGuids: Array.isArray(draft.sourceGuids) ? draft.sourceGuids.slice() : [],
+        sourceNoteTypes: Array.isArray(draft.sourceNoteTypes) ? draft.sourceNoteTypes.slice() : [],
+        sourceDeckRaws: Array.isArray(draft.sourceDeckRaws) ? draft.sourceDeckRaws.slice() : [],
+        sourceDeckPathValues: Array.isArray(draft.sourceDeckPathValues) ? draft.sourceDeckPathValues.map(path => Array.isArray(path) ? path.slice() : []) : [],
+        tagsExact: Array.isArray(draft.tagsExact) ? draft.tagsExact.slice() : [],
+        tagsNormalized: Array.isArray(draft.tagsNormalized) ? draft.tagsNormalized.slice() : [],
+        clozeProvenance: Array.isArray(draft.clozeProvenance) ? draft.clozeProvenance.map(entry => ({ ...entry })) : [],
+        warnings: Array.isArray(draft.warnings) ? draft.warnings.slice() : [],
+        variantType: draft.variantType,
+        stemScaffold: draft.stemScaffold,
+        teachingPoint: draft.teachingPoint,
+        choices: Array.isArray(draft.choices) ? draft.choices.map(choice => ({ ...choice })) : [],
+        provisionalCorrectAnswer: draft.provisionalCorrectAnswer,
+        sourceSnippets: Array.isArray(draft.sourceSnippets) ? draft.sourceSnippets.map(snippet => ({
+          ...(snippet && typeof snippet === 'object' ? snippet : {}),
+          snippets: Array.isArray(snippet?.snippets)
+            ? snippet.snippets.map(item => (item && typeof item === 'object' ? { ...item } : item))
+            : []
+        })) : [],
+        sourceProof: draft.sourceProof ? { ...draft.sourceProof } : null
+      }))
+    };
+
+    const validation = validateApprovedAnkiVariantExportPayload(payload);
+    if (!validation.ok) {
+      const message = `Approved Anki variant export blocked: ${validation.errors[0]}`;
+      toast(message, 8000);
+      const status = document.getElementById('anki-variant-status');
+      if (status) status.textContent = message;
+      return;
+    }
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const safeName = (sourceName || 'anki-notes').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'anki-notes';
+    a.href = url;
+    a.download = `${safeName}-approved-anki-variants-preview.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   function openNotesImportPreview() {
@@ -12051,6 +12234,7 @@ const App = (() => {
     clearAnkiTextImportPreview,
     previewAnkiTextExport,
     setAnkiVariantReviewStatus,
+    exportApprovedAnkiVariantsJson,
     openNotesImportPreview,
     closeNotesImportPreview,
     clearNotesImportPreview,
