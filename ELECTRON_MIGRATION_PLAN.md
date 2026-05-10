@@ -27,6 +27,8 @@ Ownership: this file is the staged Electron roadmap. Durable architecture rules 
 - Anki v1 intentionally does not use Gemini yet.
 - OME v1 is implemented inside the current app using short high-quality PDF imports only, PDF.js text-layer extraction only, structure/block preview, concept extraction, concept clustering, selected clusters, deterministic draft preview, review controls, approved-draft JSON export, quiz-object preview, and controlled save into real tests.
 - OME v1 intentionally does not add OCR fallback and does not use Gemini yet.
+- Source-level validation across NBME, UWorld, Anki, and OME passed without modifying files during validation.
+- Runtime and live fixture validation remain pending.
 - Live Gemini validation/testing is intentionally deferred to conserve API credits.
 - Primary local origin is `http://localhost:8888`; secondary/fallback local origin is `http://localhost:8080`.
 - Localhost dev loading remains intentional during migration. Packaged/local app loading should come later, after storage and service boundaries are verified.

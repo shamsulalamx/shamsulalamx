@@ -43,6 +43,9 @@ Ownership: this file is the current runtime/status snapshot. Durable rules belon
   - `deno.lock` is untracked and should not be touched unless explicitly requested.
 - `.DS_Store` is unrelated and should not be touched unless explicitly requested.
 - No push or Netlify deploy has been performed after checkpoint `2ba4b1d` from this checkout.
+- Source-level validation across NBME, UWorld, Anki, and OME passed without modifying files during validation.
+- Runtime and live fixture validation remain pending.
+- Gemini validation remains intentionally deferred to conserve API credits.
 
 ## Current Architecture
 
