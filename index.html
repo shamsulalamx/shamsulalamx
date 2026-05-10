@@ -1687,6 +1687,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
       <div class="notes-import-empty">No question drafts generated.</div>
     </div>
     <div class="modal-actions">
+      <button class="btn-modal" id="notes-export-approved" onclick="App.exportApprovedRefinedDraftsJson()" disabled>Export Approved Drafts JSON</button>
       <button class="btn-modal" onclick="App.clearNotesImportPreview()">Clear</button>
       <button class="btn-modal primary" onclick="App.closeNotesImportPreview()">Done</button>
     </div>
@@ -6969,7 +6970,24 @@ const App = (() => {
     if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concepts extracted.</div>';
     if (draftStatus) draftStatus.textContent = 'Draft scaffolds will appear after concepts are extracted. They require human or AI review before use.';
     if (draftPreview) draftPreview.innerHTML = '<div class="notes-import-empty">No question drafts generated.</div>';
+    updateApprovedDraftExportButton();
     refreshNotesAiStatus();
+  }
+
+  function getApprovedRefinedDrafts() {
+    const refinedDrafts = _notesImportPreview?.refinedDrafts || {};
+    const reviewStatuses = _notesImportPreview?.refinedReviewStatus || {};
+    return Object.entries(refinedDrafts)
+      .filter(([draftId]) => reviewStatuses[draftId] === 'approved')
+      .map(([draftId, refinedDraft]) => ({ draftId, refinedDraft }));
+  }
+
+  function updateApprovedDraftExportButton() {
+    const btn = document.getElementById('notes-export-approved');
+    if (!btn) return;
+    const approvedCount = getApprovedRefinedDrafts().length;
+    btn.disabled = approvedCount < 1;
+    btn.textContent = approvedCount > 0 ? `Export Approved Drafts JSON (${approvedCount})` : 'Export Approved Drafts JSON';
   }
 
   async function refreshNotesAiStatus() {
@@ -7419,6 +7437,7 @@ const App = (() => {
       status.style.color = '#5a6a7a';
       status.textContent = `${drafts.length} question draft scaffold${drafts.length === 1 ? '' : 's'} generated for preview only. ${reviewCount} require review before use. Refined: ${refinedIds.length}; approved: ${reviewSummary.approved || 0}; rejected: ${reviewSummary.rejected || 0}; pending: ${reviewSummary.pending || 0}. Nothing was saved.`;
     }
+    updateApprovedDraftExportButton();
     if (!preview) return;
     if (!drafts.length) {
       preview.innerHTML = '<div class="notes-import-empty">No question drafts generated.</div>';
@@ -7488,6 +7507,112 @@ const App = (() => {
     _notesImportPreview.refinedReviewStatus = _notesImportPreview.refinedReviewStatus || {};
     _notesImportPreview.refinedReviewStatus[draftId] = status;
     renderNotesQuestionDraftPreview(_notesImportPreview.drafts || []);
+  }
+
+  function nonemptyString(value) {
+    return typeof value === 'string' && value.trim().length > 0;
+  }
+
+  function validateApprovedDraftExportPayload(payload) {
+    const errors = [];
+    const labels = ['A', 'B', 'C', 'D', 'E'];
+
+    if (payload?.exportType !== 'uworld-approved-ai-refined-drafts-preview') errors.push('Invalid export type.');
+    if (payload?.exportVersion !== 1) errors.push('Invalid export version.');
+    if (!payload?.source || payload.source.sourceType !== 'docx') errors.push('Missing DOCX source metadata.');
+    if (!nonemptyString(payload?.source?.sourceName)) errors.push('Missing source DOCX name.');
+    if (!nonemptyString(payload?.source?.sourceHash)) errors.push('Missing source hash.');
+    if (!payload?.counts || payload.counts.approved !== payload?.drafts?.length) errors.push('Approved count does not match draft array.');
+    if (!Array.isArray(payload?.drafts) || payload.drafts.length < 1) errors.push('Draft array is empty.');
+
+    (payload?.drafts || []).forEach((entry, idx) => {
+      const prefix = `Draft ${idx + 1}`;
+      const refined = entry?.refinedDraft || {};
+      if (entry.reviewStatus !== 'approved') errors.push(`${prefix}: review status is not approved.`);
+      if (!nonemptyString(entry.deterministicDraftId)) errors.push(`${prefix}: missing deterministic draft ID.`);
+      if (!nonemptyString(entry.sourceConceptId)) errors.push(`${prefix}: missing source concept ID.`);
+      if (!Array.isArray(entry.sourceBlockIds) || !entry.sourceBlockIds.length || entry.sourceBlockIds.some(id => !nonemptyString(id))) errors.push(`${prefix}: missing source block IDs.`);
+      if (!nonemptyString(entry.sourceName)) errors.push(`${prefix}: missing source name.`);
+      if (!nonemptyString(entry.sourceHash)) errors.push(`${prefix}: missing source hash.`);
+      if (!nonemptyString(entry.model)) errors.push(`${prefix}: missing model.`);
+      if (!nonemptyString(entry.generationMethod)) errors.push(`${prefix}: missing generation method.`);
+      if (!nonemptyString(entry.createdAt)) errors.push(`${prefix}: missing creation timestamp.`);
+      if (!nonemptyString(refined.stem)) errors.push(`${prefix}: missing stem.`);
+      if (!nonemptyString(refined.teachingPoint)) errors.push(`${prefix}: missing teaching point.`);
+      if (!labels.includes(refined.correctAnswer)) errors.push(`${prefix}: correct answer must be A-E.`);
+      if (!Array.isArray(refined.choices) || refined.choices.length !== 5) {
+        errors.push(`${prefix}: must contain exactly five choices.`);
+      } else {
+        refined.choices.forEach((choice, choiceIdx) => {
+          if (choice?.label !== labels[choiceIdx]) errors.push(`${prefix}: choice labels must be A-E in order.`);
+          if (!nonemptyString(choice?.text)) errors.push(`${prefix}: choice ${labels[choiceIdx]} is missing text.`);
+        });
+      }
+      if (!refined.rationales || typeof refined.rationales !== 'object') {
+        errors.push(`${prefix}: missing rationales.`);
+      } else {
+        labels.forEach(label => {
+          if (!nonemptyString(refined.rationales[label])) errors.push(`${prefix}: missing rationale ${label}.`);
+        });
+      }
+      if ((refined.sourceDraftId || entry.deterministicDraftId) !== entry.deterministicDraftId) errors.push(`${prefix}: deterministic draft provenance mismatch.`);
+      if ((refined.sourceConceptId || entry.sourceConceptId) !== entry.sourceConceptId) errors.push(`${prefix}: source concept provenance mismatch.`);
+    });
+
+    return { ok: errors.length === 0, errors };
+  }
+
+  function exportApprovedRefinedDraftsJson() {
+    const approved = getApprovedRefinedDrafts();
+    if (!approved.length) {
+      toast('No approved refined drafts to export.');
+      return;
+    }
+    const sourceName = _notesImportPreview?.fileName || '';
+    const sourceHash = _notesImportPreview?.blocks?.[0]?.sourceHash || '';
+    const exportedAt = new Date().toISOString();
+    const payload = {
+      exportType: 'uworld-approved-ai-refined-drafts-preview',
+      exportVersion: 1,
+      exportedAt,
+      savedToAppDatabase: false,
+      quizCreated: false,
+      source: {
+        sourceType: 'docx',
+        sourceName,
+        sourceHash
+      },
+      counts: {
+        approved: approved.length
+      },
+      drafts: approved.map(({ draftId, refinedDraft }) => ({
+        reviewStatus: 'approved',
+        deterministicDraftId: refinedDraft.sourceDraftId || draftId,
+        sourceConceptId: refinedDraft.sourceConceptId || '',
+        sourceBlockIds: Array.isArray(refinedDraft.sourceBlockIds) ? refinedDraft.sourceBlockIds.slice() : [],
+        sourceName: refinedDraft.sourceName || sourceName,
+        sourceHash: refinedDraft.sourceHash || sourceHash,
+        model: refinedDraft.model || 'gemini-2.5-flash',
+        generationMethod: refinedDraft.generationMethod || '',
+        createdAt: refinedDraft.createdAt || '',
+        refinedDraft
+      }))
+    };
+    const validation = validateApprovedDraftExportPayload(payload);
+    if (!validation.ok) {
+      toast(`Approved draft export blocked: ${validation.errors[0]}`, 8000);
+      return;
+    }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const safeName = (sourceName || 'uworld-notes').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'uworld-notes';
+    a.href = url;
+    a.download = `${safeName}-approved-refined-drafts-preview.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   async function refineNotesDraft(draftId) {
@@ -8791,6 +8916,7 @@ const App = (() => {
     previewNotesDocx,
     refineNotesDraft,
     setRefinedDraftReviewStatus,
+    exportApprovedRefinedDraftsJson,
     deleteNote,
     downloadNotesDocx,
     downloadNotesPdf,
