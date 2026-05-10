@@ -20,6 +20,9 @@ Ownership: this file is the staged Electron roadmap. Durable architecture rules 
 - Current app still has browser/Netlify compatibility, but those paths are now transitional during migration.
 - Electron dev scaffolding and planning have started.
 - Browser/Netlify mode remains a rollback and compatibility layer until desktop-native Gemini, storage, backup/restore, and packaging paths are verified.
+- UWorld DOCX pipeline is implemented inside the current app and now includes normalized blocks, concept extraction, deterministic clustering/deduplication, selected clusters, deterministic draft scaffolds, Electron-local Gemini refinement, review controls, approved JSON export, quiz-object preview, and controlled save into real tests.
+- Electron-local UWorld Gemini refinement uses Electron main/preload. The renderer never receives the API key, and `GEMINI_API_KEY` is read from `process.env` only.
+- Batch refinement is not implemented.
 - Primary local origin is `http://localhost:8888`; secondary/fallback local origin is `http://localhost:8080`.
 - Localhost dev loading remains intentional during migration. Packaged/local app loading should come later, after storage and service boundaries are verified.
 - Early Electron work should run locally and should not require push or Netlify deploys.
@@ -32,9 +35,10 @@ Ownership: this file is the staged Electron roadmap. Durable architecture rules 
 - Avoid breaking the stable parser/render pipeline.
 - Preserve parser/debug tooling.
 - Preserve current Google Drive behavior initially.
-- Preserve current Gemini behavior initially.
+- Preserve Netlify/browser rollback behavior while routing Electron-local UWorld refinement through Electron main/preload.
 - Avoid Netlify deploys during local Electron iteration.
 - Do not expose API keys client-side.
+- Do not store Gemini API keys in localStorage, renderer/frontend code, Google Drive backups, debug exports, or packaged assets.
 - Keep migration steps small and reversible.
 - Do not remove Netlify Functions, browser storage, Drive sync, or localhost loading until Electron-native replacements are implemented and verified.
 
@@ -93,12 +97,52 @@ Ownership: this file is the staged Electron roadmap. Durable architecture rules 
 
 ### Stage 6: Preserve Netlify Gemini Initially, Then Migrate To Main
 
-- Continue using current Netlify Functions path for Gemini during early Electron work.
+- Netlify Functions remain available as a transitional/rollback layer.
+- Electron-local UWorld draft refinement now uses Electron main/preload for Gemini requests.
 - Keep `gemini-2.5-flash`.
-- Future desktop-only target: move Gemini requests into the Electron main process behind narrow preload APIs.
+- Desktop target: keep Gemini requests in the Electron main process behind narrow preload APIs.
 - Main process should own API key lookup, request construction, response validation, rate/error handling, and redaction.
 - Do not expose Gemini keys to renderer code, preload globals, localStorage, Drive backups, or packaged assets.
 - Do not remove Netlify Functions until the Electron main-process Gemini path is implemented, verified, and rollback-safe.
+
+### UWorld Notes Pipeline
+
+Current implemented flow:
+
+```text
+DOCX import
+→ normalized blocks
+→ concept extraction
+→ deterministic clustering/deduplication
+→ selected clusters
+→ deterministic draft scaffolds
+→ Electron-local Gemini refinement
+→ review controls
+→ approved draft JSON export
+→ quiz-object preview
+→ controlled save into real tests
+```
+
+Safeguards:
+
+- UWorld importer and draft generation are separate from the NBME PDF parser/OCR/render pipeline.
+- Concept clustering and selected-cluster controls are implemented.
+- Save-to-quiz is controlled and review-gated. It requires approved refined drafts, valid quiz-object previews, an explicit save target, a nonempty test name, and review confirmation.
+- No UWorld path should expose API keys, store secrets, or write Gemini prompt/debug content to Drive backups or debug exports.
+- Batch refinement is not implemented.
+
+Future batch queue design:
+
+```text
+selected clusters
+→ deterministic drafts
+→ one-at-a-time queue
+→ cache by draft hash
+→ pause/cancel/retry
+→ review-gated save
+```
+
+Batch implementation should reuse Electron main as the only Gemini caller, avoid duplicate refinements by draft hash, and keep save/export limited to reviewed approved outputs.
 
 ### Stage 7: Preserve Or Adapt Drive Workflow
 
@@ -314,6 +358,11 @@ Ownership: this file is the staged Electron roadmap. Durable architecture rules 
 - Web/desktop branching: risk of browser and Electron behavior diverging through hidden conditional paths, broad preload APIs, or premature filesystem assumptions.
 - Debug tooling: risk of exposing copyrighted/private parser artifacts outside local-only workflows.
 - Packaging: risk of shipping before Drive, Gemini, storage, parser/debug, and browser fallback behavior are verified.
+- UWorld notes generation: risk of duplicate concepts, duplicate generated questions, weak deterministic draft scaffolds, over-trusting AI output, saving pending/rejected drafts, or modifying NBME parser/render paths while working on UWorld-only features.
+
+## Local File Notes
+
+- `deno.lock` remains untracked and should not be touched unless explicitly requested.
 
 ## Verification Checklist
 

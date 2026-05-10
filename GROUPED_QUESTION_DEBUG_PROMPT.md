@@ -4,6 +4,8 @@ Grouped-question debugging only. Do not generalize historical question numbers i
 
 Ownership: this prompt is operational grouped-question debugging guidance only. Durable architecture rules, current project status, and staged Electron roadmap details belong in their dedicated project documents.
 
+UWorld DOCX notes work is separate from grouped NBME PDF parsing/rendering. UWorld concept clustering, selected clusters, deterministic drafts, Electron-local Gemini refinement, review, export, and save must not modify grouped-question invariants unless an explicit grouped-question task is requested.
+
 ## sharedGroup Invariants
 
 Grouped questions must:
@@ -61,3 +63,5 @@ Structured text may be preferred when crops duplicate answer banks, misorder gro
 Previously generated quizzes may remain stale after parser/render fixes.
 
 Do not silently mutate saved quizzes. Prefer regeneration, explicit reparse, or version-aware migration.
+
+`deno.lock` remains untracked and should not be touched unless explicitly requested.

@@ -13,7 +13,7 @@ Ownership: this file records durable architecture rules and long-lived constrain
 - The Electron migration may add Electron-specific scaffolding such as `package.json`, `electron/main.js`, and `electron/preload.js`. That does not change `index.html` being the current authoritative app during the transition.
 - Old split files may exist, but they are not the active implementation.
 - Keep the Gemini model string exactly `gemini-2.5-flash`.
-- Current implementation: Gemini API calls go through Netlify Functions. Future desktop-only migration should move Gemini calls to the Electron main process behind narrow preload APIs. Do not put Gemini API keys in frontend JavaScript, renderer code, localStorage, Google Drive backups, or packaged assets.
+- Current transitional browser implementation still keeps Netlify support, but Electron-local UWorld Gemini refinement now runs through Electron main/preload, not renderer code. `GEMINI_API_KEY` must be read from `process.env` only. Do not put Gemini API keys in frontend JavaScript, renderer code, localStorage, Google Drive backups, debug exports, or packaged assets.
 - Supabase is not active. Do not reintroduce Supabase unless explicitly requested.
 - Keep full-quality question stems, figures, and exhibits in IndexedDB via `FigureStore` or in Google Drive. Do not store large image data in localStorage.
 - Google Drive OAuth currently depends on an approved HTTP/HTTPS origin. Local development should use `http://localhost:8888` as the primary origin, or `http://localhost:8080` as a secondary/fallback origin, only if those origins are added in Google Cloud Console. `file://` is not supported for current Drive or Gemini workflows.
@@ -33,6 +33,7 @@ Main inline modules:
 - `Quiz`: test-taking engine, timers, answer selection, hints, stem-image rendering, highlighting, and navigation.
 - `Results`: score report, review mode, analytics, and PDF report generation.
 - `App`: study library landing page, source-folder routing, sidebar navigation, modals, search, notes, incorrect, marked, flagged, trash, and test generation.
+- UWorld DOCX pipeline: DOCX import, normalized blocks, concept extraction, deterministic clustering/deduplication, selected clusters, deterministic draft scaffolds, Electron-local Gemini refinement, review controls, approved draft JSON export, quiz-object preview, and controlled save into real tests.
 
 ## Current Stable Parser And Rendering State
 
@@ -73,8 +74,32 @@ Future importer and render work should preserve the current stable browser behav
   - Image mode for figure-heavy, layout-sensitive, or OCR-corrupted stems.
   - Hybrid mode for usable text plus figures, tables, or images.
   - User override per question.
-- Gemini should continue through Netlify Functions initially. Later Electron work should move Gemini to the Electron main process with secure local credential handling before Netlify Functions are removed.
+- Netlify Functions remain available as transitional/rollback Gemini support. Electron-local UWorld refinement now uses Electron main/preload, and future desktop Gemini work should continue behind narrow main/preload APIs before Netlify support is removed.
 - Browser-only storage assumptions should eventually be replaced by Electron app-data persistence, but `localStorage`, IndexedDB, `FigureStore`, Google Drive backup, and Netlify support must not be removed until desktop replacements are verified and rollback is available.
+
+## UWorld Notes Pipeline
+
+The UWorld DOCX importer is separate from the NBME PDF parser/OCR/render path. UWorld work must not modify NBME parser logic, OCR normalization, grouped-question handling, or existing rendering invariants.
+
+Current UWorld flow:
+
+```text
+DOCX import
+→ normalized blocks
+→ concept extraction
+→ deterministic clustering/deduplication
+→ selected clusters
+→ deterministic draft scaffolds
+→ Electron-local Gemini refinement
+→ review controls
+→ approved draft JSON export
+→ quiz-object preview
+→ controlled save into real tests
+```
+
+UWorld saves require approved AI-refined drafts, valid quiz-object previews, an explicit save target, a nonempty test name, and an inline review confirmation. Browser `prompt()`/`confirm()` must not be used for this Electron save flow.
+
+Batch refinement is not implemented. Future batch design is selected clusters → deterministic drafts → one-at-a-time Electron main Gemini queue → cache by draft hash → pause/cancel/retry → review-gated save.
 
 ## Historical Debugging Notes
 
@@ -114,6 +139,8 @@ Use extra caution around:
 - Avoid broad OCR normalization rules. OCR fixes should be conservative, traceable, and covered by fixtures because broad spacing/token cleanup previously caused instability.
 - PDF report generation, because jsPDF layout is sensitive to font state, page breaks, and text normalization.
 - Landing/source-folder routing, because it determines which subfolders are visible and where new tests are created.
+- UWorld selected-cluster and save-target routing, because it determines which draft candidates are generated and where approved refined drafts are saved.
+- `deno.lock` is currently untracked and should not be touched unless explicitly requested.
 
 ## Current Handoff
 

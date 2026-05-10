@@ -18,6 +18,8 @@ Keep these concerns separate:
 
 Do not mix fixes across layers unless evidence shows the boundary is wrong.
 
+UWorld DOCX notes import, concept extraction, deterministic clustering, selected clusters, deterministic drafts, Electron-local Gemini refinement, review, export, and save are separate from the NBME PDF parser/OCR path. Parser debugging should not modify UWorld generation behavior unless explicitly requested, and UWorld work should not modify `OCR.processTestPDFs()` or parser/render invariants.
+
 ## Integrity Checks
 
 Verify count and numbering integrity at each stage:
@@ -46,6 +48,8 @@ Verify count and numbering integrity at each stage:
 
 Parser debug artifacts may contain copyrighted/private exam content and should remain local/private.
 
+Parser/debug exports must not include Gemini API keys. `GEMINI_API_KEY` must remain process-env only and must not be stored in localStorage, frontend code, Drive backups, or debug exports.
+
 ## Correction Rules
 
 - Prefer conservative OCR normalization.
@@ -65,3 +69,5 @@ Do not silently mutate stored quizzes. Prefer:
 - regeneration
 - explicit reparse
 - version-aware migration
+
+`deno.lock` remains untracked and should not be touched unless explicitly requested.

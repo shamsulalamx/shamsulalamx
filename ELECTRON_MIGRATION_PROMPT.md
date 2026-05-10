@@ -13,6 +13,8 @@ Ownership: this prompt is operational guidance for Electron work. Durable rules 
 - The current browser/Netlify app in `index.html` remains the stable transitional baseline and rollback path.
 - Parser/render pipeline is stable locally.
 - Electron dev scaffolding and planning have started.
+- UWorld DOCX pipeline is implemented: DOCX import → normalized blocks → concept extraction → deterministic clustering/deduplication → selected clusters → deterministic draft scaffolds → Electron-local Gemini refinement → review controls → approved draft JSON export → quiz-object preview → controlled save into real tests.
+- Batch refinement is not implemented.
 - Netlify deploy credits are limited; avoid Netlify deploys during local Electron iteration.
 - The app is currently private/personal use only.
 
@@ -24,7 +26,7 @@ Ownership: this prompt is operational guidance for Electron work. Durable rules 
 - Keep the current web/Netlify version working.
 - Preserve parser/debug tooling and local-only debug safeguards.
 - Preserve current Google Drive behavior initially.
-- Preserve current Gemini behavior initially.
+- Preserve Netlify/browser fallback behavior while using Electron main/preload for Electron-local UWorld Gemini refinement.
 - Use staged migration with small verifiable steps.
 - Do not remove browser mode, Netlify Functions, Drive, localStorage, IndexedDB/FigureStore, or localhost dev loading until desktop-native replacements are implemented and verified.
 
@@ -48,11 +50,23 @@ Ownership: this prompt is operational guidance for Electron work. Durable rules 
 
 ## Gemini Strategy
 
-- Keep Netlify Functions initially.
-- Long-term desktop target: move Gemini calls to the Electron main process behind narrow preload APIs.
+- Keep Netlify Functions as transitional/rollback support.
+- Electron-local UWorld refinement uses the Electron main process behind narrow preload APIs.
 - Main process should own API key lookup, request construction, response validation, rate/error handling, and redaction.
-- Do not remove Netlify Functions until the Electron main-process path is verified and rollback-safe.
+- `GEMINI_API_KEY` must be read from `process.env` only.
+- Do not store or expose API keys in renderer/frontend code, preload globals, localStorage, Google Drive backups, debug exports, or packaged assets.
+- Do not remove Netlify Functions until desktop-native Gemini, storage, backup/restore, and rollback behavior are verified.
 - Keep the Gemini model string exactly `gemini-2.5-flash`.
+
+## UWorld Notes Guidance
+
+- Keep UWorld DOCX import, clustering, selection, draft generation, refinement, review, export, and save isolated from the NBME PDF parser/OCR/render pipeline.
+- Do not remove the existing single-draft refinement path.
+- Do not auto-refine all selected clusters blindly.
+- Do not save pending or rejected drafts.
+- UWorld saves require approved refined drafts, valid quiz-object preview, explicit save target, nonempty inline test name, and inline review confirmation.
+- Future batch queue design is selected clusters → deterministic drafts → one-at-a-time queue → cache by draft hash → pause/cancel/retry → review-gated save.
+- `deno.lock` remains untracked and should not be touched unless explicitly requested.
 
 ## Storage Strategy
 

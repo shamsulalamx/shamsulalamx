@@ -1,6 +1,6 @@
 # NBME Self-Assessment Suite Project Status
 
-Last updated: 2026-05-08 20:15 EDT
+Last updated: 2026-05-10
 
 This file captures the current working state after the landing-page library rehaul, PDF report naming update, and local grouped-question parser/render stabilization. It supersedes older status files where they conflict.
 
@@ -31,15 +31,16 @@ Ownership: this file is the current runtime/status snapshot. Durable rules belon
 ## Current File State
 
 - Active app: `index.html`
-- Informational snapshot at time of this file: `index.html` is about 8250 lines and 364 KB. Treat this as a timestamped reference, not a required invariant.
+- Informational snapshot at time of this update: `index.html` is about 9812 lines and 455 KB. Treat this as a timestamped reference, not a required invariant.
 - Previous handoffs:
   - `PROJECT_STATUS_2026-05-06.md`
   - `PROJECT_STATUS_2026-05-07.md`
 - Current handoff: `PROJECT_STATUS_2026-05-08.md`
 - Stable local checkpoint commit: `2ba4b1d Stabilize parser/render pipeline before Electron migration`
 - Local branch status at documentation update: `main` is ahead of `origin/main` by one commit.
-- Current uncommitted working tree at time of this file:
-  - Reusable documentation/prompt files are being organized for continuity across ChatGPT/Codex accounts.
+- Current uncommitted working tree at time of this documentation update:
+  - Documentation/prompt files are being synchronized with the current Electron and UWorld pipeline state.
+  - `deno.lock` is untracked and should not be touched unless explicitly requested.
 - `.DS_Store` is unrelated and should not be touched unless explicitly requested.
 - No push or Netlify deploy has been performed after checkpoint `2ba4b1d` from this checkout.
 
@@ -101,7 +102,7 @@ Operational status:
 - Browser app remains the stable baseline and fallback.
 - No push, pull request, or Netlify deployment has been performed after checkpoint `2ba4b1d` from this checkout.
 - Documentation and reusable prompt files are being organized for continuity across ChatGPT/Codex accounts.
-- Gemini, Google Drive, Netlify Functions, and deployment settings were intentionally left unchanged.
+- Netlify Functions and deployment settings remain transitional/rollback layers. Electron-local UWorld Gemini refinement now uses Electron main/preload and reads `GEMINI_API_KEY` from `process.env` only.
 - Saved/generated quizzes created before parser or render fixes may be stale. Do not silently mutate existing saved quizzes; regenerate or explicitly reparse them.
 
 ## Future Importer And Render Architecture
@@ -135,9 +136,10 @@ Render-mode decision policy:
 
 Electron Gemini direction:
 
-- Keep Netlify Functions initially.
-- Move Gemini calls to the Electron main process later, behind narrow preload APIs and secure local credential handling.
-- Do not remove Netlify Functions until the Electron main-process path is implemented, verified, and rollback-safe.
+- Netlify Functions remain available as transitional/rollback support.
+- Electron-local UWorld refinement now uses Electron main/preload.
+- `GEMINI_API_KEY` is read from `process.env` only for Electron-local refinement.
+- Do not remove Netlify Functions until desktop Gemini, storage, backup/restore, and rollback behavior are verified.
 - Preserve `gemini-2.5-flash`.
 
 Storage direction:
@@ -145,6 +147,48 @@ Storage direction:
 - Browser `localStorage` and IndexedDB/FigureStore remain active during transition.
 - Long-term Electron storage should move quiz metadata, source artifacts, figures, backups, settings, parser runs, and debug exports into local app-data.
 - Do not migrate or remove browser storage paths until app-data export/import, backup, restore, and rollback are verified.
+
+## UWorld DOCX Pipeline Status
+
+Implemented UWorld Notes flow:
+
+```text
+DOCX import
+→ normalized blocks
+→ concept extraction
+→ deterministic clustering/deduplication
+→ selected clusters
+→ deterministic draft scaffolds
+→ Electron-local Gemini refinement
+→ review controls
+→ approved draft JSON export
+→ quiz-object preview
+→ controlled save into real tests
+```
+
+Current safeguards:
+
+- UWorld pipeline is separate from `OCR.processTestPDFs()` and the NBME PDF parser/render path.
+- Concept clustering and selected-cluster controls are implemented.
+- Draft previews are deterministic scaffolds until refined.
+- Electron-local Gemini refinement is called through Electron main/preload only; renderer code does not receive API keys.
+- `GEMINI_API_KEY` is read from `process.env` only and must not be stored in localStorage, frontend code, Drive backups, debug exports, or packaged assets.
+- UWorld save into a real test requires approved refined drafts, valid quiz-object preview, explicit UWorld save target, nonempty inline test name, and inline review confirmation.
+- Browser `prompt()`/`confirm()` are not part of the UWorld save flow.
+- Batch refinement is not implemented.
+
+Pending UWorld batch design:
+
+```text
+selected clusters
+→ deterministic drafts
+→ one-at-a-time queue
+→ cache by draft hash
+→ pause/cancel/retry
+→ review-gated save
+```
+
+`deno.lock` remains untracked and should not be touched unless explicitly requested.
 
 ## Historical Implementation And Debugging Notes
 
@@ -320,7 +364,7 @@ Gemini is still used for:
 - one hyperspecific tag per question
 - one hint per question
 
-Gemini calls now run through Netlify Functions. The API key belongs only in the Netlify `GEMINI_API_KEY` environment variable and must not be stored in frontend JavaScript, localStorage, or Google Drive backups.
+Browser/Netlify Gemini calls still run through Netlify Functions. Electron-local UWorld refinement runs through Electron main/preload. `GEMINI_API_KEY` must not be stored in frontend JavaScript, renderer code, localStorage, Google Drive backups, debug exports, or packaged assets.
 
 The model string must remain:
 
