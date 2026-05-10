@@ -1846,6 +1846,11 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
     <div id="ome-structure-preview" class="notes-draft-preview">
       <div class="notes-import-empty">No OME structure preview loaded.</div>
     </div>
+    <div class="notes-import-section-title">OME Concept Preview</div>
+    <div id="ome-concept-status" class="notes-import-summary">Concept candidates will appear after OME blocks are previewed.</div>
+    <div id="ome-concept-preview" class="notes-draft-preview">
+      <div class="notes-import-empty">No OME concept candidates extracted.</div>
+    </div>
     <div class="modal-actions">
       <button type="button" class="btn-modal" onclick="App.clearOmePdfImportPreview()">Clear</button>
       <button type="button" class="btn-modal primary" onclick="App.closeOmePdfImportPreview()">Done</button>
@@ -7132,6 +7137,7 @@ const App = (() => {
     const modal = document.getElementById('modal-ome-import');
     if (modal) modal.style.display = 'flex';
     updateOmeStructurePreview();
+    renderOmeConceptPreview(_omeImportPreview?.conceptResult || null);
   }
 
   function closeOmePdfImportPreview() {
@@ -7144,9 +7150,13 @@ const App = (() => {
     const input = document.getElementById('ome-pdf-input');
     const status = document.getElementById('ome-import-status');
     const preview = document.getElementById('ome-structure-preview');
+    const conceptStatus = document.getElementById('ome-concept-status');
+    const conceptPreview = document.getElementById('ome-concept-preview');
     if (input) input.value = '';
     if (status) status.textContent = 'Choose one .pdf file from the OME source folder.';
     if (preview) preview.innerHTML = '<div class="notes-import-empty">No OME structure preview loaded.</div>';
+    if (conceptStatus) conceptStatus.textContent = 'Concept candidates will appear after OME blocks are previewed.';
+    if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No OME concept candidates extracted.</div>';
   }
 
   function updateOmeStructurePreview() {
@@ -7326,6 +7336,407 @@ const App = (() => {
     return warnings;
   }
 
+  function createOmeBlockSnippet(block, maxLength = 160) {
+    if (!block) return '';
+    const prefix = Array.isArray(block.sectionPath) && block.sectionPath.length ? `${block.sectionPath.join(' > ')}: ` : '';
+    return createOmeSourceSnippet(`${prefix}${block.textNormalized || block.textRaw || ''}`, maxLength);
+  }
+
+  function createOmeConceptCandidate({
+    conceptType,
+    conceptText,
+    sourceName,
+    sourceHash,
+    pageNumber,
+    blockIds,
+    blockOrders,
+    sectionPath,
+    blockTypes,
+    sourceSnippets,
+    warnings,
+    confidence,
+    evidenceText = ''
+  }) {
+    return {
+      id: `ome-concept-${pageNumber}-${blockIds.join('-')}-${conceptType}`,
+      conceptType,
+      conceptText: normalizeOmeText(conceptText),
+      sourceName,
+      sourceHash,
+      pageNumber,
+      blockIds: uniqueOmeStrings(blockIds),
+      blockOrders: Array.isArray(blockOrders) ? blockOrders.filter(value => Number.isFinite(Number(value))).map(value => Number(value)) : [],
+      sectionPath: Array.isArray(sectionPath) ? sectionPath.slice() : [],
+      blockTypes: uniqueOmeStrings(blockTypes),
+      sourceSnippets: Array.isArray(sourceSnippets) ? sourceSnippets.map(snippet => ({ ...snippet })) : [],
+      warnings: uniqueOmeStrings(warnings),
+      confidence,
+      evidenceText: normalizeOmeText(evidenceText)
+    };
+  }
+
+  function getOmeConceptPatterns() {
+    return {
+      learningObjective: /(?:learning\s*objective|learning\s*objectives|objective(?:s)?|goal(?:s)?|you should know|by the end|after reading|understand that|recognize that)\b/i,
+      managementStep: /(?:management|treatment|treat|treat with|start|initiate|begin|give|administer|monitor|follow up|step next|next step|next best step|plan)\b/i,
+      algorithm: /(?:algorithm|approach|workflow|pathway|stepwise|step\s*\d+|if|then|when|first|second|third)\b/i,
+      differential: /(?:differential|differentiate|distinguish|vs\.?|versus|rule out|compare|alternative diagnosis|similar presentation)\b/i,
+      contraindication: /(?:contraindicat(?:ed|ion)|avoid|do not|should not|contraindicated|not given|do not use)\b/i,
+      adverseEffect: /(?:adverse effect|adverse effects|side effect|side effects|toxicity|toxic|complication(?:s)?|black box)\b/i,
+      examTrap: /(?:trap|pitfall|common mistake|easy to confuse|do not confuse|testable|board-style|exam tip)\b/i
+    };
+  }
+
+  function getOmeConceptConfidence(block, extraWarnings = []) {
+    const warnings = uniqueOmeStrings([
+      ...(Array.isArray(block?.warnings) ? block.warnings : []),
+      ...extraWarnings
+    ]);
+    if (warnings.some(warning => /column order may be ambiguous|diagram-only|table\/chart reference|very short text|low extraction confidence/i.test(warning))) {
+      return 'low';
+    }
+    if (warnings.length >= 2) return 'low';
+    if (warnings.length === 1) return 'medium';
+    return block?.blockType === 'paragraph' ? 'medium' : 'high';
+  }
+
+  function getOmeConceptWarnings(block, contextWarnings = [], extraWarnings = []) {
+    const text = normalizeOmeText(block?.textNormalized || block?.textRaw || '');
+    const warnings = [
+      ...(Array.isArray(block?.warnings) ? block.warnings : []),
+      ...(Array.isArray(contextWarnings) ? contextWarnings : []),
+      ...(Array.isArray(extraWarnings) ? extraWarnings : [])
+    ];
+    if (/column order may be ambiguous/i.test(warnings.join(' '))) warnings.push('Ambiguous column order in source page.');
+    if (text.length < 18 || text.split(/\s+/).filter(Boolean).length < 3) warnings.push('Very short text may be too weak for a stable concept.');
+    if (block?.blockType === 'diagramRef') warnings.push('Diagram-only reference is not a stable concept by itself.');
+    if (block?.blockType === 'tableOrChartRef') warnings.push('Table/chart reference without explanatory text is weak.');
+    if (warnings.some(warning => /OCR-heavy|image-only/i.test(warning))) warnings.push('Low extraction confidence from sparse text layer.');
+    return uniqueOmeStrings(warnings);
+  }
+
+  function getOmeConceptFromBlock(block, context = {}) {
+    const text = normalizeOmeText(block?.textNormalized || block?.textRaw || '');
+    if (!text) return null;
+    const lower = text.toLowerCase();
+    const patterns = getOmeConceptPatterns();
+    const base = {
+      sourceName: context.sourceName || '',
+      sourceHash: context.sourceHash || '',
+      pageNumber: block?.pageNumber || context.pageNumber || 0,
+      blockIds: [block?.blockId || ''],
+      blockOrders: [block?.order || null],
+      sectionPath: Array.isArray(block?.sectionPath) ? block.sectionPath.slice() : [],
+      blockTypes: [block?.blockType || 'paragraph'],
+      sourceSnippets: [{
+        blockId: block?.blockId || '',
+        blockType: block?.blockType || '',
+        pageNumber: block?.pageNumber || context.pageNumber || 0,
+        order: block?.order || null,
+        sectionPath: Array.isArray(block?.sectionPath) ? block.sectionPath.slice() : [],
+        sourceSnippet: createOmeBlockSnippet(block)
+      }]
+    };
+    const contextWarnings = Array.isArray(context.pageWarnings) ? context.pageWarnings : [];
+
+    const directMatch = type => patterns[type].test(text);
+    const directTypes = [
+      ['learningObjective', 'learning objective inferred from heading or body text.'],
+      ['managementStep', 'management language inferred from source text.'],
+      ['differential', 'differential language inferred from source text.'],
+      ['contraindication', 'contraindication language inferred from source text.'],
+      ['adverseEffect', 'adverse-effect language inferred from source text.'],
+      ['examTrap', 'exam-trap language inferred from source text.']
+    ];
+
+    if (block?.blockType === 'heading') {
+      if (directMatch('learningObjective')) {
+        const warnings = getOmeConceptWarnings(block, contextWarnings, ['Learning objective inferred from heading text.']);
+        return createOmeConceptCandidate({
+          conceptType: 'learningObjective',
+          conceptText: text,
+          warnings,
+          confidence: getOmeConceptConfidence(block, ['Learning objective inferred from heading text.']),
+          evidenceText: text,
+          ...base
+        });
+      }
+      if (directMatch('algorithm')) {
+        const warnings = getOmeConceptWarnings(block, contextWarnings, ['Algorithm language inferred from heading text.']);
+        return createOmeConceptCandidate({
+          conceptType: 'algorithm',
+          conceptText: text,
+          warnings,
+          confidence: getOmeConceptConfidence(block, ['Algorithm language inferred from heading text.']),
+          evidenceText: text,
+          ...base
+        });
+      }
+      if (directMatch('managementStep')) {
+        const warnings = getOmeConceptWarnings(block, contextWarnings, ['Management language inferred from heading text.']);
+        return createOmeConceptCandidate({
+          conceptType: 'managementStep',
+          conceptText: text,
+          warnings,
+          confidence: getOmeConceptConfidence(block, ['Management language inferred from heading text.']),
+          evidenceText: text,
+          ...base
+        });
+      }
+      if (directMatch('differential')) {
+        const warnings = getOmeConceptWarnings(block, contextWarnings, ['Differential language inferred from heading text.']);
+        return createOmeConceptCandidate({
+          conceptType: 'differential',
+          conceptText: text,
+          warnings,
+          confidence: getOmeConceptConfidence(block, ['Differential language inferred from heading text.']),
+          evidenceText: text,
+          ...base
+        });
+      }
+      if (directMatch('contraindication')) {
+        const warnings = getOmeConceptWarnings(block, contextWarnings, ['Contraindication language inferred from heading text.']);
+        return createOmeConceptCandidate({
+          conceptType: 'contraindication',
+          conceptText: text,
+          warnings,
+          confidence: getOmeConceptConfidence(block, ['Contraindication language inferred from heading text.']),
+          evidenceText: text,
+          ...base
+        });
+      }
+      if (directMatch('adverseEffect')) {
+        const warnings = getOmeConceptWarnings(block, contextWarnings, ['Adverse-effect language inferred from heading text.']);
+        return createOmeConceptCandidate({
+          conceptType: 'adverseEffect',
+          conceptText: text,
+          warnings,
+          confidence: getOmeConceptConfidence(block, ['Adverse-effect language inferred from heading text.']),
+          evidenceText: text,
+          ...base
+        });
+      }
+      if (directMatch('examTrap')) {
+        const warnings = getOmeConceptWarnings(block, contextWarnings, ['Exam-trap language inferred from heading text.']);
+        return createOmeConceptCandidate({
+          conceptType: 'examTrap',
+          conceptText: text,
+          warnings,
+          confidence: getOmeConceptConfidence(block, ['Exam-trap language inferred from heading text.']),
+          evidenceText: text,
+          ...base
+        });
+      }
+      return null;
+    }
+
+    if (block?.blockType === 'algorithmStep') {
+      const warnings = getOmeConceptWarnings(block, contextWarnings, ['Management step inferred from stepwise instructional text.']);
+      return createOmeConceptCandidate({
+        conceptType: 'managementStep',
+        conceptText: text,
+        warnings,
+        confidence: getOmeConceptConfidence(block, ['Management step inferred from stepwise instructional text.']),
+        evidenceText: text,
+        ...base
+      });
+    }
+
+    if (block?.blockType === 'listItem' || block?.blockType === 'paragraph') {
+      for (const [conceptType, reason] of directTypes) {
+        if (!directMatch(conceptType)) continue;
+        const warnings = getOmeConceptWarnings(block, contextWarnings, [reason]);
+        return createOmeConceptCandidate({
+          conceptType,
+          conceptText: text,
+          warnings,
+          confidence: getOmeConceptConfidence(block, [reason]),
+          evidenceText: text,
+          ...base
+        });
+      }
+    }
+
+    if (block?.blockType === 'diagramRef' || block?.blockType === 'tableOrChartRef') {
+      if (text.length >= 35 && /(?:shows|illustrates|demonstrates|used to|used for|compared|associated|example|pattern|step|algorithm|management|differential|contraindication|adverse effect)\b/i.test(text)) {
+        const conceptType = block.blockType === 'diagramRef' ? 'examTrap' : 'learningObjective';
+        const reason = block.blockType === 'diagramRef'
+          ? 'Diagram reference preserved with explanatory text.'
+          : 'Table/chart reference preserved with explanatory text.';
+        const warnings = getOmeConceptWarnings(block, contextWarnings, [reason]);
+        return createOmeConceptCandidate({
+          conceptType,
+          conceptText: text,
+          warnings,
+          confidence: 'low',
+          evidenceText: text,
+          ...base
+        });
+      }
+      return null;
+    }
+
+    return null;
+  }
+
+  function extractOmeConceptCandidates(structure) {
+    const pages = Array.isArray(structure?.pages) ? structure.pages : [];
+    const candidates = [];
+    const warnings = [];
+    const seen = new Set();
+
+    pages.forEach(page => {
+      const blocks = Array.isArray(page.blocks) ? page.blocks : [];
+      const pageWarnings = Array.isArray(page.warnings) ? page.warnings : [];
+      blocks.forEach((block, idx) => {
+        const candidate = getOmeConceptFromBlock(block, {
+          sourceName: structure?.sourceName || '',
+          sourceHash: structure?.sourceHash || '',
+          pageNumber: page.pageNumber || block?.pageNumber || 0,
+          pageWarnings
+        });
+        if (candidate) {
+          const key = `${candidate.conceptType}|${candidate.pageNumber}|${candidate.blockIds.join('|')}|${candidate.conceptText}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            candidates.push(candidate);
+          }
+        }
+
+        const text = normalizeOmeText(block?.textNormalized || block?.textRaw || '');
+        if (block?.blockType === 'heading' && /algorithm/i.test(text)) {
+          const nextBlocks = [];
+          for (let lookahead = idx + 1; lookahead < blocks.length; lookahead += 1) {
+            const next = blocks[lookahead];
+            if (next?.blockType === 'heading') break;
+            if (!normalizeOmeText(next?.textNormalized || next?.textRaw || '')) continue;
+            nextBlocks.push(next);
+            if (nextBlocks.length >= 4) break;
+          }
+          if (nextBlocks.length >= 2) {
+            const blockIds = [block.blockId, ...nextBlocks.map(item => item.blockId)];
+            const blockOrders = [block.order, ...nextBlocks.map(item => item.order)];
+            const sourceSnippets = [block, ...nextBlocks].map(item => ({
+              blockId: item.blockId || '',
+              blockType: item.blockType || '',
+              pageNumber: item.pageNumber || page.pageNumber || 0,
+              order: item.order || null,
+              sectionPath: Array.isArray(item.sectionPath) ? item.sectionPath.slice() : [],
+              sourceSnippet: createOmeBlockSnippet(item)
+            }));
+            const joinedText = [block, ...nextBlocks].map(item => normalizeOmeText(item.textNormalized || item.textRaw || '')).join(' | ');
+            const algorithmCandidate = createOmeConceptCandidate({
+              conceptType: 'algorithm',
+              conceptText: joinedText,
+              sourceName: structure?.sourceName || '',
+              sourceHash: structure?.sourceHash || '',
+              pageNumber: page.pageNumber || block.pageNumber || 0,
+              blockIds,
+              blockOrders,
+              sectionPath: Array.isArray(block.sectionPath) ? block.sectionPath.slice() : [],
+              blockTypes: [block.blockType, ...nextBlocks.map(item => item.blockType || '')],
+              sourceSnippets,
+              warnings: uniqueOmeStrings([
+                ...(block.warnings || []),
+                ...nextBlocks.flatMap(item => item.warnings || []),
+                'Algorithm preserved as ordered block sequence.'
+              ]),
+              confidence: 'medium',
+              evidenceText: joinedText
+            });
+            const key = `${algorithmCandidate.conceptType}|${algorithmCandidate.pageNumber}|${algorithmCandidate.blockIds.join('|')}|${algorithmCandidate.conceptText}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              candidates.push(algorithmCandidate);
+            }
+          }
+        }
+      });
+    });
+
+    const countByType = candidates.reduce((counts, candidate) => {
+      counts[candidate.conceptType] = (counts[candidate.conceptType] || 0) + 1;
+      return counts;
+    }, {});
+    const conceptWarnings = uniqueOmeStrings([
+      ...warnings,
+      ...candidates.flatMap(candidate => candidate.warnings || [])
+    ]);
+    return {
+      candidates,
+      totalCount: candidates.length,
+      countByType,
+      warningCount: conceptWarnings.length,
+      warnings: conceptWarnings
+    };
+  }
+
+  function renderOmeConceptPreview(result) {
+    const status = document.getElementById('ome-concept-status');
+    const preview = document.getElementById('ome-concept-preview');
+    if (!status || !preview) return;
+
+    const candidates = Array.isArray(result?.candidates) ? result.candidates : [];
+    if (!candidates.length) {
+      status.textContent = 'Concept candidates will appear after OME blocks are previewed.';
+      preview.innerHTML = '<div class="notes-import-empty">No OME concept candidates extracted.</div>';
+      return;
+    }
+
+    const countByType = result?.countByType || {};
+    const warningCount = Number(result?.warningCount || 0);
+    status.textContent = `${result.totalCount} OME concept candidate${result.totalCount === 1 ? '' : 's'} extracted from the existing structure blocks. Preview only.`;
+
+    const stats = Object.keys(countByType).sort().map(type => `<span><strong>${escapeHTML(type)}</strong> ${escapeHTML(String(countByType[type] || 0))}</span>`).join('');
+    preview.innerHTML = `
+      <div class="notes-import-stats">
+        <span><strong>Total concepts</strong> ${escapeHTML(String(result.totalCount || 0))}</span>
+        <span><strong>Warnings</strong> ${escapeHTML(String(warningCount || 0))}</span>
+      </div>
+      <div class="notes-import-stats" style="margin-top:8px;">
+        ${stats || '<span><strong>By type</strong> None</span>'}
+      </div>
+      <div class="notes-draft-card" style="margin-top:10px;">
+        <div class="notes-draft-title">Concept Guardrails</div>
+        <div class="notes-draft-meta">Ambiguous columns, very short text, diagram-only references, table/chart references without explanation, and low-confidence blocks are flagged instead of guessed.</div>
+      </div>
+      ${candidates.slice(0, 18).map((candidate, idx) => {
+        const blockIds = Array.isArray(candidate.blockIds) ? candidate.blockIds : [];
+        const blockOrders = Array.isArray(candidate.blockOrders) ? candidate.blockOrders : [];
+        const sourceSnippets = Array.isArray(candidate.sourceSnippets) ? candidate.sourceSnippets : [];
+        const blockTypes = Array.isArray(candidate.blockTypes) ? candidate.blockTypes : [];
+        const sectionPath = Array.isArray(candidate.sectionPath) && candidate.sectionPath.length ? candidate.sectionPath.join(' > ') : 'None';
+        const warnings = Array.isArray(candidate.warnings) ? candidate.warnings : [];
+        return `
+          <details class="notes-draft-card" ${idx < 3 ? 'open' : ''} style="margin-top:10px;">
+            <summary class="notes-draft-summary">
+              <div class="notes-draft-title">${escapeHTML(candidate.conceptType)} · ${escapeHTML(candidate.confidence || 'low')}</div>
+              <div class="notes-draft-meta">Page ${escapeHTML(String(candidate.pageNumber || ''))} · Blocks ${escapeHTML(blockIds.join(', ') || 'None')}</div>
+            </summary>
+            <div class="notes-draft-body">
+              <div><strong>Concept text:</strong> ${escapeHTML(candidate.conceptText || '')}</div>
+              <div class="notes-draft-meta" style="margin-top:6px;"><strong>Section path:</strong> ${escapeHTML(sectionPath)}</div>
+              <div class="notes-draft-meta"><strong>Block types:</strong> ${escapeHTML(blockTypes.join(', ') || 'None')}</div>
+              <div class="notes-draft-meta"><strong>Block orders:</strong> ${escapeHTML(blockOrders.map(value => String(value)).join(', ') || 'None')}</div>
+              <div class="notes-draft-meta"><strong>Source:</strong> ${escapeHTML(candidate.sourceName || '')}</div>
+              <div class="notes-draft-meta"><strong>Hash:</strong> ${escapeHTML(candidate.sourceHash || '')}</div>
+              <div class="notes-draft-meta"><strong>Confidence:</strong> ${escapeHTML(candidate.confidence || 'low')}</div>
+              ${warnings.length ? `<div style="color:#8a5a00;margin-top:8px;">${warnings.map(warning => escapeHTML(warning)).join('<br>')}</div>` : '<div class="notes-import-empty">No concept warnings.</div>'}
+              <div style="margin-top:8px;"><strong>Source snippets</strong></div>
+              ${sourceSnippets.map(snippet => `
+                <div style="margin-top:6px;padding-top:6px;border-top:1px solid #edf1f5;">
+                  <div class="notes-draft-meta">${escapeHTML(String(snippet.blockId || ''))} · ${escapeHTML(String(snippet.blockType || ''))} · Page ${escapeHTML(String(snippet.pageNumber || ''))} · Order ${escapeHTML(String(snippet.order || ''))}</div>
+                  <div style="white-space:pre-wrap;">${escapeHTML(snippet.sourceSnippet || '')}</div>
+                </div>
+              `).join('')}
+            </div>
+          </details>
+        `;
+      }).join('')}
+      ${candidates.length > 18 ? `<div class="notes-import-empty">Showing first 18 of ${candidates.length} concept candidates.</div>` : ''}
+    `;
+  }
+
   function buildOmePageStructure({ pageNumber, textContent, sourceName, sourceHash, headingStack, orderStart }) {
     const items = Array.isArray(textContent?.items)
       ? textContent.items.filter(item => normalizeOmeText(item?.str))
@@ -7473,6 +7884,7 @@ const App = (() => {
 
     try {
       const structure = await extractOmePdfStructure(file);
+      structure.conceptResult = extractOmeConceptCandidates(structure);
       _omeImportPreview = structure;
       if (status) {
         status.textContent = structure.warningCount
@@ -7480,10 +7892,12 @@ const App = (() => {
           : `Parsed ${structure.pageCount} page${structure.pageCount === 1 ? '' : 's'} and extracted ${structure.blockCount} block${structure.blockCount === 1 ? '' : 's'} from the OME PDF preview.`;
       }
       renderOmeStructurePreview(structure);
+      renderOmeConceptPreview(structure.conceptResult);
     } catch (err) {
       _omeImportPreview = null;
       if (status) status.textContent = `Unable to preview OME PDF: ${err?.message || 'Unknown parse error.'}`;
       if (preview) preview.innerHTML = '<div class="notes-import-empty">No OME structure preview loaded.</div>';
+      renderOmeConceptPreview(null);
     }
   }
 
