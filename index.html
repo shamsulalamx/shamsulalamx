@@ -293,6 +293,19 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 .notes-import-path { font-size: 10.5px; color: var(--muted); }
 .notes-import-text { font-size: 12.5px; line-height: 1.55; color: var(--text); white-space: pre-wrap; }
 .notes-import-empty { padding: 16px; color: var(--muted); font-size: 12px; text-align: center; }
+.notes-import-section-title { margin: 14px 0 7px; font-size: 12px; font-weight: 700; color: var(--navy); }
+.notes-concept-preview { max-height: 34vh; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; background: #fff; }
+.notes-concept-card { border-bottom: 1px solid #edf1f5; padding: 0; }
+.notes-concept-card:last-child { border-bottom: none; }
+.notes-concept-summary { cursor: pointer; list-style: none; padding: 10px 12px; }
+.notes-concept-summary::-webkit-details-marker { display: none; }
+.notes-concept-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.notes-concept-topic { font-size: 12.5px; font-weight: 700; color: var(--text); }
+.notes-concept-confidence { font-size: 10px; font-weight: 700; color: var(--blue); background: #e3f2fd; border-radius: 10px; padding: 2px 7px; }
+.notes-concept-meta { font-size: 10.5px; color: var(--muted); margin-top: 4px; }
+.notes-concept-body { padding: 0 12px 12px; font-size: 12.5px; color: var(--text); line-height: 1.55; }
+.notes-concept-snippet { white-space: pre-wrap; margin-bottom: 7px; }
+.notes-concept-warning { display: inline-block; font-size: 10px; color: #8a5a00; background: #fff4d6; border-radius: 10px; padding: 2px 7px; margin: 0 4px 4px 0; }
 .selection-toolbar {
   position: fixed; z-index: 9999; display: none; gap: 6px;
   background: #162333; border: 1px solid rgba(255,255,255,.18);
@@ -1646,8 +1659,14 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
       <input type="file" class="form-input" id="notes-docx-input" accept=".docx" onchange="App.previewNotesDocx(this)">
     </div>
     <div id="notes-import-status" class="notes-import-summary">Choose a .docx file to preview normalized blocks.</div>
+    <div class="notes-import-section-title">Normalized Blocks Preview</div>
     <div id="notes-import-preview" class="notes-import-preview">
       <div class="notes-import-empty">No preview loaded.</div>
+    </div>
+    <div class="notes-import-section-title">Concept Extraction Preview</div>
+    <div id="notes-concept-status" class="notes-import-summary">Concepts will appear after a DOCX file is previewed.</div>
+    <div id="notes-concept-preview" class="notes-concept-preview">
+      <div class="notes-import-empty">No concepts extracted.</div>
     </div>
     <div class="modal-actions">
       <button class="btn-modal" onclick="App.clearNotesImportPreview()">Clear</button>
@@ -6919,9 +6938,13 @@ const App = (() => {
     const input = document.getElementById('notes-docx-input');
     const status = document.getElementById('notes-import-status');
     const preview = document.getElementById('notes-import-preview');
+    const conceptStatus = document.getElementById('notes-concept-status');
+    const conceptPreview = document.getElementById('notes-concept-preview');
     if (input) input.value = '';
     if (status) status.textContent = 'Choose a .docx file to preview normalized blocks.';
     if (preview) preview.innerHTML = '<div class="notes-import-empty">No preview loaded.</div>';
+    if (conceptStatus) conceptStatus.textContent = 'Concepts will appear after a DOCX file is previewed.';
+    if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concepts extracted.</div>';
   }
 
   async function previewNotesDocx(input) {
@@ -6929,15 +6952,24 @@ const App = (() => {
     if (!file) return;
     const status = document.getElementById('notes-import-status');
     const preview = document.getElementById('notes-import-preview');
+    const conceptStatus = document.getElementById('notes-concept-status');
+    const conceptPreview = document.getElementById('notes-concept-preview');
     if (status) {
       status.textContent = 'Reading DOCX preview...';
       status.style.color = '#5a6a7a';
     }
     if (preview) preview.innerHTML = '<div class="notes-import-empty">Extracting document structure...</div>';
+    if (conceptStatus) {
+      conceptStatus.textContent = 'Waiting for normalized blocks...';
+      conceptStatus.style.color = '#5a6a7a';
+    }
+    if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concepts extracted.</div>';
     try {
       const blocks = await extractDocxNotesBlocks(file);
-      _notesImportPreview = { fileName: file.name, blocks };
+      const concepts = extractNotesConcepts(blocks);
+      _notesImportPreview = { fileName: file.name, blocks, concepts };
       renderNotesImportPreview(blocks, file.name);
+      renderNotesConceptPreview(concepts);
     } catch (err) {
       _notesImportPreview = null;
       if (status) {
@@ -6945,6 +6977,11 @@ const App = (() => {
         status.style.color = '#c0392b';
       }
       if (preview) preview.innerHTML = '<div class="notes-import-empty">No blocks extracted. The file may be malformed, encrypted, or unsupported.</div>';
+      if (conceptStatus) {
+        conceptStatus.textContent = 'Concept extraction skipped because no normalized blocks were available.';
+        conceptStatus.style.color = '#c0392b';
+      }
+      if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concepts extracted.</div>';
     }
   }
 
@@ -7117,6 +7154,130 @@ const App = (() => {
         </div>
         <div class="notes-import-text">${escapeHTML(block.textNormalized)}</div>
       </div>`;
+    }).join('');
+  }
+
+  function conceptTokenKey(text) {
+    const stop = new Set(['the','and','for','with','from','that','this','into','onto','about','after','before','between','while','when','then','than','are','was','were','has','have','had','can','may','will','would','should','could','patient','patients']);
+    const tokens = String(text || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(t => t.length >= 3 && !stop.has(t));
+    return tokens.slice(0, 10).join(' ');
+  }
+
+  function shortConceptTitle(text) {
+    const cleaned = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!cleaned) return 'Untitled concept';
+    const firstClause = cleaned.split(/[.;:]/)[0].trim();
+    return (firstClause || cleaned).slice(0, 96);
+  }
+
+  function conceptTopicForBlock(block) {
+    const path = Array.isArray(block.sectionPath) ? block.sectionPath.filter(Boolean) : [];
+    if (block.blockType === 'heading') return shortConceptTitle(block.textNormalized);
+    if (path.length) return shortConceptTitle(path[path.length - 1]);
+    return shortConceptTitle(block.textNormalized);
+  }
+
+  function confidenceForConcept(block, text) {
+    const len = text.length;
+    let confidence = block.blockType === 'listItem' ? 0.74 : block.blockType === 'paragraph' ? 0.62 : 0.48;
+    if (len >= 80) confidence += 0.08;
+    if (len < 35) confidence -= 0.18;
+    if (/[,:;]|\b(causes|caused by|associated with|treated with|diagnosed by|presents with|increases|decreases|due to|because|therefore)\b/i.test(text)) confidence += 0.06;
+    return Math.max(0.2, Math.min(0.88, confidence));
+  }
+
+  function warningsForConcept(block, text) {
+    const warnings = [];
+    if (text.length < 35) warnings.push('short fragment');
+    if (block.blockType === 'heading') warnings.push('heading only');
+    if (!/[a-z]{3,}/i.test(text)) warnings.push('weak text signal');
+    if (text.length > 420) warnings.push('long source block');
+    return warnings;
+  }
+
+  function extractNotesConcepts(blocks) {
+    const createdAt = new Date().toISOString();
+    const merged = [];
+    const byKey = new Map();
+
+    blocks.forEach(block => {
+      const text = String(block.textNormalized || '').trim();
+      if (!text) return;
+      const topic = conceptTopicForBlock(block);
+      const testedFact = text;
+      const topicKey = conceptTokenKey(topic);
+      const factKey = conceptTokenKey(testedFact).slice(0, 90);
+      const dedupeKey = `${block.blockType}:${topicKey}:${factKey}`;
+      const warnings = warningsForConcept(block, text);
+      const sourceSnippet = text.length > 260 ? text.slice(0, 257).trimEnd() + '...' : text;
+      const confidence = confidenceForConcept(block, text);
+      const existing = byKey.get(dedupeKey);
+
+      if (existing) {
+        existing.sourceBlockIds.push(block.blockId);
+        existing.warnings = Array.from(new Set(existing.warnings.concat(warnings, ['possible duplicate merged'])));
+        existing.confidence = Math.min(existing.confidence, confidence);
+        if (sourceSnippet.length > existing.sourceSnippet.length) existing.sourceSnippet = sourceSnippet;
+        return;
+      }
+
+      const concept = {
+        conceptId: 'concept-' + String(merged.length + 1).padStart(4, '0'),
+        topic,
+        testedFact,
+        sourceBlockIds: [block.blockId],
+        sourceSnippet,
+        confidence,
+        warnings,
+        extractionMethod: `docx-${block.blockType}-heuristic-v1`,
+        createdAt
+      };
+      merged.push(concept);
+      byKey.set(dedupeKey, concept);
+    });
+
+    return merged.map((concept, idx) => Object.assign({}, concept, {
+      conceptId: 'concept-' + String(idx + 1).padStart(4, '0')
+    }));
+  }
+
+  function renderNotesConceptPreview(concepts) {
+    const status = document.getElementById('notes-concept-status');
+    const preview = document.getElementById('notes-concept-preview');
+    const weakCount = concepts.filter(c => c.warnings.length || c.confidence < 0.55).length;
+    const duplicateCount = concepts.filter(c => c.warnings.includes('possible duplicate merged')).length;
+    if (status) {
+      status.style.color = '#5a6a7a';
+      status.textContent = `${concepts.length} candidate concept${concepts.length === 1 ? '' : 's'} extracted. ${weakCount} flagged for review. ${duplicateCount} conservative duplicate merge${duplicateCount === 1 ? '' : 's'}. Nothing was saved.`;
+    }
+    if (!preview) return;
+    if (!concepts.length) {
+      preview.innerHTML = '<div class="notes-import-empty">No candidate concepts found.</div>';
+      return;
+    }
+    preview.innerHTML = concepts.map((concept, idx) => {
+      const confidencePct = Math.round(concept.confidence * 100);
+      const refs = concept.sourceBlockIds.join(', ');
+      const warnings = concept.warnings.length
+        ? `<div>${concept.warnings.map(w => `<span class="notes-concept-warning">${escapeHTML(w)}</span>`).join('')}</div>`
+        : '';
+      return `<details class="notes-concept-card" ${idx < 5 ? 'open' : ''}>
+        <summary class="notes-concept-summary">
+          <div class="notes-concept-head">
+            <span class="notes-concept-topic">${escapeHTML(concept.topic)}</span>
+            <span class="notes-concept-confidence">${confidencePct}%</span>
+          </div>
+          <div class="notes-concept-meta">${escapeHTML(concept.extractionMethod)} · ${escapeHTML(refs)}</div>
+        </summary>
+        <div class="notes-concept-body">
+          <div class="notes-concept-snippet">${escapeHTML(concept.sourceSnippet)}</div>
+          ${warnings}
+        </div>
+      </details>`;
     }).join('');
   }
 
