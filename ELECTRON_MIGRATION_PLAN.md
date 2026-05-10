@@ -32,6 +32,20 @@ This file should track migration stages, decisions, risks, verification checkpoi
 - Do not expose API keys client-side.
 - Keep migration steps small and reversible.
 
+## Staged Order Rationale
+
+- The migration order matters because the browser app is the stable fallback and the parser/render pipeline is already fragile in known areas.
+- Stabilization comes first so every later Electron change can be compared against a known-good browser baseline.
+- HTTP loading comes before desktop features because Drive and Gemini depend on an HTTP/HTTPS origin, not `file://`.
+- Main/preload/renderer boundary isolation comes before native helpers so privileged Electron capabilities do not leak into the renderer.
+- Storage planning comes before storage migration because `localStorage`, `FigureStore`, and Google Drive currently divide metadata, image data, and backup state in a deliberate way.
+- Render planning comes before render changes because grouped questions, stem crops, and shared answer banks have known duplication and ordering risks.
+- Importer planning comes before new source types so PDFs, DOCX, pasted text, Anki, transcripts, and notes can normalize into a common block format instead of creating source-specific parser shortcuts.
+- Debug tooling planning comes before parser rewrites so future fixes can use small focused artifacts rather than large raw exports.
+- Packaging comes last because packaged builds make origin, storage, OAuth, signing, and rollback problems harder to inspect.
+- Later work: narrow native helpers, app-data exports, explicit storage import/export, render-mode review UI, importer adapters, fixture runner, and packaging configuration after verification gates are defined.
+- Work that should not happen prematurely: broad parser/OCR rewrites, silent stored-quiz migration, moving Gemini credentials into Electron, replacing Drive sync, exposing filesystem access to the renderer, hardcoding render behavior by question number, or packaging before dev mode is stable.
+
 ## Planned Stages
 
 ### Stage 0: Confirm Stable Baseline
