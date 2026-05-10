@@ -11,7 +11,8 @@ Ownership: this file is the current runtime/status snapshot. Durable rules belon
 - `index.html` is the authoritative working app.
 - Keep active app edits inside `index.html`.
 - Do not split the current browser app into external CSS or JS files.
-- The Electron migration may add Electron-specific scaffolding such as `package.json`, `electron/main.js`, and `electron/preload.js`. That does not change `index.html` being the current authoritative browser app.
+- Long-term platform direction: Electron desktop is now the intended primary platform. Browser mode and Netlify remain transitional compatibility layers during migration.
+- The Electron migration may add Electron-specific scaffolding such as `package.json`, `electron/main.js`, and `electron/preload.js`. That does not change `index.html` being the current authoritative app during the transition.
 - The old split files still exist, but they are not the active implementation:
   - `app.js`
   - `db.js`
@@ -24,7 +25,7 @@ Ownership: this file is the current runtime/status snapshot. Durable rules belon
 - Keep the Gemini model string exactly `gemini-2.5-flash`.
 - Do not reintroduce Supabase unless explicitly requested.
 - Keep full-quality question and figure images in IndexedDB or Google Drive. Do not put image data back into localStorage.
-- Google Drive OAuth requires opening the app from an approved HTTP/HTTPS origin, not `file://`, when connecting or syncing Drive. Primary local origin: `http://localhost:8888`; secondary/fallback local origin: `http://localhost:8080`.
+- Google Drive OAuth currently requires opening the app from an approved HTTP/HTTPS origin, not `file://`, when connecting or syncing Drive. Primary local origin: `http://localhost:8888`; secondary/fallback local origin: `http://localhost:8080`.
 - The app is currently private/personal use only. Future Electron security decisions, including local user-provided API key storage or OAuth token storage, should be evaluated in that context and revisited if public distribution is ever planned.
 
 ## Current File State
@@ -105,13 +106,13 @@ Operational status:
 
 ## Future Importer And Render Architecture
 
-Electron migration is in early staged development and planning.
+Electron migration is in early staged development and planning. The long-term target is a desktop-only Electron app, with browser/Netlify support retained only as transitional compatibility until desktop-native replacements are verified.
 
 Electron should continue wrapping the current stable app without changing app behavior. Avoid rewrites during initial migration.
 
 Electron work should begin locally and should not trigger Netlify deployments initially.
 
-Future architecture should preserve the current browser behavior while separating importer, parser, review, and renderer responsibilities more clearly.
+Future architecture should preserve the current working behavior during transition while separating importer, parser, review, renderer, storage, and desktop-native service responsibilities more clearly.
 
 Planned direction:
 
@@ -132,11 +133,18 @@ Render-mode decision policy:
 - Hybrid mode for usable text plus figures, tables, or images.
 - User review and override per question.
 
-Unresolved Electron Gemini decision:
+Electron Gemini direction:
 
 - Keep Netlify Functions initially.
-- Later consider Electron main-process Gemini calls with a user-provided local key, or a hybrid mode.
-- Do not decide this prematurely.
+- Move Gemini calls to the Electron main process later, behind narrow preload APIs and secure local credential handling.
+- Do not remove Netlify Functions until the Electron main-process path is implemented, verified, and rollback-safe.
+- Preserve `gemini-2.5-flash`.
+
+Storage direction:
+
+- Browser `localStorage` and IndexedDB/FigureStore remain active during transition.
+- Long-term Electron storage should move quiz metadata, source artifacts, figures, backups, settings, parser runs, and debug exports into local app-data.
+- Do not migrate or remove browser storage paths until app-data export/import, backup, restore, and rollback are verified.
 
 ## Historical Implementation And Debugging Notes
 

@@ -9,7 +9,8 @@ Ownership: this prompt is operational guidance for Electron work. Durable rules 
 ## Current Baseline
 
 - Current stable checkpoint: `2ba4b1d Stabilize parser/render pipeline before Electron migration`.
-- The browser app in `index.html` remains the stable baseline and fallback.
+- Long-term target is a desktop-only Electron app.
+- The current browser/Netlify app in `index.html` remains the stable transitional baseline and rollback path.
 - Parser/render pipeline is stable locally.
 - Electron dev scaffolding and planning have started.
 - Netlify deploy credits are limited; avoid Netlify deploys during local Electron iteration.
@@ -18,13 +19,14 @@ Ownership: this prompt is operational guidance for Electron work. Durable rules 
 ## Migration Strategy
 
 - Wrap the current stable app first.
-- Preserve browser compatibility initially.
+- Preserve browser/Netlify compatibility initially, but treat it as transitional rather than the long-term platform.
 - Avoid rewrites during the first migration step.
 - Keep the current web/Netlify version working.
 - Preserve parser/debug tooling and local-only debug safeguards.
 - Preserve current Google Drive behavior initially.
 - Preserve current Gemini behavior initially.
 - Use staged migration with small verifiable steps.
+- Do not remove browser mode, Netlify Functions, Drive, localStorage, IndexedDB/FigureStore, or localhost dev loading until desktop-native replacements are implemented and verified.
 
 ## Electron Architecture Direction
 
@@ -33,6 +35,7 @@ Ownership: this prompt is operational guidance for Electron work. Durable rules 
 - Prefer a local-first app-data strategy.
 - Preserve IndexedDB/FigureStore behavior initially unless a later migration explicitly replaces it.
 - Do not expose API keys in renderer/frontend code.
+- Continue loading from localhost during development until packaged/local app loading is explicitly designed and verified.
 
 ## Future Importer/Render Direction
 
@@ -46,9 +49,16 @@ Ownership: this prompt is operational guidance for Electron work. Durable rules 
 ## Gemini Strategy
 
 - Keep Netlify Functions initially.
-- Later consider Electron main-process Gemini calls with a user-provided local key, or a hybrid mode.
-- Do not decide this prematurely.
+- Long-term desktop target: move Gemini calls to the Electron main process behind narrow preload APIs.
+- Main process should own API key lookup, request construction, response validation, rate/error handling, and redaction.
+- Do not remove Netlify Functions until the Electron main-process path is verified and rollback-safe.
 - Keep the Gemini model string exactly `gemini-2.5-flash`.
+
+## Storage Strategy
+
+- Browser `localStorage` and IndexedDB/FigureStore remain active during transition.
+- Long-term desktop target: move metadata, figures, source artifacts, parser runs, backups, settings, and logs into Electron app-data.
+- Do not silently migrate stored quizzes or image assets. Add explicit export/import, backup, verification, and rollback first.
 
 ## Requested Output
 

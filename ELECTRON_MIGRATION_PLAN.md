@@ -16,16 +16,18 @@ Ownership: this file is the staged Electron roadmap. Durable architecture rules 
 ## Current Baseline
 
 - Stable checkpoint commit: `2ba4b1d Stabilize parser/render pipeline before Electron migration`.
-- Current app is still the stable browser/Netlify version.
+- Long-term target is a desktop-only Electron app.
+- Current app still has browser/Netlify compatibility, but those paths are now transitional during migration.
 - Electron dev scaffolding and planning have started.
-- Browser app remains the fallback.
+- Browser/Netlify mode remains a rollback and compatibility layer until desktop-native Gemini, storage, backup/restore, and packaging paths are verified.
 - Primary local origin is `http://localhost:8888`; secondary/fallback local origin is `http://localhost:8080`.
+- Localhost dev loading remains intentional during migration. Packaged/local app loading should come later, after storage and service boundaries are verified.
 - Early Electron work should run locally and should not require push or Netlify deploys.
 
 ## Migration Principles
 
 - Wrap the current app first.
-- Preserve browser compatibility.
+- Preserve browser/Netlify compatibility during transition, but do not design new long-term features around Netlify.
 - Avoid rewrites initially.
 - Avoid breaking the stable parser/render pipeline.
 - Preserve parser/debug tooling.
@@ -34,6 +36,7 @@ Ownership: this file is the staged Electron roadmap. Durable architecture rules 
 - Avoid Netlify deploys during local Electron iteration.
 - Do not expose API keys client-side.
 - Keep migration steps small and reversible.
+- Do not remove Netlify Functions, browser storage, Drive sync, or localhost loading until Electron-native replacements are implemented and verified.
 
 ## Staged Order Rationale
 
@@ -47,7 +50,7 @@ Ownership: this file is the staged Electron roadmap. Durable architecture rules 
 - Debug tooling planning comes before parser rewrites so future fixes can use small focused artifacts rather than large raw exports.
 - Packaging comes last because packaged builds make origin, storage, OAuth, signing, and rollback problems harder to inspect.
 - Later work: narrow native helpers, app-data exports, explicit storage import/export, render-mode review UI, importer adapters, fixture runner, and packaging configuration after verification gates are defined.
-- Work that should not happen prematurely: broad parser/OCR rewrites, silent stored-quiz migration, moving Gemini credentials into Electron, replacing Drive sync, exposing filesystem access to the renderer, hardcoding render behavior by question number, or packaging before dev mode is stable.
+- Work that should not happen prematurely: broad parser/OCR rewrites, silent stored-quiz migration, removing Netlify Functions before Electron main-process Gemini is verified, replacing Drive sync before local backup/restore is verified, exposing filesystem access to the renderer, hardcoding render behavior by question number, or packaging before dev mode is stable.
 
 ## Planned Stages
 
@@ -88,11 +91,14 @@ Ownership: this file is the staged Electron roadmap. Durable architecture rules 
 - Candidate future helpers: app-data path lookup, open debug folder, save debug export, and native file dialogs.
 - Do not expose direct filesystem access, raw IPC wrappers, or broad Node APIs to the renderer.
 
-### Stage 6: Preserve Netlify Gemini Initially
+### Stage 6: Preserve Netlify Gemini Initially, Then Migrate To Main
 
 - Continue using current Netlify Functions path for Gemini during early Electron work.
 - Keep `gemini-2.5-flash`.
-- Revisit local Gemini strategy later.
+- Future desktop-only target: move Gemini requests into the Electron main process behind narrow preload APIs.
+- Main process should own API key lookup, request construction, response validation, rate/error handling, and redaction.
+- Do not expose Gemini keys to renderer code, preload globals, localStorage, Drive backups, or packaged assets.
+- Do not remove Netlify Functions until the Electron main-process Gemini path is implemented, verified, and rollback-safe.
 
 ### Stage 7: Preserve Or Adapt Drive Workflow
 
@@ -124,13 +130,14 @@ Ownership: this file is the staged Electron roadmap. Durable architecture rules 
 - `localStorage` currently stores sanitized metadata under `nbme_app_v1`: settings, source folders, subfolders, tests, trash, flags, marks, notes, history, attempts, answers, explanations, tags, and image references.
 - `FigureStore` currently stores large image data in IndexedDB database `nbme_figures_v1`, object store `figures`, keyed by figure keys referenced from question image metadata.
 - Keep browser compatibility by leaving `DB.save()`, `storagePayload()`, and `FigureStore` behavior unchanged during early Electron work.
+- Long-term desktop target: replace browser-only storage assumptions with Electron app-data as the active persistence layer after staged export/import, backup, and rollback are proven.
 - Future Electron migration should be staged:
   - Add read-only export diagnostics from current browser storage.
   - Add explicit user-triggered export to local app-data JSON without changing the active save path.
   - Add explicit user-triggered import/restore from local app-data after validation and backup.
   - Move active Electron metadata writes to local JSON only after parity checks and rollback are available.
   - Migrate figure/image persistence separately from metadata, preserving `figureKey` references and Drive file IDs.
-  - Keep Google Drive manifest compatibility so browser and Electron backups can coexist during transition.
+  - Keep Google Drive manifest compatibility so browser and Electron backups can coexist during transition, or until a local desktop backup replacement is verified.
 - Do not silently mutate stored quizzes, localStorage, IndexedDB images, or Google Drive backups during any storage migration.
 
 ### Future Desktop PDF/OCR Workflow Strategy
@@ -273,9 +280,11 @@ Ownership: this file is the staged Electron roadmap. Durable architecture rules 
 
 ## Open Decisions
 
-- Whether Gemini stays through Netlify Functions or later moves to Electron main process with a user-provided local key or hybrid mode.
+- Exact credential storage mechanism for Electron main-process Gemini calls.
 - Whether local storage remains JSON/local files or eventually uses SQLite.
-- How Google Drive OAuth should work in Electron.
+- Whether Google Drive remains as optional sync or is replaced by local desktop backup/export.
+- How Google Drive OAuth should work in Electron if Drive is retained.
+- When packaged/local app loading should replace localhost dev loading.
 - How render-mode review UI should work.
 - How future importers should plug into the canonical intermediate question format.
 

@@ -9,13 +9,14 @@ Ownership: this file records durable architecture rules and long-lived constrain
 - `index.html` is the authoritative working app.
 - Keep active app edits inside `index.html`.
 - Do not split the current browser app into external CSS or JavaScript files.
-- The Electron migration may add Electron-specific scaffolding such as `package.json`, `electron/main.js`, and `electron/preload.js`. That does not change `index.html` being the current authoritative browser app.
+- Long-term platform direction: Electron desktop is now the intended primary platform. Browser mode and Netlify remain transitional compatibility layers during migration, not the desired end state.
+- The Electron migration may add Electron-specific scaffolding such as `package.json`, `electron/main.js`, and `electron/preload.js`. That does not change `index.html` being the current authoritative app during the transition.
 - Old split files may exist, but they are not the active implementation.
 - Keep the Gemini model string exactly `gemini-2.5-flash`.
-- Current implementation: Gemini API calls go through Netlify Functions. Do not put Gemini API keys in frontend JavaScript, localStorage, or Google Drive backups.
+- Current implementation: Gemini API calls go through Netlify Functions. Future desktop-only migration should move Gemini calls to the Electron main process behind narrow preload APIs. Do not put Gemini API keys in frontend JavaScript, renderer code, localStorage, Google Drive backups, or packaged assets.
 - Supabase is not active. Do not reintroduce Supabase unless explicitly requested.
 - Keep full-quality question stems, figures, and exhibits in IndexedDB via `FigureStore` or in Google Drive. Do not store large image data in localStorage.
-- Google Drive OAuth should use the deployed HTTPS Netlify origin. Local development should use `http://localhost:8888` as the primary origin, or `http://localhost:8080` as a secondary/fallback origin, only if those origins are added in Google Cloud Console. `file://` is not supported for Drive or Gemini.
+- Google Drive OAuth currently depends on an approved HTTP/HTTPS origin. Local development should use `http://localhost:8888` as the primary origin, or `http://localhost:8080` as a secondary/fallback origin, only if those origins are added in Google Cloud Console. `file://` is not supported for current Drive or Gemini workflows.
 - The app is currently private/personal use only. Electron security decisions, including local user-provided API keys or OAuth token storage, should be evaluated in that context and revisited if public distribution is ever planned.
 
 ## Active App
@@ -55,7 +56,7 @@ The local grouped-question pipeline is stable and verified locally. The current 
 
 ## Future Importer And Render Direction
 
-The current migration direction is staged Electron adoption around the stable browser app. Early Electron work should keep wrapping the current app without changing app behavior. Avoid rewrites during initial migration.
+The current migration direction is staged Electron adoption with desktop as the long-term primary platform. Early Electron work should keep wrapping the current app without changing app behavior. Browser and Netlify paths should remain working until Electron-native Gemini, storage, backup/restore, and packaging paths are implemented and verified. Avoid rewrites during initial migration.
 
 Future importer and render work should preserve the current stable browser behavior while moving toward a clearer architecture:
 
@@ -72,7 +73,8 @@ Future importer and render work should preserve the current stable browser behav
   - Image mode for figure-heavy, layout-sensitive, or OCR-corrupted stems.
   - Hybrid mode for usable text plus figures, tables, or images.
   - User override per question.
-- Gemini should continue through Netlify Functions initially. Later Electron work may consider Electron main-process Gemini calls with a user-provided local key or a hybrid mode, but that decision should not be made prematurely.
+- Gemini should continue through Netlify Functions initially. Later Electron work should move Gemini to the Electron main process with secure local credential handling before Netlify Functions are removed.
+- Browser-only storage assumptions should eventually be replaced by Electron app-data persistence, but `localStorage`, IndexedDB, `FigureStore`, Google Drive backup, and Netlify support must not be removed until desktop replacements are verified and rollback is available.
 
 ## Historical Debugging Notes
 
