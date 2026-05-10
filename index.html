@@ -1686,6 +1686,11 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
     <div id="notes-draft-preview" class="notes-draft-preview">
       <div class="notes-import-empty">No question drafts generated.</div>
     </div>
+    <div class="notes-import-section-title">Preview Quiz Objects</div>
+    <div id="notes-quiz-object-status" class="notes-import-summary">Approve AI-refined drafts to preview internal quiz-question objects. Nothing is saved.</div>
+    <div id="notes-quiz-object-preview" class="notes-draft-preview">
+      <div class="notes-import-empty">No approved refined drafts converted.</div>
+    </div>
     <div class="modal-actions">
       <button class="btn-modal" id="notes-export-approved" onclick="App.exportApprovedRefinedDraftsJson()" disabled>Export Approved Drafts JSON</button>
       <button class="btn-modal" onclick="App.clearNotesImportPreview()">Clear</button>
@@ -6963,6 +6968,8 @@ const App = (() => {
     const conceptPreview = document.getElementById('notes-concept-preview');
     const draftStatus = document.getElementById('notes-draft-status');
     const draftPreview = document.getElementById('notes-draft-preview');
+    const quizObjectStatus = document.getElementById('notes-quiz-object-status');
+    const quizObjectPreview = document.getElementById('notes-quiz-object-preview');
     if (input) input.value = '';
     if (status) status.textContent = 'Choose a .docx file to preview normalized blocks.';
     if (preview) preview.innerHTML = '<div class="notes-import-empty">No preview loaded.</div>';
@@ -6970,6 +6977,8 @@ const App = (() => {
     if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concepts extracted.</div>';
     if (draftStatus) draftStatus.textContent = 'Draft scaffolds will appear after concepts are extracted. They require human or AI review before use.';
     if (draftPreview) draftPreview.innerHTML = '<div class="notes-import-empty">No question drafts generated.</div>';
+    if (quizObjectStatus) quizObjectStatus.textContent = 'Approve AI-refined drafts to preview internal quiz-question objects. Nothing is saved.';
+    if (quizObjectPreview) quizObjectPreview.innerHTML = '<div class="notes-import-empty">No approved refined drafts converted.</div>';
     updateApprovedDraftExportButton();
     refreshNotesAiStatus();
   }
@@ -7438,6 +7447,7 @@ const App = (() => {
       status.textContent = `${drafts.length} question draft scaffold${drafts.length === 1 ? '' : 's'} generated for preview only. ${reviewCount} require review before use. Refined: ${refinedIds.length}; approved: ${reviewSummary.approved || 0}; rejected: ${reviewSummary.rejected || 0}; pending: ${reviewSummary.pending || 0}. Nothing was saved.`;
     }
     updateApprovedDraftExportButton();
+    renderApprovedQuizObjectPreview();
     if (!preview) return;
     if (!drafts.length) {
       preview.innerHTML = '<div class="notes-import-empty">No question drafts generated.</div>';
@@ -7507,6 +7517,7 @@ const App = (() => {
     _notesImportPreview.refinedReviewStatus = _notesImportPreview.refinedReviewStatus || {};
     _notesImportPreview.refinedReviewStatus[draftId] = status;
     renderNotesQuestionDraftPreview(_notesImportPreview.drafts || []);
+    renderApprovedQuizObjectPreview();
   }
 
   function nonemptyString(value) {
@@ -7560,6 +7571,102 @@ const App = (() => {
     });
 
     return { ok: errors.length === 0, errors };
+  }
+
+  function buildExplanationFromRefinedDraft(refined) {
+    const labels = ['A', 'B', 'C', 'D', 'E'];
+    const rationaleText = labels
+      .map(label => `${label}: ${refined.rationales?.[label] || ''}`)
+      .join('\n');
+    return `${refined.teachingPoint}\n\nRationales:\n${rationaleText}`;
+  }
+
+  function convertApprovedRefinedDraftToQuizObject(refined, idx) {
+    const labels = ['A', 'B', 'C', 'D', 'E'];
+    const quizQuestion = {
+      n: idx + 1,
+      sourceQuestionNumber: idx + 1,
+      generatedQuizQuestionNumber: idx + 1,
+      t: refined.stem,
+      o: refined.choices.map(choice => ({ l: choice.label, t: choice.text })),
+      c: refined.correctAnswer,
+      explanation: buildExplanationFromRefinedDraft(refined),
+      tags: ['UWorld Notes', refined.sourceConceptId || 'AI Refined Draft'],
+      images: [],
+      parseConfidence: refined.confidence,
+      parseWarnings: Array.isArray(refined.warnings) ? refined.warnings.slice() : []
+    };
+    const provenance = {
+      deterministicDraftId: refined.sourceDraftId || '',
+      sourceConceptId: refined.sourceConceptId || '',
+      sourceBlockIds: Array.isArray(refined.sourceBlockIds) ? refined.sourceBlockIds.slice() : [],
+      sourceName: refined.sourceName || _notesImportPreview?.fileName || '',
+      sourceHash: refined.sourceHash || _notesImportPreview?.blocks?.[0]?.sourceHash || '',
+      model: refined.model || 'gemini-2.5-flash',
+      generationMethod: refined.generationMethod || ''
+    };
+    return { quizQuestion, provenance };
+  }
+
+  function validateQuizObjectPreviewItem(item) {
+    const errors = [];
+    const labels = ['A', 'B', 'C', 'D', 'E'];
+    const q = item?.quizQuestion || {};
+    const provenance = item?.provenance || {};
+    if (!Number.isFinite(q.n)) errors.push('missing question number');
+    if (!nonemptyString(q.t)) errors.push('missing stem');
+    if (!Array.isArray(q.o) || q.o.length !== 5) errors.push('must have exactly five answer choices');
+    else q.o.forEach((choice, idx) => {
+      if (choice?.l !== labels[idx]) errors.push('answer choices must be labeled A-E');
+      if (!nonemptyString(choice?.t)) errors.push(`choice ${labels[idx]} is missing text`);
+    });
+    if (!labels.includes(q.c)) errors.push('correct answer must be A-E');
+    if (!nonemptyString(q.explanation)) errors.push('missing explanation');
+    if (!nonemptyString(provenance.deterministicDraftId)) errors.push('missing deterministic draft provenance');
+    if (!nonemptyString(provenance.sourceConceptId)) errors.push('missing source concept provenance');
+    if (!Array.isArray(provenance.sourceBlockIds) || !provenance.sourceBlockIds.length) errors.push('missing source block provenance');
+    if (!nonemptyString(provenance.sourceName)) errors.push('missing source name provenance');
+    if (!nonemptyString(provenance.sourceHash)) errors.push('missing source hash provenance');
+    if (!nonemptyString(provenance.model)) errors.push('missing model provenance');
+    if (!nonemptyString(provenance.generationMethod)) errors.push('missing generation method provenance');
+    return errors;
+  }
+
+  function buildApprovedQuizObjectPreviewItems() {
+    return getApprovedRefinedDrafts().map(({ refinedDraft }, idx) => convertApprovedRefinedDraftToQuizObject(refinedDraft, idx));
+  }
+
+  function renderApprovedQuizObjectPreview() {
+    const status = document.getElementById('notes-quiz-object-status');
+    const preview = document.getElementById('notes-quiz-object-preview');
+    if (!status || !preview) return;
+    const items = buildApprovedQuizObjectPreviewItems();
+    const validationErrors = items.flatMap((item, idx) => validateQuizObjectPreviewItem(item).map(error => `Question ${idx + 1}: ${error}`));
+    if (!items.length) {
+      status.textContent = 'Approve AI-refined drafts to preview internal quiz-question objects. Nothing is saved.';
+      preview.innerHTML = '<div class="notes-import-empty">No approved refined drafts converted.</div>';
+      return;
+    }
+    status.textContent = validationErrors.length
+      ? `${items.length} approved refined draft${items.length === 1 ? '' : 's'} converted with ${validationErrors.length} validation issue${validationErrors.length === 1 ? '' : 's'}. Nothing was saved.`
+      : `${items.length} approved refined draft${items.length === 1 ? '' : 's'} converted into internal quiz-question object previews. Nothing was saved.`;
+    preview.innerHTML = items.map((item, idx) => {
+      const errors = validateQuizObjectPreviewItem(item);
+      const json = JSON.stringify(item, null, 2);
+      const errorHtml = errors.length
+        ? `<div style="color:#8a5a00;margin-bottom:8px;">${escapeHTML(errors.join(' '))}</div>`
+        : '';
+      return `<details class="notes-draft-card" ${idx < 2 ? 'open' : ''}>
+        <summary class="notes-draft-summary">
+          <div class="notes-draft-title">Quiz Object ${idx + 1}: ${escapeHTML(item.provenance.sourceConceptId)}</div>
+          <div class="notes-draft-meta">preview only · not saved · ${escapeHTML(item.provenance.deterministicDraftId)}</div>
+        </summary>
+        <div class="notes-draft-body">
+          ${errorHtml}
+          <pre style="white-space:pre-wrap;font-size:11px;line-height:1.45;margin:0;">${escapeHTML(json)}</pre>
+        </div>
+      </details>`;
+    }).join('');
   }
 
   function exportApprovedRefinedDraftsJson() {
