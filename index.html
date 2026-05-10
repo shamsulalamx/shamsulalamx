@@ -284,6 +284,15 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 .notes-list { margin: 0; padding: 12px 20px 14px 30px; }
 .notes-list li { font-size: 14px; line-height: 1.65; margin-bottom: 8px; }
 .notes-meta { display: block; font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+.notes-import-summary { background: #f5f7fa; border: 1px solid var(--border); border-radius: 4px; padding: 10px 12px; font-size: 12px; color: var(--muted); margin: 10px 0; }
+.notes-import-preview { max-height: 52vh; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; background: #fff; }
+.notes-import-block { border-bottom: 1px solid #edf1f5; padding: 10px 12px; }
+.notes-import-block:last-child { border-bottom: none; }
+.notes-import-block-head { display: flex; gap: 8px; align-items: center; margin-bottom: 5px; flex-wrap: wrap; }
+.notes-import-type { font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--blue); background: #e3f2fd; border-radius: 10px; padding: 2px 7px; }
+.notes-import-path { font-size: 10.5px; color: var(--muted); }
+.notes-import-text { font-size: 12.5px; line-height: 1.55; color: var(--text); white-space: pre-wrap; }
+.notes-import-empty { padding: 16px; color: var(--muted); font-size: 12px; text-align: center; }
 .selection-toolbar {
   position: fixed; z-index: 9999; display: none; gap: 6px;
   background: #162333; border: 1px solid rgba(255,255,255,.18);
@@ -1627,6 +1636,26 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
   </div>
 </div>
 
+<!-- ═══ NOTES IMPORT PREVIEW MODAL ═══ -->
+<div id="modal-notes-import" class="modal-overlay">
+  <div class="modal-box" style="max-width:760px;">
+    <h3>UWorld Notes Import Preview</h3>
+    <p>This is a preview/import prototype only. It extracts DOCX structure into normalized blocks. It does not save quizzes, generate questions, call AI, or modify stored data.</p>
+    <div class="form-group">
+      <label class="form-label">DOCX Notes File</label>
+      <input type="file" class="form-input" id="notes-docx-input" accept=".docx" onchange="App.previewNotesDocx(this)">
+    </div>
+    <div id="notes-import-status" class="notes-import-summary">Choose a .docx file to preview normalized blocks.</div>
+    <div id="notes-import-preview" class="notes-import-preview">
+      <div class="notes-import-empty">No preview loaded.</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal" onclick="App.clearNotesImportPreview()">Clear</button>
+      <button class="btn-modal primary" onclick="App.closeNotesImportPreview()">Done</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ NEW FOLDER MODAL ═══ -->
 <div id="modal-new-folder" class="modal-overlay">
   <div class="modal-box" style="max-width:380px;">
@@ -1695,21 +1724,25 @@ const DB = (() => {
   const LOCAL_KEY = 'nbme_app_v1';
   const DEFAULT_SOURCE_ID = 'src-nbme';
   const DEFAULT_SOURCE_FOLDERS = [
-    { id: 'src-nbme', name: 'NBME', order: 0 },
-    { id: 'src-uworld', name: 'UWorld', order: 1 },
-    { id: 'src-anki', name: 'Anki', order: 2 },
-    { id: 'src-ome', name: 'OME', order: 3 },
-    { id: 'src-divine-podcasts', name: 'Divine Podcasts', order: 4 },
-    { id: 'src-mehlman', name: 'Mehlman', order: 5 },
-    { id: 'src-images-and-tables', name: 'Images and Tables', order: 6 },
-    { id: 'src-amboss', name: 'Amboss', order: 7 }
+    { id: 'src-nbme', name: 'NBME', order: 0, sourceType: 'nbme', workflows: ['pdf-test-import'] },
+    { id: 'src-uworld', name: 'UWorld', order: 1, sourceType: 'uworld-notes', workflows: ['docx-notes-preview'] },
+    { id: 'src-anki', name: 'Anki', order: 2, sourceType: 'anki', workflows: [] },
+    { id: 'src-ome', name: 'OME', order: 3, sourceType: 'ome', workflows: [] },
+    { id: 'src-divine-podcasts', name: 'Divine Podcasts', order: 4, sourceType: 'divine', workflows: [] },
+    { id: 'src-mehlman', name: 'Mehlman', order: 5, sourceType: 'mehlman', workflows: [] },
+    { id: 'src-images-and-tables', name: 'Images and Tables', order: 6, sourceType: 'images-tables', workflows: [] },
+    { id: 'src-amboss', name: 'Amboss', order: 7, sourceType: 'amboss', workflows: [] }
   ];
+
+  function cloneSourceFolder(source) {
+    return Object.assign({}, source, { workflows: Array.isArray(source.workflows) ? source.workflows.slice() : [] });
+  }
 
   function defaultDB() {
     return {
       version: 1,
       settings: {},
-      sourceFolders: DEFAULT_SOURCE_FOLDERS.map(f => Object.assign({}, f)),
+      sourceFolders: DEFAULT_SOURCE_FOLDERS.map(cloneSourceFolder),
       folders: [],
       tests: [],
       trash: [],
@@ -1733,11 +1766,18 @@ const DB = (() => {
 
     DEFAULT_SOURCE_FOLDERS.forEach(src => {
       const existing = db.sourceFolders.find(s => s.id === src.id);
-      if (!existing) db.sourceFolders.push(Object.assign({}, src));
+      if (!existing) db.sourceFolders.push(cloneSourceFolder(src));
       else {
         if (!existing.name) existing.name = src.name;
         if (existing.order == null) existing.order = src.order;
+        if (!existing.sourceType) existing.sourceType = src.sourceType;
+        if (!Array.isArray(existing.workflows)) existing.workflows = src.workflows.slice();
       }
+    });
+
+    db.sourceFolders.forEach(source => {
+      if (!source.sourceType) source.sourceType = 'custom';
+      if (!Array.isArray(source.workflows)) source.workflows = [];
     });
 
     if (!Array.isArray(db.folders)) db.folders = [];
@@ -1834,7 +1874,7 @@ const DB = (() => {
   }
   function createSourceFolder(name) {
     const db = get();
-    const f = { id: uid(), name, createdAt: Date.now(), order: db.sourceFolders.length };
+    const f = { id: uid(), name, sourceType: 'custom', workflows: [], createdAt: Date.now(), order: db.sourceFolders.length };
     db.sourceFolders.push(f); save(); return f;
   }
   function renameSourceFolder(id, name) {
@@ -6077,6 +6117,7 @@ const App = (() => {
   let _ocrUndoStack = [];
   let _noteSelection = null;
 	  let _noteHighlightSeq = 0;
+  let _notesImportPreview = null;
   // ── Init ───────────────────────────────────────────────────
   function init() {
     window.toast = toast;
@@ -6245,15 +6286,51 @@ const App = (() => {
     if (folder) _currentSource = folder.sourceId || 'src-nbme';
   }
 
+  function getSourceWorkflow(sourceId = _currentSource) {
+    const source = sourceId ? DB.getSourceFolder(sourceId) : null;
+    const workflows = Array.isArray(source?.workflows) ? source.workflows : [];
+    if (workflows.includes('pdf-test-import')) return 'pdf-test-import';
+    if (workflows.includes('docx-notes-preview')) return 'docx-notes-preview';
+    return null;
+  }
+
+  function getWorkflowActionLabel(sourceId = _currentSource) {
+    const workflow = getSourceWorkflow(sourceId);
+    if (workflow === 'pdf-test-import') return '＋ Generate Test';
+    if (workflow === 'docx-notes-preview') return 'Import DOCX Preview';
+    return '';
+  }
+
+  function getWorkflowEmptyMessage(sourceId = _currentSource) {
+    const workflow = getSourceWorkflow(sourceId);
+    if (workflow === 'docx-notes-preview') return 'Use DOCX notes import preview from this library.';
+    if (workflow === 'pdf-test-import') return 'No tests in this folder yet.';
+    return 'No import workflow is available for this library yet.';
+  }
+
+  function openCurrentSourceWorkflow() {
+    const workflow = getSourceWorkflow();
+    if (workflow === 'docx-notes-preview') {
+      openNotesImportPreview();
+      return;
+    }
+    if (workflow === 'pdf-test-import') {
+      openPdfGenerateModal();
+      return;
+    }
+    toast('No import workflow is available for this library yet.');
+  }
+
   // ── Context menus ──────────────────────────────────────────
   function showFolderContextMenu(e, folder) {
     removeContextMenus();
+    const workflowLabel = getWorkflowActionLabel(folder.sourceId || 'src-nbme');
     const menu = document.createElement('div');
     menu.id = 'ctx-menu';
     menu.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;background:white;border:1px solid #c8d0da;border-radius:4px;box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:9000;min-width:150px;`;
     menu.innerHTML = `
       <div class="ctx-item" onclick="App.startRenameFolder('${folder.id}')">✏️ Rename</div>
-      <div class="ctx-item" onclick="App.generateInFolder('${folder.id}')">＋ New Test</div>
+      ${workflowLabel ? `<div class="ctx-item" onclick="App.generateInFolder('${folder.id}')">${workflowLabel}</div>` : ''}
       <div class="ctx-item ctx-danger" onclick="App.deleteFolder('${folder.id}')">🗑 Delete Folder</div>`;
     styleContextMenu(menu);
     document.body.appendChild(menu);
@@ -6342,7 +6419,11 @@ const App = (() => {
     const titleEl = document.getElementById('home-title');
     const contentEl = document.getElementById('home-content');
     const generateBtn = document.getElementById('btn-home-generate');
-    if (generateBtn) generateBtn.style.display = _currentSource ? 'flex' : 'none';
+    if (generateBtn) {
+      const workflowLabel = getWorkflowActionLabel();
+      generateBtn.style.display = workflowLabel ? 'flex' : 'none';
+      if (workflowLabel) generateBtn.textContent = workflowLabel;
+    }
 
     if (!_currentSource) {
       titleEl.textContent = 'Study Library';
@@ -6365,8 +6446,9 @@ const App = (() => {
     const tests = DB.getTests(_currentFolder);
 
     if (!tests.length) {
-      contentEl.innerHTML = `<div class="no-tests">No tests in this folder yet.<br><br>
-        <button class="btn-generate" onclick="App.generateInFolder('${_currentFolder}')">＋ Generate Test</button></div>`;
+      const workflowLabel = getWorkflowActionLabel();
+      contentEl.innerHTML = `<div class="no-tests">${escapeHTML(getWorkflowEmptyMessage())}<br><br>
+        ${workflowLabel ? `<button class="btn-generate" onclick="App.generateInFolder('${_currentFolder}')">${workflowLabel}</button>` : ''}</div>`;
       return;
     }
 
@@ -6774,13 +6856,14 @@ const App = (() => {
 
     const content = document.getElementById('home-content');
     const notes = DB.getNotes();
+    const notesActions = '<div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:12px;flex-wrap:wrap;"><button class="btn-card" onclick="App.openNotesImportPreview()">Import DOCX Preview</button><button class="btn-card" onclick="App.downloadNotesDocx()">Download DOCX</button><button class="btn-card" onclick="App.downloadNotesPdf()">Download PDF</button></div>';
     if (!notes.length) {
-      content.innerHTML = '<div class="no-tests">No notes yet. Select answer explanation text during review, then choose Add to Notes.</div>';
+      content.innerHTML = notesActions + '<div class="no-tests">No notes yet. Select answer explanation text during review, then choose Add to Notes.</div>';
       return;
     }
 
     const folders = DB.getFolders();
-    let html = '<div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:12px;"><button class="btn-card" onclick="App.downloadNotesDocx()">Download DOCX</button><button class="btn-card" onclick="App.downloadNotesPdf()">Download PDF</button></div>';
+    let html = notesActions;
     folders.forEach(folder => {
       const folderTestIds = DB.getTests(folder.id).map(t => t.id);
       const folderNotes = notes.filter(n => folderTestIds.includes(n.testId));
@@ -6818,6 +6901,223 @@ const App = (() => {
     DB.deleteNote(id);
     showNotes();
     toast('Note deleted.');
+  }
+
+  function openNotesImportPreview() {
+    const modal = document.getElementById('modal-notes-import');
+    if (!modal) return;
+    modal.style.display = 'flex';
+  }
+
+  function closeNotesImportPreview() {
+    const modal = document.getElementById('modal-notes-import');
+    if (modal) modal.style.display = 'none';
+  }
+
+  function clearNotesImportPreview() {
+    _notesImportPreview = null;
+    const input = document.getElementById('notes-docx-input');
+    const status = document.getElementById('notes-import-status');
+    const preview = document.getElementById('notes-import-preview');
+    if (input) input.value = '';
+    if (status) status.textContent = 'Choose a .docx file to preview normalized blocks.';
+    if (preview) preview.innerHTML = '<div class="notes-import-empty">No preview loaded.</div>';
+  }
+
+  async function previewNotesDocx(input) {
+    const file = input?.files?.[0];
+    if (!file) return;
+    const status = document.getElementById('notes-import-status');
+    const preview = document.getElementById('notes-import-preview');
+    if (status) {
+      status.textContent = 'Reading DOCX preview...';
+      status.style.color = '#5a6a7a';
+    }
+    if (preview) preview.innerHTML = '<div class="notes-import-empty">Extracting document structure...</div>';
+    try {
+      const blocks = await extractDocxNotesBlocks(file);
+      _notesImportPreview = { fileName: file.name, blocks };
+      renderNotesImportPreview(blocks, file.name);
+    } catch (err) {
+      _notesImportPreview = null;
+      if (status) {
+        status.textContent = err?.message || 'Could not read this DOCX file.';
+        status.style.color = '#c0392b';
+      }
+      if (preview) preview.innerHTML = '<div class="notes-import-empty">No blocks extracted. The file may be malformed, encrypted, or unsupported.</div>';
+    }
+  }
+
+  async function extractDocxNotesBlocks(file) {
+    if (!file.name.toLowerCase().endsWith('.docx')) {
+      throw new Error('Please choose a .docx file.');
+    }
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const sourceHash = await sha256Hex(bytes);
+    const entries = await readMinimalZipEntries(bytes, new Set(['word/document.xml']));
+    const documentXml = entries['word/document.xml'];
+    if (!documentXml) throw new Error('Malformed DOCX: word/document.xml was not found.');
+    return parseDocxDocumentXml(documentXml, file.name, sourceHash);
+  }
+
+  async function sha256Hex(bytes) {
+    if (!window.crypto?.subtle) return '';
+    const hash = await window.crypto.subtle.digest('SHA-256', bytes);
+    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  function readUint16LE(bytes, off) {
+    return bytes[off] | (bytes[off + 1] << 8);
+  }
+
+  function readUint32LE(bytes, off) {
+    return (bytes[off] | (bytes[off + 1] << 8) | (bytes[off + 2] << 16) | (bytes[off + 3] << 24)) >>> 0;
+  }
+
+  async function inflateZipData(data) {
+    if (typeof DecompressionStream !== 'function') {
+      throw new Error('This browser cannot decompress DOCX files without an additional library.');
+    }
+    try {
+      const stream = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+      return new Uint8Array(await new Response(stream).arrayBuffer());
+    } catch (_) {
+      const stream = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate'));
+      return new Uint8Array(await new Response(stream).arrayBuffer());
+    }
+  }
+
+  async function readMinimalZipEntries(bytes, wantedNames) {
+    const decoder = new TextDecoder('utf-8');
+    const minEocd = 22;
+    const start = Math.max(0, bytes.length - 65557);
+    let eocd = -1;
+    for (let i = bytes.length - minEocd; i >= start; i--) {
+      if (readUint32LE(bytes, i) === 0x06054b50) { eocd = i; break; }
+    }
+    if (eocd < 0) throw new Error('Malformed DOCX: ZIP directory was not found.');
+    const totalEntries = readUint16LE(bytes, eocd + 10);
+    const centralOffset = readUint32LE(bytes, eocd + 16);
+    const out = {};
+    let ptr = centralOffset;
+    for (let i = 0; i < totalEntries && ptr < bytes.length; i++) {
+      if (readUint32LE(bytes, ptr) !== 0x02014b50) break;
+      const method = readUint16LE(bytes, ptr + 10);
+      const compressedSize = readUint32LE(bytes, ptr + 20);
+      const fileNameLen = readUint16LE(bytes, ptr + 28);
+      const extraLen = readUint16LE(bytes, ptr + 30);
+      const commentLen = readUint16LE(bytes, ptr + 32);
+      const localOffset = readUint32LE(bytes, ptr + 42);
+      const name = decoder.decode(bytes.slice(ptr + 46, ptr + 46 + fileNameLen));
+      if (wantedNames.has(name)) {
+        if (readUint32LE(bytes, localOffset) !== 0x04034b50) throw new Error('Malformed DOCX: ZIP entry header is invalid.');
+        const localNameLen = readUint16LE(bytes, localOffset + 26);
+        const localExtraLen = readUint16LE(bytes, localOffset + 28);
+        const dataStart = localOffset + 30 + localNameLen + localExtraLen;
+        const compressed = bytes.slice(dataStart, dataStart + compressedSize);
+        let fileBytes;
+        if (method === 0) fileBytes = compressed;
+        else if (method === 8) fileBytes = await inflateZipData(compressed);
+        else throw new Error('Unsupported DOCX compression method: ' + method);
+        out[name] = decoder.decode(fileBytes);
+      }
+      ptr += 46 + fileNameLen + extraLen + commentLen;
+    }
+    return out;
+  }
+
+  function getWordAttr(el, localName) {
+    if (!el) return '';
+    return el.getAttribute('w:' + localName) || el.getAttribute(localName) || el.getAttributeNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', localName) || '';
+  }
+
+  function firstWordDesc(el, name) {
+    return el ? Array.from(el.getElementsByTagNameNS('*', name))[0] || null : null;
+  }
+
+  function docxParagraphText(p) {
+    let text = '';
+    const walk = node => {
+      if (node.nodeType !== 1) return;
+      const local = node.localName;
+      if (local === 't') text += node.textContent || '';
+      else if (local === 'tab') text += '\t';
+      else if (local === 'br' || local === 'cr') text += '\n';
+      Array.from(node.childNodes || []).forEach(walk);
+    };
+    Array.from(p.childNodes || []).forEach(walk);
+    return text.replace(/\s+\n/g, '\n').replace(/\n\s+/g, '\n').replace(/[ \t]{2,}/g, ' ').trim();
+  }
+
+  function parseDocxDocumentXml(xmlText, sourceName, sourceHash) {
+    const xml = new DOMParser().parseFromString(xmlText, 'application/xml');
+    if (xml.getElementsByTagName('parsererror').length) {
+      throw new Error('Malformed DOCX: document XML could not be parsed.');
+    }
+    const paragraphs = Array.from(xml.getElementsByTagNameNS('*', 'p'));
+    const blocks = [];
+    const hierarchy = [];
+    const createdAt = new Date().toISOString();
+    paragraphs.forEach(p => {
+      const textRaw = docxParagraphText(p);
+      const textNormalized = textRaw.replace(/\s+/g, ' ').trim();
+      if (!textNormalized) return;
+      const pPr = firstWordDesc(p, 'pPr');
+      const style = getWordAttr(firstWordDesc(pPr, 'pStyle'), 'val');
+      const numPr = firstWordDesc(pPr, 'numPr');
+      const headingMatch = style.match(/^Heading([1-6])$/i);
+      const blockType = headingMatch || /^Title$/i.test(style) ? 'heading' : numPr ? 'listItem' : 'paragraph';
+      const headingLevel = headingMatch ? Math.max(1, Math.min(6, parseInt(headingMatch[1], 10))) : /^Title$/i.test(style) ? 1 : null;
+      const sectionPath = hierarchy.filter(Boolean);
+      if (headingLevel) {
+        hierarchy[headingLevel - 1] = textNormalized;
+        hierarchy.length = headingLevel;
+      }
+      blocks.push({
+        sourceType: 'docx',
+        sourceName,
+        blockId: 'docx-block-' + String(blocks.length + 1).padStart(4, '0'),
+        blockType,
+        textRaw,
+        textNormalized,
+        sectionPath,
+        order: blocks.length,
+        warnings: [],
+        importerVersion: 'uworld-notes-docx-preview-v1',
+        createdAt,
+        sourceHash,
+        futureGenerationEligible: blockType !== 'heading' && textNormalized.length >= 30
+      });
+    });
+    return blocks;
+  }
+
+  function renderNotesImportPreview(blocks, fileName) {
+    const status = document.getElementById('notes-import-status');
+    const preview = document.getElementById('notes-import-preview');
+    const counts = blocks.reduce((acc, b) => {
+      acc[b.blockType] = (acc[b.blockType] || 0) + 1;
+      return acc;
+    }, {});
+    if (status) {
+      status.style.color = '#5a6a7a';
+      status.textContent = `${fileName}: ${blocks.length} normalized block${blocks.length === 1 ? '' : 's'} extracted. Headings: ${counts.heading || 0}; paragraphs: ${counts.paragraph || 0}; list items: ${counts.listItem || 0}. Nothing was saved.`;
+    }
+    if (!preview) return;
+    if (!blocks.length) {
+      preview.innerHTML = '<div class="notes-import-empty">No readable blocks found.</div>';
+      return;
+    }
+    preview.innerHTML = blocks.map(block => {
+      const path = block.sectionPath.length ? block.sectionPath.join(' / ') : 'Top level';
+      return `<div class="notes-import-block">
+        <div class="notes-import-block-head">
+          <span class="notes-import-type">${escapeHTML(block.blockType)}</span>
+          <span class="notes-import-path">${escapeHTML(path)} · #${block.order + 1}</span>
+        </div>
+        <div class="notes-import-text">${escapeHTML(block.textNormalized)}</div>
+      </div>`;
+    }).join('');
   }
 
   function groupedNotesHTML() {
@@ -7153,6 +7453,10 @@ const App = (() => {
 
 	  // ── Generate Test Modal ────────────────────────────────────
 	  function openGenerateModal() {
+    openCurrentSourceWorkflow();
+  }
+
+	  function openPdfGenerateModal() {
 	    _genQBFile = null; _genAKFile = null; _genParsed = null; _lastParserDebug = null;
     ['inp-qb','inp-ak'].forEach(id => document.getElementById(id).value = '');
     ['nm-qb','nm-ak'].forEach(id => document.getElementById(id).textContent = '');
@@ -8073,6 +8377,10 @@ const App = (() => {
     unflag,
     showMarked,
     showNotes,
+    openNotesImportPreview,
+    closeNotesImportPreview,
+    clearNotesImportPreview,
+    previewNotesDocx,
     deleteNote,
     downloadNotesDocx,
     downloadNotesPdf,
