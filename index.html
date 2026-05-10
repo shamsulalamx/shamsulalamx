@@ -306,6 +306,18 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 .notes-concept-body { padding: 0 12px 12px; font-size: 12.5px; color: var(--text); line-height: 1.55; }
 .notes-concept-snippet { white-space: pre-wrap; margin-bottom: 7px; }
 .notes-concept-warning { display: inline-block; font-size: 10px; color: #8a5a00; background: #fff4d6; border-radius: 10px; padding: 2px 7px; margin: 0 4px 4px 0; }
+.notes-draft-preview { max-height: 38vh; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; background: #fff; }
+.notes-draft-card { border-bottom: 1px solid #edf1f5; padding: 0; }
+.notes-draft-card:last-child { border-bottom: none; }
+.notes-draft-summary { cursor: pointer; list-style: none; padding: 10px 12px; }
+.notes-draft-summary::-webkit-details-marker { display: none; }
+.notes-draft-title { font-size: 12.5px; font-weight: 700; color: var(--text); }
+.notes-draft-meta { font-size: 10.5px; color: var(--muted); margin-top: 4px; }
+.notes-draft-body { padding: 0 12px 12px; font-size: 12.5px; color: var(--text); line-height: 1.55; }
+.notes-draft-stem { margin-bottom: 8px; white-space: pre-wrap; }
+.notes-draft-choice-list { margin: 6px 0 8px 20px; padding: 0; }
+.notes-draft-choice-list li { margin-bottom: 3px; }
+.notes-draft-teaching { background: #f5f7fa; border: 1px solid #edf1f5; border-radius: 4px; padding: 8px; margin: 8px 0; }
 .selection-toolbar {
   position: fixed; z-index: 9999; display: none; gap: 6px;
   background: #162333; border: 1px solid rgba(255,255,255,.18);
@@ -1667,6 +1679,11 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
     <div id="notes-concept-status" class="notes-import-summary">Concepts will appear after a DOCX file is previewed.</div>
     <div id="notes-concept-preview" class="notes-concept-preview">
       <div class="notes-import-empty">No concepts extracted.</div>
+    </div>
+    <div class="notes-import-section-title">Question Draft Preview</div>
+    <div id="notes-draft-status" class="notes-import-summary">Draft scaffolds will appear after concepts are extracted. They require human or AI review before use.</div>
+    <div id="notes-draft-preview" class="notes-draft-preview">
+      <div class="notes-import-empty">No question drafts generated.</div>
     </div>
     <div class="modal-actions">
       <button class="btn-modal" onclick="App.clearNotesImportPreview()">Clear</button>
@@ -6940,11 +6957,15 @@ const App = (() => {
     const preview = document.getElementById('notes-import-preview');
     const conceptStatus = document.getElementById('notes-concept-status');
     const conceptPreview = document.getElementById('notes-concept-preview');
+    const draftStatus = document.getElementById('notes-draft-status');
+    const draftPreview = document.getElementById('notes-draft-preview');
     if (input) input.value = '';
     if (status) status.textContent = 'Choose a .docx file to preview normalized blocks.';
     if (preview) preview.innerHTML = '<div class="notes-import-empty">No preview loaded.</div>';
     if (conceptStatus) conceptStatus.textContent = 'Concepts will appear after a DOCX file is previewed.';
     if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concepts extracted.</div>';
+    if (draftStatus) draftStatus.textContent = 'Draft scaffolds will appear after concepts are extracted. They require human or AI review before use.';
+    if (draftPreview) draftPreview.innerHTML = '<div class="notes-import-empty">No question drafts generated.</div>';
   }
 
   async function previewNotesDocx(input) {
@@ -6954,6 +6975,8 @@ const App = (() => {
     const preview = document.getElementById('notes-import-preview');
     const conceptStatus = document.getElementById('notes-concept-status');
     const conceptPreview = document.getElementById('notes-concept-preview');
+    const draftStatus = document.getElementById('notes-draft-status');
+    const draftPreview = document.getElementById('notes-draft-preview');
     if (status) {
       status.textContent = 'Reading DOCX preview...';
       status.style.color = '#5a6a7a';
@@ -6964,12 +6987,19 @@ const App = (() => {
       conceptStatus.style.color = '#5a6a7a';
     }
     if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concepts extracted.</div>';
+    if (draftStatus) {
+      draftStatus.textContent = 'Waiting for extracted concepts...';
+      draftStatus.style.color = '#5a6a7a';
+    }
+    if (draftPreview) draftPreview.innerHTML = '<div class="notes-import-empty">No question drafts generated.</div>';
     try {
       const blocks = await extractDocxNotesBlocks(file);
       const concepts = extractNotesConcepts(blocks);
-      _notesImportPreview = { fileName: file.name, blocks, concepts };
+      const drafts = buildNotesQuestionDrafts(concepts);
+      _notesImportPreview = { fileName: file.name, blocks, concepts, drafts };
       renderNotesImportPreview(blocks, file.name);
       renderNotesConceptPreview(concepts);
+      renderNotesQuestionDraftPreview(drafts);
     } catch (err) {
       _notesImportPreview = null;
       if (status) {
@@ -6982,6 +7012,11 @@ const App = (() => {
         conceptStatus.style.color = '#c0392b';
       }
       if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concepts extracted.</div>';
+      if (draftStatus) {
+        draftStatus.textContent = 'Question draft preview skipped because no concepts were available.';
+        draftStatus.style.color = '#c0392b';
+      }
+      if (draftPreview) draftPreview.innerHTML = '<div class="notes-import-empty">No question drafts generated.</div>';
     }
   }
 
@@ -7275,6 +7310,98 @@ const App = (() => {
         </summary>
         <div class="notes-concept-body">
           <div class="notes-concept-snippet">${escapeHTML(concept.sourceSnippet)}</div>
+          ${warnings}
+        </div>
+      </details>`;
+    }).join('');
+  }
+
+  function sourceSnippetSentence(text) {
+    const cleaned = String(text || '').replace(/\s+/g, ' ').trim();
+    const sentence = cleaned.split(/(?<=[.!?])\s+/)[0] || cleaned;
+    return sentence.length > 180 ? sentence.slice(0, 177).trimEnd() + '...' : sentence;
+  }
+
+  function draftStemForConcept(concept) {
+    const topic = concept.topic || 'the source concept';
+    const snippet = sourceSnippetSentence(concept.sourceSnippet || concept.testedFact);
+    return `A learner is reviewing notes on ${topic}. Which statement best captures the testable teaching point from this source note?\n\nSource note: ${snippet}`;
+  }
+
+  function draftChoicesForConcept(concept) {
+    const topic = concept.topic || 'this topic';
+    const fact = sourceSnippetSentence(concept.testedFact || concept.sourceSnippet);
+    return [
+      { l: 'A', t: fact || 'The source note contains the main teaching point.' },
+      { l: 'B', t: `A related but unverified association for ${topic}.` },
+      { l: 'C', t: `A reversed or overstated version of the source note.` },
+      { l: 'D', t: `A plausible distractor requiring later medical validation.` },
+      { l: 'E', t: `A nonspecific statement that does not directly follow from the source note.` }
+    ];
+  }
+
+  function buildNotesQuestionDrafts(concepts) {
+    const createdAt = new Date().toISOString();
+    return concepts.map((concept, idx) => {
+      const inheritedWarnings = Array.isArray(concept.warnings) ? concept.warnings.slice() : [];
+      const warnings = Array.from(new Set(inheritedWarnings.concat([
+        'deterministic scaffold only',
+        'requires human or AI review before use',
+        'distractors are placeholders'
+      ])));
+      return {
+        draftId: 'draft-' + String(idx + 1).padStart(4, '0'),
+        conceptId: concept.conceptId,
+        stem: draftStemForConcept(concept),
+        choices: draftChoicesForConcept(concept),
+        correctAnswer: 'A',
+        teachingPoint: sourceSnippetSentence(concept.testedFact || concept.sourceSnippet),
+        distractorRationales: {
+          B: 'Placeholder: requires review for a medically plausible misconception.',
+          C: 'Placeholder: intended as a reversal or overstatement, not yet validated.',
+          D: 'Placeholder: requires domain review before use.',
+          E: 'Placeholder: nonspecific distractor, not final.'
+        },
+        sourceConceptId: concept.conceptId,
+        sourceBlockIds: concept.sourceBlockIds.slice(),
+        confidence: Math.max(0.15, Math.min(0.7, concept.confidence - 0.12)),
+        warnings,
+        generationMethod: 'deterministic-question-draft-preview-v1',
+        createdAt
+      };
+    });
+  }
+
+  function renderNotesQuestionDraftPreview(drafts) {
+    const status = document.getElementById('notes-draft-status');
+    const preview = document.getElementById('notes-draft-preview');
+    const reviewCount = drafts.filter(d => d.warnings.length || d.confidence < 0.6).length;
+    if (status) {
+      status.style.color = '#5a6a7a';
+      status.textContent = `${drafts.length} question draft scaffold${drafts.length === 1 ? '' : 's'} generated for preview only. ${reviewCount} require review before use. Nothing was saved.`;
+    }
+    if (!preview) return;
+    if (!drafts.length) {
+      preview.innerHTML = '<div class="notes-import-empty">No question drafts generated.</div>';
+      return;
+    }
+    preview.innerHTML = drafts.map((draft, idx) => {
+      const confidencePct = Math.round(draft.confidence * 100);
+      const refs = draft.sourceBlockIds.join(', ');
+      const choices = draft.choices.map(choice => `<li><strong>${escapeHTML(choice.l)}.</strong> ${escapeHTML(choice.t)}</li>`).join('');
+      const warnings = draft.warnings.length
+        ? `<div>${draft.warnings.map(w => `<span class="notes-concept-warning">${escapeHTML(w)}</span>`).join('')}</div>`
+        : '';
+      return `<details class="notes-draft-card" ${idx < 3 ? 'open' : ''}>
+        <summary class="notes-draft-summary">
+          <div class="notes-draft-title">Draft ${idx + 1}: ${escapeHTML(draft.sourceConceptId)}</div>
+          <div class="notes-draft-meta">${escapeHTML(draft.generationMethod)} · ${confidencePct}% · ${escapeHTML(refs)}</div>
+        </summary>
+        <div class="notes-draft-body">
+          <div class="notes-draft-stem">${escapeHTML(draft.stem)}</div>
+          <ol class="notes-draft-choice-list" type="A">${choices}</ol>
+          <div class="notes-draft-teaching"><strong>Provisional correct answer:</strong> ${escapeHTML(draft.correctAnswer)}<br><strong>Teaching point:</strong> ${escapeHTML(draft.teachingPoint)}</div>
+          <div><strong>Distractor rationale placeholders:</strong> ${escapeHTML(Object.entries(draft.distractorRationales).map(([letter, text]) => `${letter}: ${text}`).join(' '))}</div>
           ${warnings}
         </div>
       </details>`;
