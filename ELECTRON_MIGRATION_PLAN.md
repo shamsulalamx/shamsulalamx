@@ -274,6 +274,21 @@ This file should track migration stages, decisions, risks, verification checkpoi
 - Browser/Electron divergence.
 - Messy Electron architecture from moving too much too early.
 
+### Highest Regression-Risk Areas
+
+- Parser logic: risk of losing source items, changing source-number recovery, or collapsing generated questions. Verify raw OCR, normalized, parsed, post-merge, and final counts before changing parser code.
+- OCR normalization: risk of broad spacing/token fixes corrupting valid medical text. Keep cleanup conservative, traceable, and fixture-backed.
+- Grouped-question handling: risk of breaking shared instructions, shared stems, carry-forward ranges, linked item IDs, independent scoring, or `sharedGroup.sharedChoices` authority.
+- Answer-choice parsing: risk of misreading quoted choices, two-column choices, OCR option letters, or shared answer banks.
+- Answer/explanation alignment: risk of matching the wrong answer key item, losing explanations, or shifting answer mappings after source-number recovery.
+- Render-mode selection: risk of duplicating answer banks, hiding useful parsed text, showing contaminated stem crops, or misordering grouped content.
+- localStorage migration: risk of reintroducing image data into localStorage, losing metadata, corrupting saved quizzes, or silently mutating stale generated tests.
+- Drive sync: risk of losing image references, overwriting Drive manifests, restoring stale data, or storing Gemini/API secrets in backups.
+- Gemini calls: risk of exposing API keys, breaking Netlify Function routes, changing `gemini-2.5-flash`, or making Electron depend on a local key before strategy is approved.
+- Web/desktop branching: risk of browser and Electron behavior diverging through hidden conditional paths, broad preload APIs, or premature filesystem assumptions.
+- Debug tooling: risk of exposing copyrighted/private parser artifacts outside local-only workflows.
+- Packaging: risk of shipping before Drive, Gemini, storage, parser/debug, and browser fallback behavior are verified.
+
 ## Verification Checklist
 
 For each stage, verify:
