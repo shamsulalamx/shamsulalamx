@@ -1680,6 +1680,11 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
     <div id="notes-concept-preview" class="notes-concept-preview">
       <div class="notes-import-empty">No concepts extracted.</div>
     </div>
+    <div class="notes-import-section-title">Concept Clustering Preview</div>
+    <div id="notes-cluster-status" class="notes-import-summary">Clusters will appear after concepts are extracted.</div>
+    <div id="notes-cluster-preview" class="notes-concept-preview">
+      <div class="notes-import-empty">No clusters generated.</div>
+    </div>
     <div class="notes-import-section-title">Question Draft Preview</div>
     <div id="notes-draft-status" class="notes-import-summary">Draft scaffolds will appear after concepts are extracted. They require human or AI review before use.</div>
     <div id="notes-ai-status" class="notes-import-summary" style="display:none;"></div>
@@ -6990,6 +6995,8 @@ const App = (() => {
     const preview = document.getElementById('notes-import-preview');
     const conceptStatus = document.getElementById('notes-concept-status');
     const conceptPreview = document.getElementById('notes-concept-preview');
+    const clusterStatus = document.getElementById('notes-cluster-status');
+    const clusterPreview = document.getElementById('notes-cluster-preview');
     const draftStatus = document.getElementById('notes-draft-status');
     const draftPreview = document.getElementById('notes-draft-preview');
     const quizObjectStatus = document.getElementById('notes-quiz-object-status');
@@ -7003,6 +7010,8 @@ const App = (() => {
     if (preview) preview.innerHTML = '<div class="notes-import-empty">No preview loaded.</div>';
     if (conceptStatus) conceptStatus.textContent = 'Concepts will appear after a DOCX file is previewed.';
     if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concepts extracted.</div>';
+    if (clusterStatus) clusterStatus.textContent = 'Clusters will appear after concepts are extracted.';
+    if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No clusters generated.</div>';
     if (draftStatus) draftStatus.textContent = 'Draft scaffolds will appear after concepts are extracted. They require human or AI review before use.';
     if (draftPreview) draftPreview.innerHTML = '<div class="notes-import-empty">No question drafts generated.</div>';
     if (quizObjectStatus) quizObjectStatus.textContent = 'Approve AI-refined drafts to preview internal quiz-question objects. Nothing is saved.';
@@ -7178,6 +7187,8 @@ const App = (() => {
     const preview = document.getElementById('notes-import-preview');
     const conceptStatus = document.getElementById('notes-concept-status');
     const conceptPreview = document.getElementById('notes-concept-preview');
+    const clusterStatus = document.getElementById('notes-cluster-status');
+    const clusterPreview = document.getElementById('notes-cluster-preview');
     const draftStatus = document.getElementById('notes-draft-status');
     const draftPreview = document.getElementById('notes-draft-preview');
     if (status) {
@@ -7190,6 +7201,11 @@ const App = (() => {
       conceptStatus.style.color = '#5a6a7a';
     }
     if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concepts extracted.</div>';
+    if (clusterStatus) {
+      clusterStatus.textContent = 'Waiting for extracted concepts...';
+      clusterStatus.style.color = '#5a6a7a';
+    }
+    if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No clusters generated.</div>';
     if (draftStatus) {
       draftStatus.textContent = 'Waiting for extracted concepts...';
       draftStatus.style.color = '#5a6a7a';
@@ -7198,10 +7214,12 @@ const App = (() => {
     try {
       const blocks = await extractDocxNotesBlocks(file);
       const concepts = extractNotesConcepts(blocks);
-      const drafts = buildNotesQuestionDrafts(concepts);
-      _notesImportPreview = { fileName: file.name, blocks, concepts, drafts };
+      const clusterResult = clusterNotesConcepts(concepts, blocks);
+      const drafts = buildNotesQuestionDrafts(clusterResult.dedupedConcepts);
+      _notesImportPreview = { fileName: file.name, blocks, rawConcepts: concepts, concepts: clusterResult.dedupedConcepts, conceptClusters: clusterResult.clusters, dedupedConcepts: clusterResult.dedupedConcepts, drafts };
       renderNotesImportPreview(blocks, file.name);
       renderNotesConceptPreview(concepts);
+      renderNotesClusterPreview(clusterResult);
       renderNotesQuestionDraftPreview(drafts);
     } catch (err) {
       _notesImportPreview = null;
@@ -7215,6 +7233,11 @@ const App = (() => {
         conceptStatus.style.color = '#c0392b';
       }
       if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concepts extracted.</div>';
+      if (clusterStatus) {
+        clusterStatus.textContent = 'Concept clustering skipped because no concepts were available.';
+        clusterStatus.style.color = '#c0392b';
+      }
+      if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No clusters generated.</div>';
       if (draftStatus) {
         draftStatus.textContent = 'Question draft preview skipped because no concepts were available.';
         draftStatus.style.color = '#c0392b';
@@ -7545,6 +7568,186 @@ const App = (() => {
         </summary>
         <div class="notes-concept-body">
           <div class="notes-concept-snippet">${escapeHTML(concept.sourceSnippet)}</div>
+          ${warnings}
+        </div>
+      </details>`;
+    }).join('');
+  }
+
+  function normalizeConceptText(text) {
+    return String(text || '')
+      .toLowerCase()
+      .replace(/\b(note|important|remember|uworld|question|explanation)\b/g, ' ')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function conceptTokenSet(text) {
+    const stop = new Set(['the','and','for','with','from','that','this','into','onto','about','after','before','between','while','when','then','than','are','was','were','has','have','had','can','may','will','would','should','could','patient','patients','which','what','where','there']);
+    return new Set(normalizeConceptText(text).split(/\s+/).filter(t => t.length >= 3 && !stop.has(t)));
+  }
+
+  function tokenSimilarity(a, b) {
+    const aSet = conceptTokenSet(a);
+    const bSet = conceptTokenSet(b);
+    if (!aSet.size || !bSet.size) return 0;
+    let overlap = 0;
+    aSet.forEach(token => { if (bSet.has(token)) overlap++; });
+    return overlap / Math.max(aSet.size, bSet.size);
+  }
+
+  function blockSectionKey(block) {
+    const path = Array.isArray(block?.sectionPath) ? block.sectionPath.filter(Boolean) : [];
+    return normalizeConceptText(path.join(' / ') || block?.textNormalized || 'top');
+  }
+
+  function conceptSectionKey(concept, blockMap) {
+    const firstBlockId = concept?.sourceBlockIds?.[0];
+    return blockSectionKey(blockMap.get(firstBlockId));
+  }
+
+  function mergeConceptIntoRepresentative(rep, concept, reason) {
+    rep.sourceConceptIds = Array.from(new Set((rep.sourceConceptIds || [rep.conceptId]).concat(concept.sourceConceptIds || [concept.conceptId])));
+    rep.sourceBlockIds = Array.from(new Set((rep.sourceBlockIds || []).concat(concept.sourceBlockIds || [])));
+    rep.mergedSnippets = Array.from(new Set((rep.mergedSnippets || [rep.sourceSnippet]).concat(concept.mergedSnippets || [concept.sourceSnippet]).filter(Boolean))).slice(0, 6);
+    rep.warnings = Array.from(new Set((rep.warnings || []).concat(concept.warnings || [], [`deduped: ${reason}`])));
+    rep.confidence = Math.min(rep.confidence || 0.5, concept.confidence || 0.5);
+    if ((concept.sourceSnippet || '').length > (rep.sourceSnippet || '').length) rep.sourceSnippet = concept.sourceSnippet;
+  }
+
+  function dedupeNotesConcepts(concepts, blockMap) {
+    const representatives = [];
+    concepts.forEach(concept => {
+      const normalizedFact = normalizeConceptText(concept.testedFact || concept.sourceSnippet);
+      const sectionKey = conceptSectionKey(concept, blockMap);
+      const topicKey = normalizeConceptText(concept.topic);
+      let match = representatives.find(rep => rep.normalizedFact === normalizedFact);
+      let reason = 'exact fact';
+      if (!match) {
+        match = representatives.find(rep => {
+          if (rep.sectionKey !== sectionKey && rep.topicKey !== topicKey) return false;
+          return tokenSimilarity(rep.normalizedFact, normalizedFact) >= 0.82;
+        });
+        reason = 'near-exact fact';
+      }
+      if (match) {
+        mergeConceptIntoRepresentative(match, concept, reason);
+        return;
+      }
+      representatives.push(Object.assign({}, concept, {
+        sourceConceptIds: [concept.conceptId],
+        representativeConceptId: concept.conceptId,
+        mergedSnippets: [concept.sourceSnippet].filter(Boolean),
+        normalizedFact,
+        sectionKey,
+        topicKey
+      }));
+    });
+
+    return representatives.map((concept, idx) => Object.assign({}, concept, {
+      conceptId: 'deduped-concept-' + String(idx + 1).padStart(4, '0'),
+      originalConceptId: concept.representativeConceptId,
+      warnings: (concept.warnings || []).slice()
+    }));
+  }
+
+  function clusterTitleForConcept(concept) {
+    return shortConceptTitle(concept.topic || concept.testedFact || concept.sourceSnippet);
+  }
+
+  function educationalObjectiveForCluster(concepts) {
+    const representative = concepts[0] || {};
+    const fact = sourceSnippetSentence(representative.testedFact || representative.sourceSnippet || representative.topic);
+    return fact || 'Review related notes and convert one distinct testable objective.';
+  }
+
+  function clusterNotesConcepts(concepts, blocks) {
+    const blockMap = new Map((blocks || []).map(block => [block.blockId, block]));
+    const dedupedConcepts = dedupeNotesConcepts(concepts || [], blockMap);
+    const clusters = [];
+
+    dedupedConcepts.forEach(concept => {
+      const match = clusters.find(cluster => {
+        const sameSection = cluster.sectionKey && cluster.sectionKey === concept.sectionKey;
+        const topicSimilar = tokenSimilarity(cluster.topicKey, concept.topicKey) >= 0.5;
+        const factSimilar = tokenSimilarity(cluster.objectiveKey, concept.normalizedFact) >= 0.55;
+        return (sameSection && topicSimilar) || factSimilar;
+      });
+      if (match) {
+        match.concepts.push(concept);
+        match.sourceConceptIds = Array.from(new Set(match.sourceConceptIds.concat(concept.sourceConceptIds || [concept.originalConceptId || concept.conceptId])));
+        match.sourceBlockIds = Array.from(new Set(match.sourceBlockIds.concat(concept.sourceBlockIds || [])));
+        match.mergedSnippets = Array.from(new Set(match.mergedSnippets.concat(concept.mergedSnippets || [concept.sourceSnippet]).filter(Boolean))).slice(0, 8);
+        match.warnings = Array.from(new Set(match.warnings.concat(concept.warnings || [], ['clustered overlapping objective'])));
+        if ((concept.confidence || 0) > (match.representativeConcept?.confidence || 0)) {
+          match.representativeConcept = concept;
+          match.representativeConceptId = concept.originalConceptId || concept.representativeConceptId || concept.conceptId;
+        }
+        return;
+      }
+
+      clusters.push({
+        clusterId: 'concept-cluster-' + String(clusters.length + 1).padStart(4, '0'),
+        title: clusterTitleForConcept(concept),
+        educationalObjective: educationalObjectiveForCluster([concept]),
+        representativeConceptId: concept.originalConceptId || concept.representativeConceptId || concept.conceptId,
+        representativeConcept: concept,
+        sourceConceptIds: concept.sourceConceptIds || [concept.originalConceptId || concept.conceptId],
+        sourceBlockIds: concept.sourceBlockIds || [],
+        mergedSnippets: concept.mergedSnippets || [concept.sourceSnippet].filter(Boolean),
+        confidence: concept.confidence,
+        warnings: (concept.warnings || []).slice(),
+        sectionKey: concept.sectionKey,
+        topicKey: concept.topicKey,
+        objectiveKey: concept.normalizedFact,
+        dedupeMethod: 'deterministic-section-topic-token-cluster-v1',
+        createdAt: new Date().toISOString(),
+        concepts: [concept]
+      });
+    });
+
+    clusters.forEach(cluster => {
+      cluster.educationalObjective = educationalObjectiveForCluster(cluster.concepts);
+      cluster.title = clusterTitleForConcept(cluster.representativeConcept || cluster.concepts[0]);
+      cluster.confidence = Math.min(...cluster.concepts.map(c => c.confidence || 0.5));
+    });
+
+    return { rawConceptCount: concepts.length, dedupedConcepts, clusters };
+  }
+
+  function renderNotesClusterPreview(result) {
+    const status = document.getElementById('notes-cluster-status');
+    const preview = document.getElementById('notes-cluster-preview');
+    const rawCount = result?.rawConceptCount || 0;
+    const dedupedCount = result?.dedupedConcepts?.length || 0;
+    const clusters = result?.clusters || [];
+    const warningCount = clusters.filter(cluster => cluster.warnings?.length).length;
+    if (status) {
+      status.style.color = '#5a6a7a';
+      status.textContent = `${rawCount} raw concept${rawCount === 1 ? '' : 's'} reduced to ${dedupedCount} deduplicated concept${dedupedCount === 1 ? '' : 's'} across ${clusters.length} educational-objective cluster${clusters.length === 1 ? '' : 's'}. ${warningCount} cluster${warningCount === 1 ? '' : 's'} flagged for review. Draft previews use the deduplicated representatives. Nothing was saved.`;
+    }
+    if (!preview) return;
+    if (!clusters.length) {
+      preview.innerHTML = '<div class="notes-import-empty">No clusters generated.</div>';
+      return;
+    }
+    preview.innerHTML = clusters.map((cluster, idx) => {
+      const warnings = cluster.warnings?.length
+        ? `<div>${cluster.warnings.map(w => `<span class="notes-concept-warning">${escapeHTML(w)}</span>`).join('')}</div>`
+        : '';
+      const snippets = (cluster.mergedSnippets || []).slice(0, 3).map(snippet => `<div class="notes-concept-snippet">${escapeHTML(snippet)}</div>`).join('');
+      return `<details class="notes-concept-card" ${idx < 5 ? 'open' : ''}>
+        <summary class="notes-concept-summary">
+          <div class="notes-concept-head">
+            <span class="notes-concept-topic">${escapeHTML(cluster.title)}</span>
+            <span class="notes-concept-confidence">${cluster.sourceConceptIds.length} source concept${cluster.sourceConceptIds.length === 1 ? '' : 's'}</span>
+          </div>
+          <div class="notes-concept-meta">${escapeHTML(cluster.dedupeMethod)} · representative: ${escapeHTML(cluster.representativeConceptId)} · blocks: ${escapeHTML(cluster.sourceBlockIds.join(', '))}</div>
+        </summary>
+        <div class="notes-concept-body">
+          <div><strong>Objective:</strong> ${escapeHTML(cluster.educationalObjective)}</div>
+          ${snippets}
           ${warnings}
         </div>
       </details>`;
