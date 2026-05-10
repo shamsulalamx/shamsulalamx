@@ -1691,10 +1691,28 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
     <div id="notes-quiz-object-preview" class="notes-draft-preview">
       <div class="notes-import-empty">No approved refined drafts converted.</div>
     </div>
+    <div class="notes-import-section-title">Save Target</div>
+    <div class="form-group">
+      <label class="form-label">UWorld Subfolder</label>
+      <select class="form-input" id="notes-create-test-target" onchange="App.updateApprovedDraftCreateTestButton()">
+        <option value="">Choose a UWorld subfolder</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Test name</label>
+      <input type="text" class="form-input" id="notes-create-test-name" value="UWorld Notes Test" oninput="App.updateApprovedDraftCreateTestButton()">
+    </div>
+    <label class="check-row" style="margin:8px 0 0;">
+      <input type="checkbox" id="notes-create-test-reviewed" onchange="App.updateApprovedDraftCreateTestButton()">
+      <span>I reviewed and approve these questions for test creation.</span>
+    </label>
+    <div id="notes-create-test-diagnostics" class="notes-import-summary">Save readiness will appear after approved drafts are available.</div>
+    <div id="notes-create-test-error" class="notes-import-summary" style="display:none;color:#8a5a00;"></div>
     <div class="modal-actions">
-      <button class="btn-modal" id="notes-export-approved" onclick="App.exportApprovedRefinedDraftsJson()" disabled>Export Approved Drafts JSON</button>
-      <button class="btn-modal" onclick="App.clearNotesImportPreview()">Clear</button>
-      <button class="btn-modal primary" onclick="App.closeNotesImportPreview()">Done</button>
+      <button type="button" class="btn-modal primary" id="notes-create-test-approved" onclick="App.createTestFromApprovedRefinedDrafts()" disabled>Create Test from Approved Drafts</button>
+      <button type="button" class="btn-modal" id="notes-export-approved" onclick="App.exportApprovedRefinedDraftsJson()" disabled>Export Approved Drafts JSON</button>
+      <button type="button" class="btn-modal" onclick="App.clearNotesImportPreview()">Clear</button>
+      <button type="button" class="btn-modal primary" onclick="App.closeNotesImportPreview()">Done</button>
     </div>
   </div>
 </div>
@@ -6951,6 +6969,12 @@ const App = (() => {
     const modal = document.getElementById('modal-notes-import');
     if (!modal) return;
     modal.style.display = 'flex';
+    const createName = document.getElementById('notes-create-test-name');
+    const createReviewed = document.getElementById('notes-create-test-reviewed');
+    if (createName) createName.value = 'UWorld Notes Test';
+    if (createReviewed) createReviewed.checked = false;
+    renderUWorldDraftSaveTargetSelector(false);
+    updateApprovedDraftCreateTestButton();
     refreshNotesAiStatus();
   }
 
@@ -6970,6 +6994,10 @@ const App = (() => {
     const draftPreview = document.getElementById('notes-draft-preview');
     const quizObjectStatus = document.getElementById('notes-quiz-object-status');
     const quizObjectPreview = document.getElementById('notes-quiz-object-preview');
+    const createName = document.getElementById('notes-create-test-name');
+    const createReviewed = document.getElementById('notes-create-test-reviewed');
+    const createDiagnostics = document.getElementById('notes-create-test-diagnostics');
+    const createError = document.getElementById('notes-create-test-error');
     if (input) input.value = '';
     if (status) status.textContent = 'Choose a .docx file to preview normalized blocks.';
     if (preview) preview.innerHTML = '<div class="notes-import-empty">No preview loaded.</div>';
@@ -6979,7 +7007,16 @@ const App = (() => {
     if (draftPreview) draftPreview.innerHTML = '<div class="notes-import-empty">No question drafts generated.</div>';
     if (quizObjectStatus) quizObjectStatus.textContent = 'Approve AI-refined drafts to preview internal quiz-question objects. Nothing is saved.';
     if (quizObjectPreview) quizObjectPreview.innerHTML = '<div class="notes-import-empty">No approved refined drafts converted.</div>';
+    if (createName) createName.value = 'UWorld Notes Test';
+    if (createReviewed) createReviewed.checked = false;
+    if (createDiagnostics) createDiagnostics.textContent = 'Save readiness will appear after approved drafts are available.';
+    if (createError) {
+      createError.style.display = 'none';
+      createError.textContent = '';
+    }
+    renderUWorldDraftSaveTargetSelector(false);
     updateApprovedDraftExportButton();
+    updateApprovedDraftCreateTestButton();
     refreshNotesAiStatus();
   }
 
@@ -6997,6 +7034,114 @@ const App = (() => {
     const approvedCount = getApprovedRefinedDrafts().length;
     btn.disabled = approvedCount < 1;
     btn.textContent = approvedCount > 0 ? `Export Approved Drafts JSON (${approvedCount})` : 'Export Approved Drafts JSON';
+  }
+
+  function getApprovedQuizObjectPreviewValidation() {
+    const items = buildApprovedQuizObjectPreviewItems();
+    const errors = items.flatMap((item, idx) => validateQuizObjectPreviewItem(item).map(error => `Question ${idx + 1}: ${error}`));
+    return { items, errors };
+  }
+
+  function getUWorldSourceFolder() {
+    return DB.get().sourceFolders.find(source => source.sourceType === 'uworld-notes') || null;
+  }
+
+  function getUWorldSubfolders() {
+    const uworldSource = getUWorldSourceFolder();
+    return uworldSource ? DB.getFolders(uworldSource.id) : [];
+  }
+
+  function isCurrentFolderUWorldSubfolder() {
+    if (!_currentFolder) return false;
+    return getUWorldSubfolders().some(folder => folder.id === _currentFolder);
+  }
+
+  function renderUWorldDraftSaveTargetSelector(preserveSelection = true) {
+    const select = document.getElementById('notes-create-test-target');
+    if (!select) return;
+    const previousValue = preserveSelection ? select.value : '';
+    const folders = getUWorldSubfolders();
+    const preselected = isCurrentFolderUWorldSubfolder() ? _currentFolder : '';
+    const selectedValue = previousValue || preselected;
+    const folderOptions = folders.map(folder => `<option value="${escapeHTML(folder.id)}">${escapeHTML(folder.name)}</option>`).join('');
+    const newFolderOption = folders.length ? '' : '<option value="__new__">Create new UWorld Notes folder</option>';
+    select.innerHTML = `<option value="">Choose a UWorld subfolder</option>${folderOptions}${newFolderOption}`;
+    if (Array.from(select.options).some(option => option.value === selectedValue)) {
+      select.value = selectedValue;
+    } else {
+      select.value = '';
+    }
+  }
+
+  function getSelectedUWorldDraftSaveTarget() {
+    const selectedValue = document.getElementById('notes-create-test-target')?.value || '';
+    if (selectedValue === '__new__') {
+      const source = getUWorldSourceFolder();
+      return { ok: !!source, mode: 'new-folder', source, folder: null, error: source ? '' : 'UWorld source folder is unavailable.' };
+    }
+    if (!selectedValue) return { ok: false, mode: 'none', source: getUWorldSourceFolder(), folder: null, error: 'Choose a UWorld subfolder before creating a test.' };
+    const folder = getUWorldSubfolders().find(f => f.id === selectedValue);
+    if (!folder) return { ok: false, mode: 'missing-folder', source: getUWorldSourceFolder(), folder: null, error: 'Selected UWorld subfolder was not found.' };
+    return { ok: true, mode: 'existing-folder', source: getUWorldSourceFolder(), folder, error: '' };
+  }
+
+  function getUWorldDraftSaveInputs() {
+    const testName = (document.getElementById('notes-create-test-name')?.value || '').trim();
+    const reviewed = !!document.getElementById('notes-create-test-reviewed')?.checked;
+    return { testName, reviewed };
+  }
+
+  function setApprovedDraftSaveError(message) {
+    const el = document.getElementById('notes-create-test-error');
+    if (!el) return;
+    el.style.display = message ? 'block' : 'none';
+    el.textContent = message || '';
+  }
+
+  function renderApprovedDraftSaveDiagnostics(items, errors, target, readiness, inputs, lastMessage = '', counts = null) {
+    const el = document.getElementById('notes-create-test-diagnostics');
+    if (!el) return;
+    const selectedValue = document.getElementById('notes-create-test-target')?.value || '';
+    const approvedCount = getApprovedRefinedDrafts().length;
+    const targetLabel = selectedValue
+      ? selectedValue === '__new__' ? 'Create new UWorld Notes folder' : `${target?.folder?.name || 'Unknown folder'} (${selectedValue})`
+      : 'None selected';
+    const validationLabel = errors.length ? `Blocked: ${errors[0]}` : 'Passed';
+    const readinessLabel = readiness.ok ? 'Ready' : `Blocked: ${readiness.message}`;
+    el.innerHTML = [
+      `<div><strong>Selected target:</strong> ${escapeHTML(targetLabel)}</div>`,
+      `<div><strong>Test name valid:</strong> ${inputs.testName ? 'Yes' : 'No'}</div>`,
+      `<div><strong>Review confirmation checked:</strong> ${inputs.reviewed ? 'Yes' : 'No'}</div>`,
+      `<div><strong>Approved refined drafts:</strong> ${approvedCount}</div>`,
+      `<div><strong>Quiz object previews:</strong> ${items.length}</div>`,
+      `<div><strong>Validation:</strong> ${escapeHTML(validationLabel)}</div>`,
+      `<div><strong>Save readiness:</strong> ${escapeHTML(readinessLabel)}</div>`,
+      counts ? `<div><strong>DB tests before/after:</strong> ${counts.before} / ${counts.after}</div>` : '',
+      lastMessage ? `<div><strong>Last save:</strong> ${escapeHTML(lastMessage)}</div>` : ''
+    ].filter(Boolean).join('');
+  }
+
+  function getApprovedDraftCreateTestReadiness(items, errors, target, inputs) {
+    if (!items.length) return { ok: false, message: 'Approve at least one AI-refined draft before creating a test.' };
+    if (errors.length) return { ok: false, message: `Cannot create test: ${errors[0]}` };
+    if (!target?.ok) return { ok: false, message: target?.error || 'Choose a UWorld subfolder before creating a test.' };
+    if (!inputs.testName) return { ok: false, message: 'Enter a test name before creating a test.' };
+    if (!inputs.reviewed) return { ok: false, message: 'Confirm that you reviewed and approve these questions before creating a test.' };
+    return { ok: true, message: '' };
+  }
+
+  function updateApprovedDraftCreateTestButton() {
+    const btn = document.getElementById('notes-create-test-approved');
+    if (!btn) return;
+    const { items, errors } = getApprovedQuizObjectPreviewValidation();
+    const target = getSelectedUWorldDraftSaveTarget();
+    const inputs = getUWorldDraftSaveInputs();
+    const readiness = getApprovedDraftCreateTestReadiness(items, errors, target, inputs);
+    btn.disabled = !readiness.ok;
+    btn.textContent = items.length > 0 ? `Create Test from Approved Drafts (${items.length})` : 'Create Test from Approved Drafts';
+    btn.title = readiness.message;
+    setApprovedDraftSaveError(readiness.ok ? '' : readiness.message);
+    renderApprovedDraftSaveDiagnostics(items, errors, target, readiness, inputs);
   }
 
   async function refreshNotesAiStatus() {
@@ -7091,9 +7236,41 @@ const App = (() => {
   }
 
   async function sha256Hex(bytes) {
-    if (!window.crypto?.subtle) return '';
-    const hash = await window.crypto.subtle.digest('SHA-256', bytes);
-    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+    if (window.crypto?.subtle) {
+      try {
+        const hash = await window.crypto.subtle.digest('SHA-256', bytes);
+        return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+      } catch (_) {}
+    }
+    return fallbackByteHash(bytes);
+  }
+
+  function fallbackByteHash(bytes) {
+    let hash = 2166136261;
+    for (let i = 0; i < bytes.length; i++) {
+      hash ^= bytes[i];
+      hash = Math.imul(hash, 16777619);
+    }
+    return `fnv1a-${(hash >>> 0).toString(16).padStart(8, '0')}-${bytes.length}`;
+  }
+
+  function fallbackTextHash(text) {
+    const value = String(text || '');
+    let hash = 2166136261;
+    for (let i = 0; i < value.length; i++) {
+      hash ^= value.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return `fnv1a-text-${(hash >>> 0).toString(16).padStart(8, '0')}-${value.length}`;
+  }
+
+  function fallbackRefinedDraftSourceHash(refined) {
+    return fallbackTextHash([
+      refined?.sourceName || _notesImportPreview?.fileName || 'uworld-notes',
+      refined?.sourceDraftId || '',
+      refined?.sourceConceptId || '',
+      (refined?.sourceBlockIds || []).join(',')
+    ].join('|'));
   }
 
   function readUint16LE(bytes, off) {
@@ -7447,6 +7624,7 @@ const App = (() => {
       status.textContent = `${drafts.length} question draft scaffold${drafts.length === 1 ? '' : 's'} generated for preview only. ${reviewCount} require review before use. Refined: ${refinedIds.length}; approved: ${reviewSummary.approved || 0}; rejected: ${reviewSummary.rejected || 0}; pending: ${reviewSummary.pending || 0}. Nothing was saved.`;
     }
     updateApprovedDraftExportButton();
+    updateApprovedDraftCreateTestButton();
     renderApprovedQuizObjectPreview();
     if (!preview) return;
     if (!drafts.length) {
@@ -7583,6 +7761,15 @@ const App = (() => {
 
   function convertApprovedRefinedDraftToQuizObject(refined, idx) {
     const labels = ['A', 'B', 'C', 'D', 'E'];
+    const provenance = {
+      deterministicDraftId: refined.sourceDraftId || '',
+      sourceConceptId: refined.sourceConceptId || '',
+      sourceBlockIds: Array.isArray(refined.sourceBlockIds) ? refined.sourceBlockIds.slice() : [],
+      sourceName: refined.sourceName || _notesImportPreview?.fileName || '',
+      sourceHash: refined.sourceHash || _notesImportPreview?.blocks?.[0]?.sourceHash || fallbackRefinedDraftSourceHash(refined),
+      model: refined.model || 'gemini-2.5-flash',
+      generationMethod: refined.generationMethod || ''
+    };
     const quizQuestion = {
       n: idx + 1,
       sourceQuestionNumber: idx + 1,
@@ -7594,16 +7781,8 @@ const App = (() => {
       tags: ['UWorld Notes', refined.sourceConceptId || 'AI Refined Draft'],
       images: [],
       parseConfidence: refined.confidence,
-      parseWarnings: Array.isArray(refined.warnings) ? refined.warnings.slice() : []
-    };
-    const provenance = {
-      deterministicDraftId: refined.sourceDraftId || '',
-      sourceConceptId: refined.sourceConceptId || '',
-      sourceBlockIds: Array.isArray(refined.sourceBlockIds) ? refined.sourceBlockIds.slice() : [],
-      sourceName: refined.sourceName || _notesImportPreview?.fileName || '',
-      sourceHash: refined.sourceHash || _notesImportPreview?.blocks?.[0]?.sourceHash || '',
-      model: refined.model || 'gemini-2.5-flash',
-      generationMethod: refined.generationMethod || ''
+      parseWarnings: Array.isArray(refined.warnings) ? refined.warnings.slice() : [],
+      uworldNotesProvenance: provenance
     };
     return { quizQuestion, provenance };
   }
@@ -7640,11 +7819,11 @@ const App = (() => {
     const status = document.getElementById('notes-quiz-object-status');
     const preview = document.getElementById('notes-quiz-object-preview');
     if (!status || !preview) return;
-    const items = buildApprovedQuizObjectPreviewItems();
-    const validationErrors = items.flatMap((item, idx) => validateQuizObjectPreviewItem(item).map(error => `Question ${idx + 1}: ${error}`));
+    const { items, errors: validationErrors } = getApprovedQuizObjectPreviewValidation();
     if (!items.length) {
       status.textContent = 'Approve AI-refined drafts to preview internal quiz-question objects. Nothing is saved.';
       preview.innerHTML = '<div class="notes-import-empty">No approved refined drafts converted.</div>';
+      updateApprovedDraftCreateTestButton();
       return;
     }
     status.textContent = validationErrors.length
@@ -7667,6 +7846,133 @@ const App = (() => {
         </div>
       </details>`;
     }).join('');
+    updateApprovedDraftCreateTestButton();
+  }
+
+  function createTestFromApprovedRefinedDrafts() {
+    const { items, errors } = getApprovedQuizObjectPreviewValidation();
+    const target = getSelectedUWorldDraftSaveTarget();
+    const inputs = getUWorldDraftSaveInputs();
+    const readiness = getApprovedDraftCreateTestReadiness(items, errors, target, inputs);
+    const selectedValue = document.getElementById('notes-create-test-target')?.value || '';
+
+    if (!readiness.ok) {
+      const blockedState = {
+        clickHandlerFired: true,
+        sourceId: target?.source?.id || null,
+        sourceType: target?.source?.sourceType || null,
+        workflow: target?.source ? getSourceWorkflow(target.source.id) : null,
+        selectedTargetValue: selectedValue,
+        selectedTargetMode: target?.mode || null,
+        selectedFolderId: target?.folder?.id || null,
+        approvedRefinedCount: getApprovedRefinedDrafts().length,
+        quizObjectPreviewCount: items.length,
+        validationErrors: errors,
+        dbCreateTestReached: false
+      };
+      console.warn('UWorld draft save blocked:', blockedState);
+      setApprovedDraftSaveError(readiness.message);
+      renderApprovedDraftSaveDiagnostics(items, errors, target, readiness, inputs, `Blocked: ${readiness.message}`);
+      toast(readiness.message, 8000);
+      return;
+    }
+    setApprovedDraftSaveError('');
+
+    try {
+      const testName = inputs.testName;
+      const targetFolderName = target.folder?.name || 'UWorld Notes';
+
+      const beforeCount = DB.get().tests.length;
+      const questions = items.map(item => JSON.parse(JSON.stringify(item.quizQuestion)));
+      const immediateErrors = questions.flatMap((question, idx) => validateQuizObjectPreviewItem({ quizQuestion: question, provenance: question.uworldNotesProvenance || {} }).map(error => `Question ${idx + 1}: ${error}`));
+      if (immediateErrors.length) {
+        const message = `Cannot create test: ${immediateErrors[0]}`;
+        console.warn('UWorld draft save failed validation before DB.createTest:', {
+          selectedTargetValue: selectedValue,
+          approvedRefinedCount: getApprovedRefinedDrafts().length,
+          quizObjectPreviewCount: questions.length,
+          validationErrors: immediateErrors,
+          dbCreateTestReached: false
+        });
+        setApprovedDraftSaveError(message);
+        renderApprovedDraftSaveDiagnostics(items, immediateErrors, target, { ok: false, message }, inputs, `Failed: ${message}`, { before: beforeCount, after: beforeCount });
+        toast(message, 8000);
+        return;
+      }
+      const targetFolder = target.folder || DB.createFolder(targetFolderName, target.source.id);
+      if (!targetFolder?.id) {
+        const message = 'Could not resolve the selected UWorld target folder.';
+        console.warn('UWorld draft save failed:', { selectedTargetValue: selectedValue, dbCreateTestReached: false, message });
+        setApprovedDraftSaveError(message);
+        renderApprovedDraftSaveDiagnostics(items, errors, target, readiness, inputs, `Failed: ${message}`, { before: beforeCount, after: beforeCount });
+        toast(message, 8000);
+        return;
+      }
+
+      const test = DB.createTest(targetFolder.id, testName, questions);
+      const afterCount = DB.get().tests.length;
+      const saved = !!test && afterCount === beforeCount + 1;
+      if (!saved) {
+        const message = test
+          ? `DB.createTest returned a test, but DB test count changed from ${beforeCount} to ${afterCount}.`
+          : 'DB.createTest did not save the test. Storage may be full.';
+        console.warn('UWorld draft save failed:', {
+          selectedTargetValue: selectedValue,
+          resolvedTargetFolderId: targetFolder.id,
+          approvedRefinedCount: getApprovedRefinedDrafts().length,
+          quizObjectPreviewCount: items.length,
+          validationErrors: errors,
+          testName,
+          reviewed: inputs.reviewed,
+          dbCreateTestArgs: { folderId: targetFolder.id, name: testName, questionCount: questions.length },
+          dbCreateTestReturn: test,
+          testsBefore: beforeCount,
+          testsAfter: afterCount,
+          uiRefreshStarted: false
+        });
+        setApprovedDraftSaveError(message);
+        renderApprovedDraftSaveDiagnostics(items, errors, target, readiness, inputs, `Failed: ${message}`, { before: beforeCount, after: afterCount });
+        toast(message, 8000);
+        return;
+      }
+
+      console.info('UWorld draft save succeeded:', {
+        selectedTargetValue: selectedValue,
+        resolvedTargetFolderId: targetFolder.id,
+        approvedRefinedCount: getApprovedRefinedDrafts().length,
+        quizObjectPreviewCount: items.length,
+        validationErrors: errors,
+        testName,
+        reviewed: inputs.reviewed,
+        dbCreateTestArgs: { folderId: targetFolder.id, name: testName, questionCount: questions.length },
+        dbCreateTestReturn: { id: test.id, folderId: test.folderId, name: test.name, questionCount: test.questions?.length || 0 },
+        testsBefore: beforeCount,
+        testsAfter: afterCount,
+        uiRefreshStarted: true
+      });
+
+      renderApprovedDraftSaveDiagnostics(items, errors, target, readiness, inputs, `Saved "${test.name}".`, { before: beforeCount, after: afterCount });
+      closeNotesImportPreview();
+      _currentFolder = targetFolder.id;
+      setSourceFromFolder(targetFolder.id);
+      renderSidebar();
+      showFolderHome(targetFolder.id, test.id);
+      toast(`Created "${test.name}" with ${test.questions.length} approved UWorld draft question${test.questions.length === 1 ? '' : 's'}.`);
+    } catch (err) {
+      const message = `Save failed: ${err?.message || String(err)}`;
+      console.warn('UWorld draft save failed:', {
+        selectedTargetValue: selectedValue,
+        approvedRefinedCount: getApprovedRefinedDrafts().length,
+        quizObjectPreviewCount: items.length,
+        validationErrors: errors,
+        dbCreateTestReached: false,
+        error: err?.stack || err?.message || String(err)
+      });
+      setApprovedDraftSaveError(message);
+      renderApprovedDraftSaveDiagnostics(items, errors, target, readiness, inputs, message);
+      toast(message, 8000);
+      return;
+    }
   }
 
   function exportApprovedRefinedDraftsJson() {
@@ -7676,7 +7982,7 @@ const App = (() => {
       return;
     }
     const sourceName = _notesImportPreview?.fileName || '';
-    const sourceHash = _notesImportPreview?.blocks?.[0]?.sourceHash || '';
+    const sourceHash = _notesImportPreview?.blocks?.[0]?.sourceHash || fallbackRefinedDraftSourceHash(approved[0]?.refinedDraft || {});
     const exportedAt = new Date().toISOString();
     const payload = {
       exportType: 'uworld-approved-ai-refined-drafts-preview',
@@ -9024,6 +9330,8 @@ const App = (() => {
     refineNotesDraft,
     setRefinedDraftReviewStatus,
     exportApprovedRefinedDraftsJson,
+    createTestFromApprovedRefinedDrafts,
+    updateApprovedDraftCreateTestButton,
     deleteNote,
     downloadNotesDocx,
     downloadNotesPdf,
