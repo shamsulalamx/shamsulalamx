@@ -1791,6 +1791,11 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
     <div id="anki-concept-preview" class="notes-draft-preview">
       <div class="notes-import-empty">No concept candidates extracted.</div>
     </div>
+    <div class="notes-import-section-title">Anki Cluster Preview</div>
+    <div id="anki-cluster-status" class="notes-import-summary">Clusters will appear after concept candidates are extracted.</div>
+    <div id="anki-cluster-preview" class="notes-draft-preview">
+      <div class="notes-import-empty">No clusters generated.</div>
+    </div>
     <div class="modal-actions">
       <button type="button" class="btn-modal" onclick="App.clearAnkiTextImportPreview()">Clear</button>
       <button type="button" class="btn-modal primary" onclick="App.closeAnkiTextImportPreview()">Done</button>
@@ -7083,12 +7088,16 @@ const App = (() => {
     const preview = document.getElementById('anki-card-preview');
     const conceptStatus = document.getElementById('anki-concept-status');
     const conceptPreview = document.getElementById('anki-concept-preview');
+    const clusterStatus = document.getElementById('anki-cluster-status');
+    const clusterPreview = document.getElementById('anki-cluster-preview');
     if (input) input.value = '';
     if (status) status.textContent = 'Choose a .txt file exported from Anki as Notes in Plain Text.';
     if (diagnostics) diagnostics.innerHTML = '<div class="notes-import-empty">No Anki text file loaded.</div>';
     if (preview) preview.innerHTML = '<div class="notes-import-empty">No normalized cards available.</div>';
     if (conceptStatus) conceptStatus.textContent = 'Concept candidates will appear after parsing.';
     if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concept candidates extracted.</div>';
+    if (clusterStatus) clusterStatus.textContent = 'Clusters will appear after concept candidates are extracted.';
+    if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No clusters generated.</div>';
   }
 
   async function previewAnkiTextExport(input) {
@@ -7098,6 +7107,8 @@ const App = (() => {
     const preview = document.getElementById('anki-card-preview');
     const conceptStatus = document.getElementById('anki-concept-status');
     const conceptPreview = document.getElementById('anki-concept-preview');
+    const clusterStatus = document.getElementById('anki-cluster-status');
+    const clusterPreview = document.getElementById('anki-cluster-preview');
     if (!file) return;
 
     const lowerName = String(file.name || '').toLowerCase();
@@ -7108,6 +7119,8 @@ const App = (() => {
       if (preview) preview.innerHTML = '<div class="notes-import-empty">No normalized cards available.</div>';
       if (conceptStatus) conceptStatus.textContent = 'No concept candidates extracted.';
       if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concept candidates extracted.</div>';
+      if (clusterStatus) clusterStatus.textContent = 'No clusters generated.';
+      if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No clusters generated.</div>';
       return;
     }
 
@@ -7118,6 +7131,8 @@ const App = (() => {
       if (preview) preview.innerHTML = '<div class="notes-import-empty">No normalized cards available.</div>';
       if (conceptStatus) conceptStatus.textContent = 'No concept candidates extracted.';
       if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concept candidates extracted.</div>';
+      if (clusterStatus) clusterStatus.textContent = 'No clusters generated.';
+      if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No clusters generated.</div>';
       return;
     }
 
@@ -7125,7 +7140,9 @@ const App = (() => {
       const text = await file.text();
       const result = parseAnkiTextExport(text, file.name);
       const conceptResult = extractAnkiConceptCandidates(result.normalizedCards);
+      const clusterResult = clusterAnkiConceptCandidates(conceptResult.candidates);
       result.conceptResult = conceptResult;
+      result.clusterResult = clusterResult;
       _ankiImportPreview = result;
       if (status) {
         status.textContent = `Parsed ${result.normalizedCards.length} Anki note${result.normalizedCards.length === 1 ? '' : 's'} and extracted ${conceptResult.totalCount} concept candidate${conceptResult.totalCount === 1 ? '' : 's'} for preview only. No quiz data was saved.`;
@@ -7133,6 +7150,7 @@ const App = (() => {
       renderAnkiImportDiagnostics(result);
       renderAnkiCardPreview(result.normalizedCards);
       renderAnkiConceptPreview(conceptResult);
+      renderAnkiClusterPreview(clusterResult);
     } catch (err) {
       _ankiImportPreview = null;
       if (status) status.textContent = `Unable to preview Anki text export: ${err?.message || 'Unknown parse error.'}`;
@@ -7140,6 +7158,8 @@ const App = (() => {
       if (preview) preview.innerHTML = '<div class="notes-import-empty">No normalized cards available.</div>';
       if (conceptStatus) conceptStatus.textContent = 'No concept candidates extracted.';
       if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concept candidates extracted.</div>';
+      if (clusterStatus) clusterStatus.textContent = 'No clusters generated.';
+      if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No clusters generated.</div>';
     }
   }
 
@@ -7772,6 +7792,385 @@ const App = (() => {
         `;
       }).join('')}
       ${candidates.length > 24 ? `<div class="notes-import-empty">Showing first 24 of ${candidates.length} concept candidates.</div>` : ''}
+    `;
+  }
+
+  function getAnkiStrongTags(candidate) {
+    return uniqueAnkiStrings((candidate?.tagsNormalized || []).filter(tag => !isBroadAnkiTag(tag)));
+  }
+
+  function getAnkiBroadTags(candidate) {
+    return uniqueAnkiStrings((candidate?.tagsNormalized || []).filter(tag => isBroadAnkiTag(tag)));
+  }
+
+  function getAnkiDeckKey(candidate) {
+    return Array.isArray(candidate?.deckPath) ? candidate.deckPath.join('::') : '';
+  }
+
+  function getAnkiDeckRoot(candidate) {
+    return Array.isArray(candidate?.deckPath) && candidate.deckPath.length ? candidate.deckPath[0] : '';
+  }
+
+  function normalizeAnkiSimilarityText(text) {
+    return String(text || '')
+      .toLowerCase()
+      .replace(/<\/?[^>]+>/g, ' ')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function tokenizeAnkiSimilarityText(...parts) {
+    const stopwords = new Set(['the', 'and', 'with', 'that', 'from', 'this', 'for', 'into', 'into', 'when', 'what', 'which', 'case', 'patient', 'patients', 'card', 'cards']);
+    const tokens = normalizeAnkiSimilarityText(parts.filter(Boolean).join(' '))
+      .split(' ')
+      .map(token => token.trim())
+      .filter(token => token.length >= 3 && !stopwords.has(token));
+    return new Set(tokens);
+  }
+
+  function jaccardSimilarity(setsA, setsB) {
+    if (!setsA.size && !setsB.size) return 0;
+    let intersection = 0;
+    setsA.forEach(value => { if (setsB.has(value)) intersection += 1; });
+    const union = new Set([...setsA, ...setsB]).size;
+    return union ? intersection / union : 0;
+  }
+
+  function getAnkiDeckProximityScore(a, b) {
+    const deckA = Array.isArray(a?.deckPath) ? a.deckPath : [];
+    const deckB = Array.isArray(b?.deckPath) ? b.deckPath : [];
+    if (!deckA.length || !deckB.length) return 0;
+    if (getAnkiDeckKey(a) && getAnkiDeckKey(a) === getAnkiDeckKey(b)) return 1;
+    let prefixLength = 0;
+    const limit = Math.min(deckA.length, deckB.length);
+    while (prefixLength < limit && deckA[prefixLength] === deckB[prefixLength]) prefixLength += 1;
+    if (!prefixLength) return 0;
+    if (prefixLength >= 2) return Math.min(0.95, 0.55 + (prefixLength / Math.max(deckA.length, deckB.length)) * 0.35);
+    if (getAnkiDeckRoot(a) && getAnkiDeckRoot(a) === getAnkiDeckRoot(b)) return 0.55;
+    return 0.25;
+  }
+
+  function getAnkiTextSimilarityScore(a, b) {
+    const tokensA = tokenizeAnkiSimilarityText(
+      a?.conceptText,
+      (a?.sourceSnippets || []).map(snippet => snippet.contextSnippet || snippet.sourceSnippet || '').join(' '),
+      (a?.clozeEntries || []).map(entry => entry.deletedText || '').join(' ')
+    );
+    const tokensB = tokenizeAnkiSimilarityText(
+      b?.conceptText,
+      (b?.sourceSnippets || []).map(snippet => snippet.contextSnippet || snippet.sourceSnippet || '').join(' '),
+      (b?.clozeEntries || []).map(entry => entry.deletedText || '').join(' ')
+    );
+    return jaccardSimilarity(tokensA, tokensB);
+  }
+
+  function getAnkiPairMergeDecision(a, b, tagFrequency) {
+    const sharedStrongTags = (a.strongTags || []).filter(tag => (b.strongTags || []).includes(tag));
+    const sharedBroadTags = (a.broadTags || []).filter(tag => (b.broadTags || []).includes(tag));
+    const deckScore = getAnkiDeckProximityScore(a, b);
+    const textScore = getAnkiTextSimilarityScore(a, b);
+    const sharedTagWeight = sharedStrongTags.reduce((sum, tag) => sum + (1 / Math.sqrt(Math.max(tagFrequency.get(tag) || 1, 1))), 0);
+    const sameCard = a.sourceCardIndex && b.sourceCardIndex && a.sourceCardIndex === b.sourceCardIndex;
+    const distinctClozes = sameCard && a.sourceKind === 'cloze' && b.sourceKind === 'cloze' && a.clozeNumber !== b.clozeNumber;
+
+    if (distinctClozes) {
+      const sameStrongContext = sharedStrongTags.length > 0 && sharedTagWeight >= 0.9 && deckScore === 1 && textScore >= 0.85;
+      return {
+        merge: sameStrongContext,
+        basis: sameStrongContext ? 'shared cloze-context' : 'distinct cloze numbers kept separate',
+        confidence: sameStrongContext ? 'medium' : 'low',
+        sharedStrongTags,
+        sharedBroadTags,
+        deckScore,
+        textScore
+      };
+    }
+
+    if (sharedStrongTags.length > 0) {
+      const supportedByTags = sharedStrongTags.length >= 2 || sharedTagWeight >= 0.75 || deckScore >= 0.5 || textScore >= 0.7;
+      return {
+        merge: supportedByTags,
+        basis: supportedByTags ? 'exact tag overlap' : 'shared strong tag without enough support',
+        confidence: supportedByTags ? (sharedStrongTags.length >= 2 || deckScore >= 0.85 || textScore >= 0.85 ? 'high' : 'medium') : 'low',
+        sharedStrongTags,
+        sharedBroadTags,
+        deckScore,
+        textScore
+      };
+    }
+
+    if (deckScore >= 0.85 && textScore >= 0.45) {
+      return {
+        merge: true,
+        basis: 'deck proximity',
+        confidence: 'low',
+        sharedStrongTags,
+        sharedBroadTags,
+        deckScore,
+        textScore
+      };
+    }
+
+    if (deckScore >= 0.55 && textScore >= 0.75) {
+      return {
+        merge: true,
+        basis: 'deck + text',
+        confidence: 'low',
+        sharedStrongTags,
+        sharedBroadTags,
+        deckScore,
+        textScore
+      };
+    }
+
+    if (textScore >= 0.9 && deckScore >= 0.25) {
+      return {
+        merge: true,
+        basis: 'text similarity',
+        confidence: 'low',
+        sharedStrongTags,
+        sharedBroadTags,
+        deckScore,
+        textScore
+      };
+    }
+
+    return {
+      merge: false,
+      basis: 'insufficient support',
+      confidence: 'low',
+      sharedStrongTags,
+      sharedBroadTags,
+      deckScore,
+      textScore
+    };
+  }
+
+  function clusterAnkiConceptCandidates(candidates) {
+    const concepts = Array.isArray(candidates) ? candidates.map((candidate, idx) => Object.assign({ clusterIndex: idx }, candidate)) : [];
+    if (!concepts.length) {
+      return { clusters: [], clusterCount: 0, conceptCount: 0, conceptsPerCluster: [], warnings: [] };
+    }
+
+    concepts.forEach(concept => {
+      concept.strongTags = getAnkiStrongTags(concept);
+      concept.broadTags = getAnkiBroadTags(concept);
+      concept.deckKey = getAnkiDeckKey(concept);
+      concept.deckRoot = getAnkiDeckRoot(concept);
+      concept.textTokens = tokenizeAnkiSimilarityText(
+        concept.conceptText,
+        (concept.sourceSnippets || []).map(snippet => snippet.contextSnippet || snippet.sourceSnippet || '').join(' '),
+        (concept.clozeEntries || []).map(entry => entry.deletedText || '').join(' ')
+      );
+    });
+
+    const tagFrequency = new Map();
+    concepts.forEach(concept => {
+      concept.strongTags.forEach(tag => tagFrequency.set(tag, (tagFrequency.get(tag) || 0) + 1));
+    });
+
+    const parent = concepts.map((_, idx) => idx);
+    const find = idx => {
+      let current = idx;
+      while (parent[current] !== current) {
+        parent[current] = parent[parent[current]];
+        current = parent[current];
+      }
+      return current;
+    };
+    const union = (a, b) => {
+      const rootA = find(a);
+      const rootB = find(b);
+      if (rootA === rootB) return false;
+      parent[rootB] = rootA;
+      return true;
+    };
+
+    for (let i = 0; i < concepts.length; i += 1) {
+      for (let j = i + 1; j < concepts.length; j += 1) {
+        const decision = getAnkiPairMergeDecision(concepts[i], concepts[j], tagFrequency);
+        if (decision.merge) union(i, j);
+      }
+    }
+
+    const clusterMap = new Map();
+    concepts.forEach((concept, idx) => {
+      const root = find(idx);
+      if (!clusterMap.has(root)) clusterMap.set(root, []);
+      clusterMap.get(root).push(concept);
+    });
+
+    const clusters = Array.from(clusterMap.values()).map((members, idx) => {
+      const orderedMembers = members.slice().sort((a, b) => (a.sourceCardOrder || 0) - (b.sourceCardOrder || 0) || (a.originalLine || 0) - (b.originalLine || 0) || String(a.id).localeCompare(String(b.id)));
+      const strongTagCounts = new Map();
+      const broadTagCounts = new Map();
+      const deckPaths = [];
+      const deckKeys = new Set();
+      const memberWarnings = [];
+
+      orderedMembers.forEach(member => {
+        member.strongTags.forEach(tag => strongTagCounts.set(tag, (strongTagCounts.get(tag) || 0) + 1));
+        member.broadTags.forEach(tag => broadTagCounts.set(tag, (broadTagCounts.get(tag) || 0) + 1));
+        const deckLabel = member.deckPath?.length ? member.deckPath.join(' > ') : 'Not mapped';
+        if (!deckKeys.has(deckLabel)) {
+          deckKeys.add(deckLabel);
+          deckPaths.push(deckLabel);
+        }
+        memberWarnings.push(...(member.warnings || []));
+      });
+
+      const primaryStrongTags = Array.from(strongTagCounts.entries())
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([tag]) => tag)
+        .slice(0, 4);
+      const primaryBroadTags = Array.from(broadTagCounts.entries())
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([tag]) => tag)
+        .slice(0, 4);
+      const sharedStrongTags = orderedMembers.reduce((shared, member) => {
+        const memberSet = new Set(member.strongTags || []);
+        return shared.filter(tag => memberSet.has(tag));
+      }, orderedMembers[0]?.strongTags ? orderedMembers[0].strongTags.slice() : []);
+      const clusterTextScore = orderedMembers.length > 1
+        ? orderedMembers.slice(1).reduce((minScore, member, index) => {
+            const comparisons = orderedMembers.slice(0, index + 1).map(other => getAnkiTextSimilarityScore(member, other));
+            return Math.min(minScore, Math.max(...comparisons, 0));
+          }, 1)
+        : 1;
+      const clusterDeckScore = orderedMembers.length > 1
+        ? orderedMembers.slice(1).reduce((minScore, member, index) => {
+            const comparisons = orderedMembers.slice(0, index + 1).map(other => getAnkiDeckProximityScore(member, other));
+            return Math.min(minScore, Math.max(...comparisons, 0));
+          }, 1)
+        : 1;
+      const warnings = uniqueAnkiStrings([
+        ...memberWarnings,
+        ...(orderedMembers.length > 1 && sharedStrongTags.length ? [] : (orderedMembers.length > 1 ? ['No shared strong exact tag across this cluster.'] : [])),
+        ...(primaryStrongTags.length ? [] : (primaryBroadTags.length ? ['Only broad tags are available for this cluster.'] : ['No tags are available for this cluster.'])),
+        ...(deckPaths.length > 1 ? ['Mixed deck paths reduce confidence.'] : []),
+        ...(clusterTextScore < 0.45 ? ['Text similarity is weak; cluster should not be treated as a merge.'] : []),
+        ...(clusterDeckScore < 0.55 && orderedMembers.length > 1 ? ['Deck proximity is weak for a multi-item cluster.'] : [])
+      ]);
+      const confidence = warnings.length ? 'low' : 'high';
+
+      return {
+        id: `anki-cluster-${idx + 1}`,
+        clusterIndex: idx + 1,
+        members: orderedMembers,
+        memberCount: orderedMembers.length,
+        primaryTags: primaryStrongTags,
+        broadTags: primaryBroadTags,
+        deckPaths,
+        deckKeys: Array.from(deckKeys),
+        sharedStrongTags,
+        warnings,
+        confidence,
+        conceptIds: orderedMembers.map(member => member.id),
+        conceptsPerCluster: orderedMembers.length,
+        rawPreview: orderedMembers.map(member => ({
+          id: member.id,
+          sourceCardIndex: member.sourceCardIndex,
+          sourceCardOrder: member.sourceCardOrder,
+          originalRow: member.originalRow,
+          originalLine: member.originalLine,
+          guid: member.guid,
+          noteType: member.noteType,
+          deckRaw: member.deckRaw,
+          deckPath: member.deckPath,
+          tagsExact: member.tagsExact,
+          tagsNormalized: member.tagsNormalized,
+          clozeNumber: member.clozeNumber || null,
+          clozeEntries: member.clozeEntries || [],
+          sourceFieldIndex: member.sourceFieldIndex,
+          sourceFieldIndexes: member.sourceFieldIndexes,
+          sourceSnippets: member.sourceSnippets,
+          conceptText: member.conceptText,
+          warnings: member.warnings || []
+        }))
+      };
+    });
+
+    const warnings = uniqueAnkiStrings(clusters.flatMap(cluster => cluster.warnings || []));
+    return {
+      clusters,
+      clusterCount: clusters.length,
+      conceptCount: concepts.length,
+      conceptsPerCluster: clusters.map(cluster => cluster.memberCount),
+      warnings
+    };
+  }
+
+  function renderAnkiClusterPreview(result) {
+    const status = document.getElementById('anki-cluster-status');
+    const preview = document.getElementById('anki-cluster-preview');
+    if (!status || !preview) return;
+
+    const clusters = Array.isArray(result?.clusters) ? result.clusters : [];
+    if (!clusters.length) {
+      status.textContent = 'No clusters generated from the concept candidates.';
+      preview.innerHTML = '<div class="notes-import-empty">No clusters generated.</div>';
+      return;
+    }
+
+    const conceptsPerCluster = clusters.map(cluster => cluster.memberCount).join(', ');
+    const warningCount = Array.isArray(result?.warnings) ? result.warnings.length : 0;
+    status.textContent = `${result.conceptCount} concepts grouped into ${result.clusterCount} cluster${result.clusterCount === 1 ? '' : 's'}. Preview only.`;
+
+    preview.innerHTML = `
+      <div class="notes-import-stats">
+        <span><strong>Raw concepts</strong> ${escapeHTML(String(result.conceptCount || 0))}</span>
+        <span><strong>Cluster count</strong> ${escapeHTML(String(result.clusterCount || 0))}</span>
+        <span><strong>Concepts per cluster</strong> ${escapeHTML(conceptsPerCluster || 'None')}</span>
+        <span><strong>Warnings</strong> ${escapeHTML(String(warningCount || 0))}</span>
+      </div>
+      ${clusters.slice(0, 18).map(cluster => {
+        const memberLines = cluster.members.map(member => {
+          const tagLine = member.tagsExact?.length ? member.tagsExact.join(' ') : 'None';
+          const deckLine = member.deckPath?.length ? member.deckPath.join(' > ') : 'Not mapped';
+          const sourceFieldLine = Array.isArray(member.sourceFieldIndexes) && member.sourceFieldIndexes.length
+            ? member.sourceFieldIndexes.map(index => index + 1).join(', ')
+            : 'Not mapped';
+          const clozeLine = member.sourceKind === 'cloze'
+            ? `c${escapeHTML(String(member.clozeNumber))}${Array.isArray(member.clozeTexts) && member.clozeTexts.length > 1 ? ` · ${escapeHTML(String(member.clozeTexts.length))} same-number clozes` : ''}`
+            : 'Basic';
+          const snippetLine = Array.isArray(member.sourceSnippets)
+            ? member.sourceSnippets.map(snippet => snippet.contextSnippet || snippet.sourceSnippet || '').filter(Boolean).join(' | ')
+            : '';
+          return `
+            <div style="border-top:1px solid #d7e0e9;padding-top:8px;margin-top:8px;">
+              <div class="notes-draft-meta">Card ${escapeHTML(String(member.sourceCardIndex || member.originalRow || '?'))} · ${escapeHTML(clozeLine)} · Row ${escapeHTML(String(member.originalRow || '?'))} · Line ${escapeHTML(String(member.originalLine || '?'))}${member.guid ? ` · GUID ${escapeHTML(member.guid)}` : ''}</div>
+              <div style="margin-top:6px;">${escapeHTML(member.conceptText || 'No concept text')}</div>
+              <div class="notes-draft-meta">Deck: ${escapeHTML(deckLine)} · Tags: ${escapeHTML(tagLine)} · Source fields: ${escapeHTML(sourceFieldLine)}</div>
+              ${snippetLine ? `<div class="notes-draft-meta">Source snippets: ${escapeHTML(snippetLine)}</div>` : ''}
+              ${member.warnings?.length ? `<div style="color:#8a5a00;margin-top:6px;">${escapeHTML(member.warnings.join(' '))}</div>` : ''}
+            </div>
+          `;
+        }).join('');
+
+        const warnings = Array.isArray(cluster.warnings) ? cluster.warnings : [];
+        const primaryTags = cluster.primaryTags?.length ? cluster.primaryTags.join(' ') : 'None';
+        const broadTags = cluster.broadTags?.length ? cluster.broadTags.join(' ') : 'None';
+        const deckPaths = cluster.deckPaths?.length ? cluster.deckPaths.join(' | ') : 'Not mapped';
+        const provenanceJson = JSON.stringify(cluster.rawPreview, null, 2);
+        return `
+          <div class="notes-draft-card">
+            <div class="notes-draft-title">Cluster ${escapeHTML(String(cluster.clusterIndex))} · ${escapeHTML(String(cluster.memberCount))} concept${cluster.memberCount === 1 ? '' : 's'} · ${escapeHTML(cluster.confidence === 'low' ? 'Low confidence' : 'High confidence')}</div>
+            <div class="notes-draft-meta">Primary tags: ${escapeHTML(primaryTags)} · Broad tags: ${escapeHTML(broadTags)}</div>
+            <div class="notes-draft-meta">Deck paths: ${escapeHTML(deckPaths)}</div>
+            ${warnings.length ? `<div style="color:#8a5a00;margin-top:8px;">${escapeHTML(warnings.join(' '))}</div>` : '<div class="notes-import-empty">No cluster warnings.</div>'}
+            <details open>
+              <summary>Members</summary>
+              <div class="notes-draft-body">${memberLines}</div>
+            </details>
+            <details>
+              <summary>Cluster provenance</summary>
+              <pre style="white-space:pre-wrap;overflow:auto;margin-top:8px;">${escapeHTML(provenanceJson)}</pre>
+            </details>
+          </div>
+        `;
+      }).join('')}
+      ${clusters.length > 18 ? `<div class="notes-import-empty">Showing first 18 of ${clusters.length} clusters.</div>` : ''}
     `;
   }
 
