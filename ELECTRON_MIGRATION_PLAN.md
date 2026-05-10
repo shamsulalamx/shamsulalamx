@@ -101,6 +101,21 @@ This file should track migration stages, decisions, risks, verification checkpoi
   - `logs/`: local application and import logs.
 - Do not create these folders, move `FigureStore` images, migrate localStorage, or add filesystem IPC during Stage 8.
 
+### Future Local Storage Migration Strategy
+
+- Current browser storage remains authoritative until an explicit migration is approved.
+- `localStorage` currently stores sanitized metadata under `nbme_app_v1`: settings, source folders, subfolders, tests, trash, flags, marks, notes, history, attempts, answers, explanations, tags, and image references.
+- `FigureStore` currently stores large image data in IndexedDB database `nbme_figures_v1`, object store `figures`, keyed by figure keys referenced from question image metadata.
+- Keep browser compatibility by leaving `DB.save()`, `storagePayload()`, and `FigureStore` behavior unchanged during early Electron work.
+- Future Electron migration should be staged:
+  - Add read-only export diagnostics from current browser storage.
+  - Add explicit user-triggered export to local app-data JSON without changing the active save path.
+  - Add explicit user-triggered import/restore from local app-data after validation and backup.
+  - Move active Electron metadata writes to local JSON only after parity checks and rollback are available.
+  - Migrate figure/image persistence separately from metadata, preserving `figureKey` references and Drive file IDs.
+  - Keep Google Drive manifest compatibility so browser and Electron backups can coexist during transition.
+- Do not silently mutate stored quizzes, localStorage, IndexedDB images, or Google Drive backups during any storage migration.
+
 ### Stage 9: Design Text/Image/Hybrid Render-Mode Layer
 
 - Define per-question render mode metadata.
