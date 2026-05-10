@@ -1697,6 +1697,18 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
     <div id="notes-draft-preview" class="notes-draft-preview">
       <div class="notes-import-empty">No question drafts generated.</div>
     </div>
+    <div class="notes-import-section-title">Batch Refinement Preview</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0 8px;">
+      <button type="button" class="btn-card" onclick="App.buildNotesBatchRefinementQueue()">Build Queue</button>
+      <button type="button" class="btn-card" onclick="App.simulateNotesBatchRefinementRun()">Simulate Run</button>
+      <button type="button" class="btn-card" onclick="App.pauseNotesBatchRefinementQueue()">Pause</button>
+      <button type="button" class="btn-card danger" onclick="App.cancelRemainingNotesBatchRefinement()">Cancel Remaining</button>
+      <button type="button" class="btn-card" onclick="App.retryFailedNotesBatchRefinement()">Retry Failed</button>
+    </div>
+    <div id="notes-batch-status" class="notes-import-summary">Build a queue from selected cluster drafts. Simulation only; no Gemini calls.</div>
+    <div id="notes-batch-preview" class="notes-draft-preview">
+      <div class="notes-import-empty">No batch queue built.</div>
+    </div>
     <div class="notes-import-section-title">Preview Quiz Objects</div>
     <div id="notes-quiz-object-status" class="notes-import-summary">Approve AI-refined drafts to preview internal quiz-question objects. Nothing is saved.</div>
     <div id="notes-quiz-object-preview" class="notes-draft-preview">
@@ -6191,6 +6203,8 @@ const App = (() => {
 	  let _noteHighlightSeq = 0;
   let _notesImportPreview = null;
   const _notesRefinePending = new Set();
+  const _notesBatchRefinementCache = new Map();
+  let _notesBatchRunTimer = null;
   // ── Init ───────────────────────────────────────────────────
   function init() {
     window.toast = toast;
@@ -7006,6 +7020,8 @@ const App = (() => {
     const targetQuestionCount = document.getElementById('notes-target-question-count');
     const draftStatus = document.getElementById('notes-draft-status');
     const draftPreview = document.getElementById('notes-draft-preview');
+    const batchStatus = document.getElementById('notes-batch-status');
+    const batchPreview = document.getElementById('notes-batch-preview');
     const quizObjectStatus = document.getElementById('notes-quiz-object-status');
     const quizObjectPreview = document.getElementById('notes-quiz-object-preview');
     const createName = document.getElementById('notes-create-test-name');
@@ -7022,6 +7038,9 @@ const App = (() => {
     if (targetQuestionCount) targetQuestionCount.value = '';
     if (draftStatus) draftStatus.textContent = 'Draft scaffolds will appear after concepts are extracted. They require human or AI review before use.';
     if (draftPreview) draftPreview.innerHTML = '<div class="notes-import-empty">No question drafts generated.</div>';
+    if (batchStatus) batchStatus.textContent = 'Build a queue from selected cluster drafts. Simulation only; no Gemini calls.';
+    if (batchPreview) batchPreview.innerHTML = '<div class="notes-import-empty">No batch queue built.</div>';
+    clearNotesBatchQueueState();
     if (quizObjectStatus) quizObjectStatus.textContent = 'Approve AI-refined drafts to preview internal quiz-question objects. Nothing is saved.';
     if (quizObjectPreview) quizObjectPreview.innerHTML = '<div class="notes-import-empty">No approved refined drafts converted.</div>';
     if (createName) createName.value = 'UWorld Notes Test';
@@ -7200,6 +7219,8 @@ const App = (() => {
     const targetQuestionCount = document.getElementById('notes-target-question-count');
     const draftStatus = document.getElementById('notes-draft-status');
     const draftPreview = document.getElementById('notes-draft-preview');
+    const batchStatus = document.getElementById('notes-batch-status');
+    const batchPreview = document.getElementById('notes-batch-preview');
     if (status) {
       status.textContent = 'Reading DOCX preview...';
       status.style.color = '#5a6a7a';
@@ -7221,6 +7242,12 @@ const App = (() => {
       draftStatus.style.color = '#5a6a7a';
     }
     if (draftPreview) draftPreview.innerHTML = '<div class="notes-import-empty">No question drafts generated.</div>';
+    if (batchStatus) {
+      batchStatus.textContent = 'Waiting for selected cluster drafts...';
+      batchStatus.style.color = '#5a6a7a';
+    }
+    if (batchPreview) batchPreview.innerHTML = '<div class="notes-import-empty">No batch queue built.</div>';
+    clearNotesBatchQueueState();
     try {
       const blocks = await extractDocxNotesBlocks(file);
       const concepts = extractNotesConcepts(blocks);
@@ -7234,8 +7261,10 @@ const App = (() => {
       renderNotesConceptPreview(concepts);
       renderNotesClusterPreview();
       renderNotesQuestionDraftPreview(drafts);
+      renderNotesBatchRefinementPreview();
     } catch (err) {
       _notesImportPreview = null;
+      clearNotesBatchQueueState();
       if (status) {
         status.textContent = err?.message || 'Could not read this DOCX file.';
         status.style.color = '#c0392b';
@@ -7257,6 +7286,7 @@ const App = (() => {
         draftStatus.style.color = '#c0392b';
       }
       if (draftPreview) draftPreview.innerHTML = '<div class="notes-import-empty">No question drafts generated.</div>';
+      renderNotesBatchRefinementPreview();
     }
   }
 
@@ -7776,7 +7806,9 @@ const App = (() => {
     const selectedConcepts = selectedConceptsForClusters(_notesImportPreview.conceptClusters, _notesImportPreview.selectedClusterIds || []);
     _notesImportPreview.concepts = selectedConcepts;
     _notesImportPreview.drafts = buildNotesQuestionDrafts(selectedConcepts);
+    resetNotesBatchQueueForDraftChange();
     renderNotesQuestionDraftPreview(_notesImportPreview.drafts);
+    renderNotesBatchRefinementPreview();
   }
 
   function updateNotesClusterSelection() {
@@ -7898,7 +7930,10 @@ const App = (() => {
           E: 'Placeholder: nonspecific distractor, not final.'
         },
         sourceConceptId: concept.conceptId,
+        sourceConceptIds: Array.isArray(concept.sourceConceptIds) ? concept.sourceConceptIds.slice() : [concept.conceptId],
         sourceBlockIds: concept.sourceBlockIds.slice(),
+        clusterId: concept.clusterId || '',
+        representativeConceptId: concept.representativeConceptId || concept.conceptId,
         confidence: Math.max(0.15, Math.min(0.7, concept.confidence - 0.12)),
         warnings,
         generationMethod: 'deterministic-question-draft-preview-v1',
@@ -7987,6 +8022,281 @@ const App = (() => {
       ${warnings}
       ${reviewControls}
     </div>`;
+  }
+
+  function clearNotesBatchQueueState() {
+    if (_notesBatchRunTimer) {
+      clearTimeout(_notesBatchRunTimer);
+      _notesBatchRunTimer = null;
+    }
+  }
+
+  function resetNotesBatchQueueForDraftChange() {
+    clearNotesBatchQueueState();
+    if (_notesImportPreview) {
+      _notesImportPreview.batchRefinementQueue = null;
+      _notesImportPreview.batchRefinementPaused = false;
+    }
+  }
+
+  function stableDraftHash(draft) {
+    const hashPayload = {
+      version: 'uworld-draft-batch-hash-v1',
+      stem: draft?.stem || '',
+      choices: (draft?.choices || []).map(choice => ({ l: choice.l || choice.label || '', t: choice.t || choice.text || '' })),
+      correctAnswer: draft?.correctAnswer || '',
+      teachingPoint: draft?.teachingPoint || '',
+      sourceConceptIds: (draft?.sourceConceptIds || [draft?.sourceConceptId || draft?.conceptId || '']).slice().sort(),
+      sourceBlockIds: (draft?.sourceBlockIds || []).slice().sort(),
+      generationMethod: draft?.generationMethod || ''
+    };
+    return fallbackTextHash(JSON.stringify(hashPayload));
+  }
+
+  function getNotesBatchQueueCounts(queue) {
+    const counts = {
+      totalSelected: _notesImportPreview?.drafts?.length || 0,
+      queued: 0,
+      refining: 0,
+      succeeded: 0,
+      failed: 0,
+      skipped: 0,
+      canceled: 0,
+      estimatedModelCalls: 0
+    };
+    (queue?.items || []).forEach(item => {
+      if (counts[item.status] !== undefined) counts[item.status] += 1;
+      if (['queued', 'refining'].includes(item.status) && !item.cacheHit) counts.estimatedModelCalls += 1;
+    });
+    return counts;
+  }
+
+  function createSimulatedBatchRefinedDraft(draft, item) {
+    const choices = (draft.choices || []).slice(0, 5).map(choice => ({
+      label: choice.l || choice.label || '',
+      text: choice.t || choice.text || ''
+    }));
+    const rationales = {};
+    ['A', 'B', 'C', 'D', 'E'].forEach(label => {
+      rationales[label] = 'Simulated batch rationale only. This output was not generated by Gemini and is not eligible for save.';
+    });
+    return {
+      refinedDraftId: `simulated-${draft.draftId}`,
+      sourceDraftId: draft.draftId,
+      sourceConceptId: draft.sourceConceptId || draft.conceptId || '',
+      sourceConceptIds: (draft.sourceConceptIds || [draft.sourceConceptId || draft.conceptId || '']).filter(Boolean),
+      sourceBlockIds: (draft.sourceBlockIds || []).slice(),
+      sourceName: _notesImportPreview?.fileName || '',
+      sourceHash: _notesImportPreview?.blocks?.[0]?.sourceHash || fallbackRefinedDraftSourceHash(draft),
+      draftHash: item.draftHash,
+      stem: `[SIMULATED - NOT FOR SAVE] ${draft.stem || ''}`,
+      choices,
+      correctAnswer: draft.correctAnswer || 'A',
+      teachingPoint: `SIMULATED OUTPUT ONLY - not eligible for save. ${draft.teachingPoint || ''}`,
+      rationales,
+      confidence: 0,
+      warnings: ['simulated batch output', 'not eligible for save', 'no Gemini call made'],
+      model: 'simulation-only',
+      generationMethod: 'simulated-batch-refinement-preview-v1',
+      createdAt: new Date().toISOString(),
+      nonProduction: true,
+      simulated: true
+    };
+  }
+
+  function buildNotesBatchRefinementQueue() {
+    if (!_notesImportPreview?.drafts?.length) {
+      renderNotesBatchRefinementPreview();
+      return;
+    }
+    clearNotesBatchQueueState();
+    const seenHashes = new Set();
+    const items = _notesImportPreview.drafts.map((draft, idx) => {
+      const draftHash = stableDraftHash(draft);
+      const cached = _notesBatchRefinementCache.get(draftHash) || null;
+      const duplicate = seenHashes.has(draftHash);
+      seenHashes.add(draftHash);
+      const status = duplicate || cached ? 'skipped' : 'queued';
+      return {
+        queueItemId: 'batch-' + String(idx + 1).padStart(4, '0'),
+        draftId: draft.draftId,
+        clusterId: draft.clusterId || '',
+        sourceConceptId: draft.sourceConceptId || draft.conceptId || '',
+        sourceConceptIds: (draft.sourceConceptIds || [draft.sourceConceptId || draft.conceptId || '']).filter(Boolean),
+        sourceBlockIds: (draft.sourceBlockIds || []).slice(),
+        representativeConceptId: draft.representativeConceptId || draft.sourceConceptId || draft.conceptId || '',
+        draftHash,
+        status,
+        attemptCount: 0,
+        cacheHit: !!cached,
+        skipReason: duplicate ? 'duplicate draft hash' : cached ? 'cache hit from in-memory batch preview cache' : '',
+        errorCode: '',
+        errorMessage: '',
+        startedAt: '',
+        completedAt: '',
+        simulatedRefinedDraft: cached?.refinedDraft || null
+      };
+    });
+    _notesImportPreview.batchRefinementQueue = {
+      queueId: `uworld-batch-${Date.now()}`,
+      status: 'ready',
+      paused: false,
+      builtAt: new Date().toISOString(),
+      items
+    };
+    renderNotesBatchRefinementPreview();
+  }
+
+  function processNextSimulatedBatchItem() {
+    const queue = _notesImportPreview?.batchRefinementQueue;
+    if (!queue || queue.paused || queue.status !== 'running') {
+      _notesBatchRunTimer = null;
+      renderNotesBatchRefinementPreview();
+      return;
+    }
+    const next = queue.items.find(item => item.status === 'queued');
+    if (!next) {
+      queue.status = 'complete';
+      _notesBatchRunTimer = null;
+      renderNotesBatchRefinementPreview();
+      return;
+    }
+    const draft = (_notesImportPreview.drafts || []).find(d => d.draftId === next.draftId);
+    if (!draft) {
+      next.status = 'failed';
+      next.errorCode = 'DRAFT_NOT_FOUND';
+      next.errorMessage = 'Source draft was not found in the current preview.';
+      renderNotesBatchRefinementPreview();
+      _notesBatchRunTimer = setTimeout(processNextSimulatedBatchItem, 120);
+      return;
+    }
+    next.status = 'refining';
+    next.attemptCount += 1;
+    next.startedAt = new Date().toISOString();
+    renderNotesBatchRefinementPreview();
+    _notesBatchRunTimer = setTimeout(() => {
+      next.simulatedRefinedDraft = createSimulatedBatchRefinedDraft(draft, next);
+      next.status = 'succeeded';
+      next.completedAt = new Date().toISOString();
+      _notesBatchRefinementCache.set(next.draftHash, {
+        draftHash: next.draftHash,
+        refinedDraft: next.simulatedRefinedDraft,
+        cachedAt: next.completedAt,
+        nonProduction: true
+      });
+      processNextSimulatedBatchItem();
+    }, 120);
+  }
+
+  function simulateNotesBatchRefinementRun() {
+    if (!_notesImportPreview?.drafts?.length) {
+      renderNotesBatchRefinementPreview();
+      return;
+    }
+    if (!_notesImportPreview.batchRefinementQueue) buildNotesBatchRefinementQueue();
+    const queue = _notesImportPreview.batchRefinementQueue;
+    if (!queue) return;
+    queue.items.forEach(item => {
+      if (item.status === 'failed') {
+        item.status = 'queued';
+        item.errorCode = '';
+        item.errorMessage = '';
+      }
+    });
+    queue.paused = false;
+    queue.status = 'running';
+    clearNotesBatchQueueState();
+    processNextSimulatedBatchItem();
+  }
+
+  function pauseNotesBatchRefinementQueue() {
+    const queue = _notesImportPreview?.batchRefinementQueue;
+    if (!queue) {
+      renderNotesBatchRefinementPreview();
+      return;
+    }
+    queue.paused = true;
+    queue.status = 'paused';
+    renderNotesBatchRefinementPreview();
+  }
+
+  function cancelRemainingNotesBatchRefinement() {
+    const queue = _notesImportPreview?.batchRefinementQueue;
+    if (!queue) {
+      renderNotesBatchRefinementPreview();
+      return;
+    }
+    queue.paused = false;
+    queue.status = 'canceled';
+    clearNotesBatchQueueState();
+    queue.items.forEach(item => {
+      if (['queued', 'refining'].includes(item.status)) item.status = 'canceled';
+    });
+    renderNotesBatchRefinementPreview();
+  }
+
+  function retryFailedNotesBatchRefinement() {
+    const queue = _notesImportPreview?.batchRefinementQueue;
+    if (!queue) {
+      renderNotesBatchRefinementPreview();
+      return;
+    }
+    queue.items.forEach(item => {
+      if (item.status === 'failed') {
+        item.status = 'queued';
+        item.errorCode = '';
+        item.errorMessage = '';
+        item.startedAt = '';
+        item.completedAt = '';
+      }
+    });
+    queue.status = 'ready';
+    queue.paused = false;
+    renderNotesBatchRefinementPreview();
+  }
+
+  function renderNotesBatchRefinementPreview() {
+    const status = document.getElementById('notes-batch-status');
+    const preview = document.getElementById('notes-batch-preview');
+    const queue = _notesImportPreview?.batchRefinementQueue || null;
+    const counts = getNotesBatchQueueCounts(queue);
+    if (status) {
+      status.style.color = '#5a6a7a';
+      status.textContent = queue
+        ? `Batch queue: ${counts.totalSelected} selected draft${counts.totalSelected === 1 ? '' : 's'}; queued ${counts.queued}; succeeded ${counts.succeeded}; failed ${counts.failed}; skipped/cache hits ${counts.skipped}; canceled ${counts.canceled}; estimated model calls ${counts.estimatedModelCalls}. Simulation only; no Gemini calls.`
+        : `Batch queue not built. ${counts.totalSelected} selected draft${counts.totalSelected === 1 ? '' : 's'} available. Simulation only; no Gemini calls.`;
+    }
+    if (!preview) return;
+    if (!queue?.items?.length) {
+      preview.innerHTML = '<div class="notes-import-empty">No batch queue built.</div>';
+      return;
+    }
+    preview.innerHTML = queue.items.map((item, idx) => {
+      const simulated = item.simulatedRefinedDraft
+        ? `<div class="notes-draft-teaching" style="margin-top:8px;"><strong>Simulated output:</strong> non-production preview only, not eligible for approved save.<br>${escapeHTML(item.simulatedRefinedDraft.teachingPoint || '')}</div>`
+        : '';
+      const problem = item.errorMessage || item.skipReason || '';
+      const meta = [
+        item.status,
+        item.cacheHit ? 'cache hit' : '',
+        item.skipReason,
+        `hash: ${item.draftHash}`
+      ].filter(Boolean).join(' · ');
+      return `<details class="notes-draft-card" ${idx < 4 ? 'open' : ''}>
+        <summary class="notes-draft-summary">
+          <div class="notes-draft-title">Queue ${idx + 1}: ${escapeHTML(item.draftId)}</div>
+          <div class="notes-draft-meta">${escapeHTML(meta)}</div>
+        </summary>
+        <div class="notes-draft-body">
+          <div><strong>Status:</strong> ${escapeHTML(item.status)}</div>
+          <div><strong>Cluster:</strong> ${escapeHTML(item.clusterId || 'unclustered')}</div>
+          <div><strong>Source concepts:</strong> ${escapeHTML(item.sourceConceptIds.join(', '))}</div>
+          <div><strong>Source blocks:</strong> ${escapeHTML(item.sourceBlockIds.join(', '))}</div>
+          ${problem ? `<div class="notes-concept-warning">${escapeHTML(problem)}</div>` : ''}
+          ${simulated}
+        </div>
+      </details>`;
+    }).join('');
   }
 
   function setRefinedDraftReviewStatus(draftId, status) {
@@ -9632,6 +9942,11 @@ const App = (() => {
     updateNotesClusterSelection,
     selectAllNotesClusters,
     deselectAllNotesClusters,
+    buildNotesBatchRefinementQueue,
+    simulateNotesBatchRefinementRun,
+    pauseNotesBatchRefinementQueue,
+    cancelRemainingNotesBatchRefinement,
+    retryFailedNotesBatchRefinement,
     exportApprovedRefinedDraftsJson,
     createTestFromApprovedRefinedDrafts,
     updateApprovedDraftCreateTestButton,
