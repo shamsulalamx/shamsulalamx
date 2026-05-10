@@ -7407,9 +7407,17 @@ const App = (() => {
     const status = document.getElementById('notes-draft-status');
     const preview = document.getElementById('notes-draft-preview');
     const reviewCount = drafts.filter(d => d.warnings.length || d.confidence < 0.6).length;
+    const refinedDrafts = _notesImportPreview?.refinedDrafts || {};
+    const reviewStatuses = _notesImportPreview?.refinedReviewStatus || {};
+    const refinedIds = Object.keys(refinedDrafts);
+    const reviewSummary = refinedIds.reduce((acc, draftId) => {
+      const state = reviewStatuses[draftId] || 'pending';
+      acc[state] = (acc[state] || 0) + 1;
+      return acc;
+    }, { pending: 0, approved: 0, rejected: 0 });
     if (status) {
       status.style.color = '#5a6a7a';
-      status.textContent = `${drafts.length} question draft scaffold${drafts.length === 1 ? '' : 's'} generated for preview only. ${reviewCount} require review before use. Nothing was saved.`;
+      status.textContent = `${drafts.length} question draft scaffold${drafts.length === 1 ? '' : 's'} generated for preview only. ${reviewCount} require review before use. Refined: ${refinedIds.length}; approved: ${reviewSummary.approved || 0}; rejected: ${reviewSummary.rejected || 0}; pending: ${reviewSummary.pending || 0}. Nothing was saved.`;
     }
     if (!preview) return;
     if (!drafts.length) {
@@ -7450,20 +7458,36 @@ const App = (() => {
   }
 
   function renderRefinedQuestionDraft(refined) {
+    const draftId = refined.sourceDraftId || '';
+    const reviewStatus = _notesImportPreview?.refinedReviewStatus?.[draftId] || 'pending';
     const choices = refined.choices.map(choice => `<li><strong>${escapeHTML(choice.label)}.</strong> ${escapeHTML(choice.text)}</li>`).join('');
     const rationales = ['A','B','C','D','E'].map(label => `${label}: ${refined.rationales?.[label] || ''}`).join(' ');
     const warnings = refined.warnings?.length
       ? `<div>${refined.warnings.map(w => `<span class="notes-concept-warning">${escapeHTML(w)}</span>`).join('')}</div>`
       : '';
+    const reviewControls = draftId ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+        <button class="btn-card" onclick="App.setRefinedDraftReviewStatus('${escapeHTML(draftId)}','approved')" ${reviewStatus === 'approved' ? 'disabled' : ''}>Approve</button>
+        <button class="btn-card danger" onclick="App.setRefinedDraftReviewStatus('${escapeHTML(draftId)}','rejected')" ${reviewStatus === 'rejected' ? 'disabled' : ''}>Reject</button>
+        <button class="btn-card" onclick="App.setRefinedDraftReviewStatus('${escapeHTML(draftId)}','pending')" ${reviewStatus === 'pending' ? 'disabled' : ''}>Reset</button>
+      </div>` : '';
     return `<div class="notes-draft-teaching">
       <strong>AI refined preview:</strong> requires review, not saved.<br>
-      <span class="notes-draft-meta">${escapeHTML(refined.generationMethod)} · ${Math.round((refined.confidence || 0) * 100)}% · ${escapeHTML((refined.sourceBlockIds || []).join(', '))}</span>
+      <span class="notes-draft-meta">${escapeHTML(refined.generationMethod)} · ${Math.round((refined.confidence || 0) * 100)}% · review: ${escapeHTML(reviewStatus)} · ${escapeHTML((refined.sourceBlockIds || []).join(', '))}</span>
       <div class="notes-draft-stem" style="margin-top:8px;">${escapeHTML(refined.stem)}</div>
       <ol class="notes-draft-choice-list" type="A">${choices}</ol>
       <div><strong>Provisional correct answer:</strong> ${escapeHTML(refined.correctAnswer)}<br><strong>Teaching point:</strong> ${escapeHTML(refined.teachingPoint)}</div>
       <div style="margin-top:7px;"><strong>Rationales:</strong> ${escapeHTML(rationales)}</div>
       ${warnings}
+      ${reviewControls}
     </div>`;
+  }
+
+  function setRefinedDraftReviewStatus(draftId, status) {
+    if (!_notesImportPreview?.refinedDrafts?.[draftId]) return;
+    if (!['pending', 'approved', 'rejected'].includes(status)) return;
+    _notesImportPreview.refinedReviewStatus = _notesImportPreview.refinedReviewStatus || {};
+    _notesImportPreview.refinedReviewStatus[draftId] = status;
+    renderNotesQuestionDraftPreview(_notesImportPreview.drafts || []);
   }
 
   async function refineNotesDraft(draftId) {
@@ -7491,6 +7515,8 @@ const App = (() => {
       });
       if (result?.ok && result.refinedDraft) {
         _notesImportPreview.refinedDrafts[draftId] = result.refinedDraft;
+        _notesImportPreview.refinedReviewStatus = _notesImportPreview.refinedReviewStatus || {};
+        _notesImportPreview.refinedReviewStatus[draftId] = _notesImportPreview.refinedReviewStatus[draftId] || 'pending';
       } else {
         _notesImportPreview.refineErrors[draftId] = result || { errorCode: 'MODEL_RESPONSE_INVALID', message: 'AI refinement failed validation.' };
       }
@@ -8764,6 +8790,7 @@ const App = (() => {
     clearNotesImportPreview,
     previewNotesDocx,
     refineNotesDraft,
+    setRefinedDraftReviewStatus,
     deleteNote,
     downloadNotesDocx,
     downloadNotesPdf,
