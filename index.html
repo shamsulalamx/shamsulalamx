@@ -8461,6 +8461,7 @@ const App = (() => {
       clusterCount: clusters.length,
       rawConceptCount: clusterResult?.conceptCount || 0,
       conceptsPerCluster: clusters.map(cluster => cluster.memberCount),
+      reviewStatus: Object.fromEntries(drafts.map(draft => [draft.id, 'pending'])),
       recognitionCount: drafts.filter(draft => draft.variantType === 'recognition').length,
       managementCount: drafts.filter(draft => draft.variantType === 'management').length,
       differentiationCount: drafts.filter(draft => draft.variantType === 'differentiation').length,
@@ -8475,6 +8476,7 @@ const App = (() => {
     if (!status || !preview) return;
 
     const drafts = Array.isArray(result?.drafts) ? result.drafts : [];
+    const reviewStatus = result?.reviewStatus || {};
     if (!drafts.length) {
       const skippedCount = Array.isArray(result?.skippedClusters) ? result.skippedClusters.length : 0;
       status.textContent = skippedCount
@@ -8485,7 +8487,12 @@ const App = (() => {
     }
 
     const warningCount = Array.isArray(result?.warnings) ? result.warnings.length : 0;
-    status.textContent = `${result.draftCount} deterministic variant draft${result.draftCount === 1 ? '' : 's'} generated from ${result.strongClusterCount} strong cluster${result.strongClusterCount === 1 ? '' : 's'}. Preview only.`;
+    const statusCounts = drafts.reduce((counts, draft) => {
+      const state = reviewStatus[draft.id] || 'pending';
+      counts[state] = (counts[state] || 0) + 1;
+      return counts;
+    }, { pending: 0, approved: 0, rejected: 0 });
+    status.textContent = `${result.draftCount} deterministic variant draft${result.draftCount === 1 ? '' : 's'} generated from ${result.strongClusterCount} strong cluster${result.strongClusterCount === 1 ? '' : 's'}. Review state: ${statusCounts.pending} pending, ${statusCounts.approved} approved, ${statusCounts.rejected} rejected. Preview only.`;
 
     const cards = drafts.slice(0, 18).map(draft => {
       const choiceHtml = (draft.choices || []).map(choice => `
@@ -8495,6 +8502,14 @@ const App = (() => {
         </div>
       `).join('');
       const warnings = Array.isArray(draft.warnings) ? draft.warnings : [];
+      const currentReviewStatus = reviewStatus[draft.id] || 'pending';
+      const reviewControls = `
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+          <button type="button" class="btn-card" onclick="App.setAnkiVariantReviewStatus('${escapeHTML(draft.id)}','approved')" ${currentReviewStatus === 'approved' ? 'disabled' : ''}>Approve</button>
+          <button type="button" class="btn-card danger" onclick="App.setAnkiVariantReviewStatus('${escapeHTML(draft.id)}','rejected')" ${currentReviewStatus === 'rejected' ? 'disabled' : ''}>Reject</button>
+          <button type="button" class="btn-card" onclick="App.setAnkiVariantReviewStatus('${escapeHTML(draft.id)}','pending')" ${currentReviewStatus === 'pending' ? 'disabled' : ''}>Reset</button>
+        </div>
+      `;
       const provenance = JSON.stringify({
         id: draft.id,
         clusterId: draft.clusterId,
@@ -8514,15 +8529,17 @@ const App = (() => {
         <div class="notes-draft-card">
           <div class="notes-draft-title">Cluster ${escapeHTML(String(draft.clusterIndex))} · ${escapeHTML(draft.variantType)} scaffold · provisional ${escapeHTML(draft.provisionalCorrectAnswer)}</div>
           <div class="notes-draft-meta">Source cards: ${escapeHTML((draft.sourceCardIds || []).join(', ') || 'None')} · Orders: ${escapeHTML((draft.sourceCardOrders || []).map(value => String(value)).join(', ') || 'None')}</div>
-          <div class="notes-draft-meta">Tags: ${escapeHTML((draft.tagsExact || []).join(' ') || 'None')} · Deck paths: ${escapeHTML((draft.deckPaths || []).join(' | ') || 'Not mapped')}</div>
-          <div style="margin-top:8px;">${escapeHTML(draft.stemScaffold || '')}</div>
-          <div class="notes-draft-meta" style="margin-top:8px;">Teaching point: ${escapeHTML(draft.teachingPoint || '')}</div>
-          <div class="notes-draft-meta">Placeholder distractor rationales: ${escapeHTML((draft.placeholderDistractorRationales || []).join(' | ') || 'None')}</div>
-          ${warnings.length ? `<div style="color:#8a5a00;margin-top:8px;">${escapeHTML(warnings.join(' '))}</div>` : '<div class="notes-import-empty">No draft warnings.</div>'}
-          <details open>
-            <summary>Choices</summary>
-            <div class="notes-draft-body">${choiceHtml}</div>
-          </details>
+        <div class="notes-draft-meta">Tags: ${escapeHTML((draft.tagsExact || []).join(' ') || 'None')} · Deck paths: ${escapeHTML((draft.deckPaths || []).join(' | ') || 'Not mapped')}</div>
+        <div style="margin-top:8px;">${escapeHTML(draft.stemScaffold || '')}</div>
+        <div class="notes-draft-meta" style="margin-top:8px;">Teaching point: ${escapeHTML(draft.teachingPoint || '')}</div>
+        <div class="notes-draft-meta">Review status: ${escapeHTML(currentReviewStatus)}</div>
+        <div class="notes-draft-meta">Placeholder distractor rationales: ${escapeHTML((draft.placeholderDistractorRationales || []).join(' | ') || 'None')}</div>
+        ${warnings.length ? `<div style="color:#8a5a00;margin-top:8px;">${escapeHTML(warnings.join(' '))}</div>` : '<div class="notes-import-empty">No draft warnings.</div>'}
+        ${reviewControls}
+        <details open>
+          <summary>Choices</summary>
+          <div class="notes-draft-body">${choiceHtml}</div>
+        </details>
           <details>
             <summary>Provenance</summary>
             <pre style="white-space:pre-wrap;overflow:auto;margin-top:8px;">${escapeHTML(provenance)}</pre>
@@ -8546,9 +8563,25 @@ const App = (() => {
         <span><strong>Differentiation</strong> ${escapeHTML(String(result.differentiationCount || 0))}</span>
         <span><strong>Skipped clusters</strong> ${escapeHTML(String((result.skippedClusters || []).length))}</span>
       </div>
+      <div class="notes-import-stats" style="margin-top:8px;">
+        <span><strong>Pending</strong> ${escapeHTML(String(statusCounts.pending || 0))}</span>
+        <span><strong>Approved</strong> ${escapeHTML(String(statusCounts.approved || 0))}</span>
+        <span><strong>Rejected</strong> ${escapeHTML(String(statusCounts.rejected || 0))}</span>
+        <span><strong>Total drafts</strong> ${escapeHTML(String(result.draftCount || 0))}</span>
+      </div>
       ${cards}
       ${drafts.length > 18 ? `<div class="notes-import-empty">Showing first 18 of ${drafts.length} variant drafts.</div>` : ''}
     `;
+  }
+
+  function setAnkiVariantReviewStatus(draftId, status) {
+    if (!_ankiImportPreview?.variantResult?.drafts?.length) return;
+    if (!['pending', 'approved', 'rejected'].includes(status)) return;
+    const exists = _ankiImportPreview.variantResult.drafts.some(draft => draft.id === draftId);
+    if (!exists) return;
+    _ankiImportPreview.variantResult.reviewStatus = _ankiImportPreview.variantResult.reviewStatus || {};
+    _ankiImportPreview.variantResult.reviewStatus[draftId] = status;
+    renderAnkiVariantPreview(_ankiImportPreview.variantResult);
   }
 
   function openNotesImportPreview() {
@@ -12017,6 +12050,7 @@ const App = (() => {
     closeAnkiTextImportPreview,
     clearAnkiTextImportPreview,
     previewAnkiTextExport,
+    setAnkiVariantReviewStatus,
     openNotesImportPreview,
     closeNotesImportPreview,
     clearNotesImportPreview,
