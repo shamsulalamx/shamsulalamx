@@ -222,6 +222,27 @@ This file should track migration stages, decisions, risks, verification checkpoi
 
 - Package only after local Electron dev mode is stable.
 - Confirm browser app remains functional before packaging.
+- Stage 14 packaging assessment is documentation-only. Do not add packaging config until packaging is explicitly approved.
+- Packaging should wait until:
+  - Electron dev mode reliably loads the app from the intended HTTP origin.
+  - Browser/Netlify mode remains verified.
+  - PDF upload, OCR parsing, grouped-question behavior, debug exports, Drive, and Gemini have been checked in the Electron dev workflow.
+  - Storage and app-data decisions are explicit enough to avoid destructive migration.
+  - The app has a clear policy for local credentials, OAuth tokens, and debug artifacts.
+- Future packaging approach:
+  - Consider `electron-builder` or a similarly standard tool only after dev mode is stable.
+  - macOS: build `.dmg` and optional `.zip`; expect Gatekeeper warnings unless signed and notarized with an Apple Developer ID.
+  - Windows: build NSIS installer and optional portable `.exe`; expect SmartScreen warnings unless signed with a trusted code-signing certificate and reputation is established.
+  - Portable builds are useful for private testing but should not imply durable app-data portability unless the storage path is explicitly designed.
+  - Installer builds are better for normal use once app-data location, updates, and rollback behavior are defined.
+- Packaging prerequisites:
+  - no `file://` dependency for Drive or Gemini workflows
+  - no API keys in renderer code, localStorage, Drive backups, or packaged assets
+  - parser/debug artifacts remain local/private
+  - local app-data path and backup strategy are documented
+  - clean install, upgrade, and uninstall behavior are understood
+  - package output is tested on a clean machine or clean user profile
+- Do not package, sign, notarize, publish, or create installers during early migration stages.
 
 ## Architecture Decisions To Track
 
