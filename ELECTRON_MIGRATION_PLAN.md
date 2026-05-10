@@ -137,6 +137,31 @@ This file should track migration stages, decisions, risks, verification checkpoi
 - Future parser runs should be tracked with immutable run manifests containing run ID, timestamps, app version/checkpoint, source file names and hashes, parser settings, expected count, stage counts, missing/duplicate source numbers, grouped range audits, warnings, output artifact paths, and whether a quiz was saved.
 - Do not change parser logic, OCR normalization, grouped rendering, or save behavior while adding run tracking.
 
+### Future Importer Architecture
+
+- Current PDF ingestion combines source reading, PDF text extraction, OCR fallback, normalization, page grouping, asset extraction, semantic parsing, answer merging, tagging, and debug export generation in the OCR module.
+- Future importer work should introduce source adapters that normalize different input types into a common intermediate block format before semantic parsing.
+- Candidate adapters:
+  - PDF adapter: preserves text-layer output, OCR output, page geometry, source item numbers, stem crops, figures, and lab/table crops.
+  - DOCX adapter: extracts paragraphs, headings, tables, embedded images, and source document structure.
+  - Pasted text adapter: preserves paragraph breaks, user-provided section labels, and optional answer-key regions.
+  - Anki adapter: maps cards, fields, tags, media references, and cloze deletions into source blocks without assuming NBME layout.
+  - Audio transcript adapter: preserves timestamps, speaker labels when present, transcript segments, and source file metadata.
+  - Video transcript adapter: preserves timestamps, slide/scene markers when available, transcript segments, and media references.
+  - Lecture notes adapter: preserves headings, lists, tables, images, and section hierarchy.
+- Recommended normalized block model:
+  - `sourceId`, `sourceType`, `sourceName`, `sourceHash`
+  - `blockId`, `blockType` such as `paragraph`, `heading`, `table`, `image`, `stemCrop`, `answerChoice`, `answerKey`, `transcriptSegment`, or `metadata`
+  - `textRaw`, `textNormalized`, `html`, or `rows` depending on block type
+  - `pageNumber`, `itemNumber`, `timestamp`, `sectionPath`, and `order`
+  - `geometry` for page/canvas coordinates when available
+  - `assetRefs` for images, crops, media, or extracted files
+  - `confidence`, `warnings`, and `provenance` describing adapter decisions
+- Importer boundary: source adapters should read files, extract raw content, normalize into blocks, preserve provenance/assets, and report confidence or warnings.
+- Parser boundary: parsers should consume normalized blocks, identify questions, choices, answers, explanations, grouped ranges, tags needed for rendering, and produce structured question candidates.
+- Renderer boundary: renderers should consume structured question data plus render-mode metadata, not raw importer heuristics.
+- Do not implement new adapters, storage, or parser rewrites until the block schema is reviewed against existing PDF fixtures and grouped-question invariants.
+
 ### Stage 9: Design Text/Image/Hybrid Render-Mode Layer
 
 - Define per-question render mode metadata.
