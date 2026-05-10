@@ -33,6 +33,7 @@ Main inline modules:
 - `Quiz`: test-taking engine, timers, answer selection, hints, stem-image rendering, highlighting, and navigation.
 - `Results`: score report, review mode, analytics, and PDF report generation.
 - `App`: study library landing page, source-folder routing, sidebar navigation, modals, search, notes, incorrect, marked, flagged, trash, and test generation.
+- OME PDF pipeline: short high-quality PDF import only, PDF.js text-layer extraction, structure/block preview, concept extraction, concept clustering, selected clusters, deterministic draft preview, review controls, approved-draft JSON export, quiz-object preview, and controlled save into real tests.
 - Anki text-import pipeline: plain-text `.txt` import only, no `.apkg` support, normalized card preview, cloze/basic concept extraction, tag-first clustering, deterministic variant draft preview, review controls, approved-variant JSON export, quiz-object preview, and controlled save into real tests.
 - UWorld DOCX pipeline: DOCX import, normalized blocks, concept extraction, deterministic clustering/deduplication, selected clusters, deterministic draft scaffolds, one-at-a-time Electron-local Gemini refinement, live batch queue controls, review controls, duplicate warnings, coverage summaries, preflight safeguards, approved draft JSON export, quiz-object preview, and controlled save into real tests.
 
@@ -105,6 +106,38 @@ UWorld saves require approved AI-refined drafts, valid quiz-object previews, an 
 
 Live batch refinement is implemented as a conservative one-at-a-time Electron main Gemini queue using the existing `window.nbmeDesktop.ai.refineUWorldDraft(...)` bridge. The queue includes draft-hash caching, duplicate skipping, pause/cancel/retry controls, failure stopping, visible progress, preflight confirmation, duplicate refined-question warnings, and section/topic coverage summaries. Live Gemini validation/testing is intentionally deferred to conserve API credits. Netlify Functions remain transitional/rollback support, and no app-data storage migration has been performed.
 
+## OME Notes Pipeline
+
+Status: OME v1 implementation complete, pending real-world validation.
+
+Current OME flow:
+
+```text
+short high-quality PDF
+→ PDF.js text-layer extraction only
+→ structure/block preview
+→ concept extraction
+→ concept clustering
+→ selected clusters
+→ deterministic draft preview
+→ review controls
+→ approved-draft JSON export
+→ quiz-object preview
+→ controlled save into real tests
+```
+
+Current OME safeguards:
+
+- OME accepts short high-quality PDFs and intentionally does not add OCR fallback in v1.
+- OME preview uses PDF.js text-layer extraction only.
+- `.apkg` is not relevant to OME and remains unsupported only in Anki.
+- OME structure, concept, cluster, draft, review, export, preview, and save logic stay isolated from the NBME PDF parser/OCR/render path, the UWorld DOCX path, and the Anki path.
+- Approved OME drafts only are eligible for export, quiz-object preview, and controlled save.
+- The OME save path requires an explicit OME subfolder target, a nonempty test name, and an inline review confirmation.
+- OME provenance stays separate from UWorld provenance and Anki provenance.
+- No Gemini is used in the OME v1 path yet.
+- OME v1 does not mutate NBME parser/OCR/render behavior.
+
 ## Anki Notes Pipeline
 
 Status: Anki v1 implementation complete, pending real-world validation.
@@ -131,6 +164,7 @@ Current Anki safeguards:
 - The Anki save path requires an explicit Anki subfolder target, a nonempty test name, and an inline review confirmation.
 - Anki provenance is preserved separately from quiz-object preview data.
 - Anki and UWorld pipelines remain isolated.
+- OME and the other source pipelines remain isolated.
 
 ## Historical Debugging Notes
 

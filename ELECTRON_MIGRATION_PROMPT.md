@@ -17,6 +17,8 @@ Ownership: this prompt is operational guidance for Electron work. Durable rules 
 - UWorld v1 implementation complete, pending real-world validation.
 - Anki v1 is implemented in the current app using plain-text `.txt` imports only, cloze/basic concept extraction, tag-first clustering, deterministic variant draft preview, review controls, approved-variant JSON export, quiz-object preview, and controlled save into real tests.
 - Anki v1 intentionally does not use Gemini yet.
+- OME v1 is implemented in the current app using short high-quality PDF imports only, PDF.js text-layer extraction only, structure/block preview, concept extraction, concept clustering, selected clusters, deterministic draft preview, review controls, approved-draft JSON export, quiz-object preview, and controlled save into real tests.
+- OME v1 intentionally does not add OCR fallback and does not use Gemini yet.
 - Live Gemini validation/testing is intentionally deferred to conserve API credits.
 - Netlify deploy credits are limited; avoid Netlify deploys during local Electron iteration.
 - The app is currently private/personal use only.
@@ -29,6 +31,7 @@ Ownership: this prompt is operational guidance for Electron work. Durable rules 
 - Keep the current web/Netlify version working.
 - Preserve parser/debug tooling and local-only debug safeguards.
 - Keep NBME, UWorld, and Anki pipelines isolated from each other.
+- Keep NBME, UWorld, Anki, and OME pipelines isolated from each other.
 - Preserve current Google Drive behavior initially.
 - Preserve Netlify/browser fallback behavior while using Electron main/preload for Electron-local UWorld Gemini refinement.
 - Use staged migration with small verifiable steps.
@@ -88,6 +91,18 @@ Ownership: this prompt is operational guidance for Electron work. Durable rules 
 - No app-data migration has been approved yet.
 
 Anki v1 implementation complete, pending real-world validation.
+
+## OME Notes Guidance
+
+- OME v1 is complete for short high-quality PDF imports, PDF.js text-layer extraction only, structure/block preview, concept extraction, concept clustering, selected clusters, deterministic draft preview, review, approved-draft JSON export, quiz-object preview, and controlled save.
+- OME v1 intentionally does not add OCR fallback.
+- OME v1 does not use Gemini yet.
+- Approved OME drafts only are eligible for export, quiz-object preview, and save.
+- The OME save flow requires an explicit OME subfolder target, a nonempty test name, and a review confirmation checkbox.
+- Preserve OME provenance separately from UWorld provenance and Anki provenance.
+- Keep the OME path isolated from the NBME parser/OCR/render path, the UWorld DOCX path, and the Anki path.
+
+OME v1 implementation complete, pending real-world validation.
 
 ## Storage Strategy
 

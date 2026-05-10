@@ -58,6 +58,7 @@ Main inlined modules:
 - `Results`: post-submit score page, review mode, analytics, and PDF report generation.
 - `App`: landing page, source-folder routing, sidebar navigation, home/search/notes/incorrect/marked/flagged/trash views, subfolders, modals, and test generation.
 - Anki text-import pipeline: plain-text `.txt` import only, normalized card preview, cloze/basic concept extraction, tag-first clustering, deterministic variant draft preview, review controls, approved-variant JSON export, quiz-object preview, and controlled save into real tests.
+- OME PDF pipeline: short high-quality PDF import only, PDF.js text-layer extraction only, structure/block preview, concept extraction, concept clustering, selected clusters, deterministic draft preview, review controls, approved-draft JSON export, quiz-object preview, and controlled save into real tests.
 
 ## Current Stable Parser And Rendering State
 
@@ -218,6 +219,46 @@ Unresolved validation tasks:
 - Verify controlled save into a real test with approved variants only.
 - Verify approved-variant JSON export and quiz-object preview with mixed note types and cloze groups.
 - Confirm no cross-talk with the UWorld DOCX pipeline.
+
+## OME Notes Pipeline Status
+
+Status: OME v1 implementation complete, pending real-world validation.
+
+Current flow:
+
+```text
+short high-quality PDF
+→ PDF.js text-layer extraction only
+→ structure/block preview
+→ concept extraction
+→ concept clustering
+→ selected clusters
+→ deterministic draft preview
+→ review controls
+→ approved-draft JSON export
+→ quiz-object preview
+→ controlled save into real tests
+```
+
+Current safeguards:
+
+- OME accepts short high-quality PDFs in v1.
+- OME intentionally does not add OCR fallback in v1.
+- OME preview uses PDF.js text-layer extraction only.
+- OME structure, concept, cluster, draft, review, export, preview, and save logic stay isolated from the NBME PDF parser/OCR/render path, the UWorld DOCX path, and the Anki path.
+- Approved OME drafts only are eligible for export, quiz-object preview, and controlled save.
+- The OME save flow requires an explicit OME subfolder target, a nonempty test name, and an inline review confirmation.
+- OME provenance stays separate from UWorld provenance and Anki provenance.
+- No Gemini is used in OME v1 yet.
+- OME v1 does not modify NBME parser/OCR/render behavior.
+
+Unresolved validation tasks:
+
+- Verify real short OME PDFs import cleanly with PDF.js text-layer extraction only.
+- Verify structure/block preview on PDFs with columns, tables, charts, algorithms, and diagrams.
+- Verify concept extraction and clustering do not cross into UWorld or Anki paths.
+- Verify selected-cluster draft previews, review controls, approved-draft JSON export, quiz-object preview, and controlled save into a real test.
+- Confirm the no-OCR-fallback rule remains intact on real OME fixtures.
 
 Current UWorld batch flow:
 
