@@ -1682,6 +1682,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
     </div>
     <div class="notes-import-section-title">Question Draft Preview</div>
     <div id="notes-draft-status" class="notes-import-summary">Draft scaffolds will appear after concepts are extracted. They require human or AI review before use.</div>
+    <div id="notes-ai-status" class="notes-import-summary" style="display:none;"></div>
     <div id="notes-draft-preview" class="notes-draft-preview">
       <div class="notes-import-empty">No question drafts generated.</div>
     </div>
@@ -6943,6 +6944,7 @@ const App = (() => {
     const modal = document.getElementById('modal-notes-import');
     if (!modal) return;
     modal.style.display = 'flex';
+    refreshNotesAiStatus();
   }
 
   function closeNotesImportPreview() {
@@ -6966,6 +6968,34 @@ const App = (() => {
     if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concepts extracted.</div>';
     if (draftStatus) draftStatus.textContent = 'Draft scaffolds will appear after concepts are extracted. They require human or AI review before use.';
     if (draftPreview) draftPreview.innerHTML = '<div class="notes-import-empty">No question drafts generated.</div>';
+    refreshNotesAiStatus();
+  }
+
+  async function refreshNotesAiStatus() {
+    const el = document.getElementById('notes-ai-status');
+    const getStatus = window.nbmeDesktop?.ai?.getStatus;
+    if (!el) return;
+    if (typeof getStatus !== 'function') {
+      el.style.display = 'none';
+      el.textContent = '';
+      return;
+    }
+    el.style.display = 'block';
+    el.style.color = '#5a6a7a';
+    el.textContent = 'Desktop AI status: checking local boundary...';
+    try {
+      const status = await getStatus();
+      if (!status?.desktopMode) {
+        el.style.display = 'none';
+        el.textContent = '';
+        return;
+      }
+      const keyText = status.hasApiKey ? 'API key detected in Electron main process' : 'no API key detected in Electron main process';
+      el.textContent = `Desktop AI status: ${status.provider || 'unknown'} ${status.model || ''}; ${keyText}. No AI requests are made from this preview.`;
+    } catch (_) {
+      el.style.color = '#8a5a00';
+      el.textContent = 'Desktop AI status unavailable. No AI requests are made from this preview.';
+    }
   }
 
   async function previewNotesDocx(input) {

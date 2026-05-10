@@ -1,12 +1,21 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 
 const DEFAULT_DEV_URL = 'http://localhost:8888';
 const devUrl = process.env.NBME_ELECTRON_URL || DEFAULT_DEV_URL;
 
+ipcMain.handle('nbme:ai:get-status', async () => ({
+  available: true,
+  provider: 'gemini',
+  model: 'gemini-2.5-flash',
+  hasApiKey: !!process.env.GEMINI_API_KEY,
+  desktopMode: true
+}));
+
 // Main process boundary:
 // Owns Electron window lifecycle and loading the existing HTTP-served app only.
-// App logic, parser/OCR/render behavior, Gemini, Drive, and storage remain in index.html.
+// App logic, parser/OCR/render behavior, Drive, and storage remain in index.html.
+// AI status is owned here so future Gemini calls can remain outside the renderer.
 function createWindow() {
   const win = new BrowserWindow({
     width: 1440,
