@@ -1872,6 +1872,10 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
     <div id="ome-draft-preview" class="notes-draft-preview">
       <div class="notes-import-empty">No OME draft scaffolds generated.</div>
     </div>
+    <div class="modal-actions" style="justify-content:flex-start;margin-top:10px;">
+      <button type="button" class="btn-modal" id="ome-export-approved" onclick="App.exportApprovedOmeDraftsJson()" disabled>Export Approved OME Drafts JSON</button>
+    </div>
+    <div id="ome-draft-export-error" class="notes-import-summary" style="display:none;color:#8a5a00;">Export readiness will appear after OME drafts are reviewed.</div>
     <div class="modal-actions">
       <button type="button" class="btn-modal" onclick="App.clearOmePdfImportPreview()">Clear</button>
       <button type="button" class="btn-modal primary" onclick="App.closeOmePdfImportPreview()">Done</button>
@@ -7192,6 +7196,8 @@ const App = (() => {
     if (targetInput) targetInput.value = '0';
     if (draftStatus) draftStatus.textContent = 'Choose OME clusters to generate deterministic draft scaffolds.';
     if (draftPreview) draftPreview.innerHTML = '<div class="notes-import-empty">No OME draft scaffolds generated.</div>';
+    setOmeDraftExportError('');
+    updateOmeDraftExportButton();
   }
 
   function updateOmeStructurePreview() {
@@ -8373,6 +8379,7 @@ const App = (() => {
     _omeImportPreview.selectedClusterIds = selectedClusterIds;
     _omeImportPreview.targetQuestionCount = targetQuestionCount;
     _omeImportPreview.draftResult = draftResult;
+    setOmeDraftExportError('');
     renderOmeDraftPreview(draftResult);
   }
 
@@ -8405,6 +8412,7 @@ const App = (() => {
     if (!_omeImportPreview?.draftResult?.reviewStatus) return;
     if (!draftId || !['pending', 'approved', 'rejected'].includes(status)) return;
     _omeImportPreview.draftResult.reviewStatus[draftId] = status;
+    setOmeDraftExportError('');
     renderOmeDraftPreview(_omeImportPreview.draftResult);
   }
 
@@ -8414,6 +8422,167 @@ const App = (() => {
       counts[status] = (counts[status] || 0) + 1;
       return counts;
     }, { pending: 0, approved: 0, rejected: 0 });
+  }
+
+  function setOmeDraftExportError(message) {
+    const el = document.getElementById('ome-draft-export-error');
+    if (!el) return;
+    if (message) {
+      el.style.display = 'block';
+      el.textContent = message;
+    } else {
+      el.style.display = 'none';
+      el.textContent = '';
+    }
+  }
+
+  function getApprovedOmeDrafts() {
+    const drafts = Array.isArray(_omeImportPreview?.draftResult?.drafts) ? _omeImportPreview.draftResult.drafts : [];
+    const reviewStatus = _omeImportPreview?.draftResult?.reviewStatus || {};
+    return drafts
+      .filter(draft => reviewStatus[draft.id] === 'approved')
+      .map(draft => ({ draft, reviewStatus: 'approved' }));
+  }
+
+  function updateOmeDraftExportButton() {
+    const btn = document.getElementById('ome-export-approved');
+    if (!btn) return;
+    const approvedCount = getApprovedOmeDrafts().length;
+    btn.disabled = approvedCount === 0;
+    btn.textContent = approvedCount > 0 ? `Export Approved OME Drafts JSON (${approvedCount})` : 'Export Approved OME Drafts JSON';
+    btn.title = approvedCount > 0
+      ? 'Export approved OME draft scaffolds as JSON.'
+      : 'Approve at least one OME draft before exporting.';
+  }
+
+  function validateApprovedOmeDraftExportPayload(payload) {
+    const errors = [];
+    const labels = ['A', 'B', 'C', 'D', 'E'];
+
+    if (payload?.exportType !== 'ome-approved-draft-scaffolds-preview') errors.push('Invalid export type.');
+    if (payload?.exportVersion !== 1) errors.push('Invalid export version.');
+    if (!nonemptyString(payload?.exportedAt)) errors.push('Missing export timestamp.');
+    if (!Number.isFinite(payload?.approvedCount)) errors.push('Missing approved count.');
+    if (!payload?.source || payload.source.sourceType !== 'ome-pdf') errors.push('Missing OME source metadata.');
+    if (!nonemptyString(payload?.source?.sourceName)) errors.push('Missing source name.');
+    if (!nonemptyString(payload?.source?.sourceHash)) errors.push('Missing source hash.');
+    if (payload?.approvedCount !== payload?.drafts?.length) errors.push('Approved count does not match the exported draft array.');
+    if (!Array.isArray(payload?.drafts) || payload.drafts.length < 1) errors.push('Draft array is empty.');
+
+    (payload?.drafts || []).forEach((entry, idx) => {
+      const prefix = `Draft ${idx + 1}`;
+      if (entry.reviewStatus !== 'approved') errors.push(`${prefix}: review status is not approved.`);
+      if (!nonemptyString(entry.draftId)) errors.push(`${prefix}: missing draft ID.`);
+      if (!nonemptyString(entry.clusterId)) errors.push(`${prefix}: missing cluster ID.`);
+      if (!Number.isFinite(entry.clusterIndex)) errors.push(`${prefix}: missing cluster index.`);
+      if (!nonemptyString(entry.sourceName)) errors.push(`${prefix}: missing source name.`);
+      if (!nonemptyString(entry.sourceHash)) errors.push(`${prefix}: missing source hash.`);
+      if (!nonemptyString(entry.variantType)) errors.push(`${prefix}: missing variant type.`);
+      if (!nonemptyString(entry.stemScaffold)) errors.push(`${prefix}: missing stem scaffold.`);
+      if (!nonemptyString(entry.teachingPoint)) errors.push(`${prefix}: missing teaching point.`);
+      if (!labels.includes(entry.provisionalCorrectAnswer)) errors.push(`${prefix}: provisional correct answer must be A-E.`);
+      if (!Array.isArray(entry.sourcePages) || !entry.sourcePages.length || entry.sourcePages.some(value => !Number.isFinite(Number(value)))) errors.push(`${prefix}: missing source page provenance.`);
+      if (!Array.isArray(entry.sourceBlockIds) || !entry.sourceBlockIds.length || entry.sourceBlockIds.some(id => !nonemptyString(id))) errors.push(`${prefix}: missing source block IDs.`);
+      if (!Array.isArray(entry.sourceBlockOrders) || !entry.sourceBlockOrders.length || entry.sourceBlockOrders.some(order => !Number.isFinite(Number(order)))) errors.push(`${prefix}: missing source block orders.`);
+      if (!Array.isArray(entry.sectionPath)) errors.push(`${prefix}: missing section path provenance.`);
+      if (!Array.isArray(entry.sourceSnippets) || !entry.sourceSnippets.length) {
+        errors.push(`${prefix}: missing source snippets provenance.`);
+      } else {
+        entry.sourceSnippets.forEach((snippet, snippetIdx) => {
+          const snippetPrefix = `${prefix} source snippet ${snippetIdx + 1}`;
+          if (!nonemptyString(snippet?.blockId)) errors.push(`${snippetPrefix}: missing block ID.`);
+          if (!nonemptyString(snippet?.blockType)) errors.push(`${snippetPrefix}: missing block type.`);
+          if (!Number.isFinite(Number(snippet?.pageNumber))) errors.push(`${snippetPrefix}: missing page number.`);
+          if (!Number.isFinite(Number(snippet?.order))) errors.push(`${snippetPrefix}: missing order.`);
+          if (!nonemptyString(snippet?.sourceSnippet)) errors.push(`${snippetPrefix}: missing source snippet text.`);
+        });
+      }
+      if (!Array.isArray(entry.warnings)) errors.push(`${prefix}: missing warnings provenance.`);
+      if (!Array.isArray(entry.placeholderDistractorRationales)) errors.push(`${prefix}: missing distractor rationale placeholders.`);
+      if (entry.placeholderDistractorRationales?.length !== 4) errors.push(`${prefix}: distractor rationale placeholders must contain four entries.`);
+      if (!Array.isArray(entry.choices) || entry.choices.length !== 5) {
+        errors.push(`${prefix}: must contain exactly five choices.`);
+      } else {
+        entry.choices.forEach((choice, choiceIdx) => {
+          if (choice?.label !== labels[choiceIdx]) errors.push(`${prefix}: choice labels must be A-E in order.`);
+          if (!nonemptyString(choice?.text)) errors.push(`${prefix}: choice ${labels[choiceIdx]} is missing text.`);
+          if (!nonemptyString(choice?.rationale)) errors.push(`${prefix}: choice ${labels[choiceIdx]} is missing rationale.`);
+        });
+      }
+    });
+
+    return { ok: errors.length === 0, errors };
+  }
+
+  function exportApprovedOmeDraftsJson() {
+    const approved = getApprovedOmeDrafts();
+    if (!approved.length) {
+      const message = 'Approve at least one OME draft before exporting.';
+      toast(message, 8000);
+      setOmeDraftExportError(message);
+      updateOmeDraftExportButton();
+      return;
+    }
+
+    const sourceName = _omeImportPreview?.sourceName || approved[0]?.draft?.sourceName || '';
+    const sourceHash = _omeImportPreview?.sourceHash || approved[0]?.draft?.sourceHash || '';
+    const payload = {
+      exportType: 'ome-approved-draft-scaffolds-preview',
+      exportVersion: 1,
+      exportedAt: new Date().toISOString(),
+      approvedCount: approved.length,
+      source: {
+        sourceType: 'ome-pdf',
+        sourceName,
+        sourceHash
+      },
+      drafts: approved.map(({ draft }) => ({
+        reviewStatus: 'approved',
+        draftId: draft.id,
+        clusterId: draft.clusterId,
+        clusterIndex: draft.clusterIndex,
+        clusterType: draft.clusterType,
+        clusterLabel: draft.clusterLabel,
+        sourceName: draft.sourceName || sourceName,
+        sourceHash: draft.sourceHash || sourceHash,
+        sourcePages: Array.isArray(draft.sourcePages) ? draft.sourcePages.slice() : [],
+        sourceBlockIds: Array.isArray(draft.sourceBlockIds) ? draft.sourceBlockIds.slice() : [],
+        sourceBlockOrders: Array.isArray(draft.sourceBlockOrders) ? draft.sourceBlockOrders.slice() : [],
+        sectionPath: Array.isArray(draft.sectionPath) ? draft.sectionPath.slice() : [],
+        variantType: draft.variantType,
+        stemScaffold: draft.stemScaffold,
+        choices: Array.isArray(draft.choices) ? draft.choices.map(choice => ({ ...choice })) : [],
+        provisionalCorrectAnswer: draft.provisionalCorrectAnswer,
+        teachingPoint: draft.teachingPoint,
+        placeholderDistractorRationales: Array.isArray(draft.placeholderDistractorRationales) ? draft.placeholderDistractorRationales.slice() : [],
+        warnings: Array.isArray(draft.warnings) ? draft.warnings.slice() : [],
+        sourceSnippets: Array.isArray(draft.sourceSnippets) ? draft.sourceSnippets.map(snippet => ({
+          ...(snippet && typeof snippet === 'object' ? snippet : {})
+        })) : [],
+        sourceProof: draft.sourceProof ? { ...draft.sourceProof } : null
+      }))
+    };
+
+    const validation = validateApprovedOmeDraftExportPayload(payload);
+    if (!validation.ok) {
+      const message = `Approved OME draft export blocked: ${validation.errors[0]}`;
+      toast(message, 8000);
+      setOmeDraftExportError(message);
+      updateOmeDraftExportButton();
+      return;
+    }
+
+    setOmeDraftExportError('');
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const safeName = (sourceName || 'ome-pdf').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'ome-pdf';
+    a.href = url;
+    a.download = `${safeName}-approved-ome-drafts-preview.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   function renderOmeDraftPreview(result) {
@@ -8436,6 +8605,7 @@ const App = (() => {
         ? `Selected ${selectedClusterCount} cluster${selectedClusterCount === 1 ? '' : 's'}, but no draft scaffolds were generated.`
         : 'Choose OME clusters to generate deterministic draft scaffolds.';
       preview.innerHTML = '<div class="notes-import-empty">No OME draft scaffolds generated.</div>';
+      updateOmeDraftExportButton();
       return;
     }
 
@@ -8525,6 +8695,7 @@ const App = (() => {
         `;
       }).join('')}
     `;
+    updateOmeDraftExportButton();
   }
 
   function buildOmePageStructure({ pageNumber, textContent, sourceName, sourceHash, headingStack, orderStart }) {
@@ -8666,6 +8837,7 @@ const App = (() => {
       _omeImportPreview = null;
       if (status) status.textContent = 'Unsupported file type. Choose one .pdf file from the OME source folder.';
       if (preview) preview.innerHTML = '<div class="notes-import-empty">Only .pdf files are accepted.</div>';
+      setOmeDraftExportError('');
       renderOmeConceptPreview(null);
       renderOmeClusterPreview(null);
       renderOmeDraftPreview(null);
@@ -8674,6 +8846,7 @@ const App = (() => {
 
     if (status) status.textContent = 'Reading OME PDF structure with PDF.js...';
     if (preview) preview.innerHTML = '<div class="notes-import-empty">Extracting page-ordered text blocks...</div>';
+    setOmeDraftExportError('');
 
     try {
       const structure = await extractOmePdfStructure(file);
@@ -14428,6 +14601,7 @@ const App = (() => {
     clearOmePdfImportPreview,
     previewOmePdfImport,
     setOmeDraftReviewStatus,
+    exportApprovedOmeDraftsJson,
     updateOmeClusterSelection,
     selectAllOmeClusters,
     deselectAllOmeClusters,
