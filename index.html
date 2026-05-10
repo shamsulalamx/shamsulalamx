@@ -1681,6 +1681,12 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
       <div class="notes-import-empty">No concepts extracted.</div>
     </div>
     <div class="notes-import-section-title">Concept Clustering Preview</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0 8px;">
+      <button type="button" class="btn-card" onclick="App.selectAllNotesClusters()">Select All</button>
+      <button type="button" class="btn-card" onclick="App.deselectAllNotesClusters()">Deselect All</button>
+      <label class="form-label" style="margin:0;">Target question count</label>
+      <input type="number" class="form-input" id="notes-target-question-count" min="1" step="1" style="width:110px;" onchange="App.updateNotesClusterSelection()" oninput="App.updateNotesClusterSelection()">
+    </div>
     <div id="notes-cluster-status" class="notes-import-summary">Clusters will appear after concepts are extracted.</div>
     <div id="notes-cluster-preview" class="notes-concept-preview">
       <div class="notes-import-empty">No clusters generated.</div>
@@ -6997,6 +7003,7 @@ const App = (() => {
     const conceptPreview = document.getElementById('notes-concept-preview');
     const clusterStatus = document.getElementById('notes-cluster-status');
     const clusterPreview = document.getElementById('notes-cluster-preview');
+    const targetQuestionCount = document.getElementById('notes-target-question-count');
     const draftStatus = document.getElementById('notes-draft-status');
     const draftPreview = document.getElementById('notes-draft-preview');
     const quizObjectStatus = document.getElementById('notes-quiz-object-status');
@@ -7012,6 +7019,7 @@ const App = (() => {
     if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concepts extracted.</div>';
     if (clusterStatus) clusterStatus.textContent = 'Clusters will appear after concepts are extracted.';
     if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No clusters generated.</div>';
+    if (targetQuestionCount) targetQuestionCount.value = '';
     if (draftStatus) draftStatus.textContent = 'Draft scaffolds will appear after concepts are extracted. They require human or AI review before use.';
     if (draftPreview) draftPreview.innerHTML = '<div class="notes-import-empty">No question drafts generated.</div>';
     if (quizObjectStatus) quizObjectStatus.textContent = 'Approve AI-refined drafts to preview internal quiz-question objects. Nothing is saved.';
@@ -7189,6 +7197,7 @@ const App = (() => {
     const conceptPreview = document.getElementById('notes-concept-preview');
     const clusterStatus = document.getElementById('notes-cluster-status');
     const clusterPreview = document.getElementById('notes-cluster-preview');
+    const targetQuestionCount = document.getElementById('notes-target-question-count');
     const draftStatus = document.getElementById('notes-draft-status');
     const draftPreview = document.getElementById('notes-draft-preview');
     if (status) {
@@ -7206,6 +7215,7 @@ const App = (() => {
       clusterStatus.style.color = '#5a6a7a';
     }
     if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No clusters generated.</div>';
+    if (targetQuestionCount) targetQuestionCount.value = '';
     if (draftStatus) {
       draftStatus.textContent = 'Waiting for extracted concepts...';
       draftStatus.style.color = '#5a6a7a';
@@ -7215,11 +7225,14 @@ const App = (() => {
       const blocks = await extractDocxNotesBlocks(file);
       const concepts = extractNotesConcepts(blocks);
       const clusterResult = clusterNotesConcepts(concepts, blocks);
-      const drafts = buildNotesQuestionDrafts(clusterResult.dedupedConcepts);
-      _notesImportPreview = { fileName: file.name, blocks, rawConcepts: concepts, concepts: clusterResult.dedupedConcepts, conceptClusters: clusterResult.clusters, dedupedConcepts: clusterResult.dedupedConcepts, drafts };
+      if (targetQuestionCount) targetQuestionCount.value = String(Math.min(clusterResult.clusters.length, 25) || '');
+      const selectedClusterIds = defaultSelectedClusterIds(clusterResult.clusters);
+      const selectedConcepts = selectedConceptsForClusters(clusterResult.clusters, selectedClusterIds);
+      const drafts = buildNotesQuestionDrafts(selectedConcepts);
+      _notesImportPreview = { fileName: file.name, blocks, rawConcepts: concepts, concepts: clusterResult.dedupedConcepts, conceptClusters: clusterResult.clusters, selectedClusterIds, dedupedConcepts: clusterResult.dedupedConcepts, drafts };
       renderNotesImportPreview(blocks, file.name);
       renderNotesConceptPreview(concepts);
-      renderNotesClusterPreview(clusterResult);
+      renderNotesClusterPreview();
       renderNotesQuestionDraftPreview(drafts);
     } catch (err) {
       _notesImportPreview = null;
@@ -7238,6 +7251,7 @@ const App = (() => {
         clusterStatus.style.color = '#c0392b';
       }
       if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No clusters generated.</div>';
+      if (targetQuestionCount) targetQuestionCount.value = '';
       if (draftStatus) {
         draftStatus.textContent = 'Question draft preview skipped because no concepts were available.';
         draftStatus.style.color = '#c0392b';
@@ -7716,16 +7730,97 @@ const App = (() => {
     return { rawConceptCount: concepts.length, dedupedConcepts, clusters };
   }
 
+  function targetQuestionCountValue() {
+    const value = parseInt(document.getElementById('notes-target-question-count')?.value || '', 10);
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }
+
+  function defaultSelectedClusterIds(clusters) {
+    const target = targetQuestionCountValue() || Math.min(clusters.length, 25);
+    return clusters
+      .slice()
+      .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
+      .slice(0, target)
+      .map(cluster => cluster.clusterId);
+  }
+
+  function selectedConceptsForClusters(clusters, selectedIds) {
+    const selected = new Set(selectedIds || []);
+    return clusters
+      .filter(cluster => selected.has(cluster.clusterId))
+      .map(cluster => Object.assign({}, cluster.representativeConcept, {
+        conceptId: cluster.representativeConcept?.conceptId || cluster.representativeConceptId,
+        sourceConceptIds: cluster.sourceConceptIds.slice(),
+        sourceBlockIds: cluster.sourceBlockIds.slice(),
+        sourceSnippet: cluster.mergedSnippets?.[0] || cluster.representativeConcept?.sourceSnippet || '',
+        testedFact: cluster.educationalObjective,
+        topic: cluster.title,
+        warnings: Array.from(new Set((cluster.representativeConcept?.warnings || []).concat(cluster.warnings || []))),
+        clusterId: cluster.clusterId,
+        representativeConceptId: cluster.representativeConceptId
+      }));
+  }
+
+  function refreshNotesDraftsFromSelectedClusters() {
+    if (!_notesImportPreview?.conceptClusters) return;
+    const selected = new Set(_notesImportPreview.selectedClusterIds || []);
+    const target = targetQuestionCountValue();
+    if (target && selected.size > target) {
+      const rankedSelected = _notesImportPreview.conceptClusters
+        .filter(cluster => selected.has(cluster.clusterId))
+        .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
+        .slice(0, target)
+        .map(cluster => cluster.clusterId);
+      _notesImportPreview.selectedClusterIds = rankedSelected;
+    }
+    const selectedConcepts = selectedConceptsForClusters(_notesImportPreview.conceptClusters, _notesImportPreview.selectedClusterIds || []);
+    _notesImportPreview.concepts = selectedConcepts;
+    _notesImportPreview.drafts = buildNotesQuestionDrafts(selectedConcepts);
+    renderNotesQuestionDraftPreview(_notesImportPreview.drafts);
+  }
+
+  function updateNotesClusterSelection() {
+    if (!_notesImportPreview?.conceptClusters) return;
+    const checkedIds = Array.from(document.querySelectorAll('.notes-cluster-include'))
+      .filter(input => input.checked)
+      .map(input => input.value);
+    _notesImportPreview.selectedClusterIds = checkedIds;
+    refreshNotesDraftsFromSelectedClusters();
+    renderNotesClusterPreview();
+  }
+
+  function selectAllNotesClusters() {
+    if (!_notesImportPreview?.conceptClusters) return;
+    const target = targetQuestionCountValue();
+    const clusters = _notesImportPreview.conceptClusters.slice().sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+    _notesImportPreview.selectedClusterIds = (target ? clusters.slice(0, target) : clusters).map(cluster => cluster.clusterId);
+    refreshNotesDraftsFromSelectedClusters();
+    renderNotesClusterPreview();
+  }
+
+  function deselectAllNotesClusters() {
+    if (!_notesImportPreview?.conceptClusters) return;
+    _notesImportPreview.selectedClusterIds = [];
+    refreshNotesDraftsFromSelectedClusters();
+    renderNotesClusterPreview();
+  }
+
   function renderNotesClusterPreview(result) {
+    if (result && _notesImportPreview) {
+      _notesImportPreview.conceptClusters = result.clusters || [];
+      _notesImportPreview.dedupedConcepts = result.dedupedConcepts || [];
+    }
     const status = document.getElementById('notes-cluster-status');
     const preview = document.getElementById('notes-cluster-preview');
-    const rawCount = result?.rawConceptCount || 0;
-    const dedupedCount = result?.dedupedConcepts?.length || 0;
-    const clusters = result?.clusters || [];
+    const clusters = _notesImportPreview?.conceptClusters || result?.clusters || [];
+    const selectedIds = new Set(_notesImportPreview?.selectedClusterIds || []);
+    const rawCount = result?.rawConceptCount || _notesImportPreview?.rawConcepts?.length || 0;
+    const dedupedCount = result?.dedupedConcepts?.length || _notesImportPreview?.dedupedConcepts?.length || 0;
+    const selectedCount = selectedIds.size;
     const warningCount = clusters.filter(cluster => cluster.warnings?.length).length;
     if (status) {
       status.style.color = '#5a6a7a';
-      status.textContent = `${rawCount} raw concept${rawCount === 1 ? '' : 's'} reduced to ${dedupedCount} deduplicated concept${dedupedCount === 1 ? '' : 's'} across ${clusters.length} educational-objective cluster${clusters.length === 1 ? '' : 's'}. ${warningCount} cluster${warningCount === 1 ? '' : 's'} flagged for review. Draft previews use the deduplicated representatives. Nothing was saved.`;
+      status.textContent = `${rawCount} raw concept${rawCount === 1 ? '' : 's'} reduced to ${dedupedCount} deduplicated concept${dedupedCount === 1 ? '' : 's'} across ${clusters.length} educational-objective cluster${clusters.length === 1 ? '' : 's'}. Selected: ${selectedCount}; estimated drafts: ${selectedCount}. ${warningCount} cluster${warningCount === 1 ? '' : 's'} flagged for review. Nothing was saved.`;
     }
     if (!preview) return;
     if (!clusters.length) {
@@ -7737,9 +7832,11 @@ const App = (() => {
         ? `<div>${cluster.warnings.map(w => `<span class="notes-concept-warning">${escapeHTML(w)}</span>`).join('')}</div>`
         : '';
       const snippets = (cluster.mergedSnippets || []).slice(0, 3).map(snippet => `<div class="notes-concept-snippet">${escapeHTML(snippet)}</div>`).join('');
+      const checked = selectedIds.has(cluster.clusterId) ? 'checked' : '';
       return `<details class="notes-concept-card" ${idx < 5 ? 'open' : ''}>
         <summary class="notes-concept-summary">
           <div class="notes-concept-head">
+            <input type="checkbox" class="notes-cluster-include" value="${escapeHTML(cluster.clusterId)}" onchange="App.updateNotesClusterSelection()" ${checked} onclick="event.stopPropagation()">
             <span class="notes-concept-topic">${escapeHTML(cluster.title)}</span>
             <span class="notes-concept-confidence">${cluster.sourceConceptIds.length} source concept${cluster.sourceConceptIds.length === 1 ? '' : 's'}</span>
           </div>
@@ -9532,6 +9629,9 @@ const App = (() => {
     previewNotesDocx,
     refineNotesDraft,
     setRefinedDraftReviewStatus,
+    updateNotesClusterSelection,
+    selectAllNotesClusters,
+    deselectAllNotesClusters,
     exportApprovedRefinedDraftsJson,
     createTestFromApprovedRefinedDrafts,
     updateApprovedDraftCreateTestButton,
