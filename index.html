@@ -1853,8 +1853,24 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
     </div>
     <div class="notes-import-section-title">OME Cluster Preview</div>
     <div id="ome-cluster-status" class="notes-import-summary">Clusters will appear after OME concept candidates are extracted.</div>
+    <div class="notes-draft-card" style="margin-top:10px;">
+      <div class="notes-draft-title">Cluster Selection</div>
+      <div class="notes-draft-meta">Include or exclude clusters before generating deterministic draft scaffolds.</div>
+      <div class="notes-draft-body" style="display:flex;flex-wrap:wrap;gap:8px;align-items:end;">
+        <button type="button" class="btn-card" onclick="App.selectAllOmeClusters()">Select All</button>
+        <button type="button" class="btn-card" onclick="App.deselectAllOmeClusters()">Deselect All</button>
+        <label class="form-label" style="margin:0;">Target question count</label>
+        <input type="number" class="form-input" id="ome-draft-target" min="0" step="1" value="0" oninput="App.updateOmeClusterSelection()">
+        <span id="ome-selection-status" class="notes-import-summary" style="flex:1;min-width:220px;margin:0;">No OME clusters selected yet.</span>
+      </div>
+    </div>
     <div id="ome-cluster-preview" class="notes-draft-preview">
       <div class="notes-import-empty">No OME clusters generated.</div>
+    </div>
+    <div class="notes-import-section-title">OME Draft Preview</div>
+    <div id="ome-draft-status" class="notes-import-summary">Choose OME clusters to generate deterministic draft scaffolds.</div>
+    <div id="ome-draft-preview" class="notes-draft-preview">
+      <div class="notes-import-empty">No OME draft scaffolds generated.</div>
     </div>
     <div class="modal-actions">
       <button type="button" class="btn-modal" onclick="App.clearOmePdfImportPreview()">Clear</button>
@@ -7144,6 +7160,7 @@ const App = (() => {
     updateOmeStructurePreview();
     renderOmeConceptPreview(_omeImportPreview?.conceptResult || null);
     renderOmeClusterPreview(_omeImportPreview?.conceptResult?.clusterResult || null);
+    renderOmeDraftPreview(_omeImportPreview?.draftResult || null);
   }
 
   function closeOmePdfImportPreview() {
@@ -7160,6 +7177,10 @@ const App = (() => {
     const conceptPreview = document.getElementById('ome-concept-preview');
     const clusterStatus = document.getElementById('ome-cluster-status');
     const clusterPreview = document.getElementById('ome-cluster-preview');
+    const selectionStatus = document.getElementById('ome-selection-status');
+    const targetInput = document.getElementById('ome-draft-target');
+    const draftStatus = document.getElementById('ome-draft-status');
+    const draftPreview = document.getElementById('ome-draft-preview');
     if (input) input.value = '';
     if (status) status.textContent = 'Choose one .pdf file from the OME source folder.';
     if (preview) preview.innerHTML = '<div class="notes-import-empty">No OME structure preview loaded.</div>';
@@ -7167,6 +7188,10 @@ const App = (() => {
     if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No OME concept candidates extracted.</div>';
     if (clusterStatus) clusterStatus.textContent = 'Clusters will appear after OME concept candidates are extracted.';
     if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No OME clusters generated.</div>';
+    if (selectionStatus) selectionStatus.textContent = 'No OME clusters selected yet.';
+    if (targetInput) targetInput.value = '0';
+    if (draftStatus) draftStatus.textContent = 'Choose OME clusters to generate deterministic draft scaffolds.';
+    if (draftPreview) draftPreview.innerHTML = '<div class="notes-import-empty">No OME draft scaffolds generated.</div>';
   }
 
   function updateOmeStructurePreview() {
@@ -7967,11 +7992,25 @@ const App = (() => {
   function renderOmeClusterPreview(result) {
     const status = document.getElementById('ome-cluster-status');
     const preview = document.getElementById('ome-cluster-preview');
+    const selectionStatus = document.getElementById('ome-selection-status');
     if (!status || !preview) return;
 
-    const clusters = Array.isArray(result?.clusters) ? result.clusters : [];
+    const clusterResult = result || _omeImportPreview?.conceptResult?.clusterResult || null;
+    const clusters = Array.isArray(clusterResult?.clusters) ? clusterResult.clusters : [];
+    if (_omeImportPreview && clusterResult) {
+      _omeImportPreview.conceptResult = _omeImportPreview.conceptResult || {};
+      _omeImportPreview.conceptResult.clusterResult = clusterResult;
+      if (!Array.isArray(_omeImportPreview.selectedClusterIds)) {
+        _omeImportPreview.selectedClusterIds = clusters.map(cluster => cluster.id);
+      }
+    }
+    const selectedIds = new Set(getOmeSelectedClusterIds());
+    const selectedCount = selectedIds.size;
+    const targetCount = getOmeDraftTargetQuestionCount();
+    const draftCount = Number(_omeImportPreview?.draftResult?.draftCount || 0);
     if (!clusters.length) {
       status.textContent = 'Clusters will appear after OME concept candidates are extracted.';
+      if (selectionStatus) selectionStatus.textContent = 'No OME clusters selected yet.';
       preview.innerHTML = '<div class="notes-import-empty">No OME clusters generated.</div>';
       return;
     }
@@ -7980,14 +8019,25 @@ const App = (() => {
       counts[cluster.clusterType] = (counts[cluster.clusterType] || 0) + 1;
       return counts;
     }, {});
-    status.textContent = `${result.rawConceptCount} raw OME concept candidate${result.rawConceptCount === 1 ? '' : 's'} grouped into ${result.clusterCount} cluster${result.clusterCount === 1 ? '' : 's'}. Preview only.`;
+    const targetLabel = targetCount > 0 ? String(targetCount) : 'all';
+    const rawConceptCount = Number(clusterResult?.rawConceptCount || 0);
+    const warningCount = Number(clusterResult?.warningCount || 0);
+    status.textContent = `${rawConceptCount} raw OME concept candidate${rawConceptCount === 1 ? '' : 's'} grouped into ${clusters.length} cluster${clusters.length === 1 ? '' : 's'}. Selected ${selectedCount}; target ${targetLabel}; draft previews ${draftCount}. Preview only.`;
+    if (selectionStatus) {
+      selectionStatus.textContent = `${selectedCount} of ${clusters.length} clusters selected. Target question count: ${targetLabel}. Draft previews: ${draftCount}.`;
+    }
 
     const typeSummary = Object.keys(typeCounts).sort().map(type => `<span><strong>${escapeHTML(type)}</strong> ${escapeHTML(String(typeCounts[type] || 0))}</span>`).join('');
     preview.innerHTML = `
       <div class="notes-import-stats">
-        <span><strong>Raw concepts</strong> ${escapeHTML(String(result.rawConceptCount || 0))}</span>
-        <span><strong>Clusters</strong> ${escapeHTML(String(result.clusterCount || 0))}</span>
-        <span><strong>Warnings</strong> ${escapeHTML(String(result.warningCount || 0))}</span>
+        <span><strong>Raw concepts</strong> ${escapeHTML(String(rawConceptCount || 0))}</span>
+        <span><strong>Clusters</strong> ${escapeHTML(String(clusters.length || 0))}</span>
+        <span><strong>Warnings</strong> ${escapeHTML(String(warningCount || 0))}</span>
+      </div>
+      <div class="notes-import-stats" style="margin-top:8px;">
+        <span><strong>Selected</strong> ${escapeHTML(String(selectedCount || 0))}</span>
+        <span><strong>Target</strong> ${escapeHTML(targetLabel)}</span>
+        <span><strong>Draft previews</strong> ${escapeHTML(String(draftCount || 0))}</span>
       </div>
       <div class="notes-import-stats" style="margin-top:8px;">
         <span><strong>Concepts per cluster</strong> ${escapeHTML((result.conceptsPerCluster || []).join(', ') || 'None')}</span>
@@ -7997,7 +8047,7 @@ const App = (() => {
         <div class="notes-draft-title">Clustering Guardrails</div>
         <div class="notes-draft-meta">Concepts are grouped only within the same section path and heading topic, with page proximity and conservative text similarity. Low-confidence concepts stay split.</div>
       </div>
-      ${clusters.slice(0, 16).map((cluster, idx) => {
+      ${clusters.map((cluster, idx) => {
         const warnings = Array.isArray(cluster.warnings) ? cluster.warnings : [];
         const sectionPath = Array.isArray(cluster.sectionPath) && cluster.sectionPath.length ? cluster.sectionPath.join(' > ') : 'None';
         const pages = Array.isArray(cluster.pageNumbers) ? cluster.pageNumbers : [];
@@ -8005,10 +8055,14 @@ const App = (() => {
         const blockOrders = Array.isArray(cluster.blockOrders) ? cluster.blockOrders : [];
         const sourceSnippets = Array.isArray(cluster.sourceSnippets) ? cluster.sourceSnippets : [];
         const orderedConcepts = Array.isArray(cluster.orderedConcepts) ? cluster.orderedConcepts : [];
+        const checked = selectedIds.has(cluster.id) ? 'checked' : '';
         return `
           <details class="notes-draft-card" ${idx < 3 ? 'open' : ''} style="margin-top:10px;">
             <summary class="notes-draft-summary">
-              <div class="notes-draft-title">${escapeHTML(cluster.clusterType)} cluster · ${escapeHTML(String(cluster.memberCount || 0))} concept${cluster.memberCount === 1 ? '' : 's'}</div>
+              <div class="notes-draft-title">
+                <input type="checkbox" class="ome-cluster-include" value="${escapeHTML(cluster.id)}" onchange="App.updateOmeClusterSelection()" ${checked} onclick="event.stopPropagation()">
+                ${escapeHTML(cluster.clusterType)} cluster · ${escapeHTML(String(cluster.memberCount || 0))} concept${cluster.memberCount === 1 ? '' : 's'}
+              </div>
               <div class="notes-draft-meta">Pages ${escapeHTML(pages.map(value => String(value)).join(', ') || 'None')} · Label ${escapeHTML(cluster.clusterLabel || '')}</div>
             </summary>
             <div class="notes-draft-body">
@@ -8037,7 +8091,411 @@ const App = (() => {
           </details>
         `;
       }).join('')}
-      ${clusters.length > 16 ? `<div class="notes-import-empty">Showing first 16 of ${clusters.length} clusters.</div>` : ''}
+    `;
+    renderOmeDraftPreview(_omeImportPreview?.draftResult || null);
+  }
+
+  function deterministicOmeChoiceIndex(seed, mod = 5) {
+    let hash = 2166136261;
+    const text = String(seed || '');
+    for (let i = 0; i < text.length; i += 1) {
+      hash ^= text.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return Math.abs(hash >>> 0) % mod;
+  }
+
+  function getOmeDraftTargetQuestionCount() {
+    const input = document.getElementById('ome-draft-target');
+    const value = Number.parseInt(input?.value, 10);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  }
+
+  function getOmeSelectedClusterIds() {
+    return uniqueOmeStrings(Array.isArray(_omeImportPreview?.selectedClusterIds) ? _omeImportPreview.selectedClusterIds : []);
+  }
+
+  function getOmeClusterTextBlob(cluster) {
+    return normalizeOmeText((Array.isArray(cluster?.orderedConcepts) ? cluster.orderedConcepts : []).map(concept => [
+      concept.conceptText || '',
+      concept.sectionPath?.join(' > ') || '',
+      concept.blockTypes?.join(' ') || '',
+      (concept.sourceSnippets || []).map(snippet => snippet.sourceSnippet || '').join(' '),
+      (concept.sourceSnippets || []).map(snippet => snippet.contextSnippet || '').join(' ')
+    ].join(' ')).join(' | '));
+  }
+
+  function getOmeClusterAnchorLabel(cluster) {
+    const concepts = Array.isArray(cluster?.orderedConcepts) ? cluster.orderedConcepts : [];
+    return createOmeSourceSnippet(concepts[0]?.conceptText || concepts[0]?.sourceSnippets?.[0]?.sourceSnippet || cluster?.clusterLabel || 'Shared concept', 110) || 'Shared concept';
+  }
+
+  function getOmeClusterSiblingLabel(cluster) {
+    const concepts = Array.isArray(cluster?.orderedConcepts) ? cluster.orderedConcepts : [];
+    return createOmeSourceSnippet(concepts[1]?.conceptText || concepts[1]?.sourceSnippets?.[0]?.sourceSnippet || '', 110);
+  }
+
+  function getOmeClusterStepLabels(cluster) {
+    return uniqueOmeStrings((Array.isArray(cluster?.orderedConcepts) ? cluster.orderedConcepts : []).map((concept, idx) => {
+      const snippet = createOmeSourceSnippet(concept?.conceptText || concept?.sourceSnippets?.[0]?.sourceSnippet || '', 110);
+      return snippet || `Step ${idx + 1}`;
+    }));
+  }
+
+  function isOmeManagementSequenceCluster(cluster) {
+    if (!cluster || cluster.clusterType !== 'managementStep' || !Array.isArray(cluster.orderedConcepts) || cluster.orderedConcepts.length < 2) return false;
+    const blob = getOmeClusterTextBlob(cluster);
+    return /(?:\bnext step\b|\bnext best step\b|\binitial management\b|\bmanagement\b|\btreat(?:ment|ing)?\b|\btherapy\b|\bfirst line\b|\bstart\b|\binitiat(?:e|ion)\b|\bfollow up\b|\bmonitor\b|\bwhen\b|\bthen\b|\bif\b)/i.test(blob);
+  }
+
+  function isOmeContrastCluster(cluster) {
+    if (!cluster || cluster.clusterType !== 'differential' || !Array.isArray(cluster.orderedConcepts) || cluster.orderedConcepts.length < 2) return false;
+    return cluster.orderedConcepts.some(concept => isOmeContrastCandidate(concept));
+  }
+
+  function isOmeOrderedAlgorithmCluster(cluster) {
+    return !!(cluster && cluster.clusterType === 'algorithm' && Array.isArray(cluster.orderedConcepts) && cluster.orderedConcepts.length >= 2);
+  }
+
+  function buildOmeDraftChoices(variantType, cluster, support) {
+    const labels = ['A', 'B', 'C', 'D', 'E'];
+    const anchorLabel = support.anchorLabel || getOmeClusterAnchorLabel(cluster);
+    const siblingLabel = support.siblingLabel || getOmeClusterSiblingLabel(cluster);
+    const stepLabels = Array.isArray(support.stepLabels) ? support.stepLabels : getOmeClusterStepLabels(cluster);
+    const stepLabel = support.stepLabel || stepLabels[stepLabels.length - 1] || anchorLabel;
+    const previousStepLabel = support.previousStepLabel || stepLabels[0] || siblingLabel || anchorLabel;
+    const correctText = {
+      recognition: `Shared concept: ${anchorLabel}`,
+      'next-best-step': `Next best step: ${support.nextStepLabel || stepLabel}`,
+      differentiation: `Distinguishing feature: ${support.contrastLabel || siblingLabel || anchorLabel}`,
+      'algorithm-step': `Ordered step: ${stepLabel}`
+    }[variantType] || `Shared concept: ${anchorLabel}`;
+    const correctRationale = {
+      recognition: 'Placeholder rationale: repeated source blocks and preserved provenance support the shared concept.',
+      'next-best-step': 'Placeholder rationale: the source sequence supports a next-step scaffold without inventing missing management facts.',
+      differentiation: 'Placeholder rationale: explicit contrast language supports the discriminating scaffold.',
+      'algorithm-step': 'Placeholder rationale: the ordered source blocks support the algorithm step scaffold.'
+    }[variantType] || 'Placeholder rationale.';
+    const distractors = {
+      recognition: [
+        { text: 'Broad topic guess', rationale: 'Placeholder rationale: broad topic labels are not enough.' },
+        { text: siblingLabel ? `Related but unsupported concept: ${siblingLabel}` : 'Related but unsupported concept', rationale: 'Placeholder rationale: related source material still needs direct support.' },
+        { text: 'Deck proximity guess', rationale: 'Placeholder rationale: deck proximity alone is weak.' },
+        { text: 'Unrelated decoy', rationale: 'Placeholder rationale: this option does not follow the source blocks.' }
+      ],
+      'next-best-step': [
+        { text: 'Recognition-only scaffold', rationale: 'Placeholder rationale: this ignores the management sequence.' },
+        { text: siblingLabel ? `Sibling concept: ${siblingLabel}` : 'Sibling concept', rationale: 'Placeholder rationale: sibling content is not the next step.' },
+        { text: 'Broad topic guess', rationale: 'Placeholder rationale: broad categories are metadata, not facts.' },
+        { text: 'Unsupported action', rationale: 'Placeholder rationale: do not invent management steps.' }
+      ],
+      differentiation: [
+        { text: siblingLabel ? `Sibling concept: ${siblingLabel}` : 'Sibling concept', rationale: 'Placeholder rationale: contrast must be explicit in the source.' },
+        { text: 'Broad category reading', rationale: 'Placeholder rationale: broad labels do not distinguish the cluster.' },
+        { text: 'Tag-only guess', rationale: 'Placeholder rationale: tags organize source material but do not answer the question.' },
+        { text: 'Unrelated alternative', rationale: 'Placeholder rationale: unrelated decoys are not source grounded.' }
+      ],
+      'algorithm-step': [
+        { text: `Earlier step: ${previousStepLabel}`, rationale: 'Placeholder rationale: this is a nearby but incorrect sequence position.' },
+        { text: siblingLabel ? `Neighbor step: ${siblingLabel}` : 'Neighbor step', rationale: 'Placeholder rationale: another step-like line is not necessarily the target step.' },
+        { text: 'Recognition-only scaffold', rationale: 'Placeholder rationale: recognizing the topic does not preserve order.' },
+        { text: 'Unrelated decoy', rationale: 'Placeholder rationale: this option is not supported by the source order.' }
+      ]
+    }[variantType] || [];
+
+    const correctIndex = deterministicOmeChoiceIndex([cluster.id, variantType, anchorLabel, siblingLabel, stepLabel, previousStepLabel].join('|'), 5);
+    const pool = distractors.slice(0, 4);
+    pool.splice(correctIndex, 0, { text: correctText, rationale: correctRationale, isCorrect: true });
+    return pool.map((choice, idx) => ({
+      label: labels[idx],
+      text: choice.text,
+      rationale: choice.rationale,
+      isCorrect: !!choice.isCorrect
+    }));
+  }
+
+  function buildOmeDraftForCluster(cluster, variantType, support = {}) {
+    const anchorLabel = support.anchorLabel || getOmeClusterAnchorLabel(cluster);
+    const siblingLabel = support.siblingLabel || getOmeClusterSiblingLabel(cluster);
+    const stepLabels = Array.isArray(support.stepLabels) ? support.stepLabels : getOmeClusterStepLabels(cluster);
+    const stepLabel = support.stepLabel || stepLabels[stepLabels.length - 1] || anchorLabel;
+    const previousStepLabel = support.previousStepLabel || stepLabels[0] || siblingLabel || anchorLabel;
+    const choices = buildOmeDraftChoices(variantType, cluster, {
+      anchorLabel,
+      siblingLabel,
+      stepLabels,
+      stepLabel,
+      previousStepLabel,
+      nextStepLabel: support.nextStepLabel || stepLabel,
+      contrastLabel: support.contrastLabel || siblingLabel || anchorLabel
+    });
+    const correctChoice = choices.find(choice => choice.isCorrect) || choices[0];
+    const sourceConcepts = Array.isArray(cluster?.orderedConcepts) ? cluster.orderedConcepts : [];
+    const sourcePages = uniqueOmeNumbers(cluster?.pageNumbers || sourceConcepts.map(concept => concept.pageNumber));
+    const sourceBlockIds = uniqueOmeStrings(cluster?.blockIds || sourceConcepts.flatMap(concept => concept.blockIds || []));
+    const sourceBlockOrders = uniqueOmeNumbers(cluster?.blockOrders || sourceConcepts.flatMap(concept => concept.blockOrders || []));
+    const sourceSnippets = sourceConcepts.flatMap(concept => concept.sourceSnippets || []).map(snippet => ({ ...snippet }));
+    const sourceWarnings = uniqueOmeStrings(sourceConcepts.flatMap(concept => concept.warnings || []));
+    const warnings = uniqueOmeStrings([
+      ...(cluster?.warnings || []),
+      ...sourceWarnings,
+      'Deterministic scaffold only. Review required before any quiz use.'
+    ]);
+    return {
+      id: `ome-draft-${cluster.clusterIndex}-${variantType}`,
+      clusterId: cluster.id,
+      clusterIndex: cluster.clusterIndex,
+      clusterType: cluster.clusterType,
+      clusterLabel: cluster.clusterLabel || '',
+      variantType,
+      stemScaffold: {
+        recognition: 'Which choice best matches the shared OME concept supported by the selected source blocks?',
+        'next-best-step': 'Which next step is best supported by the ordered management sequence without inventing unsupported details?',
+        differentiation: 'Which choice best distinguishes the primary concept from the explicit contrast in the selected cluster?',
+        'algorithm-step': 'Which step best preserves the ordered algorithm in the source blocks?'
+      }[variantType] || 'Which choice best matches the selected OME cluster?',
+      choices,
+      provisionalCorrectAnswer: correctChoice.label,
+      provisionalCorrectAnswerText: correctChoice.text,
+      teachingPoint: {
+        recognition: 'Use the shared source blocks and preserved provenance to anchor the recognition scaffold.',
+        'next-best-step': 'Only generate next-step scaffolds when the source text supports a management sequence.',
+        differentiation: 'Only generate contrast scaffolds when the cluster makes the contrast explicit.',
+        'algorithm-step': 'Only generate algorithm-step scaffolds when the source blocks preserve a clear order.'
+      }[variantType] || 'Deterministic scaffold only. Review required.',
+      placeholderDistractorRationales: choices.filter(choice => !choice.isCorrect).map(choice => choice.rationale),
+      sourceName: cluster.sourceName || '',
+      sourceHash: cluster.sourceHash || '',
+      sourcePages,
+      sourceBlockIds,
+      sourceBlockOrders,
+      sectionPath: Array.isArray(cluster.sectionPath) ? cluster.sectionPath.slice() : [],
+      sourceSnippets,
+      sourceWarnings,
+      sourceProof: {
+        clusterType: cluster.clusterType,
+        clusterLabel: cluster.clusterLabel || '',
+        orderedConceptTexts: sourceConcepts.map(concept => concept.conceptText || ''),
+        sourceConceptIds: sourceConcepts.map(concept => concept.id),
+        pageNumbers: sourcePages,
+        blockIds: sourceBlockIds,
+        blockOrders: sourceBlockOrders
+      },
+      warnings,
+      confidence: warnings.length ? 'low' : 'medium'
+    };
+  }
+
+  function buildOmeDraftsFromSelectedClusters(clusterResult, selectedClusterIds, targetQuestionCount) {
+    const clusters = Array.isArray(clusterResult?.clusters) ? clusterResult.clusters : [];
+    const selected = new Set(Array.isArray(selectedClusterIds) ? selectedClusterIds : []);
+    const activeClusters = clusters.filter(cluster => selected.has(cluster.id));
+    const limit = Number.isFinite(Number(targetQuestionCount)) && Number(targetQuestionCount) > 0 ? Number(targetQuestionCount) : Infinity;
+    const drafts = [];
+    const skippedClusters = [];
+
+    activeClusters.forEach(cluster => {
+      if (drafts.length >= limit) {
+        skippedClusters.push({
+          clusterId: cluster.id,
+          clusterIndex: cluster.clusterIndex,
+          reason: 'Target question count reached before this cluster could be drafted.'
+        });
+        return;
+      }
+
+      const anchorLabel = getOmeClusterAnchorLabel(cluster);
+      const siblingLabel = getOmeClusterSiblingLabel(cluster);
+      const stepLabels = getOmeClusterStepLabels(cluster);
+      const support = {
+        anchorLabel,
+        siblingLabel,
+        stepLabels,
+        stepLabel: stepLabels[stepLabels.length - 1] || anchorLabel,
+        previousStepLabel: stepLabels[0] || siblingLabel || anchorLabel,
+        nextStepLabel: stepLabels[stepLabels.length - 1] || anchorLabel,
+        contrastLabel: siblingLabel || anchorLabel
+      };
+
+      const clusterDrafts = [buildOmeDraftForCluster(cluster, 'recognition', support)];
+      if (isOmeManagementSequenceCluster(cluster)) clusterDrafts.push(buildOmeDraftForCluster(cluster, 'next-best-step', support));
+      if (isOmeContrastCluster(cluster)) clusterDrafts.push(buildOmeDraftForCluster(cluster, 'differentiation', support));
+      if (isOmeOrderedAlgorithmCluster(cluster)) clusterDrafts.push(buildOmeDraftForCluster(cluster, 'algorithm-step', support));
+
+      clusterDrafts.forEach(draft => {
+        if (drafts.length < limit) {
+          drafts.push(draft);
+        } else {
+          skippedClusters.push({
+            clusterId: cluster.id,
+            clusterIndex: cluster.clusterIndex,
+            reason: 'Target question count reached before all drafts from this cluster could be added.'
+          });
+        }
+      });
+    });
+
+    const variantCounts = drafts.reduce((counts, draft) => {
+      counts[draft.variantType] = (counts[draft.variantType] || 0) + 1;
+      return counts;
+    }, {});
+    const warnings = uniqueOmeStrings([
+      ...(Array.isArray(clusterResult?.warnings) ? clusterResult.warnings : []),
+      ...drafts.flatMap(draft => draft.warnings || []),
+      ...skippedClusters.flatMap(item => item.reason ? [item.reason] : [])
+    ]);
+
+    return {
+      drafts,
+      draftCount: drafts.length,
+      clusterCount: clusters.length,
+      selectedClusterCount: activeClusters.length,
+      targetQuestionCount: Number.isFinite(Number(targetQuestionCount)) && Number(targetQuestionCount) > 0 ? Number(targetQuestionCount) : 0,
+      rawConceptCount: clusterResult?.rawConceptCount || 0,
+      conceptsPerCluster: activeClusters.map(cluster => cluster.memberCount),
+      variantCounts,
+      warnings,
+      warningCount: warnings.length,
+      skippedClusters
+    };
+  }
+
+  function refreshOmeDraftsFromSelectedClusters() {
+    if (!_omeImportPreview?.conceptResult?.clusterResult) return;
+    const selectedClusterIds = getOmeSelectedClusterIds();
+    const targetQuestionCount = getOmeDraftTargetQuestionCount();
+    const draftResult = buildOmeDraftsFromSelectedClusters(
+      _omeImportPreview.conceptResult.clusterResult,
+      selectedClusterIds,
+      targetQuestionCount
+    );
+    _omeImportPreview.selectedClusterIds = selectedClusterIds;
+    _omeImportPreview.targetQuestionCount = targetQuestionCount;
+    _omeImportPreview.draftResult = draftResult;
+    renderOmeDraftPreview(draftResult);
+  }
+
+  function updateOmeClusterSelection() {
+    if (!_omeImportPreview?.conceptResult?.clusterResult) return;
+    const checkedIds = Array.from(document.querySelectorAll('.ome-cluster-include'))
+      .filter(input => input.checked)
+      .map(input => input.value);
+    _omeImportPreview.selectedClusterIds = checkedIds;
+    refreshOmeDraftsFromSelectedClusters();
+    renderOmeClusterPreview(_omeImportPreview.conceptResult.clusterResult);
+  }
+
+  function selectAllOmeClusters() {
+    if (!_omeImportPreview?.conceptResult?.clusterResult) return;
+    const clusters = Array.isArray(_omeImportPreview?.conceptResult?.clusterResult?.clusters) ? _omeImportPreview.conceptResult.clusterResult.clusters : [];
+    _omeImportPreview.selectedClusterIds = clusters.map(cluster => cluster.id);
+    refreshOmeDraftsFromSelectedClusters();
+    renderOmeClusterPreview(_omeImportPreview.conceptResult.clusterResult);
+  }
+
+  function deselectAllOmeClusters() {
+    if (!_omeImportPreview?.conceptResult?.clusterResult) return;
+    _omeImportPreview.selectedClusterIds = [];
+    refreshOmeDraftsFromSelectedClusters();
+    renderOmeClusterPreview(_omeImportPreview.conceptResult.clusterResult);
+  }
+
+  function renderOmeDraftPreview(result) {
+    const status = document.getElementById('ome-draft-status');
+    const preview = document.getElementById('ome-draft-preview');
+    if (!status || !preview) return;
+
+    const draftResult = result || _omeImportPreview?.draftResult || null;
+    const drafts = Array.isArray(draftResult?.drafts) ? draftResult.drafts : [];
+    const selectedClusterCount = Number(draftResult?.selectedClusterCount || getOmeSelectedClusterIds().length || 0);
+    const targetQuestionCount = Number(draftResult?.targetQuestionCount || getOmeDraftTargetQuestionCount() || 0);
+    const rawConceptCount = Number(draftResult?.rawConceptCount || _omeImportPreview?.conceptResult?.clusterResult?.rawConceptCount || 0);
+    const warningCount = Number(draftResult?.warningCount || 0);
+    const targetLabel = targetQuestionCount > 0 ? String(targetQuestionCount) : 'all';
+
+    if (!drafts.length) {
+      status.textContent = selectedClusterCount
+        ? `Selected ${selectedClusterCount} cluster${selectedClusterCount === 1 ? '' : 's'}, but no draft scaffolds were generated.`
+        : 'Choose OME clusters to generate deterministic draft scaffolds.';
+      preview.innerHTML = '<div class="notes-import-empty">No OME draft scaffolds generated.</div>';
+      return;
+    }
+
+    const variantCounts = draftResult?.variantCounts || {};
+    const variantSummary = Object.keys(variantCounts).sort().map(type => `<span><strong>${escapeHTML(type)}</strong> ${escapeHTML(String(variantCounts[type] || 0))}</span>`).join('');
+    status.textContent = `${drafts.length} deterministic OME draft scaffold${drafts.length === 1 ? '' : 's'} generated from ${selectedClusterCount} selected cluster${selectedClusterCount === 1 ? '' : 's'} (target ${targetLabel}). Preview only.`;
+
+    preview.innerHTML = `
+      <div class="notes-import-stats">
+        <span><strong>Raw concepts</strong> ${escapeHTML(String(rawConceptCount || 0))}</span>
+        <span><strong>Selected clusters</strong> ${escapeHTML(String(selectedClusterCount || 0))}</span>
+        <span><strong>Drafts</strong> ${escapeHTML(String(drafts.length || 0))}</span>
+        <span><strong>Warnings</strong> ${escapeHTML(String(warningCount || 0))}</span>
+      </div>
+      <div class="notes-import-stats" style="margin-top:8px;">
+        <span><strong>Target</strong> ${escapeHTML(targetLabel)}</span>
+        ${variantSummary || '<span><strong>Variant types</strong> None</span>'}
+      </div>
+      <div class="notes-draft-card" style="margin-top:10px;">
+        <div class="notes-draft-title">Draft Guardrails</div>
+        <div class="notes-draft-meta">Drafts are built only from the selected OME clusters. Recognition is always allowed. Next-best-step, differentiation, and algorithm-step drafts require explicit source support and remain review-only scaffolds.</div>
+      </div>
+      ${drafts.map((draft, idx) => {
+        const warnings = Array.isArray(draft.warnings) ? draft.warnings : [];
+        const sourcePages = Array.isArray(draft.sourcePages) ? draft.sourcePages : [];
+        const sourceBlockIds = Array.isArray(draft.sourceBlockIds) ? draft.sourceBlockIds : [];
+        const sourceBlockOrders = Array.isArray(draft.sourceBlockOrders) ? draft.sourceBlockOrders : [];
+        const sourceSnippets = Array.isArray(draft.sourceSnippets) ? draft.sourceSnippets : [];
+        const choices = Array.isArray(draft.choices) ? draft.choices : [];
+        const provenance = {
+          sourceName: draft.sourceName || '',
+          sourceHash: draft.sourceHash || '',
+          sectionPath: draft.sectionPath || [],
+          sourcePages,
+          sourceBlockIds,
+          sourceBlockOrders,
+          sourceWarnings: draft.sourceWarnings || [],
+          sourceProof: draft.sourceProof || {}
+        };
+        return `
+          <details class="notes-draft-card" ${idx < 4 ? 'open' : ''} style="margin-top:10px;">
+            <summary class="notes-draft-summary">
+              <div class="notes-draft-title">${escapeHTML(draft.variantType || 'draft')} · ${escapeHTML(draft.clusterLabel || '')}</div>
+              <div class="notes-draft-meta">Cluster ${escapeHTML(String(draft.clusterIndex || ''))} · Pages ${escapeHTML(sourcePages.map(value => String(value)).join(', ') || 'None')} · Blocks ${escapeHTML(sourceBlockIds.join(', ') || 'None')}</div>
+            </summary>
+            <div class="notes-draft-body">
+              <div class="notes-draft-meta"><strong>Stem scaffold:</strong> ${escapeHTML(draft.stemScaffold || '')}</div>
+              <div class="notes-draft-meta"><strong>Source path:</strong> ${escapeHTML(Array.isArray(draft.sectionPath) && draft.sectionPath.length ? draft.sectionPath.join(' > ') : 'None')}</div>
+              <div class="notes-draft-meta"><strong>Source orders:</strong> ${escapeHTML(sourceBlockOrders.map(value => String(value)).join(', ') || 'None')}</div>
+              <div class="notes-draft-meta"><strong>Source:</strong> ${escapeHTML(draft.sourceName || '')}</div>
+              <div class="notes-draft-meta"><strong>Hash:</strong> ${escapeHTML(draft.sourceHash || '')}</div>
+              <div class="notes-draft-meta"><strong>Provisional correct answer:</strong> ${escapeHTML(String(draft.provisionalCorrectAnswer || ''))} · ${escapeHTML(String(draft.provisionalCorrectAnswerText || ''))}</div>
+              <div class="notes-draft-meta"><strong>Teaching point:</strong> ${escapeHTML(draft.teachingPoint || '')}</div>
+              ${warnings.length ? `<div style="color:#8a5a00;margin-top:8px;">${warnings.map(warning => escapeHTML(warning)).join('<br>')}</div>` : '<div class="notes-import-empty">No draft warnings.</div>'}
+              <div style="margin-top:8px;"><strong>Choices</strong></div>
+              ${choices.map(choice => `
+                <div style="margin-top:6px;padding-top:6px;border-top:1px solid #edf1f5;">
+                  <div class="notes-draft-meta">${escapeHTML(choice.label || '')}. ${escapeHTML(choice.text || '')}${choice.isCorrect ? ' · correct' : ''}</div>
+                  <div style="white-space:pre-wrap;">${escapeHTML(choice.rationale || '')}</div>
+                </div>
+              `).join('')}
+              <div style="margin-top:8px;"><strong>Placeholder distractor rationales</strong></div>
+              <div style="white-space:pre-wrap;">${escapeHTML((draft.placeholderDistractorRationales || []).join('\n'))}</div>
+              <div style="margin-top:8px;"><strong>Source snippets</strong></div>
+              ${sourceSnippets.map(snippet => `
+                <div style="margin-top:6px;padding-top:6px;border-top:1px solid #edf1f5;">
+                  <div class="notes-draft-meta">${escapeHTML(String(snippet.blockId || ''))} · ${escapeHTML(String(snippet.blockType || ''))} · Page ${escapeHTML(String(snippet.pageNumber || ''))} · Order ${escapeHTML(String(snippet.order || ''))}</div>
+                  <div style="white-space:pre-wrap;">${escapeHTML(snippet.sourceSnippet || '')}</div>
+                </div>
+              `).join('')}
+              <details style="margin-top:8px;">
+                <summary>Provenance JSON</summary>
+                <pre style="white-space:pre-wrap;overflow:auto;margin-top:8px;">${escapeHTML(JSON.stringify(provenance, null, 2))}</pre>
+              </details>
+            </div>
+          </details>
+        `;
+      }).join('')}
     `;
   }
 
@@ -8180,6 +8638,9 @@ const App = (() => {
       _omeImportPreview = null;
       if (status) status.textContent = 'Unsupported file type. Choose one .pdf file from the OME source folder.';
       if (preview) preview.innerHTML = '<div class="notes-import-empty">Only .pdf files are accepted.</div>';
+      renderOmeConceptPreview(null);
+      renderOmeClusterPreview(null);
+      renderOmeDraftPreview(null);
       return;
     }
 
@@ -8190,6 +8651,17 @@ const App = (() => {
       const structure = await extractOmePdfStructure(file);
       structure.conceptResult = extractOmeConceptCandidates(structure);
       structure.conceptResult.clusterResult = clusterOmeConceptCandidates(structure.conceptResult.candidates);
+      structure.selectedClusterIds = Array.isArray(structure.conceptResult.clusterResult?.clusters)
+        ? structure.conceptResult.clusterResult.clusters.map(cluster => cluster.id)
+        : [];
+      const targetInput = document.getElementById('ome-draft-target');
+      if (targetInput && !String(targetInput.value || '').trim()) targetInput.value = '0';
+      structure.targetQuestionCount = getOmeDraftTargetQuestionCount();
+      structure.draftResult = buildOmeDraftsFromSelectedClusters(
+        structure.conceptResult.clusterResult,
+        structure.selectedClusterIds,
+        structure.targetQuestionCount
+      );
       _omeImportPreview = structure;
       if (status) {
         status.textContent = structure.warningCount
@@ -8199,12 +8671,14 @@ const App = (() => {
       renderOmeStructurePreview(structure);
       renderOmeConceptPreview(structure.conceptResult);
       renderOmeClusterPreview(structure.conceptResult.clusterResult);
+      renderOmeDraftPreview(structure.draftResult || null);
     } catch (err) {
       _omeImportPreview = null;
       if (status) status.textContent = `Unable to preview OME PDF: ${err?.message || 'Unknown parse error.'}`;
       if (preview) preview.innerHTML = '<div class="notes-import-empty">No OME structure preview loaded.</div>';
       renderOmeConceptPreview(null);
       renderOmeClusterPreview(null);
+      renderOmeDraftPreview(null);
     }
   }
 
@@ -13925,6 +14399,9 @@ const App = (() => {
     closeOmePdfImportPreview,
     clearOmePdfImportPreview,
     previewOmePdfImport,
+    updateOmeClusterSelection,
+    selectAllOmeClusters,
+    deselectAllOmeClusters,
     downloadNotesDocx,
     downloadNotesPdf,
     toggleMarkedFolder,
