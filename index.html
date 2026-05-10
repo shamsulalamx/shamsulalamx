@@ -1872,6 +1872,11 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
     <div id="ome-draft-preview" class="notes-draft-preview">
       <div class="notes-import-empty">No OME draft scaffolds generated.</div>
     </div>
+    <div class="notes-import-section-title">OME Quiz Object Preview</div>
+    <div id="ome-quiz-object-status" class="notes-import-summary">Approve OME drafts to preview internal quiz-question objects. Nothing is saved.</div>
+    <div id="ome-quiz-object-preview" class="notes-draft-preview">
+      <div class="notes-import-empty">No approved OME drafts converted.</div>
+    </div>
     <div class="modal-actions" style="justify-content:flex-start;margin-top:10px;">
       <button type="button" class="btn-modal" id="ome-export-approved" onclick="App.exportApprovedOmeDraftsJson()" disabled>Export Approved OME Drafts JSON</button>
     </div>
@@ -8606,6 +8611,7 @@ const App = (() => {
         : 'Choose OME clusters to generate deterministic draft scaffolds.';
       preview.innerHTML = '<div class="notes-import-empty">No OME draft scaffolds generated.</div>';
       updateOmeDraftExportButton();
+      renderOmeQuizObjectPreview();
       return;
     }
 
@@ -8696,6 +8702,171 @@ const App = (() => {
       }).join('')}
     `;
     updateOmeDraftExportButton();
+    renderOmeQuizObjectPreview();
+  }
+
+  function buildOmeQuizObjectExplanation(draft) {
+    const labels = ['A', 'B', 'C', 'D', 'E'];
+    const rationales = labels
+      .map(label => {
+        const choice = Array.isArray(draft?.choices) ? draft.choices.find(item => item?.label === label) : null;
+        return `${label}: ${choice?.rationale || ''}`;
+      })
+      .join('\n');
+    return [
+      draft?.teachingPoint || '',
+      draft?.stemScaffold ? `Stem scaffold: ${draft.stemScaffold}` : '',
+      rationales ? `Choice rationales:\n${rationales}` : ''
+    ].filter(Boolean).join('\n\n').trim();
+  }
+
+  function convertApprovedOmeDraftToQuizObject(draft, idx) {
+    const quizQuestion = {
+      n: idx + 1,
+      sourceQuestionNumber: idx + 1,
+      generatedQuizQuestionNumber: idx + 1,
+      t: draft?.stemScaffold || '',
+      o: Array.isArray(draft?.choices) ? draft.choices.map(choice => ({ l: choice.label, t: choice.text })) : [],
+      c: draft?.provisionalCorrectAnswer || '',
+      explanation: buildOmeQuizObjectExplanation(draft),
+      tags: ['OME', 'Preview', draft?.variantType || 'draft'],
+      images: [],
+      parseConfidence: draft?.confidence || 'low',
+      parseWarnings: Array.isArray(draft?.warnings) ? draft.warnings.slice() : []
+    };
+
+    const provenance = {
+      sourceType: 'ome-pdf',
+      sourceName: draft?.sourceName || _omeImportPreview?.sourceName || '',
+      sourceHash: draft?.sourceHash || _omeImportPreview?.sourceHash || '',
+      draftId: draft?.id || '',
+      clusterId: draft?.clusterId || '',
+      clusterType: draft?.clusterType || '',
+      clusterIndex: draft?.clusterIndex ?? null,
+      variantType: draft?.variantType || '',
+      sourcePages: Array.isArray(draft?.sourcePages) ? draft.sourcePages.slice() : [],
+      sourceBlockIds: Array.isArray(draft?.sourceBlockIds) ? draft.sourceBlockIds.slice() : [],
+      sourceBlockOrders: Array.isArray(draft?.sourceBlockOrders) ? draft.sourceBlockOrders.slice() : [],
+      sectionPath: Array.isArray(draft?.sectionPath) ? draft.sectionPath.slice() : [],
+      warnings: Array.isArray(draft?.warnings) ? draft.warnings.slice() : [],
+      sourceSnippets: Array.isArray(draft?.sourceSnippets) ? draft.sourceSnippets.map(snippet => ({
+        ...(snippet && typeof snippet === 'object' ? snippet : {})
+      })) : [],
+      sourceProof: draft?.sourceProof ? { ...draft.sourceProof } : null
+    };
+
+    return { quizQuestion, provenance };
+  }
+
+  function validateOmeQuizObjectPreviewItem(item) {
+    const errors = [];
+    const labels = ['A', 'B', 'C', 'D', 'E'];
+    const q = item?.quizQuestion || {};
+    const provenance = item?.provenance || {};
+
+    if (!Number.isFinite(q.n)) errors.push('missing question number');
+    if (!Number.isFinite(q.sourceQuestionNumber)) errors.push('missing source question number');
+    if (!Number.isFinite(q.generatedQuizQuestionNumber)) errors.push('missing generated question number');
+    if (!nonemptyString(q.t)) errors.push('missing stem');
+    if (!Array.isArray(q.o) || q.o.length !== 5) {
+      errors.push('must have exactly five answer choices');
+    } else {
+      q.o.forEach((choice, idx) => {
+        if (choice?.l !== labels[idx]) errors.push('answer choices must be labeled A-E in order');
+        if (!nonemptyString(choice?.t)) errors.push(`choice ${labels[idx]} is missing text`);
+      });
+    }
+    if (!labels.includes(q.c)) errors.push('correct answer must be A-E');
+    if (!nonemptyString(q.explanation)) errors.push('missing explanation');
+    if (!Array.isArray(q.tags)) errors.push('missing tags');
+    if (!Array.isArray(q.images)) errors.push('missing images array');
+    if (!nonemptyString(q.parseConfidence)) errors.push('missing parse confidence');
+    if (!Array.isArray(q.parseWarnings)) errors.push('missing parse warnings array');
+
+    if (!nonemptyString(provenance.sourceType)) errors.push('missing source type provenance');
+    if (!nonemptyString(provenance.sourceName)) errors.push('missing source name provenance');
+    if (!nonemptyString(provenance.sourceHash)) errors.push('missing source hash provenance');
+    if (!nonemptyString(provenance.draftId)) errors.push('missing draft provenance');
+    if (!nonemptyString(provenance.clusterId)) errors.push('missing cluster provenance');
+    if (!nonemptyString(provenance.clusterType)) errors.push('missing cluster type provenance');
+    if (!Number.isFinite(provenance.clusterIndex)) errors.push('missing cluster index provenance');
+    if (!nonemptyString(provenance.variantType)) errors.push('missing variant type provenance');
+    if (!Array.isArray(provenance.sourcePages) || !provenance.sourcePages.length || provenance.sourcePages.some(value => !Number.isFinite(Number(value)))) errors.push('missing source page provenance');
+    if (!Array.isArray(provenance.sourceBlockIds) || !provenance.sourceBlockIds.length || provenance.sourceBlockIds.some(id => !nonemptyString(id))) errors.push('missing source block IDs provenance');
+    if (!Array.isArray(provenance.sourceBlockOrders) || provenance.sourceBlockOrders.length !== provenance.sourceBlockIds.length || provenance.sourceBlockOrders.some(order => !Number.isFinite(Number(order)))) errors.push('missing source block orders provenance');
+    if (!Array.isArray(provenance.sectionPath)) errors.push('missing section path provenance');
+    if (!Array.isArray(provenance.warnings)) errors.push('missing warnings provenance');
+    if (!Array.isArray(provenance.sourceSnippets) || !provenance.sourceSnippets.length) {
+      errors.push('missing source snippets provenance');
+    } else {
+      provenance.sourceSnippets.forEach((snippet, snippetIdx) => {
+        const snippetPrefix = `source snippet ${snippetIdx + 1}`;
+        if (!nonemptyString(snippet?.blockId)) errors.push(`${snippetPrefix}: missing block ID`);
+        if (!nonemptyString(snippet?.blockType)) errors.push(`${snippetPrefix}: missing block type`);
+        if (!Number.isFinite(Number(snippet?.pageNumber))) errors.push(`${snippetPrefix}: missing page number`);
+        if (!Number.isFinite(Number(snippet?.order))) errors.push(`${snippetPrefix}: missing order`);
+        if (!nonemptyString(snippet?.sourceSnippet)) errors.push(`${snippetPrefix}: missing source snippet text`);
+      });
+    }
+
+    return { ok: errors.length === 0, errors };
+  }
+
+  function getApprovedOmeQuizObjectPreviewValidation() {
+    const approved = getApprovedOmeDrafts();
+    const items = approved.map(({ draft }, idx) => convertApprovedOmeDraftToQuizObject(draft, idx));
+    const errors = items.flatMap((item, idx) => validateOmeQuizObjectPreviewItem(item).errors.map(error => `Quiz object ${idx + 1}: ${error}`));
+    return { items, errors };
+  }
+
+  function renderOmeQuizObjectPreview() {
+    const status = document.getElementById('ome-quiz-object-status');
+    const preview = document.getElementById('ome-quiz-object-preview');
+    if (!status || !preview) return;
+
+    const approved = getApprovedOmeDrafts();
+    if (!approved.length) {
+      status.textContent = 'Approve OME draft scaffolds to preview internal quiz-question objects. Nothing is saved.';
+      preview.innerHTML = '<div class="notes-import-empty">No approved OME drafts converted.</div>';
+      return;
+    }
+
+    const { items, errors } = getApprovedOmeQuizObjectPreviewValidation();
+    if (errors.length) {
+      status.textContent = `OME quiz object preview blocked: ${errors[0]}`;
+      preview.innerHTML = `
+        <div class="notes-draft-card">
+          <div class="notes-draft-title">Validation errors</div>
+          <div class="notes-draft-meta">Preview blocked until approved OME drafts contain complete quiz-object provenance.</div>
+          <div style="color:#8a5a00;margin-top:8px;">${escapeHTML(errors.join(' '))}</div>
+        </div>
+      `;
+      return;
+    }
+
+    status.textContent = `${items.length} approved OME draft${items.length === 1 ? '' : 's'} converted into quiz-question object previews. Nothing was saved.`;
+    preview.innerHTML = items.map((item, idx) => {
+      const quizJson = JSON.stringify(item.quizQuestion, null, 2);
+      const provenanceJson = JSON.stringify(item.provenance, null, 2);
+      return `
+        <details class="notes-draft-card" ${idx < 2 ? 'open' : ''}>
+          <summary class="notes-draft-summary">
+            <div class="notes-draft-title">Quiz Object ${idx + 1}: ${escapeHTML(item.provenance.variantType || 'draft')} · ${escapeHTML(item.quizQuestion.c || '?')}</div>
+            <div class="notes-draft-meta">preview only · not saved · ${escapeHTML(item.provenance.draftId || '')}</div>
+          </summary>
+          <div class="notes-draft-body">
+            <details open>
+              <summary>Quiz object JSON</summary>
+              <pre style="white-space:pre-wrap;overflow:auto;margin-top:8px;">${escapeHTML(quizJson)}</pre>
+            </details>
+            <details>
+              <summary>Provenance JSON</summary>
+              <pre style="white-space:pre-wrap;overflow:auto;margin-top:8px;">${escapeHTML(provenanceJson)}</pre>
+            </details>
+          </div>
+        </details>
+      `;
+    }).join('');
   }
 
   function buildOmePageStructure({ pageNumber, textContent, sourceName, sourceHash, headingStack, orderStart }) {
