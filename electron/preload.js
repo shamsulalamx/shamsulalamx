@@ -3,7 +3,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 const desktopInfo = Object.freeze({
   isElectron: true,
   ai: Object.freeze({
-    getStatus: () => ipcRenderer.invoke('nbme:ai:get-status')
+    getStatus: () => ipcRenderer.invoke('nbme:ai:get-status'),
+    refineUWorldDraft: payload => ipcRenderer.invoke('nbme:ai:refine-uworld-draft', payload)
   })
 });
 

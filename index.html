@@ -6155,6 +6155,7 @@ const App = (() => {
   let _noteSelection = null;
 	  let _noteHighlightSeq = 0;
   let _notesImportPreview = null;
+  const _notesRefinePending = new Set();
   // ── Init ───────────────────────────────────────────────────
   function init() {
     window.toast = toast;
@@ -7415,12 +7416,19 @@ const App = (() => {
       preview.innerHTML = '<div class="notes-import-empty">No question drafts generated.</div>';
       return;
     }
+    const canRefine = typeof window.nbmeDesktop?.ai?.refineUWorldDraft === 'function';
     preview.innerHTML = drafts.map((draft, idx) => {
       const confidencePct = Math.round(draft.confidence * 100);
       const refs = draft.sourceBlockIds.join(', ');
       const choices = draft.choices.map(choice => `<li><strong>${escapeHTML(choice.l)}.</strong> ${escapeHTML(choice.t)}</li>`).join('');
       const warnings = draft.warnings.length
         ? `<div>${draft.warnings.map(w => `<span class="notes-concept-warning">${escapeHTML(w)}</span>`).join('')}</div>`
+        : '';
+      const pending = _notesRefinePending.has(draft.draftId);
+      const refined = _notesImportPreview?.refinedDrafts?.[draft.draftId] || null;
+      const refineError = _notesImportPreview?.refineErrors?.[draft.draftId] || null;
+      const refineControl = canRefine
+        ? `<button class="btn-card" onclick="App.refineNotesDraft('${escapeHTML(draft.draftId)}')" ${pending ? 'disabled' : ''}>${pending ? 'Refining...' : 'Refine Draft'}</button>`
         : '';
       return `<details class="notes-draft-card" ${idx < 3 ? 'open' : ''}>
         <summary class="notes-draft-summary">
@@ -7433,9 +7441,65 @@ const App = (() => {
           <div class="notes-draft-teaching"><strong>Provisional correct answer:</strong> ${escapeHTML(draft.correctAnswer)}<br><strong>Teaching point:</strong> ${escapeHTML(draft.teachingPoint)}</div>
           <div><strong>Distractor rationale placeholders:</strong> ${escapeHTML(Object.entries(draft.distractorRationales).map(([letter, text]) => `${letter}: ${text}`).join(' '))}</div>
           ${warnings}
+          ${refineControl ? `<div style="margin-top:10px;">${refineControl}</div>` : ''}
+          ${refineError ? `<div class="notes-draft-teaching" style="color:#8a5a00;"><strong>AI refined preview unavailable:</strong> ${escapeHTML(refineError.message || refineError.errorCode || 'Request failed.')}</div>` : ''}
+          ${refined ? renderRefinedQuestionDraft(refined) : ''}
         </div>
       </details>`;
     }).join('');
+  }
+
+  function renderRefinedQuestionDraft(refined) {
+    const choices = refined.choices.map(choice => `<li><strong>${escapeHTML(choice.label)}.</strong> ${escapeHTML(choice.text)}</li>`).join('');
+    const rationales = ['A','B','C','D','E'].map(label => `${label}: ${refined.rationales?.[label] || ''}`).join(' ');
+    const warnings = refined.warnings?.length
+      ? `<div>${refined.warnings.map(w => `<span class="notes-concept-warning">${escapeHTML(w)}</span>`).join('')}</div>`
+      : '';
+    return `<div class="notes-draft-teaching">
+      <strong>AI refined preview:</strong> requires review, not saved.<br>
+      <span class="notes-draft-meta">${escapeHTML(refined.generationMethod)} · ${Math.round((refined.confidence || 0) * 100)}% · ${escapeHTML((refined.sourceBlockIds || []).join(', '))}</span>
+      <div class="notes-draft-stem" style="margin-top:8px;">${escapeHTML(refined.stem)}</div>
+      <ol class="notes-draft-choice-list" type="A">${choices}</ol>
+      <div><strong>Provisional correct answer:</strong> ${escapeHTML(refined.correctAnswer)}<br><strong>Teaching point:</strong> ${escapeHTML(refined.teachingPoint)}</div>
+      <div style="margin-top:7px;"><strong>Rationales:</strong> ${escapeHTML(rationales)}</div>
+      ${warnings}
+    </div>`;
+  }
+
+  async function refineNotesDraft(draftId) {
+    const refine = window.nbmeDesktop?.ai?.refineUWorldDraft;
+    if (typeof refine !== 'function' || !_notesImportPreview?.drafts?.length) return;
+    const draft = _notesImportPreview.drafts.find(d => d.draftId === draftId);
+    const concept = _notesImportPreview.concepts?.find(c => c.conceptId === draft?.sourceConceptId || c.conceptId === draft?.conceptId);
+    if (!draft || !concept || _notesRefinePending.has(draftId)) return;
+
+    _notesImportPreview.refinedDrafts = _notesImportPreview.refinedDrafts || {};
+    _notesImportPreview.refineErrors = _notesImportPreview.refineErrors || {};
+    delete _notesImportPreview.refineErrors[draftId];
+    _notesRefinePending.add(draftId);
+    renderNotesQuestionDraftPreview(_notesImportPreview.drafts);
+
+    try {
+      const result = await refine({
+        draft,
+        concept,
+        sourceSnippet: concept.sourceSnippet || concept.testedFact || '',
+        sourceMeta: {
+          sourceName: _notesImportPreview.fileName || '',
+          sourceHash: _notesImportPreview.blocks?.[0]?.sourceHash || ''
+        }
+      });
+      if (result?.ok && result.refinedDraft) {
+        _notesImportPreview.refinedDrafts[draftId] = result.refinedDraft;
+      } else {
+        _notesImportPreview.refineErrors[draftId] = result || { errorCode: 'MODEL_RESPONSE_INVALID', message: 'AI refinement failed validation.' };
+      }
+    } catch (_) {
+      _notesImportPreview.refineErrors[draftId] = { errorCode: 'NETWORK_ERROR', message: 'AI refinement request could not be completed.' };
+    } finally {
+      _notesRefinePending.delete(draftId);
+      renderNotesQuestionDraftPreview(_notesImportPreview.drafts);
+    }
   }
 
   function groupedNotesHTML() {
@@ -8699,6 +8763,7 @@ const App = (() => {
     closeNotesImportPreview,
     clearNotesImportPreview,
     previewNotesDocx,
+    refineNotesDraft,
     deleteNote,
     downloadNotesDocx,
     downloadNotesPdf,
