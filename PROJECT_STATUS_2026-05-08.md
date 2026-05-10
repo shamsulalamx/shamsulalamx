@@ -150,6 +150,8 @@ Storage direction:
 
 ## UWorld DOCX Pipeline Status
 
+Status: UWorld v1 implementation complete, pending real-world validation.
+
 Implemented UWorld Notes flow:
 
 ```text
@@ -159,8 +161,9 @@ DOCX import
 → deterministic clustering/deduplication
 → selected clusters
 → deterministic draft scaffolds
-→ Electron-local Gemini refinement
+→ one-at-a-time Electron-local Gemini refinement
 → review controls
+→ duplicate warnings and section/topic coverage summaries
 → approved draft JSON export
 → quiz-object preview
 → controlled save into real tests
@@ -173,11 +176,14 @@ Current safeguards:
 - Draft previews are deterministic scaffolds until refined.
 - Electron-local Gemini refinement is called through Electron main/preload only; renderer code does not receive API keys.
 - `GEMINI_API_KEY` is read from `process.env` only and must not be stored in localStorage, frontend code, Drive backups, debug exports, or packaged assets.
+- Live batch queue infrastructure is implemented for selected deterministic drafts. It processes one draft at a time through the existing Electron Gemini bridge, caches by draft hash, skips duplicate draft hashes, supports pause/cancel/retry, stops after consecutive failures, and requires a visible preflight confirmation before live runs.
+- Duplicate refined-question warnings are implemented for similar stems, teaching points, source concepts, source blocks, and clusters. These warnings do not auto-reject, auto-remove, approve, or block saving.
+- Section/topic coverage summaries are implemented from selected clusters, deterministic drafts, refined drafts, approved drafts, duplicate warnings, and coverage gaps. They are display-only and do not rebalance or filter generation.
 - UWorld save into a real test requires approved refined drafts, valid quiz-object preview, explicit UWorld save target, nonempty inline test name, and inline review confirmation.
 - Browser `prompt()`/`confirm()` are not part of the UWorld save flow.
-- Batch refinement is not implemented.
+- Live Gemini validation/testing is intentionally deferred to conserve API credits.
 
-Pending UWorld batch design:
+Current UWorld batch flow:
 
 ```text
 selected clusters
@@ -185,6 +191,7 @@ selected clusters
 → one-at-a-time queue
 → cache by draft hash
 → pause/cancel/retry
+→ preflight confirmation
 → review-gated save
 ```
 
@@ -481,7 +488,7 @@ Recent verification after the latest local parser/render stabilization:
 - Electron does not use `file://` for the app load path.
 - Browser/Netlify mode still works and remains the stable fallback.
 - Basic Electron interaction verification passed.
-- Gemini local verification intentionally skipped to avoid Netlify redeploy/API usage during early Electron migration.
+- Gemini live validation for UWorld v1 is intentionally deferred to conserve API credits.
 - No parser, render, OCR, Gemini, or Google Drive logic was modified for Stage 2 verification.
 
 For deployment and sync testing, use the deployed HTTPS Netlify URL or Netlify local dev. Do not test Drive or Gemini from a `file://` URL.

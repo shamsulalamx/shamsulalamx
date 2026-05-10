@@ -20,9 +20,10 @@ Ownership: this file is the staged Electron roadmap. Durable architecture rules 
 - Current app still has browser/Netlify compatibility, but those paths are now transitional during migration.
 - Electron dev scaffolding and planning have started.
 - Browser/Netlify mode remains a rollback and compatibility layer until desktop-native Gemini, storage, backup/restore, and packaging paths are verified.
-- UWorld DOCX pipeline is implemented inside the current app and now includes normalized blocks, concept extraction, deterministic clustering/deduplication, selected clusters, deterministic draft scaffolds, Electron-local Gemini refinement, review controls, approved JSON export, quiz-object preview, and controlled save into real tests.
+- UWorld DOCX pipeline is implemented inside the current app and now includes normalized blocks, concept extraction, deterministic clustering/deduplication, selected clusters, deterministic draft scaffolds, one-at-a-time Electron-local Gemini refinement, live batch queue controls, review controls, duplicate warnings, section/topic coverage summaries, preflight safeguards, approved JSON export, quiz-object preview, and controlled save into real tests.
 - Electron-local UWorld Gemini refinement uses Electron main/preload. The renderer never receives the API key, and `GEMINI_API_KEY` is read from `process.env` only.
-- Batch refinement is not implemented.
+- UWorld v1 implementation complete, pending real-world validation.
+- Live Gemini validation/testing is intentionally deferred to conserve API credits.
 - Primary local origin is `http://localhost:8888`; secondary/fallback local origin is `http://localhost:8080`.
 - Localhost dev loading remains intentional during migration. Packaged/local app loading should come later, after storage and service boundaries are verified.
 - Early Electron work should run locally and should not require push or Netlify deploys.
@@ -107,6 +108,8 @@ Ownership: this file is the staged Electron roadmap. Durable architecture rules 
 
 ### UWorld Notes Pipeline
 
+Status: UWorld v1 implementation complete, pending real-world validation.
+
 Current implemented flow:
 
 ```text
@@ -116,8 +119,9 @@ DOCX import
 → deterministic clustering/deduplication
 → selected clusters
 → deterministic draft scaffolds
-→ Electron-local Gemini refinement
+→ one-at-a-time Electron-local Gemini refinement
 → review controls
+→ duplicate warnings and section/topic coverage summaries
 → approved draft JSON export
 → quiz-object preview
 → controlled save into real tests
@@ -129,9 +133,11 @@ Safeguards:
 - Concept clustering and selected-cluster controls are implemented.
 - Save-to-quiz is controlled and review-gated. It requires approved refined drafts, valid quiz-object previews, an explicit save target, a nonempty test name, and review confirmation.
 - No UWorld path should expose API keys, store secrets, or write Gemini prompt/debug content to Drive backups or debug exports.
-- Batch refinement is not implemented.
+- Live batch refinement is implemented as a conservative one-at-a-time queue. It reuses Electron main as the only Gemini caller, avoids duplicate refinements by draft hash, tracks explicit queue states, supports pause/cancel/retry, stops after repeated failures, and keeps save/export limited to reviewed approved outputs.
+- Duplicate refined-question warnings, review filters/sorts, section/topic coverage summaries, and live-run preflight safeguards are implemented as display/review aids only. They do not auto-approve, auto-reject, auto-save, or block saving.
+- Live Gemini validation/testing is intentionally deferred to conserve API credits.
 
-Future batch queue design:
+Current batch queue flow:
 
 ```text
 selected clusters
@@ -139,10 +145,11 @@ selected clusters
 → one-at-a-time queue
 → cache by draft hash
 → pause/cancel/retry
+→ preflight confirmation
 → review-gated save
 ```
 
-Batch implementation should reuse Electron main as the only Gemini caller, avoid duplicate refinements by draft hash, and keep save/export limited to reviewed approved outputs.
+Remaining validation should use real imported UWorld notes and a small confirmed batch before any large run.
 
 ### Stage 7: Preserve Or Adapt Drive Workflow
 
@@ -419,6 +426,14 @@ Append future entries here.
 - Verification: Electron successfully loaded the existing app over `http://localhost:8888`; `file://` was not used; browser/Netlify mode still works; basic Electron interaction verification passed.
 - Decision: Keep Gemini routed through Netlify Functions for now. Local Gemini verification remains intentionally skipped during early Electron migration.
 - Rollback notes: No parser, render, OCR, Gemini, Drive, storage, packaging, or deployment changes were made for this verification.
+
+### 2026-05-10
+
+- Stage: UWorld v1 workflow completion, pending live validation.
+- Change: UWorld DOCX pipeline is implemented end-to-end with deterministic clustering/deduplication, selected clusters, deterministic draft generation, single-draft Electron Gemini refinement, live one-at-a-time batch queue, review controls, duplicate warnings, review filtering/sorting, section/topic coverage summaries, preflight safeguards, approved JSON export, quiz-object preview, and controlled save into real tests.
+- Verification: Source-level and syntax checks passed during implementation work. Live Gemini validation/testing is intentionally deferred to conserve API credits.
+- Decision: Preserve Electron-first direction while keeping browser/Netlify rollback support. Preserve NBME parser isolation, grouped-question safeguards, and existing browser storage paths.
+- Rollback notes: No OCR/PDF parser logic, grouped-question behavior, Netlify removal, app-data migration, packaging, push, or deployment is part of UWorld v1 completion.
 
 ### Entry Template
 

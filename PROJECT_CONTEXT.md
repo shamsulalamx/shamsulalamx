@@ -33,7 +33,7 @@ Main inline modules:
 - `Quiz`: test-taking engine, timers, answer selection, hints, stem-image rendering, highlighting, and navigation.
 - `Results`: score report, review mode, analytics, and PDF report generation.
 - `App`: study library landing page, source-folder routing, sidebar navigation, modals, search, notes, incorrect, marked, flagged, trash, and test generation.
-- UWorld DOCX pipeline: DOCX import, normalized blocks, concept extraction, deterministic clustering/deduplication, selected clusters, deterministic draft scaffolds, Electron-local Gemini refinement, review controls, approved draft JSON export, quiz-object preview, and controlled save into real tests.
+- UWorld DOCX pipeline: DOCX import, normalized blocks, concept extraction, deterministic clustering/deduplication, selected clusters, deterministic draft scaffolds, one-at-a-time Electron-local Gemini refinement, live batch queue controls, review controls, duplicate warnings, coverage summaries, preflight safeguards, approved draft JSON export, quiz-object preview, and controlled save into real tests.
 
 ## Current Stable Parser And Rendering State
 
@@ -81,6 +81,8 @@ Future importer and render work should preserve the current stable browser behav
 
 The UWorld DOCX importer is separate from the NBME PDF parser/OCR/render path. UWorld work must not modify NBME parser logic, OCR normalization, grouped-question handling, or existing rendering invariants.
 
+Status: UWorld v1 implementation complete, pending real-world validation.
+
 Current UWorld flow:
 
 ```text
@@ -90,8 +92,9 @@ DOCX import
 → deterministic clustering/deduplication
 → selected clusters
 → deterministic draft scaffolds
-→ Electron-local Gemini refinement
+→ one-at-a-time Electron-local Gemini refinement
 → review controls
+→ duplicate warnings and coverage summaries
 → approved draft JSON export
 → quiz-object preview
 → controlled save into real tests
@@ -99,7 +102,7 @@ DOCX import
 
 UWorld saves require approved AI-refined drafts, valid quiz-object previews, an explicit save target, a nonempty test name, and an inline review confirmation. Browser `prompt()`/`confirm()` must not be used for this Electron save flow.
 
-Batch refinement is not implemented. Future batch design is selected clusters → deterministic drafts → one-at-a-time Electron main Gemini queue → cache by draft hash → pause/cancel/retry → review-gated save.
+Live batch refinement is implemented as a conservative one-at-a-time Electron main Gemini queue using the existing `window.nbmeDesktop.ai.refineUWorldDraft(...)` bridge. The queue includes draft-hash caching, duplicate skipping, pause/cancel/retry controls, failure stopping, visible progress, preflight confirmation, duplicate refined-question warnings, and section/topic coverage summaries. Live Gemini validation/testing is intentionally deferred to conserve API credits. Netlify Functions remain transitional/rollback support, and no app-data storage migration has been performed.
 
 ## Historical Debugging Notes
 
