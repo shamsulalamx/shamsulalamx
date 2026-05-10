@@ -2,6 +2,8 @@
 
 Parser/debugging workflow only. Prefer the smallest safe correction point.
 
+Ownership: this prompt is operational parser-debug guidance only. Durable architecture rules, current project status, and staged Electron roadmap details belong in their dedicated project documents.
+
 Do not commit, push, deploy, or silently mutate saved quizzes unless explicitly approved.
 
 ## Layer Separation

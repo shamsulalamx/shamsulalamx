@@ -2,6 +2,8 @@
 
 Last verified from `PROJECT_STATUS_2026-05-08.md`.
 
+Ownership: this file records durable architecture rules and long-lived constraints. Runtime snapshot details belong in `PROJECT_STATUS_2026-05-08.md`; staged Electron decisions belong in `ELECTRON_MIGRATION_PLAN.md`; operational prompts should stay in the prompt files.
+
 ## Core Rules
 
 - `index.html` is the authoritative working app.
@@ -13,7 +15,7 @@ Last verified from `PROJECT_STATUS_2026-05-08.md`.
 - Current implementation: Gemini API calls go through Netlify Functions. Do not put Gemini API keys in frontend JavaScript, localStorage, or Google Drive backups.
 - Supabase is not active. Do not reintroduce Supabase unless explicitly requested.
 - Keep full-quality question stems, figures, and exhibits in IndexedDB via `FigureStore` or in Google Drive. Do not store large image data in localStorage.
-- Google Drive OAuth should use the deployed HTTPS Netlify origin. Local development may use `http://localhost:8888` or `http://localhost:8080` only if those origins are added in Google Cloud Console. `file://` is not supported for Drive or Gemini.
+- Google Drive OAuth should use the deployed HTTPS Netlify origin. Local development should use `http://localhost:8888` as the primary origin, or `http://localhost:8080` as a secondary/fallback origin, only if those origins are added in Google Cloud Console. `file://` is not supported for Drive or Gemini.
 - The app is currently private/personal use only. Electron security decisions, including local user-provided API keys or OAuth token storage, should be evaluated in that context and revisited if public distribution is ever planned.
 
 ## Active App
@@ -53,7 +55,7 @@ The local grouped-question pipeline is stable and verified locally. The current 
 
 ## Future Importer And Render Direction
 
-The next planned phase is Electron migration. The first Electron step should wrap the current stable app without changing app behavior. Avoid rewrites during the initial migration.
+The current migration direction is staged Electron adoption around the stable browser app. Early Electron work should keep wrapping the current app without changing app behavior. Avoid rewrites during initial migration.
 
 Future importer and render work should preserve the current stable browser behavior while moving toward a clearer architecture:
 

@@ -4,6 +4,8 @@ Last updated: 2026-05-08 20:15 EDT
 
 This file captures the current working state after the landing-page library rehaul, PDF report naming update, and local grouped-question parser/render stabilization. It supersedes older status files where they conflict.
 
+Ownership: this file is the current runtime/status snapshot. Durable rules belong in `PROJECT_CONTEXT.md`; staged Electron roadmap details belong in `ELECTRON_MIGRATION_PLAN.md`; prompt files are operational guidance only.
+
 ## Core Rules
 
 - `index.html` is the authoritative working app.
@@ -22,7 +24,7 @@ This file captures the current working state after the landing-page library reha
 - Keep the Gemini model string exactly `gemini-2.5-flash`.
 - Do not reintroduce Supabase unless explicitly requested.
 - Keep full-quality question and figure images in IndexedDB or Google Drive. Do not put image data back into localStorage.
-- Google Drive OAuth requires opening the app from `http://localhost:8080`, not `file://`, when connecting or syncing Drive.
+- Google Drive OAuth requires opening the app from an approved HTTP/HTTPS origin, not `file://`, when connecting or syncing Drive. Primary local origin: `http://localhost:8888`; secondary/fallback local origin: `http://localhost:8080`.
 - The app is currently private/personal use only. Future Electron security decisions, including local user-provided API key storage or OAuth token storage, should be evaluated in that context and revisited if public distribution is ever planned.
 
 ## Current File State
@@ -103,9 +105,9 @@ Operational status:
 
 ## Future Importer And Render Architecture
 
-The next planned phase is Electron migration.
+Electron migration is in early staged development and planning.
 
-The first Electron step should wrap the current stable app without changing app behavior. Avoid rewrites during the initial migration.
+Electron should continue wrapping the current stable app without changing app behavior. Avoid rewrites during initial migration.
 
 Electron work should begin locally and should not trigger Netlify deployments initially.
 
@@ -283,7 +285,7 @@ Implemented behavior:
 Important operational note:
 
 - For Netlify deployment, Google Drive OAuth should use the deployed HTTPS origin, for example `https://MY-NETLIFY-SITE.netlify.app`.
-- Local development may use `http://localhost:8888` or `http://localhost:8080` only if those origins are added in Google Cloud Console.
+- Local development should use `http://localhost:8888` as the primary origin, or `http://localhost:8080` as a secondary/fallback origin, only if those origins are added in Google Cloud Console.
 - Opening `index.html` directly with `file://` is not supported for Drive or Gemini.
 
 ### Supabase

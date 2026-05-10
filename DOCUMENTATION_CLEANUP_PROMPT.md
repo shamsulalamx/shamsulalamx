@@ -2,6 +2,8 @@
 
 Documentation cleanup only. Do not modify app logic.
 
+Ownership: this prompt governs documentation cleanup tasks only. Durable architecture rules, current project status, and staged Electron roadmap details belong in their dedicated project documents.
+
 ## Scope
 
 - Update only relevant documentation/prompt files.

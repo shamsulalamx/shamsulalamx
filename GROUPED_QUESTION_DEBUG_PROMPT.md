@@ -2,6 +2,8 @@
 
 Grouped-question debugging only. Do not generalize historical question numbers into active logic.
 
+Ownership: this prompt is operational grouped-question debugging guidance only. Durable architecture rules, current project status, and staged Electron roadmap details belong in their dedicated project documents.
+
 ## sharedGroup Invariants
 
 Grouped questions must:

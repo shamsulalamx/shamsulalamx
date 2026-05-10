@@ -4,12 +4,14 @@ Use this prompt for Electron migration planning and implementation continuity.
 
 Do not commit, push, deploy, package, or remove Netlify/web support unless explicitly approved.
 
+Ownership: this prompt is operational guidance for Electron work. Durable rules belong in `PROJECT_CONTEXT.md`; current status belongs in `PROJECT_STATUS_2026-05-08.md`; the staged roadmap belongs in `ELECTRON_MIGRATION_PLAN.md`.
+
 ## Current Baseline
 
 - Current stable checkpoint: `2ba4b1d Stabilize parser/render pipeline before Electron migration`.
 - The browser app in `index.html` remains the stable baseline and fallback.
 - Parser/render pipeline is stable locally.
-- Electron work has not started yet.
+- Electron dev scaffolding and planning have started.
 - Netlify deploy credits are limited; avoid Netlify deploys during local Electron iteration.
 - The app is currently private/personal use only.
 

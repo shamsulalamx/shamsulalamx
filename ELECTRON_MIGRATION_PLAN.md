@@ -11,12 +11,15 @@ It is different from:
 
 This file should track migration stages, decisions, risks, verification checkpoints, and future migration log entries.
 
+Ownership: this file is the staged Electron roadmap. Durable architecture rules belong in `PROJECT_CONTEXT.md`; current runtime status belongs in `PROJECT_STATUS_2026-05-08.md`; prompt files are operational/debug guidance only.
+
 ## Current Baseline
 
 - Stable checkpoint commit: `2ba4b1d Stabilize parser/render pipeline before Electron migration`.
-- Current app is the stable browser/Netlify version.
-- Electron work has not started yet.
+- Current app is still the stable browser/Netlify version.
+- Electron dev scaffolding and planning have started.
 - Browser app remains the fallback.
+- Primary local origin is `http://localhost:8888`; secondary/fallback local origin is `http://localhost:8080`.
 - Early Electron work should run locally and should not require push or Netlify deploys.
 
 ## Migration Principles
