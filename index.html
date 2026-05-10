@@ -8354,6 +8354,7 @@ const App = (() => {
       rawConceptCount: clusterResult?.rawConceptCount || 0,
       conceptsPerCluster: activeClusters.map(cluster => cluster.memberCount),
       variantCounts,
+      reviewStatus: Object.fromEntries(drafts.map(draft => [draft.id, 'pending'])),
       warnings,
       warningCount: warnings.length,
       skippedClusters
@@ -8400,6 +8401,21 @@ const App = (() => {
     renderOmeClusterPreview(_omeImportPreview.conceptResult.clusterResult);
   }
 
+  function setOmeDraftReviewStatus(draftId, status) {
+    if (!_omeImportPreview?.draftResult?.reviewStatus) return;
+    if (!draftId || !['pending', 'approved', 'rejected'].includes(status)) return;
+    _omeImportPreview.draftResult.reviewStatus[draftId] = status;
+    renderOmeDraftPreview(_omeImportPreview.draftResult);
+  }
+
+  function getOmeDraftReviewStatusSummary() {
+    const reviewStatus = _omeImportPreview?.draftResult?.reviewStatus || {};
+    return Object.values(reviewStatus).reduce((counts, status) => {
+      counts[status] = (counts[status] || 0) + 1;
+      return counts;
+    }, { pending: 0, approved: 0, rejected: 0 });
+  }
+
   function renderOmeDraftPreview(result) {
     const status = document.getElementById('ome-draft-status');
     const preview = document.getElementById('ome-draft-preview');
@@ -8411,6 +8427,8 @@ const App = (() => {
     const targetQuestionCount = Number(draftResult?.targetQuestionCount || getOmeDraftTargetQuestionCount() || 0);
     const rawConceptCount = Number(draftResult?.rawConceptCount || _omeImportPreview?.conceptResult?.clusterResult?.rawConceptCount || 0);
     const warningCount = Number(draftResult?.warningCount || 0);
+    const reviewStatus = draftResult?.reviewStatus || {};
+    const reviewCounts = getOmeDraftReviewStatusSummary();
     const targetLabel = targetQuestionCount > 0 ? String(targetQuestionCount) : 'all';
 
     if (!drafts.length) {
@@ -8434,6 +8452,9 @@ const App = (() => {
       </div>
       <div class="notes-import-stats" style="margin-top:8px;">
         <span><strong>Target</strong> ${escapeHTML(targetLabel)}</span>
+        <span><strong>Pending</strong> ${escapeHTML(String(reviewCounts.pending || 0))}</span>
+        <span><strong>Approved</strong> ${escapeHTML(String(reviewCounts.approved || 0))}</span>
+        <span><strong>Rejected</strong> ${escapeHTML(String(reviewCounts.rejected || 0))}</span>
         ${variantSummary || '<span><strong>Variant types</strong> None</span>'}
       </div>
       <div class="notes-draft-card" style="margin-top:10px;">
@@ -8447,6 +8468,7 @@ const App = (() => {
         const sourceBlockOrders = Array.isArray(draft.sourceBlockOrders) ? draft.sourceBlockOrders : [];
         const sourceSnippets = Array.isArray(draft.sourceSnippets) ? draft.sourceSnippets : [];
         const choices = Array.isArray(draft.choices) ? draft.choices : [];
+        const currentReviewStatus = reviewStatus[draft.id] || 'pending';
         const provenance = {
           sourceName: draft.sourceName || '',
           sourceHash: draft.sourceHash || '',
@@ -8469,8 +8491,14 @@ const App = (() => {
               <div class="notes-draft-meta"><strong>Source orders:</strong> ${escapeHTML(sourceBlockOrders.map(value => String(value)).join(', ') || 'None')}</div>
               <div class="notes-draft-meta"><strong>Source:</strong> ${escapeHTML(draft.sourceName || '')}</div>
               <div class="notes-draft-meta"><strong>Hash:</strong> ${escapeHTML(draft.sourceHash || '')}</div>
+              <div class="notes-draft-meta"><strong>Review status:</strong> ${escapeHTML(currentReviewStatus)}</div>
               <div class="notes-draft-meta"><strong>Provisional correct answer:</strong> ${escapeHTML(String(draft.provisionalCorrectAnswer || ''))} · ${escapeHTML(String(draft.provisionalCorrectAnswerText || ''))}</div>
               <div class="notes-draft-meta"><strong>Teaching point:</strong> ${escapeHTML(draft.teachingPoint || '')}</div>
+              <div class="notes-draft-body" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0 0;">
+                <button type="button" class="btn-card" onclick="App.setOmeDraftReviewStatus('${escapeHTML(draft.id)}','approved')" ${currentReviewStatus === 'approved' ? 'disabled' : ''}>Approve</button>
+                <button type="button" class="btn-card danger" onclick="App.setOmeDraftReviewStatus('${escapeHTML(draft.id)}','rejected')" ${currentReviewStatus === 'rejected' ? 'disabled' : ''}>Reject</button>
+                <button type="button" class="btn-card" onclick="App.setOmeDraftReviewStatus('${escapeHTML(draft.id)}','pending')" ${currentReviewStatus === 'pending' ? 'disabled' : ''}>Reset</button>
+              </div>
               ${warnings.length ? `<div style="color:#8a5a00;margin-top:8px;">${warnings.map(warning => escapeHTML(warning)).join('<br>')}</div>` : '<div class="notes-import-empty">No draft warnings.</div>'}
               <div style="margin-top:8px;"><strong>Choices</strong></div>
               ${choices.map(choice => `
@@ -14399,6 +14427,7 @@ const App = (() => {
     closeOmePdfImportPreview,
     clearOmePdfImportPreview,
     previewOmePdfImport,
+    setOmeDraftReviewStatus,
     updateOmeClusterSelection,
     selectAllOmeClusters,
     deselectAllOmeClusters,
