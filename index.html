@@ -1806,7 +1806,25 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
     <div id="anki-quiz-object-preview" class="notes-draft-preview">
       <div class="notes-import-empty">No approved Anki variants converted.</div>
     </div>
+    <div class="notes-import-section-title">Save Approved Anki Variants</div>
+    <div class="form-group">
+      <label class="form-label">Anki Subfolder</label>
+      <select class="form-input" id="anki-create-test-target" onchange="App.updateApprovedAnkiDraftCreateTestButton()">
+        <option value="">Choose an Anki subfolder</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Test name</label>
+      <input type="text" class="form-input" id="anki-create-test-name" value="Anki Variants Test" oninput="App.updateApprovedAnkiDraftCreateTestButton()">
+    </div>
+    <label class="check-row" style="margin:8px 0 0;">
+      <input type="checkbox" id="anki-create-test-reviewed" onchange="App.updateApprovedAnkiDraftCreateTestButton()">
+      <span>I reviewed and approve these quiz objects for test creation.</span>
+    </label>
+    <div id="anki-create-test-diagnostics" class="notes-import-summary">Save readiness will appear after approved variants are available.</div>
+    <div id="anki-create-test-error" class="notes-import-summary" style="display:none;color:#8a5a00;"></div>
     <div class="modal-actions">
+      <button type="button" class="btn-modal primary" id="anki-create-test-approved" onclick="App.createTestFromApprovedAnkiVariants()" disabled>Create Test from Approved Anki Variants</button>
       <button type="button" class="btn-modal" id="anki-export-approved" onclick="App.exportApprovedAnkiVariantsJson()" disabled>Export Approved Anki Variants JSON</button>
       <button type="button" class="btn-modal" onclick="App.clearAnkiTextImportPreview()">Clear</button>
       <button type="button" class="btn-modal primary" onclick="App.closeAnkiTextImportPreview()">Done</button>
@@ -7084,6 +7102,8 @@ const App = (() => {
   function openAnkiTextImportPreview() {
     const modal = document.getElementById('modal-anki-import');
     if (modal) modal.style.display = 'flex';
+    renderAnkiDraftSaveTargetSelector(false);
+    updateApprovedAnkiDraftCreateTestButton();
   }
 
   function closeAnkiTextImportPreview() {
@@ -7105,6 +7125,11 @@ const App = (() => {
     const variantPreview = document.getElementById('anki-variant-preview');
     const quizObjectStatus = document.getElementById('anki-quiz-object-status');
     const quizObjectPreview = document.getElementById('anki-quiz-object-preview');
+    const saveTarget = document.getElementById('anki-create-test-target');
+    const saveName = document.getElementById('anki-create-test-name');
+    const saveReviewed = document.getElementById('anki-create-test-reviewed');
+    const saveDiagnostics = document.getElementById('anki-create-test-diagnostics');
+    const saveError = document.getElementById('anki-create-test-error');
     if (input) input.value = '';
     if (status) status.textContent = 'Choose a .txt file exported from Anki as Notes in Plain Text.';
     if (diagnostics) diagnostics.innerHTML = '<div class="notes-import-empty">No Anki text file loaded.</div>';
@@ -7117,7 +7142,17 @@ const App = (() => {
     if (variantPreview) variantPreview.innerHTML = '<div class="notes-import-empty">No variant drafts generated.</div>';
     if (quizObjectStatus) quizObjectStatus.textContent = 'Approve Anki variant drafts to preview quiz-question objects. Nothing is saved.';
     if (quizObjectPreview) quizObjectPreview.innerHTML = '<div class="notes-import-empty">No approved Anki variants converted.</div>';
+    if (saveTarget) saveTarget.value = '';
+    if (saveName) saveName.value = 'Anki Variants Test';
+    if (saveReviewed) saveReviewed.checked = false;
+    if (saveDiagnostics) saveDiagnostics.textContent = 'Save readiness will appear after approved variants are available.';
+    if (saveError) {
+      saveError.style.display = 'none';
+      saveError.textContent = '';
+    }
+    renderAnkiDraftSaveTargetSelector(false);
     updateAnkiVariantExportButton();
+    updateApprovedAnkiDraftCreateTestButton();
   }
 
   async function previewAnkiTextExport(input) {
@@ -7133,6 +7168,11 @@ const App = (() => {
     const variantPreview = document.getElementById('anki-variant-preview');
     const quizObjectStatus = document.getElementById('anki-quiz-object-status');
     const quizObjectPreview = document.getElementById('anki-quiz-object-preview');
+    const saveTarget = document.getElementById('anki-create-test-target');
+    const saveName = document.getElementById('anki-create-test-name');
+    const saveReviewed = document.getElementById('anki-create-test-reviewed');
+    const saveDiagnostics = document.getElementById('anki-create-test-diagnostics');
+    const saveError = document.getElementById('anki-create-test-error');
     if (!file) return;
 
     const lowerName = String(file.name || '').toLowerCase();
@@ -7149,6 +7189,16 @@ const App = (() => {
       if (variantPreview) variantPreview.innerHTML = '<div class="notes-import-empty">No variant drafts generated.</div>';
       if (quizObjectStatus) quizObjectStatus.textContent = 'Approve Anki variant drafts to preview quiz-question objects. Nothing is saved.';
       if (quizObjectPreview) quizObjectPreview.innerHTML = '<div class="notes-import-empty">No approved Anki variants converted.</div>';
+      if (saveTarget) saveTarget.value = '';
+      if (saveName) saveName.value = 'Anki Variants Test';
+      if (saveReviewed) saveReviewed.checked = false;
+      if (saveDiagnostics) saveDiagnostics.textContent = 'Save readiness will appear after approved variants are available.';
+      if (saveError) {
+        saveError.style.display = 'none';
+        saveError.textContent = '';
+      }
+      renderAnkiDraftSaveTargetSelector(false);
+      updateApprovedAnkiDraftCreateTestButton();
       updateAnkiVariantExportButton();
       return;
     }
@@ -7166,6 +7216,16 @@ const App = (() => {
       if (variantPreview) variantPreview.innerHTML = '<div class="notes-import-empty">No variant drafts generated.</div>';
       if (quizObjectStatus) quizObjectStatus.textContent = 'Approve Anki variant drafts to preview quiz-question objects. Nothing is saved.';
       if (quizObjectPreview) quizObjectPreview.innerHTML = '<div class="notes-import-empty">No approved Anki variants converted.</div>';
+      if (saveTarget) saveTarget.value = '';
+      if (saveName) saveName.value = 'Anki Variants Test';
+      if (saveReviewed) saveReviewed.checked = false;
+      if (saveDiagnostics) saveDiagnostics.textContent = 'Save readiness will appear after approved variants are available.';
+      if (saveError) {
+        saveError.style.display = 'none';
+        saveError.textContent = '';
+      }
+      renderAnkiDraftSaveTargetSelector(false);
+      updateApprovedAnkiDraftCreateTestButton();
       updateAnkiVariantExportButton();
       return;
     }
@@ -7188,6 +7248,7 @@ const App = (() => {
       renderAnkiConceptPreview(conceptResult);
       renderAnkiClusterPreview(clusterResult);
       renderAnkiVariantPreview(variantResult);
+      renderAnkiDraftSaveTargetSelector(false);
     } catch (err) {
       _ankiImportPreview = null;
       if (status) status.textContent = `Unable to preview Anki text export: ${err?.message || 'Unknown parse error.'}`;
@@ -7201,6 +7262,16 @@ const App = (() => {
       if (variantPreview) variantPreview.innerHTML = '<div class="notes-import-empty">No variant drafts generated.</div>';
       if (quizObjectStatus) quizObjectStatus.textContent = 'Approve Anki variant drafts to preview quiz-question objects. Nothing is saved.';
       if (quizObjectPreview) quizObjectPreview.innerHTML = '<div class="notes-import-empty">No approved Anki variants converted.</div>';
+      if (saveTarget) saveTarget.value = '';
+      if (saveName) saveName.value = 'Anki Variants Test';
+      if (saveReviewed) saveReviewed.checked = false;
+      if (saveDiagnostics) saveDiagnostics.textContent = 'Save readiness will appear after approved variants are available.';
+      if (saveError) {
+        saveError.style.display = 'none';
+        saveError.textContent = '';
+      }
+      renderAnkiDraftSaveTargetSelector(false);
+      updateApprovedAnkiDraftCreateTestButton();
       updateAnkiVariantExportButton();
     }
   }
@@ -8763,6 +8834,7 @@ const App = (() => {
     if (!approved.length) {
       status.textContent = 'Approve Anki variant drafts to preview quiz-question objects. Nothing is saved.';
       preview.innerHTML = '<div class="notes-import-empty">No approved Anki variants converted.</div>';
+      updateApprovedAnkiDraftCreateTestButton();
       return;
     }
 
@@ -8777,6 +8849,7 @@ const App = (() => {
           <div style="color:#8a5a00;margin-top:8px;">${escapeHTML(errors.join(' '))}</div>
         </div>
       `;
+      updateApprovedAnkiDraftCreateTestButton();
       return;
     }
 
@@ -8803,6 +8876,238 @@ const App = (() => {
         </details>
       `;
     }).join('');
+    updateApprovedAnkiDraftCreateTestButton();
+  }
+
+  function getAnkiSourceFolder() {
+    return DB.get().sourceFolders.find(source => source.sourceType === 'anki') || DB.getSourceFolder('src-anki') || null;
+  }
+
+  function getAnkiSubfolders() {
+    const source = getAnkiSourceFolder();
+    return source ? DB.getFolders(source.id) : [];
+  }
+
+  function renderAnkiDraftSaveTargetSelector(preserveSelection = true) {
+    const select = document.getElementById('anki-create-test-target');
+    if (!select) return;
+    const previousValue = preserveSelection ? select.value : '';
+    const folders = getAnkiSubfolders();
+    const newFolderOption = '<option value="__new__">Create new Anki Notes folder</option>';
+    const folderOptions = folders.map(folder => `<option value="${escapeHTML(folder.id)}">${escapeHTML(folder.name)}</option>`).join('');
+    select.innerHTML = `<option value="">Choose an Anki subfolder</option>${folderOptions}${newFolderOption}`;
+    if (Array.from(select.options).some(option => option.value === previousValue)) {
+      select.value = previousValue;
+    } else {
+      select.value = '';
+    }
+  }
+
+  function getSelectedAnkiDraftSaveTarget() {
+    const selectedValue = document.getElementById('anki-create-test-target')?.value || '';
+    const source = getAnkiSourceFolder();
+    if (selectedValue === '__new__') {
+      return { ok: !!source, mode: 'new-folder', source, folder: null, error: source ? '' : 'Anki source folder is unavailable.' };
+    }
+    if (!selectedValue) return { ok: false, mode: 'none', source, folder: null, error: 'Choose an Anki subfolder before creating a test.' };
+    const folder = getAnkiSubfolders().find(item => item.id === selectedValue);
+    if (!folder) return { ok: false, mode: 'missing-folder', source, folder: null, error: 'Selected Anki subfolder was not found.' };
+    return { ok: true, mode: 'existing-folder', source, folder, error: '' };
+  }
+
+  function getAnkiDraftSaveInputs() {
+    const testName = (document.getElementById('anki-create-test-name')?.value || '').trim();
+    const reviewed = !!document.getElementById('anki-create-test-reviewed')?.checked;
+    return { testName, reviewed };
+  }
+
+  function setAnkiDraftSaveError(message) {
+    const el = document.getElementById('anki-create-test-error');
+    if (!el) return;
+    el.style.display = message ? 'block' : 'none';
+    el.textContent = message || '';
+  }
+
+  function renderAnkiDraftSaveDiagnostics(items, errors, target, readiness, inputs, lastMessage = '', counts = null) {
+    const el = document.getElementById('anki-create-test-diagnostics');
+    if (!el) return;
+    const selectedValue = document.getElementById('anki-create-test-target')?.value || '';
+    const approvedCount = getApprovedAnkiVariantDrafts().length;
+    const targetLabel = selectedValue
+      ? selectedValue === '__new__' ? 'Create new Anki Notes folder' : `${target?.folder?.name || 'Unknown folder'} (${selectedValue})`
+      : 'None selected';
+    const validationLabel = errors.length ? `Blocked: ${errors[0]}` : 'Passed';
+    const readinessLabel = readiness.ok ? 'Ready' : `Blocked: ${readiness.message}`;
+    el.innerHTML = [
+      `<div><strong>Selected target:</strong> ${escapeHTML(targetLabel)}</div>`,
+      `<div><strong>Test name valid:</strong> ${inputs.testName ? 'Yes' : 'No'}</div>`,
+      `<div><strong>Review confirmation checked:</strong> ${inputs.reviewed ? 'Yes' : 'No'}</div>`,
+      `<div><strong>Approved variants:</strong> ${approvedCount}</div>`,
+      `<div><strong>Quiz object previews:</strong> ${items.length}</div>`,
+      `<div><strong>Validation:</strong> ${escapeHTML(validationLabel)}</div>`,
+      `<div><strong>Save readiness:</strong> ${escapeHTML(readinessLabel)}</div>`,
+      counts ? `<div><strong>DB tests before/after:</strong> ${counts.before} / ${counts.after}</div>` : '',
+      lastMessage ? `<div><strong>Last save:</strong> ${escapeHTML(lastMessage)}</div>` : ''
+    ].filter(Boolean).join('');
+  }
+
+  function getApprovedAnkiDraftCreateTestReadiness(items, errors, target, inputs) {
+    if (!items.length) return { ok: false, message: 'Approve at least one Anki variant before creating a test.' };
+    if (errors.length) return { ok: false, message: `Cannot create test: ${errors[0]}` };
+    if (!target?.ok) return { ok: false, message: target?.error || 'Choose an Anki subfolder before creating a test.' };
+    if (!inputs.testName) return { ok: false, message: 'Enter a test name before creating a test.' };
+    if (!inputs.reviewed) return { ok: false, message: 'Confirm that you reviewed and approve these quiz objects before creating a test.' };
+    return { ok: true, message: '' };
+  }
+
+  function updateApprovedAnkiDraftCreateTestButton() {
+    const btn = document.getElementById('anki-create-test-approved');
+    if (!btn) return;
+    const { items, errors } = getApprovedAnkiQuizObjectPreviewValidation();
+    const target = getSelectedAnkiDraftSaveTarget();
+    const inputs = getAnkiDraftSaveInputs();
+    const readiness = getApprovedAnkiDraftCreateTestReadiness(items, errors, target, inputs);
+    btn.disabled = !readiness.ok;
+    btn.textContent = items.length > 0 ? `Create Test from Approved Anki Variants (${items.length})` : 'Create Test from Approved Anki Variants';
+    btn.title = readiness.message;
+    setAnkiDraftSaveError(readiness.ok ? '' : readiness.message);
+    renderAnkiDraftSaveDiagnostics(items, errors, target, readiness, inputs);
+  }
+
+  function createTestFromApprovedAnkiVariants() {
+    const { items, errors } = getApprovedAnkiQuizObjectPreviewValidation();
+    const target = getSelectedAnkiDraftSaveTarget();
+    const inputs = getAnkiDraftSaveInputs();
+    const readiness = getApprovedAnkiDraftCreateTestReadiness(items, errors, target, inputs);
+    const selectedValue = document.getElementById('anki-create-test-target')?.value || '';
+
+    if (!readiness.ok) {
+      const blockedState = {
+        clickHandlerFired: true,
+        sourceId: target?.source?.id || null,
+        sourceType: target?.source?.sourceType || null,
+        selectedTargetValue: selectedValue,
+        selectedTargetMode: target?.mode || null,
+        selectedFolderId: target?.folder?.id || null,
+        approvedAnkiVariantCount: getApprovedAnkiVariantDrafts().length,
+        quizObjectPreviewCount: items.length,
+        validationErrors: errors,
+        dbCreateTestReached: false
+      };
+      console.warn('Anki variant save blocked:', blockedState);
+      setAnkiDraftSaveError(readiness.message);
+      renderAnkiDraftSaveDiagnostics(items, errors, target, readiness, inputs, `Blocked: ${readiness.message}`);
+      toast(readiness.message, 8000);
+      return;
+    }
+    setAnkiDraftSaveError('');
+
+    try {
+      const testName = inputs.testName;
+      const targetFolderName = target.folder?.name || 'Anki Notes';
+      const source = target.source || getAnkiSourceFolder();
+      const beforeCount = DB.get().tests.length;
+      const questions = items.map(item => {
+        const question = JSON.parse(JSON.stringify(item.quizQuestion));
+        question.ankiVariantProvenance = JSON.parse(JSON.stringify({
+          ...(item.provenance || {}),
+          targetFolderId: target.folder?.id || null,
+          targetFolderName,
+          savedAt: new Date().toISOString()
+        }));
+        return question;
+      });
+      const immediateErrors = questions.flatMap((question, idx) => validateAnkiQuizObjectPreviewItem({
+        quizQuestion: question,
+        provenance: question.ankiVariantProvenance || {}
+      }).map(error => `Question ${idx + 1}: ${error}`));
+      if (immediateErrors.length) {
+        const message = `Cannot create test: ${immediateErrors[0]}`;
+        console.warn('Anki variant save failed validation before DB.createTest:', {
+          selectedTargetValue: selectedValue,
+          approvedAnkiVariantCount: getApprovedAnkiVariantDrafts().length,
+          quizObjectPreviewCount: questions.length,
+          validationErrors: immediateErrors,
+          dbCreateTestReached: false
+        });
+        setAnkiDraftSaveError(message);
+        renderAnkiDraftSaveDiagnostics(items, immediateErrors, target, { ok: false, message }, inputs, `Failed: ${message}`, { before: beforeCount, after: beforeCount });
+        toast(message, 8000);
+        return;
+      }
+
+      const targetFolder = target.folder || DB.createFolder(targetFolderName, source?.id || 'src-anki');
+      if (!targetFolder?.id) {
+        const message = 'Could not resolve the selected Anki target folder.';
+        console.warn('Anki variant save failed:', { selectedTargetValue: selectedValue, dbCreateTestReached: false, message });
+        setAnkiDraftSaveError(message);
+        renderAnkiDraftSaveDiagnostics(items, errors, target, readiness, inputs, `Failed: ${message}`, { before: beforeCount, after: beforeCount });
+        toast(message, 8000);
+        return;
+      }
+
+      const test = DB.createTest(targetFolder.id, testName, questions);
+      const afterCount = DB.get().tests.length;
+      const saved = !!test && afterCount === beforeCount + 1;
+      if (!saved) {
+        const message = test
+          ? `DB.createTest returned a test, but DB test count changed from ${beforeCount} to ${afterCount}.`
+          : 'DB.createTest did not save the test. Storage may be full.';
+        console.warn('Anki variant save failed:', {
+          selectedTargetValue: selectedValue,
+          resolvedTargetFolderId: targetFolder.id,
+          approvedAnkiVariantCount: getApprovedAnkiVariantDrafts().length,
+          quizObjectPreviewCount: items.length,
+          validationErrors: errors,
+          testName,
+          reviewed: inputs.reviewed,
+          dbCreateTestArgs: { folderId: targetFolder.id, name: testName, questionCount: questions.length },
+          dbCreateTestReturn: test,
+          testsBefore: beforeCount,
+          testsAfter: afterCount,
+          uiRefreshStarted: false
+        });
+        setAnkiDraftSaveError(message);
+        renderAnkiDraftSaveDiagnostics(items, errors, target, readiness, inputs, `Failed: ${message}`, { before: beforeCount, after: afterCount });
+        toast(message, 8000);
+        return;
+      }
+
+      console.info('Anki variant save succeeded:', {
+        selectedTargetValue: selectedValue,
+        resolvedTargetFolderId: targetFolder.id,
+        approvedAnkiVariantCount: getApprovedAnkiVariantDrafts().length,
+        quizObjectPreviewCount: items.length,
+        validationErrors: errors,
+        testName,
+        reviewed: inputs.reviewed,
+        dbCreateTestArgs: { folderId: targetFolder.id, name: testName, questionCount: questions.length },
+        dbCreateTestReturn: { id: test.id, folderId: test.folderId, name: test.name, questionCount: test.questions?.length || 0 },
+        testsBefore: beforeCount,
+        testsAfter: afterCount,
+        uiRefreshStarted: true
+      });
+
+      renderAnkiDraftSaveDiagnostics(items, errors, target, readiness, inputs, `Saved "${test.name}".`, { before: beforeCount, after: afterCount });
+      _currentFolder = targetFolder.id;
+      setSourceFromFolder(targetFolder.id);
+      renderSidebar();
+      toast(`Created "${test.name}" with ${test.questions.length} approved Anki variant question${test.questions.length === 1 ? '' : 's'}.`);
+    } catch (err) {
+      const message = `Save failed: ${err?.message || String(err)}`;
+      console.warn('Anki variant save failed:', {
+        selectedTargetValue: selectedValue,
+        approvedAnkiVariantCount: getApprovedAnkiVariantDrafts().length,
+        quizObjectPreviewCount: items.length,
+        validationErrors: errors,
+        dbCreateTestReached: false,
+        error: err?.stack || err?.message || String(err)
+      });
+      setAnkiDraftSaveError(message);
+      renderAnkiDraftSaveDiagnostics(items, errors, target, readiness, inputs, message);
+      toast(message, 8000);
+      return;
+    }
   }
 
   function validateApprovedAnkiVariantExportPayload(payload) {
@@ -12407,6 +12712,8 @@ const App = (() => {
     previewAnkiTextExport,
     setAnkiVariantReviewStatus,
     exportApprovedAnkiVariantsJson,
+    updateApprovedAnkiDraftCreateTestButton,
+    createTestFromApprovedAnkiVariants,
     openNotesImportPreview,
     closeNotesImportPreview,
     clearNotesImportPreview,
