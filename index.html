@@ -1694,6 +1694,24 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
     <div class="notes-import-section-title">Question Draft Preview</div>
     <div id="notes-draft-status" class="notes-import-summary">Draft scaffolds will appear after concepts are extracted. They require human or AI review before use.</div>
     <div id="notes-ai-status" class="notes-import-summary" style="display:none;"></div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0 8px;">
+      <label class="form-label" style="margin:0;">Filter</label>
+      <select class="form-input" id="notes-review-filter" style="width:180px;" onchange="App.updateNotesReviewTableDisplay()">
+        <option value="all">All</option>
+        <option value="pending">Pending</option>
+        <option value="approved">Approved</option>
+        <option value="rejected">Rejected</option>
+        <option value="duplicates">Duplicate warnings</option>
+        <option value="validation-warnings">Validation warnings</option>
+      </select>
+      <label class="form-label" style="margin:0;">Sort</label>
+      <select class="form-input" id="notes-review-sort" style="width:190px;" onchange="App.updateNotesReviewTableDisplay()">
+        <option value="newest">Newest first</option>
+        <option value="oldest">Oldest first</option>
+        <option value="confidence-desc">Confidence high to low</option>
+        <option value="confidence-asc">Confidence low to high</option>
+      </select>
+    </div>
     <div id="notes-draft-preview" class="notes-draft-preview">
       <div class="notes-import-empty">No question drafts generated.</div>
     </div>
@@ -6199,13 +6217,14 @@ const App = (() => {
 	  let _lastParserDebug = null;
   let _ocrIssues = [];
   let _ocrIssueIdx = 0;
-  let _ocrUndoStack = [];
-  let _noteSelection = null;
+	  let _ocrUndoStack = [];
+	  let _noteSelection = null;
 	  let _noteHighlightSeq = 0;
   let _notesImportPreview = null;
   const _notesRefinePending = new Set();
   const _notesBatchRefinementCache = new Map();
   let _notesBatchRunTimer = null;
+  const _notesReviewTableDisplay = { filter: 'all', sort: 'newest' };
   const NOTES_BATCH_MAX_LIVE_REFINEMENTS = 25;
   const NOTES_BATCH_MAX_ATTEMPTS = 2;
   const NOTES_BATCH_MAX_CONSECUTIVE_FAILURES = 3;
@@ -7022,6 +7041,8 @@ const App = (() => {
     const clusterStatus = document.getElementById('notes-cluster-status');
     const clusterPreview = document.getElementById('notes-cluster-preview');
     const targetQuestionCount = document.getElementById('notes-target-question-count');
+    const reviewFilter = document.getElementById('notes-review-filter');
+    const reviewSort = document.getElementById('notes-review-sort');
     const draftStatus = document.getElementById('notes-draft-status');
     const draftPreview = document.getElementById('notes-draft-preview');
     const batchStatus = document.getElementById('notes-batch-status');
@@ -7040,6 +7061,10 @@ const App = (() => {
     if (clusterStatus) clusterStatus.textContent = 'Clusters will appear after concepts are extracted.';
     if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No clusters generated.</div>';
     if (targetQuestionCount) targetQuestionCount.value = '';
+    _notesReviewTableDisplay.filter = 'all';
+    _notesReviewTableDisplay.sort = 'newest';
+    if (reviewFilter) reviewFilter.value = 'all';
+    if (reviewSort) reviewSort.value = 'newest';
     if (draftStatus) draftStatus.textContent = 'Draft scaffolds will appear after concepts are extracted. They require human or AI review before use.';
     if (draftPreview) draftPreview.innerHTML = '<div class="notes-import-empty">No question drafts generated.</div>';
     if (batchStatus) batchStatus.textContent = 'Build a queue from selected cluster drafts. Live runs use Electron Gemini one at a time.';
@@ -7973,7 +7998,12 @@ const App = (() => {
       return;
     }
     const canRefine = typeof window.nbmeDesktop?.ai?.refineUWorldDraft === 'function';
-    preview.innerHTML = drafts.map((draft, idx) => {
+    const displayDrafts = filterAndSortNotesReviewDrafts(drafts, duplicateMap);
+    if (!displayDrafts.length) {
+      preview.innerHTML = '<div class="notes-import-empty">No drafts match the current review filter.</div>';
+      return;
+    }
+    preview.innerHTML = displayDrafts.map(({ draft, originalIndex }, displayIdx) => {
       const confidencePct = Math.round(draft.confidence * 100);
       const refs = draft.sourceBlockIds.join(', ');
       const choices = draft.choices.map(choice => `<li><strong>${escapeHTML(choice.l)}.</strong> ${escapeHTML(choice.t)}</li>`).join('');
@@ -7986,9 +8016,9 @@ const App = (() => {
       const refineControl = canRefine
         ? `<button class="btn-card" onclick="App.refineNotesDraft('${escapeHTML(draft.draftId)}')" ${pending ? 'disabled' : ''}>${pending ? 'Refining...' : 'Refine Draft'}</button>`
         : '';
-      return `<details class="notes-draft-card" ${idx < 3 ? 'open' : ''}>
+      return `<details class="notes-draft-card" ${displayIdx < 3 ? 'open' : ''}>
         <summary class="notes-draft-summary">
-          <div class="notes-draft-title">Draft ${idx + 1}: ${escapeHTML(draft.sourceConceptId)}</div>
+          <div class="notes-draft-title">Draft ${originalIndex + 1}: ${escapeHTML(draft.sourceConceptId)}</div>
           <div class="notes-draft-meta">${escapeHTML(draft.generationMethod)} · ${confidencePct}% · ${escapeHTML(refs)}</div>
         </summary>
         <div class="notes-draft-body">
@@ -8003,6 +8033,44 @@ const App = (() => {
         </div>
       </details>`;
     }).join('');
+  }
+
+  function updateNotesReviewTableDisplay() {
+    _notesReviewTableDisplay.filter = document.getElementById('notes-review-filter')?.value || 'all';
+    _notesReviewTableDisplay.sort = document.getElementById('notes-review-sort')?.value || 'newest';
+    renderNotesQuestionDraftPreview(_notesImportPreview?.drafts || []);
+  }
+
+  function notesDraftDisplayDate(draft, refined) {
+    const raw = refined?.createdAt || draft?.createdAt || '';
+    const timestamp = raw ? Date.parse(raw) : 0;
+    return Number.isFinite(timestamp) ? timestamp : 0;
+  }
+
+  function filterAndSortNotesReviewDrafts(drafts, duplicateMap) {
+    const filter = _notesReviewTableDisplay.filter || 'all';
+    const sort = _notesReviewTableDisplay.sort || 'newest';
+    const reviewStatuses = _notesImportPreview?.refinedReviewStatus || {};
+    const refinedDrafts = _notesImportPreview?.refinedDrafts || {};
+    const rows = (drafts || []).map((draft, originalIndex) => {
+      const refined = refinedDrafts[draft.draftId] || null;
+      const reviewStatus = refined ? (reviewStatuses[draft.draftId] || 'pending') : '';
+      return { draft, originalIndex, refined, reviewStatus };
+    }).filter(row => {
+      if (filter === 'all') return true;
+      if (!row.refined) return false;
+      if (['pending', 'approved', 'rejected'].includes(filter)) return row.reviewStatus === filter;
+      if (filter === 'duplicates') return !!duplicateMap[row.draft.draftId]?.length;
+      if (filter === 'validation-warnings') return !!row.refined.warnings?.length;
+      return true;
+    });
+    rows.sort((a, b) => {
+      if (sort === 'oldest') return notesDraftDisplayDate(a.draft, a.refined) - notesDraftDisplayDate(b.draft, b.refined);
+      if (sort === 'confidence-desc') return ((b.refined?.confidence ?? b.draft.confidence ?? 0) - (a.refined?.confidence ?? a.draft.confidence ?? 0));
+      if (sort === 'confidence-asc') return ((a.refined?.confidence ?? a.draft.confidence ?? 0) - (b.refined?.confidence ?? b.draft.confidence ?? 0));
+      return notesDraftDisplayDate(b.draft, b.refined) - notesDraftDisplayDate(a.draft, a.refined);
+    });
+    return rows;
   }
 
   function normalizeRefinedDuplicateText(value) {
@@ -10221,6 +10289,7 @@ const App = (() => {
     previewNotesDocx,
     refineNotesDraft,
     setRefinedDraftReviewStatus,
+    updateNotesReviewTableDisplay,
     updateNotesClusterSelection,
     selectAllNotesClusters,
     deselectAllNotesClusters,
