@@ -305,17 +305,39 @@ This file should track migration stages, decisions, risks, verification checkpoi
 
 ## Verification Checklist
 
-For each stage, verify:
+Use lightweight checks for documentation-only stages and narrow Electron scaffolding changes. Use full regression checks before storage, parser, importer, render-mode, Drive, Gemini, packaging, or release changes.
 
-- Web version still works.
-- Electron app opens.
-- PDF upload still works.
-- Parser counts match expected source count.
-- Grouped questions still work.
-- Debug exports still work.
-- Google Drive backup/restore still works.
-- Gemini hints/tags still work.
-- No API keys are exposed client-side.
+Lightweight checks:
+
+- Browser mode still opens from the existing local or Netlify workflow.
+- Electron app opens from the project root.
+- Electron loads the app over the intended localhost HTTP origin.
+- Electron does not use `file://` for app loading.
+- `index.html` remains authoritative and unsplit.
+- Preload exposes only approved narrow APIs.
+- No API keys are exposed in renderer code, localStorage, Drive backups, packaged assets, or preload.
+
+Full regression checks:
+
+- Browser mode still works after a refresh.
+- Electron app opens and basic navigation works.
+- `http://localhost:8888` or the approved local HTTP origin serves the app.
+- PDF upload accepts question and answer PDFs.
+- OCR/PDF extraction completes.
+- Parser counts match expected source count at raw OCR, normalized, parsed, post-merge, and final stages.
+- No missing source numbers.
+- No duplicate source numbers or duplicate final/displayed question numbers.
+- Answer-choice parsing still handles quoted choices and shared answer banks.
+- Answer/explanation alignment remains correct.
+- Grouped questions still preserve shared instructions, shared stems, linked ranges, authoritative `sharedGroup.sharedChoices`, independent selection, and independent scoring.
+- Render behavior remains correct; later render-mode metadata must preserve text, image, and hybrid behavior without duplicating grouped answer banks.
+- Debug exports work and remain local/private.
+- Google Drive connect, backup, restore, image restore, and manifest behavior work from an approved HTTP/HTTPS origin.
+- Gemini tagging, hints, and backend status work through Netlify Functions with `gemini-2.5-flash`.
+- No unintended `file://` dependency is introduced.
+- Browser and Electron behavior do not diverge except for explicitly approved desktop-only features.
+
+Run full regression before packaging, before storage migration, after parser/OCR/render changes, after Drive/Gemini changes, and after adding native filesystem helpers.
 
 ## Rollback Plan
 
