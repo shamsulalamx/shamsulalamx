@@ -1851,6 +1851,11 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
     <div id="ome-concept-preview" class="notes-draft-preview">
       <div class="notes-import-empty">No OME concept candidates extracted.</div>
     </div>
+    <div class="notes-import-section-title">OME Cluster Preview</div>
+    <div id="ome-cluster-status" class="notes-import-summary">Clusters will appear after OME concept candidates are extracted.</div>
+    <div id="ome-cluster-preview" class="notes-draft-preview">
+      <div class="notes-import-empty">No OME clusters generated.</div>
+    </div>
     <div class="modal-actions">
       <button type="button" class="btn-modal" onclick="App.clearOmePdfImportPreview()">Clear</button>
       <button type="button" class="btn-modal primary" onclick="App.closeOmePdfImportPreview()">Done</button>
@@ -7138,6 +7143,7 @@ const App = (() => {
     if (modal) modal.style.display = 'flex';
     updateOmeStructurePreview();
     renderOmeConceptPreview(_omeImportPreview?.conceptResult || null);
+    renderOmeClusterPreview(_omeImportPreview?.conceptResult?.clusterResult || null);
   }
 
   function closeOmePdfImportPreview() {
@@ -7152,11 +7158,15 @@ const App = (() => {
     const preview = document.getElementById('ome-structure-preview');
     const conceptStatus = document.getElementById('ome-concept-status');
     const conceptPreview = document.getElementById('ome-concept-preview');
+    const clusterStatus = document.getElementById('ome-cluster-status');
+    const clusterPreview = document.getElementById('ome-cluster-preview');
     if (input) input.value = '';
     if (status) status.textContent = 'Choose one .pdf file from the OME source folder.';
     if (preview) preview.innerHTML = '<div class="notes-import-empty">No OME structure preview loaded.</div>';
     if (conceptStatus) conceptStatus.textContent = 'Concept candidates will appear after OME blocks are previewed.';
     if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No OME concept candidates extracted.</div>';
+    if (clusterStatus) clusterStatus.textContent = 'Clusters will appear after OME concept candidates are extracted.';
+    if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No OME clusters generated.</div>';
   }
 
   function updateOmeStructurePreview() {
@@ -7342,6 +7352,18 @@ const App = (() => {
     return createOmeSourceSnippet(`${prefix}${block.textNormalized || block.textRaw || ''}`, maxLength);
   }
 
+  function uniqueOmeNumbers(values) {
+    const seen = new Set();
+    const out = [];
+    (Array.isArray(values) ? values : []).forEach(value => {
+      const num = Number(value);
+      if (!Number.isFinite(num) || seen.has(num)) return;
+      seen.add(num);
+      out.push(num);
+    });
+    return out;
+  }
+
   function createOmeConceptCandidate({
     conceptType,
     conceptText,
@@ -7418,7 +7440,6 @@ const App = (() => {
   function getOmeConceptFromBlock(block, context = {}) {
     const text = normalizeOmeText(block?.textNormalized || block?.textRaw || '');
     if (!text) return null;
-    const lower = text.toLowerCase();
     const patterns = getOmeConceptPatterns();
     const base = {
       sourceName: context.sourceName || '',
@@ -7737,6 +7758,289 @@ const App = (() => {
     `;
   }
 
+  function normalizeOmeSectionPath(sectionPath) {
+    return Array.isArray(sectionPath) ? sectionPath.map(part => normalizeOmeText(part)).filter(Boolean) : [];
+  }
+
+  function getOmeSectionKey(sectionPath) {
+    const parts = normalizeOmeSectionPath(sectionPath);
+    return parts.join(' > ');
+  }
+
+  function getOmeConceptTokens(text) {
+    return uniqueOmeStrings(normalizeOmeText(text)
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(token => token && token.length > 2 && !['the', 'and', 'for', 'with', 'from', 'that', 'this', 'are', 'was', 'were', 'into', 'your', 'step', 'next', 'best', 'objective', 'objectives', 'management', 'treatment', 'algorithm'].includes(token)));
+  }
+
+  function getOmeTokenSimilarity(a, b) {
+    const tokensA = new Set(getOmeConceptTokens(a));
+    const tokensB = new Set(getOmeConceptTokens(b));
+    if (!tokensA.size || !tokensB.size) return 0;
+    let shared = 0;
+    tokensA.forEach(token => {
+      if (tokensB.has(token)) shared += 1;
+    });
+    return shared / Math.max(tokensA.size, tokensB.size);
+  }
+
+  function getOmeHeadingTopicKey(candidate) {
+    const path = normalizeOmeSectionPath(candidate?.sectionPath || []);
+    if (!path.length) return '';
+    return path[path.length - 1];
+  }
+
+  function isOmeContrastCandidate(candidate) {
+    const text = normalizeOmeText(candidate?.conceptText || '');
+    return /(?:\bvs\.?\b|\bversus\b|\bdifferentiat(?:e|ion)\b|\bdistinguish\b|\bcompare\b|\brule out\b|\bcontrast\b)/i.test(text);
+  }
+
+  function isOmeStrongAlgorithmConcept(candidate) {
+    return candidate?.conceptType === 'algorithm' && (Array.isArray(candidate.blockIds) ? candidate.blockIds.length >= 1 : false);
+  }
+
+  function areOmeConceptsClose(a, b) {
+    const pagesA = Array.isArray(a?.pageNumbers) ? a.pageNumbers : [a?.pageNumber].filter(value => Number.isFinite(Number(value))).map(Number);
+    const pagesB = Array.isArray(b?.pageNumbers) ? b.pageNumbers : [b?.pageNumber].filter(value => Number.isFinite(Number(value))).map(Number);
+    if (!pagesA.length || !pagesB.length) return false;
+    const minDistance = Math.min(...pagesA.flatMap(pa => pagesB.map(pb => Math.abs(pa - pb))));
+    return minDistance <= 1;
+  }
+
+  function getOmeClusterKey(candidate) {
+    const sectionKey = getOmeSectionKey(candidate.sectionPath || []);
+    const headingKey = getOmeHeadingTopicKey(candidate) || sectionKey;
+    return [candidate.conceptType, sectionKey, headingKey].join('|');
+  }
+
+  function createOmeCluster(members, index) {
+    const orderedMembers = (Array.isArray(members) ? members : []).slice().sort((a, b) => {
+      const orderA = Number.isFinite(Number(a.blockOrders?.[0])) ? Number(a.blockOrders[0]) : Number.MAX_SAFE_INTEGER;
+      const orderB = Number.isFinite(Number(b.blockOrders?.[0])) ? Number(b.blockOrders[0]) : Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) return orderA - orderB;
+      return String(a.conceptText || '').localeCompare(String(b.conceptText || ''));
+    });
+    const sourceName = orderedMembers[0]?.sourceName || '';
+    const sourceHash = orderedMembers[0]?.sourceHash || '';
+    const conceptType = orderedMembers[0]?.conceptType || 'unknown';
+    const sectionPaths = uniqueOmeStrings(orderedMembers.flatMap(member => [getOmeSectionKey(member.sectionPath || [])]));
+    const pageNumbers = uniqueOmeNumbers(orderedMembers.flatMap(member => Array.isArray(member.pageNumbers) && member.pageNumbers.length ? member.pageNumbers : [member.pageNumber]));
+    const blockIds = uniqueOmeStrings(orderedMembers.flatMap(member => member.blockIds || []));
+    const blockOrders = uniqueOmeNumbers(orderedMembers.flatMap(member => member.blockOrders || []));
+    const sourceSnippets = orderedMembers.flatMap(member => member.sourceSnippets || []).map(snippet => ({ ...snippet }));
+    const warnings = uniqueOmeStrings(orderedMembers.flatMap(member => member.warnings || []));
+    const confidence = orderedMembers.some(member => member.confidence === 'low')
+      ? 'low'
+      : orderedMembers.some(member => member.confidence === 'medium')
+        ? 'medium'
+        : 'high';
+    const clusterType = conceptType;
+    const clusterLabel = orderedMembers[0]?.sectionPath?.length ? orderedMembers[0].sectionPath[orderedMembers[0].sectionPath.length - 1] : conceptType;
+    return {
+      id: `ome-cluster-${index + 1}`,
+      clusterType,
+      clusterLabel,
+      sourceName,
+      sourceHash,
+      conceptType,
+      memberCount: orderedMembers.length,
+      conceptIds: orderedMembers.map(member => member.id),
+      conceptTexts: orderedMembers.map(member => member.conceptText || ''),
+      orderedConcepts: orderedMembers,
+      pageNumbers,
+      blockIds,
+      blockOrders,
+      sectionPath: normalizeOmeSectionPath(orderedMembers[0]?.sectionPath || []),
+      sectionPaths,
+      sourceSnippets,
+      warnings,
+      confidence,
+      orderedMembers
+    };
+  }
+
+  function clusterOmeConceptCandidates(candidates) {
+    const concepts = Array.isArray(candidates) ? candidates.slice() : [];
+    const clusters = [];
+    const skipped = [];
+
+    const byKey = new Map();
+    concepts.forEach(candidate => {
+      const key = getOmeClusterKey(candidate);
+      if (!byKey.has(key)) byKey.set(key, []);
+      byKey.get(key).push(candidate);
+    });
+
+    byKey.forEach(group => {
+      const remaining = group.slice().sort((a, b) => {
+        const orderA = Number.isFinite(Number(a.blockOrders?.[0])) ? Number(a.blockOrders[0]) : Number.MAX_SAFE_INTEGER;
+        const orderB = Number.isFinite(Number(b.blockOrders?.[0])) ? Number(b.blockOrders[0]) : Number.MAX_SAFE_INTEGER;
+        if (orderA !== orderB) return orderA - orderB;
+        if ((a.pageNumber || 0) !== (b.pageNumber || 0)) return (a.pageNumber || 0) - (b.pageNumber || 0);
+        return String(a.conceptText || '').localeCompare(String(b.conceptText || ''));
+      });
+
+      while (remaining.length) {
+        const seed = remaining.shift();
+        const clusterMembers = [seed];
+        const clusterSectionKey = getOmeSectionKey(seed.sectionPath || []);
+        const clusterHeadingKey = getOmeHeadingTopicKey(seed) || clusterSectionKey;
+
+        for (let i = 0; i < remaining.length; i += 1) {
+          const candidate = remaining[i];
+          if (candidate.conceptType !== seed.conceptType) continue;
+          if (getOmeSectionKey(candidate.sectionPath || []) !== clusterSectionKey) continue;
+          if (getOmeHeadingTopicKey(candidate) !== clusterHeadingKey) continue;
+          if (!areOmeConceptsClose(seed, candidate)) continue;
+
+          const similarity = getOmeTokenSimilarity(seed.conceptText, candidate.conceptText);
+          const explicitContrast = isOmeContrastCandidate(seed) || isOmeContrastCandidate(candidate);
+          const bothAlgorithms = seed.conceptType === 'algorithm' && candidate.conceptType === 'algorithm';
+          const bothDifferentials = seed.conceptType === 'differential' && candidate.conceptType === 'differential';
+          const conservativeThreshold = seed.confidence === 'low' || candidate.confidence === 'low' ? 0.72 : 0.5;
+          const allowMerge = bothAlgorithms
+            ? similarity >= 0.25 || explicitContrast
+            : bothDifferentials
+              ? explicitContrast && similarity >= 0.2
+              : similarity >= conservativeThreshold;
+
+          if (allowMerge) {
+            clusterMembers.push(candidate);
+            remaining.splice(i, 1);
+            i -= 1;
+          }
+        }
+
+        const orderedClusterMembers = clusterMembers.slice().sort((a, b) => {
+          const orderA = Number.isFinite(Number(a.blockOrders?.[0])) ? Number(a.blockOrders[0]) : Number.MAX_SAFE_INTEGER;
+          const orderB = Number.isFinite(Number(b.blockOrders?.[0])) ? Number(b.blockOrders[0]) : Number.MAX_SAFE_INTEGER;
+          if (orderA !== orderB) return orderA - orderB;
+          return String(a.conceptText || '').localeCompare(String(b.conceptText || ''));
+        });
+
+        const sectionPath = orderedClusterMembers[0]?.sectionPath || [];
+        const baseWarnings = uniqueOmeStrings([
+          ...orderedClusterMembers.flatMap(member => member.warnings || []),
+          orderedClusterMembers.some(member => member.confidence === 'low') ? 'Low-confidence concepts were split conservatively.' : '',
+          seed.conceptType === 'algorithm' ? 'Algorithm cluster preserves source order.' : '',
+          seed.conceptType === 'differential' && !orderedClusterMembers.some(isOmeContrastCandidate) ? 'Differential cluster lacks explicit contrast language.' : ''
+        ]);
+
+        if (orderedClusterMembers.length === 1) {
+          skipped.push({
+            conceptId: seed.id,
+            reason: 'Single concept remained unclustered.',
+            sectionPath: getOmeSectionKey(sectionPath)
+          });
+        }
+
+        const cluster = createOmeCluster(orderedClusterMembers, clusters.length);
+        cluster.warnings = uniqueOmeStrings([...(cluster.warnings || []), ...baseWarnings]);
+        cluster.confidence = orderedClusterMembers.some(member => member.confidence === 'low')
+          ? 'low'
+          : orderedClusterMembers.some(member => member.confidence === 'medium')
+            ? 'medium'
+            : 'high';
+        clusters.push(cluster);
+      }
+    });
+
+    const warnings = uniqueOmeStrings([
+      ...clusters.flatMap(cluster => cluster.warnings || []),
+      ...skipped.flatMap(item => item.reason ? [item.reason] : [])
+    ]);
+
+    return {
+      clusters,
+      clusterCount: clusters.length,
+      rawConceptCount: concepts.length,
+      conceptsPerCluster: clusters.map(cluster => cluster.memberCount),
+      clusterTypes: clusters.map(cluster => cluster.clusterType),
+      warnings,
+      warningCount: warnings.length,
+      skipped
+    };
+  }
+
+  function renderOmeClusterPreview(result) {
+    const status = document.getElementById('ome-cluster-status');
+    const preview = document.getElementById('ome-cluster-preview');
+    if (!status || !preview) return;
+
+    const clusters = Array.isArray(result?.clusters) ? result.clusters : [];
+    if (!clusters.length) {
+      status.textContent = 'Clusters will appear after OME concept candidates are extracted.';
+      preview.innerHTML = '<div class="notes-import-empty">No OME clusters generated.</div>';
+      return;
+    }
+
+    const typeCounts = clusters.reduce((counts, cluster) => {
+      counts[cluster.clusterType] = (counts[cluster.clusterType] || 0) + 1;
+      return counts;
+    }, {});
+    status.textContent = `${result.rawConceptCount} raw OME concept candidate${result.rawConceptCount === 1 ? '' : 's'} grouped into ${result.clusterCount} cluster${result.clusterCount === 1 ? '' : 's'}. Preview only.`;
+
+    const typeSummary = Object.keys(typeCounts).sort().map(type => `<span><strong>${escapeHTML(type)}</strong> ${escapeHTML(String(typeCounts[type] || 0))}</span>`).join('');
+    preview.innerHTML = `
+      <div class="notes-import-stats">
+        <span><strong>Raw concepts</strong> ${escapeHTML(String(result.rawConceptCount || 0))}</span>
+        <span><strong>Clusters</strong> ${escapeHTML(String(result.clusterCount || 0))}</span>
+        <span><strong>Warnings</strong> ${escapeHTML(String(result.warningCount || 0))}</span>
+      </div>
+      <div class="notes-import-stats" style="margin-top:8px;">
+        <span><strong>Concepts per cluster</strong> ${escapeHTML((result.conceptsPerCluster || []).join(', ') || 'None')}</span>
+        ${typeSummary || '<span><strong>Cluster types</strong> None</span>'}
+      </div>
+      <div class="notes-draft-card" style="margin-top:10px;">
+        <div class="notes-draft-title">Clustering Guardrails</div>
+        <div class="notes-draft-meta">Concepts are grouped only within the same section path and heading topic, with page proximity and conservative text similarity. Low-confidence concepts stay split.</div>
+      </div>
+      ${clusters.slice(0, 16).map((cluster, idx) => {
+        const warnings = Array.isArray(cluster.warnings) ? cluster.warnings : [];
+        const sectionPath = Array.isArray(cluster.sectionPath) && cluster.sectionPath.length ? cluster.sectionPath.join(' > ') : 'None';
+        const pages = Array.isArray(cluster.pageNumbers) ? cluster.pageNumbers : [];
+        const blockIds = Array.isArray(cluster.blockIds) ? cluster.blockIds : [];
+        const blockOrders = Array.isArray(cluster.blockOrders) ? cluster.blockOrders : [];
+        const sourceSnippets = Array.isArray(cluster.sourceSnippets) ? cluster.sourceSnippets : [];
+        const orderedConcepts = Array.isArray(cluster.orderedConcepts) ? cluster.orderedConcepts : [];
+        return `
+          <details class="notes-draft-card" ${idx < 3 ? 'open' : ''} style="margin-top:10px;">
+            <summary class="notes-draft-summary">
+              <div class="notes-draft-title">${escapeHTML(cluster.clusterType)} cluster · ${escapeHTML(String(cluster.memberCount || 0))} concept${cluster.memberCount === 1 ? '' : 's'}</div>
+              <div class="notes-draft-meta">Pages ${escapeHTML(pages.map(value => String(value)).join(', ') || 'None')} · Label ${escapeHTML(cluster.clusterLabel || '')}</div>
+            </summary>
+            <div class="notes-draft-body">
+              <div class="notes-draft-meta"><strong>Section path:</strong> ${escapeHTML(sectionPath)}</div>
+              <div class="notes-draft-meta"><strong>Block IDs:</strong> ${escapeHTML(blockIds.join(', ') || 'None')}</div>
+              <div class="notes-draft-meta"><strong>Block orders:</strong> ${escapeHTML(blockOrders.map(value => String(value)).join(', ') || 'None')}</div>
+              <div class="notes-draft-meta"><strong>Source:</strong> ${escapeHTML(cluster.sourceName || '')}</div>
+              <div class="notes-draft-meta"><strong>Hash:</strong> ${escapeHTML(cluster.sourceHash || '')}</div>
+              <div class="notes-draft-meta"><strong>Confidence:</strong> ${escapeHTML(cluster.confidence || 'low')}</div>
+              ${warnings.length ? `<div style="color:#8a5a00;margin-top:8px;">${warnings.map(warning => escapeHTML(warning)).join('<br>')}</div>` : '<div class="notes-import-empty">No cluster warnings.</div>'}
+              <div style="margin-top:8px;"><strong>Ordered concepts</strong></div>
+              ${orderedConcepts.map((concept, conceptIdx) => `
+                <div style="margin-top:6px;padding-top:6px;border-top:1px solid #edf1f5;">
+                  <div class="notes-draft-meta">${escapeHTML(String(conceptIdx + 1))}. ${escapeHTML(concept.conceptType || '')} · ${escapeHTML(concept.confidence || '')} · Page ${escapeHTML(String(concept.pageNumber || ''))}</div>
+                  <div style="white-space:pre-wrap;">${escapeHTML(concept.conceptText || '')}</div>
+                </div>
+              `).join('')}
+              <div style="margin-top:8px;"><strong>Source snippets</strong></div>
+              ${sourceSnippets.map(snippet => `
+                <div style="margin-top:6px;padding-top:6px;border-top:1px solid #edf1f5;">
+                  <div class="notes-draft-meta">${escapeHTML(String(snippet.blockId || ''))} · ${escapeHTML(String(snippet.blockType || ''))} · Page ${escapeHTML(String(snippet.pageNumber || ''))} · Order ${escapeHTML(String(snippet.order || ''))}</div>
+                  <div style="white-space:pre-wrap;">${escapeHTML(snippet.sourceSnippet || '')}</div>
+                </div>
+              `).join('')}
+            </div>
+          </details>
+        `;
+      }).join('')}
+      ${clusters.length > 16 ? `<div class="notes-import-empty">Showing first 16 of ${clusters.length} clusters.</div>` : ''}
+    `;
+  }
+
   function buildOmePageStructure({ pageNumber, textContent, sourceName, sourceHash, headingStack, orderStart }) {
     const items = Array.isArray(textContent?.items)
       ? textContent.items.filter(item => normalizeOmeText(item?.str))
@@ -7885,6 +8189,7 @@ const App = (() => {
     try {
       const structure = await extractOmePdfStructure(file);
       structure.conceptResult = extractOmeConceptCandidates(structure);
+      structure.conceptResult.clusterResult = clusterOmeConceptCandidates(structure.conceptResult.candidates);
       _omeImportPreview = structure;
       if (status) {
         status.textContent = structure.warningCount
@@ -7893,11 +8198,13 @@ const App = (() => {
       }
       renderOmeStructurePreview(structure);
       renderOmeConceptPreview(structure.conceptResult);
+      renderOmeClusterPreview(structure.conceptResult.clusterResult);
     } catch (err) {
       _omeImportPreview = null;
       if (status) status.textContent = `Unable to preview OME PDF: ${err?.message || 'Unknown parse error.'}`;
       if (preview) preview.innerHTML = '<div class="notes-import-empty">No OME structure preview loaded.</div>';
       renderOmeConceptPreview(null);
+      renderOmeClusterPreview(null);
     }
   }
 
