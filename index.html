@@ -1768,6 +1768,31 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
   </div>
 </div>
 
+<!-- ═══ ANKI TEXT IMPORT PREVIEW MODAL ═══ -->
+<div id="modal-anki-import" class="modal-overlay">
+  <div class="modal-box" style="max-width:760px;">
+    <h3>Anki Text Import Preview</h3>
+    <p>This preview accepts Anki Notes in Plain Text exports only. It does not support .apkg, generate questions, call AI, or save quizzes.</p>
+    <div class="form-group">
+      <label class="form-label">Anki Text Export</label>
+      <input type="file" class="form-input" id="anki-text-input" accept=".txt" onchange="App.previewAnkiTextExport(this)">
+    </div>
+    <div id="anki-import-status" class="notes-import-summary">Choose a .txt file exported from Anki as Notes in Plain Text.</div>
+    <div class="notes-import-section-title">Import Diagnostics</div>
+    <div id="anki-import-diagnostics" class="notes-import-preview">
+      <div class="notes-import-empty">No Anki text file loaded.</div>
+    </div>
+    <div class="notes-import-section-title">Normalized Card Preview</div>
+    <div id="anki-card-preview" class="notes-draft-preview">
+      <div class="notes-import-empty">No normalized cards available.</div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn-modal" onclick="App.clearAnkiTextImportPreview()">Clear</button>
+      <button type="button" class="btn-modal primary" onclick="App.closeAnkiTextImportPreview()">Done</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ NEW FOLDER MODAL ═══ -->
 <div id="modal-new-folder" class="modal-overlay">
   <div class="modal-box" style="max-width:380px;">
@@ -1838,7 +1863,7 @@ const DB = (() => {
   const DEFAULT_SOURCE_FOLDERS = [
     { id: 'src-nbme', name: 'NBME', order: 0, sourceType: 'nbme', workflows: ['pdf-test-import'] },
     { id: 'src-uworld', name: 'UWorld', order: 1, sourceType: 'uworld-notes', workflows: ['docx-notes-preview'] },
-    { id: 'src-anki', name: 'Anki', order: 2, sourceType: 'anki', workflows: [] },
+    { id: 'src-anki', name: 'Anki', order: 2, sourceType: 'anki', workflows: ['anki-text-preview'] },
     { id: 'src-ome', name: 'OME', order: 3, sourceType: 'ome', workflows: [] },
     { id: 'src-divine-podcasts', name: 'Divine Podcasts', order: 4, sourceType: 'divine', workflows: [] },
     { id: 'src-mehlman', name: 'Mehlman', order: 5, sourceType: 'mehlman', workflows: [] },
@@ -1884,6 +1909,11 @@ const DB = (() => {
         if (existing.order == null) existing.order = src.order;
         if (!existing.sourceType) existing.sourceType = src.sourceType;
         if (!Array.isArray(existing.workflows)) existing.workflows = src.workflows.slice();
+        if (src.id === 'src-anki') {
+          src.workflows.forEach(workflow => {
+            if (!existing.workflows.includes(workflow)) existing.workflows.push(workflow);
+          });
+        }
       }
     });
 
@@ -6230,6 +6260,7 @@ const App = (() => {
 	  let _noteSelection = null;
 	  let _noteHighlightSeq = 0;
   let _notesImportPreview = null;
+  let _ankiImportPreview = null;
   const _notesRefinePending = new Set();
   const _notesBatchRefinementCache = new Map();
   let _notesBatchRunTimer = null;
@@ -6410,6 +6441,7 @@ const App = (() => {
     const workflows = Array.isArray(source?.workflows) ? source.workflows : [];
     if (workflows.includes('pdf-test-import')) return 'pdf-test-import';
     if (workflows.includes('docx-notes-preview')) return 'docx-notes-preview';
+    if (workflows.includes('anki-text-preview')) return 'anki-text-preview';
     return null;
   }
 
@@ -6417,12 +6449,14 @@ const App = (() => {
     const workflow = getSourceWorkflow(sourceId);
     if (workflow === 'pdf-test-import') return '＋ Generate Test';
     if (workflow === 'docx-notes-preview') return 'Import DOCX Preview';
+    if (workflow === 'anki-text-preview') return 'Import Anki Text Preview';
     return '';
   }
 
   function getWorkflowEmptyMessage(sourceId = _currentSource) {
     const workflow = getSourceWorkflow(sourceId);
     if (workflow === 'docx-notes-preview') return 'Use DOCX notes import preview from this library.';
+    if (workflow === 'anki-text-preview') return 'Use Anki plain-text import preview from this library.';
     if (workflow === 'pdf-test-import') return 'No tests in this folder yet.';
     return 'No import workflow is available for this library yet.';
   }
@@ -6431,6 +6465,10 @@ const App = (() => {
     const workflow = getSourceWorkflow();
     if (workflow === 'docx-notes-preview') {
       openNotesImportPreview();
+      return;
+    }
+    if (workflow === 'anki-text-preview') {
+      openAnkiTextImportPreview();
       return;
     }
     if (workflow === 'pdf-test-import') {
@@ -7020,6 +7058,417 @@ const App = (() => {
     DB.deleteNote(id);
     showNotes();
     toast('Note deleted.');
+  }
+
+  function openAnkiTextImportPreview() {
+    const modal = document.getElementById('modal-anki-import');
+    if (modal) modal.style.display = 'flex';
+  }
+
+  function closeAnkiTextImportPreview() {
+    const modal = document.getElementById('modal-anki-import');
+    if (modal) modal.style.display = 'none';
+  }
+
+  function clearAnkiTextImportPreview() {
+    _ankiImportPreview = null;
+    const input = document.getElementById('anki-text-input');
+    const status = document.getElementById('anki-import-status');
+    const diagnostics = document.getElementById('anki-import-diagnostics');
+    const preview = document.getElementById('anki-card-preview');
+    if (input) input.value = '';
+    if (status) status.textContent = 'Choose a .txt file exported from Anki as Notes in Plain Text.';
+    if (diagnostics) diagnostics.innerHTML = '<div class="notes-import-empty">No Anki text file loaded.</div>';
+    if (preview) preview.innerHTML = '<div class="notes-import-empty">No normalized cards available.</div>';
+  }
+
+  async function previewAnkiTextExport(input) {
+    const file = input?.files?.[0];
+    const status = document.getElementById('anki-import-status');
+    const diagnostics = document.getElementById('anki-import-diagnostics');
+    const preview = document.getElementById('anki-card-preview');
+    if (!file) return;
+
+    const lowerName = String(file.name || '').toLowerCase();
+    if (lowerName.endsWith('.apkg')) {
+      _ankiImportPreview = null;
+      if (status) status.textContent = 'Unsupported .apkg file. Export Notes in Plain Text first.';
+      if (diagnostics) diagnostics.innerHTML = '<div class="notes-import-empty">.apkg import is not enabled in this preview.</div>';
+      if (preview) preview.innerHTML = '<div class="notes-import-empty">No normalized cards available.</div>';
+      return;
+    }
+
+    if (!lowerName.endsWith('.txt')) {
+      _ankiImportPreview = null;
+      if (status) status.textContent = 'Unsupported file type. Choose a .txt export from Anki Notes in Plain Text.';
+      if (diagnostics) diagnostics.innerHTML = '<div class="notes-import-empty">Only .txt files are accepted.</div>';
+      if (preview) preview.innerHTML = '<div class="notes-import-empty">No normalized cards available.</div>';
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      const result = parseAnkiTextExport(text, file.name);
+      _ankiImportPreview = result;
+      if (status) {
+        status.textContent = `Parsed ${result.normalizedCards.length} Anki note${result.normalizedCards.length === 1 ? '' : 's'} for preview only. No quiz data was saved.`;
+      }
+      renderAnkiImportDiagnostics(result);
+      renderAnkiCardPreview(result.normalizedCards);
+    } catch (err) {
+      _ankiImportPreview = null;
+      if (status) status.textContent = `Unable to preview Anki text export: ${err?.message || 'Unknown parse error.'}`;
+      if (diagnostics) diagnostics.innerHTML = '<div class="notes-import-empty">Parse failed before diagnostics could be generated.</div>';
+      if (preview) preview.innerHTML = '<div class="notes-import-empty">No normalized cards available.</div>';
+    }
+  }
+
+  function parseAnkiTextExport(text, fileName = '') {
+    const normalizedText = String(text || '').replace(/^\uFEFF/, '');
+    const headerResult = readAnkiHeaderBlock(normalizedText);
+    const separator = resolveAnkiSeparator(headerResult.headers.separator);
+    const rowResult = parseDelimitedAnkiRows(headerResult.dataText, separator.value, headerResult.dataStartLine);
+    const rows = rowResult.rows.filter(row => row.fields.some(field => String(field || '').trim()));
+    const warnings = [...headerResult.warnings, ...rowResult.warnings];
+    const fieldCounts = rows.reduce((counts, row) => {
+      const count = row.fields.length;
+      counts[count] = (counts[count] || 0) + 1;
+      return counts;
+    }, {});
+    const fieldCountKeys = Object.keys(fieldCounts).map(Number).sort((a, b) => a - b);
+    const dominantFieldCount = fieldCountKeys.length
+      ? fieldCountKeys.slice().sort((a, b) => fieldCounts[b] - fieldCounts[a] || a - b)[0]
+      : 0;
+
+    if (fieldCountKeys.length > 1) {
+      warnings.push(`Field count varies across rows: ${fieldCountKeys.map(count => `${count} fields in ${fieldCounts[count]} row${fieldCounts[count] === 1 ? '' : 's'}`).join('; ')}.`);
+    }
+
+    const columns = parseAnkiColumnsHeader(headerResult.headers.columns, separator.value);
+    const columnMap = detectAnkiColumnMap(headerResult.headers, columns, dominantFieldCount, warnings);
+    const normalizedCards = normalizeAnkiCards(rows, {
+      fileName,
+      separator,
+      headers: headerResult.headers,
+      columns,
+      columnMap
+    });
+
+    return {
+      fileName,
+      headers: headerResult.headers,
+      separator,
+      rowCount: rows.length,
+      fieldCounts,
+      fieldCountConsistent: fieldCountKeys.length <= 1,
+      dominantFieldCount,
+      columns,
+      columnMap,
+      warnings,
+      normalizedCards
+    };
+  }
+
+  function readAnkiHeaderBlock(text) {
+    const lines = String(text || '').split(/\n/);
+    const headers = {};
+    const warnings = [];
+    let dataStartIndex = 0;
+
+    for (let i = 0; i < lines.length; i += 1) {
+      const rawLine = lines[i].replace(/\r$/, '');
+      const match = rawLine.match(/^#\s*([^:]+)\s*:\s*(.*)$/);
+      if (!match) break;
+      const key = match[1].trim().toLowerCase();
+      const value = match[2];
+      if (['separator', 'html', 'columns', 'notetype column', 'deck column', 'tags column', 'guid column', 'tags'].includes(key)) {
+        headers[key] = value;
+      } else {
+        warnings.push(`Unsupported Anki header ignored: #${match[1].trim()}.`);
+      }
+      dataStartIndex = i + 1;
+    }
+
+    return {
+      headers,
+      warnings,
+      dataText: lines.slice(dataStartIndex).join('\n'),
+      dataStartLine: dataStartIndex + 1
+    };
+  }
+
+  function resolveAnkiSeparator(rawValue) {
+    const value = String(rawValue || 'tab').trim();
+    const normalized = value.toLowerCase();
+    if (!value || normalized === 'tab' || normalized === '\\t') return { value: '\t', label: 'tab' };
+    if (normalized === 'comma' || value === ',') return { value: ',', label: 'comma' };
+    if (normalized === 'semicolon' || value === ';') return { value: ';', label: 'semicolon' };
+    if (normalized === 'space' || value === ' ') return { value: ' ', label: 'space' };
+    return { value: value[0] || '\t', label: value[0] === '\t' ? 'tab' : value[0] };
+  }
+
+  function parseDelimitedAnkiRows(text, separator, startLine = 1) {
+    const rows = [];
+    const warnings = [];
+    let fields = [];
+    let field = '';
+    let inQuotes = false;
+    let rowStartLine = startLine;
+    let lineNumber = startLine;
+    const source = String(text || '');
+
+    for (let i = 0; i < source.length; i += 1) {
+      const ch = source[i];
+      const next = source[i + 1];
+
+      if (ch === '"') {
+        if (inQuotes && next === '"') {
+          field += '"';
+          i += 1;
+        } else {
+          inQuotes = !inQuotes;
+        }
+        continue;
+      }
+
+      if (!inQuotes && ch === separator) {
+        fields.push(field);
+        field = '';
+        continue;
+      }
+
+      if (!inQuotes && ch === '\n') {
+        fields.push(field);
+        rows.push({ fields, originalRow: rows.length + 1, originalLine: rowStartLine });
+        fields = [];
+        field = '';
+        rowStartLine = lineNumber + 1;
+        lineNumber += 1;
+        continue;
+      }
+
+      if (ch === '\n') lineNumber += 1;
+      if (ch !== '\r') field += ch;
+    }
+
+    if (inQuotes) warnings.push('Quoted field was not closed before end of file.');
+    if (field || fields.length) {
+      fields.push(field);
+      rows.push({ fields, originalRow: rows.length + 1, originalLine: rowStartLine });
+    }
+
+    return { rows, warnings };
+  }
+
+  function parseAnkiColumnsHeader(rawColumns, separator) {
+    if (!rawColumns) return [];
+    const parsed = parseDelimitedAnkiRows(String(rawColumns), separator, 1).rows[0]?.fields || [];
+    if (parsed.length > 1) return parsed.map(col => col.trim()).filter(Boolean);
+    return String(rawColumns)
+      .split(/[,\t;]/)
+      .map(col => col.trim())
+      .filter(Boolean);
+  }
+
+  function detectAnkiColumnMap(headers, columns, fieldCount, warnings) {
+    const map = { noteType: null, deck: null, tags: null, guid: null };
+    const setFromHeader = (headerName, key) => {
+      const raw = headers[headerName];
+      if (!raw) return;
+      const index = Number.parseInt(raw, 10);
+      if (Number.isFinite(index) && index >= 1 && index <= Math.max(fieldCount, 1)) {
+        map[key] = index - 1;
+      } else {
+        warnings.push(`#${headerName} header is outside the parsed field range.`);
+      }
+    };
+
+    setFromHeader('notetype column', 'noteType');
+    setFromHeader('deck column', 'deck');
+    setFromHeader('tags column', 'tags');
+    setFromHeader('guid column', 'guid');
+
+    columns.forEach((columnName, idx) => {
+      const normalized = normalizeAnkiColumnName(columnName);
+      if (map.noteType === null && ['notetype', 'note type', 'type'].includes(normalized)) map.noteType = idx;
+      if (map.deck === null && ['deck', 'deck name'].includes(normalized)) map.deck = idx;
+      if (map.tags === null && ['tags', 'tag'].includes(normalized)) map.tags = idx;
+      if (map.guid === null && ['guid', 'note guid', 'id'].includes(normalized)) map.guid = idx;
+    });
+
+    if (!columns.length && !headers['notetype column'] && !headers['deck column'] && !headers['tags column'] && !headers['guid column']) {
+      warnings.push('No column headers found. Raw fields are preserved, but note type, deck, tags, and GUID are left unmapped.');
+    }
+
+    ['noteType', 'deck', 'tags', 'guid'].forEach(key => {
+      if (map[key] !== null && map[key] >= fieldCount && fieldCount > 0) {
+        warnings.push(`${key} column points past the dominant field count and was ignored.`);
+        map[key] = null;
+      }
+    });
+
+    return map;
+  }
+
+  function normalizeAnkiColumnName(name) {
+    return String(name || '').trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+  }
+
+  function normalizeAnkiCards(rows, meta) {
+    const reserved = new Set(Object.values(meta.columnMap).filter(value => value !== null));
+    const headerTags = splitAnkiTags(meta.headers.tags || '');
+
+    return rows.map((row, idx) => {
+      const rawFields = row.fields.slice();
+      const cleanedFields = rawFields.map(cleanAnkiFieldText);
+      const noteFieldIndexes = rawFields
+        .map((_, fieldIndex) => fieldIndex)
+        .filter(fieldIndex => !reserved.has(fieldIndex));
+      const noteFields = noteFieldIndexes.map(fieldIndex => cleanedFields[fieldIndex]);
+      const clozeDeletions = [];
+      noteFieldIndexes.forEach(fieldIndex => {
+        extractAnkiClozes(cleanedFields[fieldIndex]).forEach(cloze => {
+          clozeDeletions.push({ ...cloze, fieldIndex });
+        });
+      });
+
+      const exactTags = [
+        ...headerTags,
+        ...splitAnkiTags(meta.columnMap.tags !== null ? rawFields[meta.columnMap.tags] : '')
+      ];
+      const dedupedExactTags = Array.from(new Set(exactTags));
+      const tagsRaw = meta.columnMap.tags !== null ? String(rawFields[meta.columnMap.tags] || '') : '';
+      const deckRaw = meta.columnMap.deck !== null ? String(rawFields[meta.columnMap.deck] || '').trim() : '';
+      const noteTypeRaw = meta.columnMap.noteType !== null ? String(rawFields[meta.columnMap.noteType] || '').trim() : '';
+      const inferredNoteType = clozeDeletions.length ? 'Cloze' : (noteFields.length >= 2 ? 'Basic' : 'Unknown');
+      const guid = meta.columnMap.guid !== null ? String(rawFields[meta.columnMap.guid] || '').trim() : '';
+      const sourceHash = fallbackTextHash(JSON.stringify({
+        fileName: meta.fileName,
+        originalRow: row.originalRow,
+        rawFields
+      }));
+
+      return {
+        id: `anki-card-${idx + 1}`,
+        originalRow: row.originalRow,
+        originalLine: row.originalLine,
+        rawFields,
+        cleanedFields,
+        noteFields,
+        tagsRaw,
+        tagsExact: dedupedExactTags,
+        tagsNormalized: dedupedExactTags.map(normalizeAnkiTag).filter(Boolean),
+        deckPath: deckRaw ? deckRaw.split('::').map(part => part.trim()).filter(Boolean) : [],
+        deckRaw,
+        noteType: noteTypeRaw || inferredNoteType,
+        guid,
+        clozeDeletions,
+        sourceHash
+      };
+    });
+  }
+
+  function cleanAnkiFieldText(value) {
+    const unescaped = String(value || '').replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+    return stripAnkiHtml(unescaped).replace(/\u00a0/g, ' ').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  function stripAnkiHtml(value) {
+    const source = String(value || '');
+    if (!/[<&][a-zA-Z!/]/.test(source)) return source;
+    const html = source
+      .replace(/<\s*br\s*\/?\s*>/gi, '\n')
+      .replace(/<\/\s*(div|p|li|tr|h[1-6])\s*>/gi, '\n');
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    doc.querySelectorAll('script, style').forEach(node => node.remove());
+    return doc.body.textContent || '';
+  }
+
+  function splitAnkiTags(value) {
+    return String(value || '')
+      .split(/\s+/)
+      .map(tag => tag.trim())
+      .filter(Boolean);
+  }
+
+  function normalizeAnkiTag(tag) {
+    return String(tag || '').trim().toLowerCase();
+  }
+
+  function extractAnkiClozes(text) {
+    const clozes = [];
+    const pattern = /\{\{c(\d+)::([\s\S]*?)(?:::([\s\S]*?))?\}\}/g;
+    let match;
+    while ((match = pattern.exec(String(text || ''))) !== null) {
+      clozes.push({
+        clozeNumber: Number.parseInt(match[1], 10),
+        deletedText: String(match[2] || '').trim(),
+        hint: match[3] ? String(match[3]).trim() : '',
+        raw: match[0]
+      });
+    }
+    return clozes;
+  }
+
+  function renderAnkiImportDiagnostics(result) {
+    const el = document.getElementById('anki-import-diagnostics');
+    if (!el) return;
+    const map = result.columnMap || {};
+    const columnLabel = key => map[key] === null || map[key] === undefined
+      ? 'Not detected'
+      : `${map[key] + 1}${result.columns?.[map[key]] ? ` (${escapeHTML(result.columns[map[key]])})` : ''}`;
+    const countSummary = Object.keys(result.fieldCounts || {})
+      .sort((a, b) => Number(a) - Number(b))
+      .map(count => `${escapeHTML(count)} fields: ${escapeHTML(result.fieldCounts[count])}`)
+      .join(', ') || 'No rows';
+    const warnings = result.warnings?.length
+      ? `<ul>${result.warnings.map(warning => `<li>${escapeHTML(warning)}</li>`).join('')}</ul>`
+      : '<div class="notes-import-empty">No parse warnings.</div>';
+
+    el.innerHTML = `
+      <div class="notes-import-stats">
+        <span><strong>Separator</strong> ${escapeHTML(result.separator.label)}</span>
+        <span><strong>Rows</strong> ${escapeHTML(String(result.rowCount))}</span>
+        <span><strong>Field counts</strong> ${escapeHTML(countSummary)}</span>
+        <span><strong>Consistent fields</strong> ${result.fieldCountConsistent ? 'Yes' : 'No'}</span>
+        <span><strong>Note type column</strong> ${columnLabel('noteType')}</span>
+        <span><strong>Deck column</strong> ${columnLabel('deck')}</span>
+        <span><strong>Tags column</strong> ${columnLabel('tags')}</span>
+        <span><strong>GUID column</strong> ${columnLabel('guid')}</span>
+      </div>
+      <div class="notes-import-section-title">Parse Warnings</div>
+      ${warnings}
+    `;
+  }
+
+  function renderAnkiCardPreview(cards) {
+    const el = document.getElementById('anki-card-preview');
+    if (!el) return;
+    if (!cards?.length) {
+      el.innerHTML = '<div class="notes-import-empty">No normalized cards available.</div>';
+      return;
+    }
+
+    const visibleCards = cards.slice(0, 50);
+    el.innerHTML = visibleCards.map(card => `
+      <div class="notes-draft-card">
+        <div class="notes-draft-title">
+          Row ${escapeHTML(String(card.originalRow))} · ${escapeHTML(card.noteType || 'Unknown')}
+          ${card.guid ? ` · GUID ${escapeHTML(card.guid)}` : ''}
+        </div>
+        <div class="notes-draft-meta">
+          Deck: ${escapeHTML(card.deckPath.length ? card.deckPath.join(' > ') : 'Not mapped')} ·
+          Tags: ${escapeHTML(card.tagsExact.length ? card.tagsExact.join(' ') : 'None mapped')} ·
+          Clozes: ${escapeHTML(String(card.clozeDeletions.length))}
+        </div>
+        <div>${escapeHTML((card.noteFields.slice(0, 3).join(' | ') || card.cleanedFields.slice(0, 3).join(' | ')).slice(0, 900))}</div>
+        ${card.clozeDeletions.length ? `<div class="notes-draft-meta">Cloze deletions: ${escapeHTML(card.clozeDeletions.map(c => `c${c.clozeNumber}: ${c.deletedText}${c.hint ? ` (${c.hint})` : ''}`).join(' | ').slice(0, 700))}</div>` : ''}
+        <details>
+          <summary>Raw fields preserved</summary>
+          <pre style="white-space:pre-wrap;overflow:auto;">${escapeHTML(JSON.stringify(card.rawFields, null, 2))}</pre>
+        </details>
+      </div>
+    `).join('') + (cards.length > visibleCards.length ? `<div class="notes-import-empty">Showing first ${visibleCards.length} of ${cards.length} normalized cards.</div>` : '');
   }
 
   function openNotesImportPreview() {
@@ -10484,6 +10933,10 @@ const App = (() => {
     unflag,
     showMarked,
     showNotes,
+    openAnkiTextImportPreview,
+    closeAnkiTextImportPreview,
+    clearAnkiTextImportPreview,
+    previewAnkiTextExport,
     openNotesImportPreview,
     closeNotesImportPreview,
     clearNotesImportPreview,
