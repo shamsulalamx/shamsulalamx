@@ -7953,6 +7953,8 @@ const App = (() => {
     const refinedDrafts = _notesImportPreview?.refinedDrafts || {};
     const reviewStatuses = _notesImportPreview?.refinedReviewStatus || {};
     const refinedIds = Object.keys(refinedDrafts);
+    const duplicateMap = buildRefinedDraftDuplicateWarningMap();
+    const duplicateCount = Object.values(duplicateMap).filter(Boolean).length;
     const reviewSummary = refinedIds.reduce((acc, draftId) => {
       const state = reviewStatuses[draftId] || 'pending';
       acc[state] = (acc[state] || 0) + 1;
@@ -7960,7 +7962,7 @@ const App = (() => {
     }, { pending: 0, approved: 0, rejected: 0 });
     if (status) {
       status.style.color = '#5a6a7a';
-      status.textContent = `${drafts.length} question draft scaffold${drafts.length === 1 ? '' : 's'} generated for preview only. ${reviewCount} require review before use. Refined: ${refinedIds.length}; approved: ${reviewSummary.approved || 0}; rejected: ${reviewSummary.rejected || 0}; pending: ${reviewSummary.pending || 0}. Nothing was saved.`;
+      status.textContent = `${drafts.length} question draft scaffold${drafts.length === 1 ? '' : 's'} generated for preview only. ${reviewCount} require review before use. Refined: ${refinedIds.length}; approved: ${reviewSummary.approved || 0}; rejected: ${reviewSummary.rejected || 0}; pending: ${reviewSummary.pending || 0}; duplicate warnings: ${duplicateCount}. Nothing was saved.`;
     }
     updateApprovedDraftExportButton();
     updateApprovedDraftCreateTestButton();
@@ -7997,13 +7999,93 @@ const App = (() => {
           ${warnings}
           ${refineControl ? `<div style="margin-top:10px;">${refineControl}</div>` : ''}
           ${refineError ? `<div class="notes-draft-teaching" style="color:#8a5a00;"><strong>AI refined preview unavailable:</strong> ${escapeHTML(refineError.message || refineError.errorCode || 'Request failed.')}</div>` : ''}
-          ${refined ? renderRefinedQuestionDraft(refined) : ''}
+          ${refined ? renderRefinedQuestionDraft(refined, duplicateMap[draft.draftId]) : ''}
         </div>
       </details>`;
     }).join('');
   }
 
-  function renderRefinedQuestionDraft(refined) {
+  function normalizeRefinedDuplicateText(value) {
+    return String(value || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(token => token.length > 2)
+      .join(' ');
+  }
+
+  function refinedDuplicateTokenOverlap(a, b) {
+    const left = new Set(normalizeRefinedDuplicateText(a).split(' ').filter(Boolean));
+    const right = new Set(normalizeRefinedDuplicateText(b).split(' ').filter(Boolean));
+    if (!left.size || !right.size) return 0;
+    let overlap = 0;
+    left.forEach(token => { if (right.has(token)) overlap += 1; });
+    return overlap / Math.min(left.size, right.size);
+  }
+
+  function getDraftForRefinedDuplicateCheck(draftId) {
+    return (_notesImportPreview?.drafts || []).find(draft => draft.draftId === draftId) || null;
+  }
+
+  function refinedDuplicateSignals(leftEntry, rightEntry) {
+    const reasons = [];
+    const left = leftEntry.refined || {};
+    const right = rightEntry.refined || {};
+    const leftDraft = leftEntry.draft || {};
+    const rightDraft = rightEntry.draft || {};
+    const stemOverlap = refinedDuplicateTokenOverlap(left.stem, right.stem);
+    const teachingOverlap = refinedDuplicateTokenOverlap(left.teachingPoint, right.teachingPoint);
+    const leftBlocks = new Set(left.sourceBlockIds || leftDraft.sourceBlockIds || []);
+    const rightBlocks = new Set(right.sourceBlockIds || rightDraft.sourceBlockIds || []);
+    const overlappingBlocks = Array.from(leftBlocks).filter(id => rightBlocks.has(id));
+    const leftClusterId = left.clusterId || leftDraft.clusterId || '';
+    const rightClusterId = right.clusterId || rightDraft.clusterId || '';
+
+    if (left.sourceConceptId && left.sourceConceptId === right.sourceConceptId) reasons.push('same source concept');
+    if (overlappingBlocks.length) reasons.push(`overlapping source blocks: ${overlappingBlocks.slice(0, 3).join(', ')}`);
+    if (leftClusterId && leftClusterId === rightClusterId) reasons.push('same cluster');
+    if (stemOverlap >= 0.72) reasons.push(`similar stems (${Math.round(stemOverlap * 100)}% token overlap)`);
+    if (teachingOverlap >= 0.72) reasons.push(`similar teaching points (${Math.round(teachingOverlap * 100)}% token overlap)`);
+
+    const strongProvenanceMatch = reasons.some(reason => reason.startsWith('same ') || reason.startsWith('overlapping source blocks'));
+    const strongTextMatch = stemOverlap >= 0.82 || teachingOverlap >= 0.82 || (stemOverlap >= 0.68 && teachingOverlap >= 0.68);
+    if (!strongProvenanceMatch && !strongTextMatch) return [];
+    return reasons;
+  }
+
+  function buildRefinedDraftDuplicateWarningMap() {
+    const refinedDrafts = _notesImportPreview?.refinedDrafts || {};
+    const entries = Object.entries(refinedDrafts).map(([draftId, refined]) => ({
+      draftId,
+      refined,
+      draft: getDraftForRefinedDuplicateCheck(draftId)
+    }));
+    const warnings = {};
+    for (let i = 0; i < entries.length; i += 1) {
+      for (let j = i + 1; j < entries.length; j += 1) {
+        const reasons = refinedDuplicateSignals(entries[i], entries[j]);
+        if (!reasons.length) continue;
+        warnings[entries[i].draftId] = warnings[entries[i].draftId] || [];
+        warnings[entries[j].draftId] = warnings[entries[j].draftId] || [];
+        warnings[entries[i].draftId].push({ otherDraftId: entries[j].draftId, reasons });
+        warnings[entries[j].draftId].push({ otherDraftId: entries[i].draftId, reasons });
+      }
+    }
+    return warnings;
+  }
+
+  function renderRefinedDuplicateWarnings(warnings) {
+    if (!warnings?.length) return '';
+    const rows = warnings.map(warning =>
+      `<div>Possible duplicate of ${escapeHTML(warning.otherDraftId)}: ${escapeHTML(warning.reasons.join('; '))}</div>`
+    ).join('');
+    return `<div class="notes-draft-teaching" style="color:#8a5a00;margin-top:8px;">
+      <strong>Duplicate warning:</strong> review before approving. This does not reject, remove, or block saving.
+      ${rows}
+    </div>`;
+  }
+
+  function renderRefinedQuestionDraft(refined, duplicateWarnings = []) {
     const draftId = refined.sourceDraftId || '';
     const reviewStatus = _notesImportPreview?.refinedReviewStatus?.[draftId] || 'pending';
     const choices = refined.choices.map(choice => `<li><strong>${escapeHTML(choice.label)}.</strong> ${escapeHTML(choice.text)}</li>`).join('');
@@ -8023,6 +8105,7 @@ const App = (() => {
       <ol class="notes-draft-choice-list" type="A">${choices}</ol>
       <div><strong>Provisional correct answer:</strong> ${escapeHTML(refined.correctAnswer)}<br><strong>Teaching point:</strong> ${escapeHTML(refined.teachingPoint)}</div>
       <div style="margin-top:7px;"><strong>Rationales:</strong> ${escapeHTML(rationales)}</div>
+      ${renderRefinedDuplicateWarnings(duplicateWarnings)}
       ${warnings}
       ${reviewControls}
     </div>`;
