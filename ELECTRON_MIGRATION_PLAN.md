@@ -162,6 +162,37 @@ This file should track migration stages, decisions, risks, verification checkpoi
 - Renderer boundary: renderers should consume structured question data plus render-mode metadata, not raw importer heuristics.
 - Do not implement new adapters, storage, or parser rewrites until the block schema is reviewed against existing PDF fixtures and grouped-question invariants.
 
+### Future Debugging And Token-Efficiency Tooling
+
+- Current parser debugging is local-only and exports a large JSON bundle with raw OCR output, normalized item maps, answer maps, skipped items, source-number recovery, count audits, final rendered arrays, grouped range audits, focused item traces, and full generated quiz JSON.
+- Current pain points:
+  - exports are large and expensive to paste into model chats
+  - focused item lists are static historical examples rather than user-selected ranges
+  - repeated runs are not automatically saved or comparable
+  - source-number, grouped-question, and render-mode audits are embedded inside one large export
+  - fixture checks are not exposed as a one-command desktop workflow
+  - local logs and failed-run artifacts are not retained unless manually exported
+- Future Electron-only helpers should include:
+  - parser run history with immutable manifests
+  - source-number audit summary exports
+  - grouped-question audit summary exports
+  - render-mode audit summary exports after render-mode metadata exists
+  - focused debug exports by source-number range or selected item IDs
+  - local logs for parse stages, warnings, errors, and user-approved corrections
+  - fixture runner entrypoint with pass/fail summaries and artifact links
+  - open debug folder helper through narrow preload/main IPC
+- Recommended debug export structure:
+  - `manifest.json`: run ID, timestamps, app checkpoint, source names/hashes, parser settings, expected counts, artifact index.
+  - `summary.json`: compact stage counts, missing/duplicate source numbers, grouped range status, warning counts, and pass/fail flags.
+  - `source-number-audit.json`: item-number detection by page, fallback detections, missing/duplicate numbers, displayed-to-source mapping.
+  - `grouped-audit.json`: shared group IDs, expected ranges, linked item IDs, authoritative shared choices, and render-order checks.
+  - `render-audit.json`: render mode, stem/image availability, duplicate-answer-bank risk, and selected display assets.
+  - `focused-items/`: one small JSON file per selected item or item range with raw text, normalized text, parsed object, merged object, final object, and answer mapping.
+  - `artifacts/`: OCR raw text, normalized blocks, parser snapshots, and optional redacted excerpts.
+  - `logs/`: append-only local logs for the run.
+- Default model-facing export should be a compact summary plus selected focused items, not the full raw export.
+- Debug artifacts may contain copyrighted/private exam content and must remain local/private unless the user intentionally exports selected files.
+
 ### Stage 9: Design Text/Image/Hybrid Render-Mode Layer
 
 - Define per-question render mode metadata.
