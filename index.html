@@ -7921,6 +7921,7 @@ const App = (() => {
     const clusterLabel = orderedMembers[0]?.sectionPath?.length ? orderedMembers[0].sectionPath[orderedMembers[0].sectionPath.length - 1] : conceptType;
     return {
       id: `ome-cluster-${index + 1}`,
+      clusterIndex: index,
       clusterType,
       clusterLabel,
       sourceName,
