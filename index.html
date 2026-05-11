@@ -1920,11 +1920,19 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
     <div id="mehlman-import-status" class="notes-import-summary">Choose a .pdf file from the Mehlman library.</div>
     <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
       <button type="button" class="btn-card" onclick="App.clearMehlmanPdfImportPreview()">Clear / Reset</button>
+      <button type="button" class="btn-card" id="mehlman-extract-concepts-btn" style="display:none;" onclick="App.extractAndPreviewMehlmanConcepts()">Extract Concepts</button>
       <button type="button" class="btn-card" onclick="App.closeMehlmanPdfImportPreview()">Close</button>
     </div>
     <div class="notes-import-section-title">Mehlman Block Preview</div>
     <div id="mehlman-structure-preview" class="notes-draft-preview">
       <div class="notes-import-empty">No Mehlman structure preview loaded.</div>
+    </div>
+    <div id="mehlman-concept-section" style="display:none;">
+      <div class="notes-import-section-title" style="margin-top:12px;">Mehlman Concept Preview</div>
+      <div id="mehlman-concept-status" class="notes-import-summary" style="margin-bottom:6px;"></div>
+      <div id="mehlman-concept-preview" class="notes-draft-preview">
+        <div class="notes-import-empty">No concepts extracted yet.</div>
+      </div>
     </div>
   </div>
 </div>
@@ -2045,11 +2053,12 @@ const DB = (() => {
         if (existing.order == null) existing.order = src.order;
         if (!existing.sourceType) existing.sourceType = src.sourceType;
         if (!Array.isArray(existing.workflows)) existing.workflows = src.workflows.slice();
-        if (src.id === 'src-anki' || src.id === 'src-ome') {
-          src.workflows.forEach(workflow => {
-            if (!existing.workflows.includes(workflow)) existing.workflows.push(workflow);
-          });
-        }
+        // Backfill any workflows added to DEFAULT_SOURCE_FOLDERS into already-stored entries.
+        // Applies to all default sources so new workflows (e.g. mehlman-pdf-preview) are
+        // automatically surfaced without requiring a localStorage reset.
+        src.workflows.forEach(workflow => {
+          if (!existing.workflows.includes(workflow)) existing.workflows.push(workflow);
+        });
       }
     });
 
@@ -2149,6 +2158,13 @@ const DB = (() => {
   }
   function getSourceFolder(id) {
     return get().sourceFolders.find(s => s.id === id) || null;
+  }
+  // Returns the canonical workflows for a default source folder directly from
+  // DEFAULT_SOURCE_FOLDERS, bypassing localStorage. Used as a fallback so that
+  // workflows added to defaults are always visible even when localStorage is stale.
+  function getDefaultSourceFolderWorkflows(id) {
+    const def = DEFAULT_SOURCE_FOLDERS.find(s => s.id === id);
+    return Array.isArray(def && def.workflows) ? def.workflows.slice() : [];
   }
   function createSourceFolder(name) {
     const db = get();
@@ -2318,7 +2334,7 @@ const DB = (() => {
   }
 
   return { get, save, uid,
-    getSourceFolders, getSourceFolder, createSourceFolder, renameSourceFolder,
+    getSourceFolders, getSourceFolder, getDefaultSourceFolderWorkflows, createSourceFolder, renameSourceFolder,
     getFolders, createFolder, renameFolder, deleteFolder,
     getTests, getTest, createTest, updateTest, renameTest, trashTest, restoreTest, emptyTrash, permanentDelete,
     saveAttempt, finishAttempt, getHistory, getFlags, addFlag, removeFlag, isFlagged,
@@ -6576,7 +6592,14 @@ const App = (() => {
 
   function getSourceWorkflow(sourceId = _currentSource) {
     const source = sourceId ? DB.getSourceFolder(sourceId) : null;
-    const workflows = Array.isArray(source?.workflows) ? source.workflows : [];
+    // Merge stored workflows with the canonical defaults so that workflows added
+    // to DEFAULT_SOURCE_FOLDERS are always surfaced even when localStorage is stale.
+    const stored = Array.isArray(source && source.workflows) ? source.workflows : [];
+    const defaults = DB.getDefaultSourceFolderWorkflows(sourceId || '');
+    const workflows = stored.length > 0
+      ? stored.concat(defaults.filter(w => !stored.includes(w)))
+      : defaults;
+
     if (workflows.includes('pdf-test-import')) return 'pdf-test-import';
     if (workflows.includes('docx-notes-preview')) return 'docx-notes-preview';
     if (workflows.includes('anki-text-preview')) return 'anki-text-preview';
@@ -6830,13 +6853,20 @@ const App = (() => {
 
   function renderSourceFolderPage(contentEl) {
     const folders = DB.getFolders(_currentSource);
+
+    // Import action button for non-NBME sources (shown regardless of subfolder count).
+    const workflowLabel = getWorkflowActionLabel();
+    const importSection = workflowLabel && workflowLabel !== '＋ Generate Test'
+      ? `<div style="margin-bottom:14px;"><button class="btn-generate" onclick="App.openGenerateModal()">${escapeHTML(workflowLabel)}</button></div>`
+      : '';
+
     if (!folders.length) {
-      contentEl.innerHTML = `<div class="no-tests">No subfolders in this library yet.<br><br>
+      contentEl.innerHTML = `${importSection}<div class="no-tests">No subfolders in this library yet.<br><br>
         <button class="btn-generate" onclick="App.promptNewFolder()">＋ New Subfolder</button></div>`;
       return;
     }
 
-    let html = '<div class="source-subfolder-grid">';
+    let html = `${importSection}<div class="source-subfolder-grid">`;
     folders.forEach(folder => {
       const tests = DB.getTests(folder.id);
       html += `<div class="subfolder-card" onclick="App.showFolderHome('${folder.id}')">
@@ -9481,9 +9511,17 @@ const App = (() => {
     const input = document.getElementById('mehlman-pdf-input');
     const status = document.getElementById('mehlman-import-status');
     const preview = document.getElementById('mehlman-structure-preview');
+    const extractBtn = document.getElementById('mehlman-extract-concepts-btn');
+    const conceptSection = document.getElementById('mehlman-concept-section');
+    const conceptStatus = document.getElementById('mehlman-concept-status');
+    const conceptPreview = document.getElementById('mehlman-concept-preview');
     if (input) input.value = '';
     if (status) status.textContent = 'Choose a .pdf file from the Mehlman library.';
     if (preview) preview.innerHTML = '<div class="notes-import-empty">No Mehlman structure preview loaded.</div>';
+    if (extractBtn) extractBtn.style.display = 'none';
+    if (conceptSection) conceptSection.style.display = 'none';
+    if (conceptStatus) conceptStatus.textContent = '';
+    if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concepts extracted yet.</div>';
   }
 
   async function calibrateMehlmanFontThreshold(pdf) {
@@ -9764,6 +9802,272 @@ const App = (() => {
       : '';
 
     preview.innerHTML = `${summary}${warningPreview}${headingPreview}${pageCards}${truncNote}`;
+
+    const extractBtn = document.getElementById('mehlman-extract-concepts-btn');
+    if (extractBtn) extractBtn.style.display = '';
+  }
+
+  // ── Mehlman concept extraction (deterministic, no AI) ────────────────────
+
+  function extractMehlmanConcepts(blocks) {
+    const SKIP_TYPES = new Set(['heading', 'subheading', 'table-caption']);
+
+    const TYPE_CODES = {
+      'high-yield-fact': 'hyf',
+      'mechanism': 'mec',
+      'risk-factor': 'rf',
+      'diagnostic-distinction': 'dd',
+      'management-rule': 'mgmt',
+      'contraindication-adverse-effect': 'cae',
+      'exam-trap': 'et',
+      'unknown': 'unk'
+    };
+
+    const TRIGGERS = {
+      'high-yield-fact': /most common|classic(?:al)? (?:presentation|finding|feature|sign|symptom|case)|pathognomonic|\b#1\b|first[- ]line|first[- ]choice|most likely|hallmark|\balways\b|\bnever\b|gold standard|treatment of choice|best initial|most important/i,
+      'mechanism': /\bdue to\b|\bcaused by\b|\bleads? to\b|\bresults? in\b|\binhibits?\b|\bactivates?\b|\bblocks?\b|\bstimulates?\b|\bprevents?\b|\bdownregulat|\bupregulat|\bpathophysi/i,
+      'risk-factor': /risk factor|predispos(?:es?|ing)|associated with (?:increased |higher )?risk|increases? (?:the )?risk|higher risk|more likely in/i,
+      'diagnostic-distinction': /\bvs\.?\b|\bunlike\b|\bdistinguish(?:es|ing)?\b|\bdifferentiat(?:es|ing|ion)?\b|\bnot seen in\b|\bin contrast\b|\bcompared to\b|\bmore specific(?:ally)?\b|\bnot present in\b/i,
+      'management-rule': /\bgive\b|\bstart\b|\badminister\b|\bnext best step\b|\bfirst step\b|\btreat(?:ment)? with\b|\btreatment of choice\b|\bmanage(?:ment)?\b|\btherapy\b|\bprescribe\b|\bindication\b/i,
+      'contraindication-adverse-effect': /contraindicated?|\bavoid\b|\bside effect|\btoxicity|\badverse\b|\bcomplication\b|\bdrug interaction|\bmonitoring\b|\bnephrotoxic|\bototoxic|\bhepatotoxic|\bSJS\b|\bTEN\b|\bserotonin syndrome/i,
+      'exam-trap': /\bremember\b|\bboards?\b|\bdon't confuse\b|\bdo not confuse\b|\bpitfall\b|\bexam tip\b|\bclassic mistake\b|\bbeware\b|\btricky\b|\bnote:\b|\bimportant:\b|\bkey point\b|\bpearl\b/i
+    };
+
+    const HEADING_RISK_RE = /risk|predispos/i;
+    const HEADING_MGMT_RE = /treatment|management|therapy|approach|intervention/i;
+
+    const concepts = [];
+
+    for (const block of blocks) {
+      if (SKIP_TYPES.has(block.blockType)) continue;
+      if (!block.text || block.text.trim().length < 6) continue;
+
+      const text = block.text;
+      const headingContext = (block.headingPath || []).join(' ');
+
+      const matchedTypes = [];
+
+      // exam-trap: callout blocks are always exam-traps; also match trigger text
+      if (block.blockType === 'callout' || TRIGGERS['exam-trap'].test(text)) {
+        matchedTypes.push({ type: 'exam-trap', fromCallout: block.blockType === 'callout' });
+      }
+
+      if (TRIGGERS['high-yield-fact'].test(text)) {
+        matchedTypes.push({ type: 'high-yield-fact' });
+      }
+
+      if (TRIGGERS['mechanism'].test(text)) {
+        matchedTypes.push({ type: 'mechanism' });
+      }
+
+      // risk-factor: heading context OR text trigger
+      const riskFromHeading = HEADING_RISK_RE.test(headingContext);
+      const riskFromText = TRIGGERS['risk-factor'].test(text);
+      if (riskFromHeading || riskFromText) {
+        matchedTypes.push({ type: 'risk-factor', fromHeading: riskFromHeading && !riskFromText });
+      }
+
+      if (TRIGGERS['diagnostic-distinction'].test(text)) {
+        matchedTypes.push({ type: 'diagnostic-distinction' });
+      }
+
+      // management-rule: heading context OR text trigger
+      const mgmtFromHeading = HEADING_MGMT_RE.test(headingContext);
+      const mgmtFromText = TRIGGERS['management-rule'].test(text);
+      if (mgmtFromHeading || mgmtFromText) {
+        matchedTypes.push({ type: 'management-rule', fromHeading: mgmtFromHeading && !mgmtFromText });
+      }
+
+      if (TRIGGERS['contraindication-adverse-effect'].test(text)) {
+        matchedTypes.push({ type: 'contraindication-adverse-effect' });
+      }
+
+      // unknown only when no other type matched
+      if (matchedTypes.length === 0) {
+        matchedTypes.push({ type: 'unknown' });
+      }
+
+      // de-duplicate: one entry per concept type per block
+      const seenTypes = new Set();
+
+      for (const match of matchedTypes) {
+        if (seenTypes.has(match.type)) continue;
+        seenTypes.add(match.type);
+
+        const typeCode = TYPE_CODES[match.type] || 'unk';
+        const conceptId = `${block.blockId}-${typeCode}`;
+
+        // Confidence calculation
+        let confidence = typeof block.confidence === 'number' ? block.confidence : 0.5;
+
+        if (match.type === 'unknown') {
+          confidence = Math.min(confidence, 0.45);
+        } else if (match.type === 'exam-trap' && match.fromCallout) {
+          confidence = Math.max(confidence, 0.88);
+        } else if (match.type === 'high-yield-fact') {
+          const strong = /pathognomonic|most common|\b#1\b|gold standard|treatment of choice/i.test(text);
+          confidence = Math.max(confidence, strong ? 0.85 : 0.72);
+        } else if (match.type === 'contraindication-adverse-effect') {
+          confidence = Math.max(confidence, 0.78);
+        } else if (match.fromHeading) {
+          // Heading-context-only signal is weaker
+          confidence = Math.min(confidence * 0.9, 0.65);
+        }
+
+        // Block-level adjustments
+        if (block.blockType === 'callout') confidence = Math.min(confidence + 0.08, 0.95);
+        if (block.blockType === 'table-row') confidence = Math.max(confidence - 0.05, 0.35);
+        if ((block.headingPath || []).length > 0) confidence = Math.min(confidence + 0.03, 0.95);
+        if (text.length < 12) confidence = Math.max(confidence - 0.15, 0.35);
+
+        confidence = Math.round(confidence * 100) / 100;
+        confidence = Math.max(0.35, Math.min(0.95, confidence));
+
+        const warnings = [];
+        if (confidence < 0.7) warnings.push('Low-confidence — verify against source');
+        if (match.type === 'unknown') warnings.push('No concept trigger matched — included for completeness');
+        if (match.fromHeading) {
+          const headingLabel = (block.headingPath || []).slice(-1)[0] || '';
+          warnings.push(`Type inferred from heading context only ("${headingLabel}")`);
+        }
+
+        concepts.push({
+          conceptId,
+          conceptType: match.type,
+          sourceBlockId: block.blockId,
+          headingPath: (block.headingPath || []).slice(),
+          pageNumber: block.pageNumber,
+          sourceSnippet: text.slice(0, 300),
+          confidence,
+          warnings
+        });
+      }
+    }
+
+    return concepts;
+  }
+
+  function renderMehlmanConceptPreview(concepts) {
+    const section = document.getElementById('mehlman-concept-section');
+    const statusEl = document.getElementById('mehlman-concept-status');
+    const previewEl = document.getElementById('mehlman-concept-preview');
+    if (!previewEl) return;
+
+    if (section) section.style.display = '';
+
+    if (!concepts || concepts.length === 0) {
+      if (statusEl) statusEl.textContent = 'No concepts extracted.';
+      previewEl.innerHTML = '<div class="notes-import-empty">No concepts found.</div>';
+      return;
+    }
+
+    const TYPE_ORDER = [
+      'high-yield-fact', 'mechanism', 'management-rule', 'diagnostic-distinction',
+      'risk-factor', 'contraindication-adverse-effect', 'exam-trap', 'unknown'
+    ];
+
+    const TYPE_LABELS = {
+      'high-yield-fact': '⭐ High-Yield Fact',
+      'mechanism': '⚙ Mechanism',
+      'risk-factor': '⚠ Risk Factor',
+      'diagnostic-distinction': '🔍 Diagnostic Distinction',
+      'management-rule': '💊 Management Rule',
+      'contraindication-adverse-effect': '🚫 Contraindication / Adverse Effect',
+      'exam-trap': '⚡ Exam Trap',
+      'unknown': '• Unknown'
+    };
+
+    const TYPE_COLORS = {
+      'high-yield-fact': '#2563eb',
+      'mechanism': '#7c3aed',
+      'risk-factor': '#d97706',
+      'diagnostic-distinction': '#0891b2',
+      'management-rule': '#059669',
+      'contraindication-adverse-effect': '#dc2626',
+      'exam-trap': '#c026d3',
+      'unknown': '#6b7280'
+    };
+
+    const lowConfCount = concepts.filter(c => c.confidence < 0.7).length;
+    const unknownCount = concepts.filter(c => c.conceptType === 'unknown').length;
+
+    const byType = {};
+    for (const t of TYPE_ORDER) byType[t] = [];
+    for (const c of concepts) {
+      if (!byType[c.conceptType]) byType[c.conceptType] = [];
+      byType[c.conceptType].push(c);
+    }
+
+    const statRows = TYPE_ORDER
+      .filter(t => byType[t].length > 0)
+      .map(t => `<tr><td style="padding:1px 10px 1px 0;font-size:12px;">${escapeHTML(TYPE_LABELS[t] || t)}</td><td style="font-size:12px;font-weight:600;color:${TYPE_COLORS[t]};">${byType[t].length}</td></tr>`)
+      .join('');
+
+    if (statusEl) statusEl.textContent = `${concepts.length} concepts — ${lowConfCount} low-confidence${unknownCount ? ` — ${unknownCount} unknown` : ''}.`;
+
+    const summaryHtml = `
+      <div class="notes-import-summary" style="margin-bottom:10px;">
+        <strong>${concepts.length} concepts extracted</strong>${lowConfCount > 0 ? ` · <span style="color:#c0392b;">${lowConfCount} low-confidence</span>` : ''}${unknownCount > 0 ? ` · <span style="color:#6b7280;">${unknownCount} unknown</span>` : ''}
+        <table style="margin-top:6px;border-collapse:collapse;">${statRows}</table>
+      </div>`;
+
+    const conceptCard = (c) => {
+      const color = TYPE_COLORS[c.conceptType] || '#6b7280';
+      const lowConf = c.confidence < 0.7;
+      const cardStyle = lowConf
+        ? 'border:1px solid #f9b8b8;background:#fff8f8;border-radius:6px;padding:8px 10px;margin-bottom:6px;'
+        : 'border:1px solid #e2e8f0;background:#fafafa;border-radius:6px;padding:8px 10px;margin-bottom:6px;';
+      const badge = `<span style="display:inline-block;background:${color};color:#fff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:3px;margin-bottom:4px;">${escapeHTML(c.conceptType.toUpperCase().replace(/-/g, ' '))}</span>`;
+      const breadcrumb = c.headingPath.length
+        ? `<div style="font-size:11px;color:#888;margin-bottom:3px;">${c.headingPath.map(h => escapeHTML(h)).join(' › ')}</div>`
+        : '';
+      const snippet = `<div style="font-size:12px;color:#222;margin-bottom:3px;">${escapeHTML(c.sourceSnippet.slice(0, 200))}${c.sourceSnippet.length > 200 ? '…' : ''}</div>`;
+      const meta = `<div style="font-size:11px;color:#888;">Page ${c.pageNumber} · confidence: ${(c.confidence * 100).toFixed(0)}%${lowConf ? ' ⚠' : ''}</div>`;
+      const warnHtml = c.warnings.length
+        ? `<div style="font-size:11px;color:#c0392b;margin-top:3px;">${c.warnings.map(w => escapeHTML(w)).join(' · ')}</div>`
+        : '';
+      return `<div style="${cardStyle}">${badge}${breadcrumb}${snippet}${meta}${warnHtml}</div>`;
+    };
+
+    const knownTypes = TYPE_ORDER.filter(t => t !== 'unknown' && byType[t].length > 0);
+
+    const knownSections = knownTypes.map(t => {
+      const cards = byType[t].map(conceptCard).join('');
+      return `<details open style="margin-bottom:10px;">
+        <summary style="cursor:pointer;font-size:13px;font-weight:700;color:${TYPE_COLORS[t]};margin-bottom:6px;">${escapeHTML(TYPE_LABELS[t])} (${byType[t].length})</summary>
+        ${cards}
+      </details>`;
+    }).join('');
+
+    const unknownSection = byType['unknown'].length > 0
+      ? `<details style="margin-bottom:10px;">
+          <summary style="cursor:pointer;font-size:13px;font-weight:700;color:#6b7280;">• Unknown (${byType['unknown'].length}) — no trigger matched</summary>
+          ${byType['unknown'].map(conceptCard).join('')}
+        </details>`
+      : '';
+
+    previewEl.innerHTML = `${summaryHtml}${knownSections}${unknownSection}`;
+  }
+
+  function extractAndPreviewMehlmanConcepts() {
+    const section = document.getElementById('mehlman-concept-section');
+    const statusEl = document.getElementById('mehlman-concept-status');
+
+    if (!_mehlmanImportPreview || !Array.isArray(_mehlmanImportPreview.blocks)) {
+      if (section) section.style.display = '';
+      if (statusEl) statusEl.textContent = 'No block preview loaded. Load a PDF first.';
+      return;
+    }
+
+    if (section) section.style.display = '';
+    if (statusEl) statusEl.textContent = 'Extracting concepts…';
+
+    // Yield one frame so the status message renders before the synchronous extraction loop
+    setTimeout(() => {
+      const concepts = extractMehlmanConcepts(_mehlmanImportPreview.blocks);
+      _mehlmanImportPreview.concepts = concepts;
+      renderMehlmanConceptPreview(concepts);
+    }, 0);
   }
 
   function openAnkiTextImportPreview() {
@@ -15906,6 +16210,7 @@ const App = (() => {
     closeMehlmanPdfImportPreview,
     clearMehlmanPdfImportPreview,
     previewMehlmanPdfImport,
+    extractAndPreviewMehlmanConcepts,
     updateApprovedOmeDraftCreateTestButton,
     createTestFromApprovedOmeDrafts,
     exportApprovedOmeDraftsJson,
