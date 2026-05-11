@@ -1997,6 +1997,60 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
   </div>
 </div>
 
+<!-- ═══ DIVINE TRANSCRIPT IMPORT PREVIEW MODAL ═══ -->
+<div id="modal-divine-import" class="modal-overlay">
+  <div class="modal-box" style="max-width:780px;">
+    <h3>Divine Transcript Import Preview</h3>
+    <p>This preview accepts plain-text transcripts from Divine Podcasts. Upload a <code>.txt</code>, <code>.md</code>, or <code>.txt.md</code> file (e.g. OpenWhispr exports) or paste the transcript directly. No audio transcription, cleaning, question generation, or save is available yet — this is a structural preview only.</p>
+    <div class="form-group">
+      <label class="form-label">Transcript File <span style="font-size:11px;color:#888;">(.txt, .md, .txt.md)</span></label>
+      <input type="file" class="form-input" id="divine-transcript-file-input" accept=".txt,.md,.txt.md"
+             onchange="App.loadDivineTranscriptFile(this)">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Or paste transcript text</label>
+      <textarea class="form-input" id="divine-transcript-paste" rows="6"
+                style="resize:vertical;font-size:12px;font-family:monospace;"
+                placeholder="Paste the full transcript here…"
+                oninput="App.loadDivineTranscriptPaste(this)"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Episode title <span style="font-size:11px;color:#888;">(optional)</span></label>
+      <input type="text" class="form-input" id="divine-episode-title"
+             placeholder="e.g. Episode 42 — Cardiology High-Yield">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Series / source metadata <span style="font-size:11px;color:#888;">(optional)</span></label>
+      <input type="text" class="form-input" id="divine-source-meta"
+             placeholder="e.g. Divine Intervention Podcast, Season 5">
+    </div>
+    <div id="divine-import-status" class="notes-import-summary">Choose a .txt, .md, or .txt.md file or paste a transcript to begin.</div>
+    <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+      <button type="button" class="btn-card" onclick="App.clearDivineTranscriptImportPreview()">Clear / Reset</button>
+      <button type="button" class="btn-card" id="divine-clean-btn" style="display:none;" onclick="App.cleanAndPreviewDivineTranscript()">Clean Transcript</button>
+      <button type="button" class="btn-card" onclick="App.closeDivineTranscriptImportPreview()">Close</button>
+    </div>
+    <div class="notes-import-section-title">Raw Transcript Preview</div>
+    <div id="divine-transcript-preview" class="notes-draft-preview">
+      <div class="notes-import-empty">No transcript loaded yet.</div>
+    </div>
+    <div id="divine-clean-section" style="display:none;">
+      <div class="notes-import-section-title" style="margin-top:12px;">Cleaning Summary</div>
+      <div id="divine-clean-status" class="notes-import-summary" style="margin-bottom:6px;"></div>
+      <div id="divine-clean-summary" style="margin-bottom:8px;"></div>
+      <div class="notes-import-section-title" style="margin-top:10px;">Cleaned Transcript Preview</div>
+      <div id="divine-cleaned-preview" class="notes-draft-preview">
+        <div class="notes-import-empty">No cleaned transcript yet.</div>
+      </div>
+      <div class="notes-import-section-title" style="margin-top:10px;">Excluded Segments Preview</div>
+      <div id="divine-excluded-status" class="notes-import-summary" style="margin-bottom:6px;"></div>
+      <div id="divine-excluded-preview" class="notes-draft-preview">
+        <div class="notes-import-empty">No excluded segments.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ NEW FOLDER MODAL ═══ -->
 <div id="modal-new-folder" class="modal-overlay">
   <div class="modal-box" style="max-width:380px;">
@@ -2069,7 +2123,7 @@ const DB = (() => {
     { id: 'src-uworld', name: 'UWorld', order: 1, sourceType: 'uworld-notes', workflows: ['docx-notes-preview'] },
     { id: 'src-anki', name: 'Anki', order: 2, sourceType: 'anki', workflows: ['anki-text-preview'] },
     { id: 'src-ome', name: 'OME', order: 3, sourceType: 'ome', workflows: ['ome-pdf-preview'] },
-    { id: 'src-divine-podcasts', name: 'Divine Podcasts', order: 4, sourceType: 'divine', workflows: [] },
+    { id: 'src-divine-podcasts', name: 'Divine Podcasts', order: 4, sourceType: 'divine', workflows: ['divine-transcript-preview'] },
     { id: 'src-mehlman', name: 'Mehlman', order: 5, sourceType: 'mehlman', workflows: ['mehlman-pdf-preview'] },
     { id: 'src-images-and-tables', name: 'Images and Tables', order: 6, sourceType: 'images-tables', workflows: [] },
     { id: 'src-amboss', name: 'Amboss', order: 7, sourceType: 'amboss', workflows: [] }
@@ -6475,6 +6529,7 @@ const App = (() => {
   let _ankiImportPreview = null;
   let _omeImportPreview = null;
   let _mehlmanImportPreview = null;
+  let _divineImportPreview = null;
   const _notesRefinePending = new Set();
   const _notesBatchRefinementCache = new Map();
   let _notesBatchRunTimer = null;
@@ -6665,6 +6720,7 @@ const App = (() => {
     if (workflows.includes('anki-text-preview')) return 'anki-text-preview';
     if (workflows.includes('ome-pdf-preview')) return 'ome-pdf-preview';
     if (workflows.includes('mehlman-pdf-preview')) return 'mehlman-pdf-preview';
+    if (workflows.includes('divine-transcript-preview')) return 'divine-transcript-preview';
     return null;
   }
 
@@ -6675,6 +6731,7 @@ const App = (() => {
     if (workflow === 'anki-text-preview') return 'Import Anki Text Preview';
     if (workflow === 'ome-pdf-preview') return 'Import OME PDF Preview';
     if (workflow === 'mehlman-pdf-preview') return 'Import Mehlman PDF Preview';
+    if (workflow === 'divine-transcript-preview') return 'Import Divine Transcript Preview';
     return '';
   }
 
@@ -6684,6 +6741,7 @@ const App = (() => {
     if (workflow === 'anki-text-preview') return 'Use Anki plain-text import preview from this library.';
     if (workflow === 'ome-pdf-preview') return 'Use OME PDF structure preview from this library.';
     if (workflow === 'mehlman-pdf-preview') return 'Use Mehlman PDF structure preview from this library.';
+    if (workflow === 'divine-transcript-preview') return 'Use Divine transcript import preview from this library.';
     if (workflow === 'pdf-test-import') return 'No tests in this folder yet.';
     return 'No import workflow is available for this library yet.';
   }
@@ -6704,6 +6762,10 @@ const App = (() => {
     }
     if (workflow === 'mehlman-pdf-preview') {
       openMehlmanPdfImportPreview();
+      return;
+    }
+    if (workflow === 'divine-transcript-preview') {
+      openDivineTranscriptImportPreview();
       return;
     }
     if (workflow === 'pdf-test-import') {
@@ -11201,6 +11263,409 @@ const App = (() => {
       renderMehlmanSaveDiagnostics(items, errors, target, { ok: false, message }, inputs, message);
       toast(message, 8000);
     }
+  }
+
+  // ══ Divine Podcasts Transcript Import Preview (isolated) ══
+
+  function openDivineTranscriptImportPreview() {
+    const modal = document.getElementById('modal-divine-import');
+    if (modal) modal.style.display = 'flex';
+  }
+
+  function closeDivineTranscriptImportPreview() {
+    const modal = document.getElementById('modal-divine-import');
+    if (modal) modal.style.display = 'none';
+  }
+
+  function clearDivineTranscriptImportPreview() {
+    _divineImportPreview = null;
+    const fileInput = document.getElementById('divine-transcript-file-input');
+    const pasteArea = document.getElementById('divine-transcript-paste');
+    const episodeTitle = document.getElementById('divine-episode-title');
+    const sourceMeta = document.getElementById('divine-source-meta');
+    const status = document.getElementById('divine-import-status');
+    const preview = document.getElementById('divine-transcript-preview');
+    const cleanBtn = document.getElementById('divine-clean-btn');
+    const cleanSection = document.getElementById('divine-clean-section');
+    const cleanStatus = document.getElementById('divine-clean-status');
+    const cleanSummary = document.getElementById('divine-clean-summary');
+    const cleanedPreview = document.getElementById('divine-cleaned-preview');
+    const excludedStatus = document.getElementById('divine-excluded-status');
+    const excludedPreview = document.getElementById('divine-excluded-preview');
+    if (fileInput) fileInput.value = '';
+    if (pasteArea) pasteArea.value = '';
+    if (episodeTitle) episodeTitle.value = '';
+    if (sourceMeta) sourceMeta.value = '';
+    if (status) status.textContent = 'Choose a .txt, .md, or .txt.md file or paste a transcript to begin.';
+    if (preview) preview.innerHTML = '<div class="notes-import-empty">No transcript loaded yet.</div>';
+    if (cleanBtn) cleanBtn.style.display = 'none';
+    if (cleanSection) cleanSection.style.display = 'none';
+    if (cleanStatus) cleanStatus.textContent = '';
+    if (cleanSummary) cleanSummary.innerHTML = '';
+    if (cleanedPreview) cleanedPreview.innerHTML = '<div class="notes-import-empty">No cleaned transcript yet.</div>';
+    if (excludedStatus) excludedStatus.textContent = '';
+    if (excludedPreview) excludedPreview.innerHTML = '<div class="notes-import-empty">No excluded segments.</div>';
+  }
+
+  function _divineRenderRawPreview(text, sourceName) {
+    const status = document.getElementById('divine-import-status');
+    const preview = document.getElementById('divine-transcript-preview');
+    const cleanBtn = document.getElementById('divine-clean-btn');
+    const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+    const charCount = text.length;
+    if (status) status.textContent = `Loaded "${sourceName}" — ${wordCount.toLocaleString()} words, ${charCount.toLocaleString()} characters. Click "Clean Transcript" to run the cleaning pass.`;
+    if (preview) preview.innerHTML = `<pre style="white-space:pre-wrap;overflow:auto;max-height:280px;font-size:11px;padding:8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;">${escapeHTML(text.slice(0, 3000))}${text.length > 3000 ? '\n\n[…preview truncated — full text loaded]' : ''}</pre>`;
+    if (cleanBtn) cleanBtn.style.display = '';
+  }
+
+  function loadDivineTranscriptFile(input) {
+    const file = input && input.files && input.files[0];
+    const status = document.getElementById('divine-import-status');
+    const pasteArea = document.getElementById('divine-transcript-paste');
+
+    if (!file) {
+      if (status) status.textContent = 'No file selected.';
+      return;
+    }
+    const nameLower = file.name.toLowerCase();
+    if (!nameLower.endsWith('.txt') && !nameLower.endsWith('.md')) {
+      if (status) status.textContent = 'Only .txt, .md, or .txt.md files are accepted.';
+      return;
+    }
+
+    if (status) status.textContent = 'Reading file…';
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      const text = e.target.result || '';
+      if (pasteArea) pasteArea.value = text;
+      _divineImportPreview = {
+        rawText: text,
+        sourceName: file.name,
+        characterCount: text.length,
+        wordCount: text.trim().split(/\s+/).filter(Boolean).length,
+        cleanResult: null
+      };
+      _divineRenderRawPreview(text, file.name);
+    };
+    reader.onerror = function () {
+      if (status) status.textContent = 'Error reading file.';
+    };
+    reader.readAsText(file);
+  }
+
+  function loadDivineTranscriptPaste(textarea) {
+    const text = (textarea && textarea.value) || '';
+    const status = document.getElementById('divine-import-status');
+    const preview = document.getElementById('divine-transcript-preview');
+    const cleanBtn = document.getElementById('divine-clean-btn');
+
+    if (!text.trim()) {
+      _divineImportPreview = null;
+      if (status) status.textContent = 'Choose a .txt, .md, or .txt.md file or paste a transcript to begin.';
+      if (preview) preview.innerHTML = '<div class="notes-import-empty">No transcript loaded yet.</div>';
+      if (cleanBtn) cleanBtn.style.display = 'none';
+      return;
+    }
+
+    _divineImportPreview = {
+      rawText: text,
+      sourceName: 'pasted-transcript',
+      characterCount: text.length,
+      wordCount: text.trim().split(/\s+/).filter(Boolean).length,
+      cleanResult: null
+    };
+    _divineRenderRawPreview(text, 'pasted-transcript');
+  }
+
+  // ── Divine cleaning pipeline ──────────────────────────────────
+
+  // Patterns that mark a line (or a run of lines) as promotional/non-medical.
+  // Matched case-insensitively on the full line text.
+  const DIVINE_PROMO_PATTERNS = [
+    /\bsubscri(?:be|ption)\b/i,
+    /\bfollow\s+(?:us|me)\b/i,
+    /\binstagram\b|\btwitter\b|\btiktok\b|\bfacebook\b|\byoutube\b|\blinkedin\b/i,
+    /\bsocial\s+media\b/i,
+    /\bpatreon\b/i,
+    /\bour\s+(?:website|app|platform|store|shop)\b/i,
+    /\bdownload\s+(?:the\s+)?(?:notes?|app|pdf|slides?)\b/i,
+    /\bbuy\s+(?:the\s+)?(?:course|notes?|bundle|package)\b/i,
+    /\bpurchase\s+(?:the\s+)?(?:course|notes?|bundle)\b/i,
+    /\benroll(?:ment)?\b/i,
+    /\buse\s+(?:code|coupon|promo)\b/i,
+    /\bdiscount\b|\bpromo\s+code\b|\bcoupon\b/i,
+    /\bcheck\s+(?:us\s+)?out\s+at\b/i,
+    /\bvisit\s+(?:our\s+)?(?:website|site|page)\b/i,
+    /\blink\s+in\s+(?:the\s+)?(?:bio|description|show\s*notes?)\b/i,
+    /\bshow\s*notes?\b/i,
+    /\bsponsor(?:ed)?\b|\bbrought\s+to\s+you\s+by\b/i,
+    /\baffiliate\b/i,
+    /\bpodcast\s+merch\b/i,
+    /\bif\s+you\s+(?:enjoyed|liked|loved)\s+(?:this|today'?s?)\s+(?:episode|podcast)\b/i,
+    /\bleave\s+(?:a\s+)?(?:review|rating|comment)\b/i,
+    /\brate\s+(?:and\s+)?review\b/i,
+    /\btell\s+(?:your\s+)?friends\b/i,
+    /\bshare\s+(?:this|the)\s+(?:episode|podcast)\b/i,
+    /\bwe'll\s+(?:see|catch)\s+you\s+(?:next\s+)?(?:time|week|episode)\b/i,
+    /\bthat(?:'s|\s+is)\s+(?:all|it)\s+for\s+(?:today|this\s+(?:episode|week))\b/i,
+    /\bthanks?\s+for\s+(?:listening|tuning\s+in|joining)\b/i,
+    /\buntil\s+next\s+(?:time|week|episode)\b/i,
+    /\bnotes?\s+are\s+available\b/i,
+    /\bfree\s+trial\b|\bfree\s+(?:access|account)\b/i,
+    /\bsign\s+up\b/i,
+    /\bapp\s+store\b|\bgoogle\s+play\b/i
+  ];
+
+  // Filler words/phrases that are safe to strip from within a line.
+  // Applied inline (not whole-line removal).
+  const DIVINE_FILLER_RE = /\b(?:um+|uh+|hmm+|mhm+|erm+)\b,?\s*/gi;
+  const DIVINE_DISCOURSE_RE = /\b(?:you\s+know(?:\s+what)?|i\s+mean|like\s+i\s+said|basically|literally|actually|honestly|right\?|okay\?|alright\??|so\s+yeah|and\s+so)\b,?\s*/gi;
+
+  // Timestamp pattern used in OpenWhispr / Whisper exports: [00:00], (00:00), 00:00:00
+  const DIVINE_TIMESTAMP_RE = /^[\[\(]?\d{1,2}:\d{2}(?::\d{2})?[\]\)]?\s*/;
+
+  function _divineExtractTimestamp(line) {
+    const m = line.match(DIVINE_TIMESTAMP_RE);
+    return m ? { timestamp: m[0].trim(), rest: line.slice(m[0].length) } : { timestamp: null, rest: line };
+  }
+
+  function cleanDivineTranscript(rawText) {
+    // Split into lines, preserving original line numbers (1-based)
+    const rawLines = rawText.split('\n');
+    const totalLines = rawLines.length;
+
+    const excludedSegments = [];   // { originalLine, text, reason, timestamp }
+    const cleanedLines = [];       // { originalLine, cleanedLine, timestamp }
+    const dupSet = new Set();
+
+    let promoLineCount = 0;
+    let dupLineCount = 0;
+    let fillerCleanupCount = 0;
+
+    // Pass 1: per-line classification and promo exclusion
+    const lineRecords = rawLines.map((raw, idx) => {
+      const originalLine = idx + 1;
+      const trimmed = raw.trim();
+
+      // Extract timestamp prefix if present
+      const { timestamp, rest } = _divineExtractTimestamp(trimmed);
+      const textForTest = rest.trim();
+
+      // Empty or near-empty lines are kept as structure (blank line = paragraph break)
+      if (!textForTest) return { originalLine, raw, trimmed, timestamp, textForTest, action: 'keep-blank' };
+
+      // Promo/ad detection: match any promo pattern
+      const promoMatch = DIVINE_PROMO_PATTERNS.find(re => re.test(textForTest));
+      if (promoMatch) {
+        return { originalLine, raw, trimmed, timestamp, textForTest, action: 'exclude-promo', reason: `Promotional/non-medical content: matched "${promoMatch.source.slice(0, 60)}"` };
+      }
+
+      return { originalLine, raw, trimmed, timestamp, textForTest, action: 'keep' };
+    });
+
+    // Pass 2: exact duplicate collapse (consecutive or full-transcript)
+    // Exact duplicates of content text (ignoring timestamp prefix) are collapsed.
+    const seenContent = new Map(); // content → first originalLine it appeared on
+
+    for (const rec of lineRecords) {
+      if (rec.action !== 'keep') continue;
+      const key = rec.textForTest.toLowerCase().replace(/\s+/g, ' ');
+      if (key.length < 8) continue; // short fragments not worth deduping
+      if (seenContent.has(key)) {
+        rec.action = 'exclude-dup';
+        rec.reason = `Exact duplicate of line ${seenContent.get(key)}`;
+      } else {
+        seenContent.set(key, rec.originalLine);
+      }
+    }
+
+    // Pass 3: adjacent repeated short-phrase collapse
+    // If the same short phrase (< 10 words) appears in two consecutive kept lines, collapse second.
+    let prevKeptText = '';
+    for (const rec of lineRecords) {
+      if (rec.action !== 'keep') continue;
+      const wordCount = rec.textForTest.split(/\s+/).filter(Boolean).length;
+      if (wordCount <= 10 && rec.textForTest.toLowerCase() === prevKeptText.toLowerCase()) {
+        rec.action = 'exclude-dup';
+        rec.reason = 'Adjacent repeated short phrase';
+      } else {
+        prevKeptText = rec.textForTest;
+      }
+    }
+
+    // Pass 4: filler word removal within kept lines
+    let cleanedLineNumber = 0;
+    for (const rec of lineRecords) {
+      if (rec.action === 'keep-blank') {
+        cleanedLineNumber++;
+        cleanedLines.push({ originalLine: rec.originalLine, cleanedLineNumber, text: '', timestamp: rec.timestamp });
+        continue;
+      }
+
+      if (rec.action === 'exclude-promo') {
+        promoLineCount++;
+        excludedSegments.push({
+          originalLine: rec.originalLine,
+          text: rec.textForTest,
+          timestamp: rec.timestamp,
+          reason: rec.reason
+        });
+        continue;
+      }
+
+      if (rec.action === 'exclude-dup') {
+        dupLineCount++;
+        excludedSegments.push({
+          originalLine: rec.originalLine,
+          text: rec.textForTest,
+          timestamp: rec.timestamp,
+          reason: rec.reason
+        });
+        continue;
+      }
+
+      // action === 'keep': apply filler cleanup inline
+      let cleaned = rec.textForTest;
+
+      // Count filler matches before stripping
+      const fillerMatches = (cleaned.match(DIVINE_FILLER_RE) || []).length
+                          + (cleaned.match(DIVINE_DISCOURSE_RE) || []).length;
+      if (fillerMatches > 0) fillerCleanupCount += fillerMatches;
+
+      cleaned = cleaned.replace(DIVINE_FILLER_RE, '').replace(DIVINE_DISCOURSE_RE, '');
+      // Collapse multiple spaces left by removal
+      cleaned = cleaned.replace(/\s{2,}/g, ' ').trim();
+
+      // Reconstruct with timestamp prefix
+      const fullCleaned = rec.timestamp ? `${rec.timestamp} ${cleaned}` : cleaned;
+
+      cleanedLineNumber++;
+      cleanedLines.push({
+        originalLine: rec.originalLine,
+        cleanedLineNumber,
+        text: fullCleaned,
+        timestamp: rec.timestamp
+      });
+    }
+
+    // Build cleaned text for downstream use
+    const cleanedText = cleanedLines.map(l => l.text).join('\n');
+    const cleanedWordCount = cleanedText.trim().split(/\s+/).filter(Boolean).length;
+    const excludedLineCount = excludedSegments.length;
+    const excludedWordCount = excludedSegments.reduce((sum, s) => sum + s.text.split(/\s+/).filter(Boolean).length, 0);
+    const rawWordCount = rawText.trim().split(/\s+/).filter(Boolean).length;
+    const exclusionRate = rawWordCount > 0 ? excludedWordCount / rawWordCount : 0;
+
+    const warnings = [];
+    if (exclusionRate > 0.15) {
+      warnings.push(`High exclusion rate: ${(exclusionRate * 100).toFixed(1)}% of transcript words were excluded. Review the excluded segments carefully.`);
+    }
+    if (promoLineCount === 0 && dupLineCount === 0 && fillerCleanupCount === 0) {
+      warnings.push('No promotional content, duplicates, or fillers were detected. Transcript may already be clean, or patterns may not match this format.');
+    }
+
+    return {
+      cleanedText,
+      cleanedLines,
+      excludedSegments,
+      totalLines,
+      cleanedLineCount: cleanedLines.filter(l => l.text.trim()).length,
+      excludedLineCount,
+      dupLineCount,
+      promoLineCount,
+      fillerCleanupCount,
+      cleanedWordCount,
+      excludedWordCount,
+      exclusionRate,
+      warnings
+    };
+  }
+
+  function renderDivineCleanedPreview(result) {
+    const cleanSection = document.getElementById('divine-clean-section');
+    const cleanStatus = document.getElementById('divine-clean-status');
+    const cleanSummary = document.getElementById('divine-clean-summary');
+    const cleanedPreview = document.getElementById('divine-cleaned-preview');
+    const excludedStatus = document.getElementById('divine-excluded-status');
+    const excludedPreview = document.getElementById('divine-excluded-preview');
+    if (!cleanSection) return;
+
+    cleanSection.style.display = '';
+
+    // Status line
+    const exclusionPct = (result.exclusionRate * 100).toFixed(1);
+    const statusText = result.warnings.length
+      ? result.warnings[0]
+      : `Cleaning complete. ${result.cleanedWordCount.toLocaleString()} words retained, ${result.excludedWordCount.toLocaleString()} excluded (${exclusionPct}%).`;
+    if (cleanStatus) cleanStatus.textContent = statusText;
+
+    // Summary stats table
+    const summaryRows = [
+      ['Total lines', result.totalLines],
+      ['Cleaned lines (non-blank)', result.cleanedLineCount],
+      ['Excluded lines', result.excludedLineCount],
+      ['— Promo / ad / social lines removed', result.promoLineCount],
+      ['— Duplicate lines collapsed', result.dupLineCount],
+      ['Filler instances removed', result.fillerCleanupCount],
+      ['Exclusion rate (by word)', `${exclusionPct}%`]
+    ];
+    const rowHtml = summaryRows.map(([label, val]) =>
+      `<tr><td style="padding:2px 14px 2px 0;font-size:12px;color:#555;">${escapeHTML(String(label))}</td><td style="font-size:12px;font-weight:600;">${escapeHTML(String(val))}</td></tr>`
+    ).join('');
+    if (cleanSummary) cleanSummary.innerHTML = `
+      <table style="border-collapse:collapse;margin-bottom:6px;">${rowHtml}</table>
+      ${result.warnings.map(w => `<div style="color:#8a5a00;font-size:12px;margin-top:4px;">⚠ ${escapeHTML(w)}</div>`).join('')}`;
+
+    // Cleaned transcript preview (first 3000 chars)
+    const cleanedSnippet = result.cleanedText.slice(0, 3000);
+    const truncated = result.cleanedText.length > 3000;
+    if (cleanedPreview) cleanedPreview.innerHTML = `<pre style="white-space:pre-wrap;overflow:auto;max-height:300px;font-size:11px;padding:8px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:4px;">${escapeHTML(cleanedSnippet)}${truncated ? '\n\n[…preview truncated — full cleaned text stored]' : ''}</pre>`;
+
+    // Excluded segments list
+    const excluded = result.excludedSegments;
+    if (!excluded.length) {
+      if (excludedStatus) excludedStatus.textContent = 'No segments excluded.';
+      if (excludedPreview) excludedPreview.innerHTML = '<div class="notes-import-empty">No excluded segments.</div>';
+    } else {
+      if (excludedStatus) excludedStatus.textContent = `${excluded.length} segment${excluded.length === 1 ? '' : 's'} excluded — verify before proceeding.`;
+      const cards = excluded.slice(0, 80).map(seg => {
+        const tsLabel = seg.timestamp ? `<span style="color:#888;font-size:10px;margin-right:6px;">${escapeHTML(seg.timestamp)}</span>` : '';
+        const reasonColor = seg.reason.startsWith('Promotional') ? '#dc2626' : '#6b7280';
+        return `<div style="border:1px solid #e2e8f0;border-left:3px solid ${reasonColor};border-radius:4px;padding:6px 8px;margin-bottom:5px;font-size:12px;">
+          <div style="display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;">
+            <span style="color:#94a3b8;font-size:10px;">Line ${escapeHTML(String(seg.originalLine))}</span>
+            ${tsLabel}
+            <span style="color:${reasonColor};font-size:10px;font-weight:700;">${escapeHTML(seg.reason.slice(0, 80))}</span>
+          </div>
+          <div style="margin-top:3px;color:#374151;">${escapeHTML(seg.text.slice(0, 180))}${seg.text.length > 180 ? '…' : ''}</div>
+        </div>`;
+      }).join('');
+      const truncMsg = excluded.length > 80
+        ? `<div class="notes-import-empty" style="margin-top:6px;">…and ${excluded.length - 80} more excluded segments (all stored, only first 80 shown)</div>`
+        : '';
+      if (excludedPreview) excludedPreview.innerHTML = cards + truncMsg;
+    }
+  }
+
+  function cleanAndPreviewDivineTranscript() {
+    const cleanStatus = document.getElementById('divine-clean-status');
+    const cleanSection = document.getElementById('divine-clean-section');
+
+    if (!_divineImportPreview || !_divineImportPreview.rawText) {
+      if (cleanSection) cleanSection.style.display = '';
+      if (cleanStatus) cleanStatus.textContent = 'No transcript loaded. Load a file or paste text first.';
+      return;
+    }
+
+    if (cleanSection) cleanSection.style.display = '';
+    if (cleanStatus) cleanStatus.textContent = 'Cleaning…';
+
+    // Yield one frame so the status updates before the synchronous cleaning loop
+    setTimeout(() => {
+      const result = cleanDivineTranscript(_divineImportPreview.rawText);
+      _divineImportPreview.cleanResult = result;
+      renderDivineCleanedPreview(result);
+    }, 0);
   }
 
   function openAnkiTextImportPreview() {
@@ -17354,6 +17819,12 @@ const App = (() => {
     rejectAllMehlmanDrafts,
     updateApprovedMehlmanDraftCreateTestButton,
     createTestFromApprovedMehlmanDrafts,
+    openDivineTranscriptImportPreview,
+    closeDivineTranscriptImportPreview,
+    clearDivineTranscriptImportPreview,
+    loadDivineTranscriptFile,
+    loadDivineTranscriptPaste,
+    cleanAndPreviewDivineTranscript,
     updateApprovedOmeDraftCreateTestButton,
     createTestFromApprovedOmeDrafts,
     exportApprovedOmeDraftsJson,
