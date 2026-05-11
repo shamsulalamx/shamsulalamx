@@ -12297,6 +12297,109 @@ const App = (() => {
     'unknown':                        '#94a3b8'
   };
 
+  // ── Divine v6a — Distilled Objective constants ──────────────────────────────
+
+  // Podcast-register / coaching-voice words that reduce clinical testability.
+  const DIVINE_VOICE_MARKERS = [
+    /\byou need to\b/i,
+    /\bI think\b/i,
+    /\bI want you to\b/i,
+    /\blet me tell you\b/i,
+    /\bremember\b/i,
+    /\bdon'?t forget\b/i,
+    /\bdon'?t screw up\b/i,
+    /\bhigh[\s-]yield\b/i,
+    /\bthe thing is\b/i,
+    /\bthe easy way\b/i,
+    /\bthe way I think\b/i,
+    /\bthe way to think\b/i,
+    /\bthink of it\b/i,
+    /\bexam\b/i,
+    /\bboards?\b/i,
+    /\bquestion(?:s)?\b/i,
+    /\bpodcast\b/i,
+    /\bshoot me an email\b/i,
+    /\bmy website\b/i,
+    /\bone-on-one\b/i,
+    /\btutoring\b/i,
+    /\byou'?re going to see\b/i,
+    /\bwelcome\b/i,
+    /\bbye for now\b/i,
+    /\bpretty set\b/i,
+    /\breal quick\b/i,
+    /\bobviously\b/i,
+    /\bto be completely honest\b/i
+  ];
+
+  // Duration criteria — extract minimum/maximum/range time thresholds.
+  const DIVINE_DURATION_PATTERNS = [
+    { re: /more\s+than\s+(?:a\s+)?(\w+(?:\s+\w+)?)\s*(day|week|month|year)s?/i,                   polarity: 'minimum' },
+    { re: /at\s+least\s+(\w+)\s+(day|week|month|year)s?/i,                                          polarity: 'minimum' },
+    { re: /less\s+than\s+(?:a\s+)?(\w+(?:\s+\w+)?)\s*(day|week|month|year)s?/i,                    polarity: 'maximum' },
+    { re: /for\s+(?:more\s+than\s+)?(\w+)\s+(day|week|month|year)s?\s+or\s+more/i,                 polarity: 'minimum' },
+    { re: /(\w+)\s+to\s+(\w+)\s+(day|week|month|year)s?/i,                                          polarity: 'range' },
+    { re: /(\d+)\s+(day|week|month|year)s?\s+or\s+less/i,                                           polarity: 'maximum' },
+    { re: /(\w+)\s+(day|week|month|year)s?/i,                                                        polarity: 'exact' }
+  ];
+
+  // Age threshold criteria.
+  const DIVINE_AGE_PATTERNS = [
+    { re: /before\s+(?:the\s+)?age\s+(?:of\s+)?(\d+)/i,                        polarity: 'before' },
+    { re: /under\s+(?:the\s+age\s+of\s+)?(\d+)/i,                              polarity: 'before' },
+    { re: /less\s+than\s+(\d+)\s+years?\s+(?:of\s+age)?/i,                     polarity: 'before' },
+    { re: /past\s+(?:the\s+age\s+of\s+|age\s+)?(\d+)/i,                        polarity: 'after' },
+    { re: /over\s+(?:the\s+age\s+of\s+)?(\d+)/i,                               polarity: 'after' },
+    { re: /(?:once\s+(?:they\s+)?)?go\s+past\s+(\d+)/i,                        polarity: 'after' },
+    { re: /at\s+least\s+(\d+)\s+years?\s+(?:of\s+age)?/i,                      polarity: 'minimum' }
+  ];
+
+  // Count / settings / criteria thresholds.
+  const DIVINE_COUNT_PATTERNS = [
+    { re: /(\d+)\s+out\s+of\s+(\d+)/i,                                         polarity: 'exact' },
+    { re: /at\s+least\s+(\d+)\s+settings?/i,                                   polarity: 'minimum' },
+    { re: /(\d+)\s+or\s+more\s+(?:criteria|symptoms?|settings?|episodes?)/i,   polarity: 'minimum' },
+    { re: /(\d+)\s+or\s+fewer\s+(?:criteria|symptoms?|settings?|episodes?)/i,  polarity: 'maximum' },
+    { re: /at\s+least\s+(\d+)\s+(?:criteria|symptoms?|episodes?)/i,            polarity: 'minimum' },
+    { re: /five\s+(?:or\s+more\s+)?(?:out\s+of\s+)?(?:of\s+)?(?:the\s+)?(?:nine|9)/i, polarity: 'minimum' }
+  ];
+
+  // Known psychiatric / medical condition names.
+  const DIVINE_CONDITION_PATTERNS = [
+    /\bPTSD\b/,
+    /\bacute\s+stress\s+disorder\b/i,
+    /\badjustment\s+disorder\b/i,
+    /\bgeneralized\s+anxiety\s+disorder\b/i,
+    /\bGAD\b/,
+    /\bmajor\s+depressive\s+disorder\b/i,
+    /\bMDD\b/,
+    /\bdysthymia\b/i,
+    /\bpersistent\s+depressive\s+disorder\b/i,
+    /\bcyclothymia\b/i,
+    /\bbipolar\s+(?:1\b|2\b|I\b|II\b|disorder\b)/i,
+    /\bmania\b/i,
+    /\bhypomania\b/i,
+    /\bschizophrenia\b/i,
+    /\bschizophreniform\b/i,
+    /\bbrief\s+psychotic\s+disorder\b/i,
+    /\bconduct\s+disorder\b/i,
+    /\boppositional\s+defiant(?:\s+disorder)?\b/i,
+    /\bantisocial\s+personality(?:\s+disorder)?\b/i,
+    /\bADHD\b/,
+    /\bpanic\s+disorder\b/i,
+    /\bpanic\s+attack\b/i,
+    /\bsocial\s+anxiety(?:\s+disorder)?\b/i,
+    /\bspecific\s+phobia\b/i,
+    /\bobsessive[\s-]compulsive(?:\s+disorder)?\b/i,
+    /\bOCD\b/,
+    /\bborderline\s+personality(?:\s+disorder)?\b/i,
+    /\bnarcolepsy\b/i,
+    /\binsomnia(?:\s+disorder)?\b/i,
+    /\banorexia\b/i,
+    /\bbulimia\b/i,
+    /\bsomatoform\b/i,
+    /\bconversion\s+disorder\b/i
+  ];
+
   // Trigger-pattern table. Each entry: { type, patterns: [{ re, weight }] }.
   // Weight = base confidence awarded when this pattern fires.
   // Checked independently per type — multiple types can fire on one segment.
@@ -12802,7 +12905,206 @@ const App = (() => {
       }
     }
 
+    // v6a: attach distilled objective to every cluster before returning.
+    for (const cl of clusters) {
+      cl.distilledObjective = distillDivineClusterToObjective(cl);
+    }
+
     return clusters;
+  }
+
+  // ── Divine v6a: Deterministic distilled-objective extraction ────────────────
+  // Takes a fully-built cluster object. Returns a distilledObjective record.
+  // All parsing is deterministic — no AI calls, no blocking.
+  function distillDivineClusterToObjective(cluster) {
+    const snippet  = (cluster.sourceSnippet || '').trim();
+    const warnings = [];
+
+    // ── 1. Condition extraction ─────────────────────────────────────────────
+    let condition = '';
+    for (const re of DIVINE_CONDITION_PATTERNS) {
+      const m = snippet.match(re);
+      if (m) { condition = m[0]; break; }
+    }
+    // Fallback: first noun phrase from the representative concept's testedFact.
+    if (!condition && cluster.representativeConcept) {
+      const tf = (cluster.representativeConcept.testedFact || '').split(/[.,;]/)[0].trim();
+      if (tf.length >= 4 && tf.length <= 80) condition = tf;
+    }
+
+    // ── 2. Criterion extraction ─────────────────────────────────────────────
+    let criterion       = '';
+    let criterionType   = 'other';
+    let criterionPolarity = 'exact';
+
+    // Duration first (most common for psychiatric timelines).
+    for (const { re, polarity } of DIVINE_DURATION_PATTERNS) {
+      const m = snippet.match(re);
+      if (m) {
+        criterion        = m[0].trim();
+        criterionType    = 'duration';
+        criterionPolarity = polarity;
+        break;
+      }
+    }
+
+    // Age threshold if no duration found.
+    if (!criterion) {
+      for (const { re, polarity } of DIVINE_AGE_PATTERNS) {
+        const m = snippet.match(re);
+        if (m) {
+          criterion        = m[0].trim();
+          criterionType    = 'age-threshold';
+          criterionPolarity = polarity;
+          break;
+        }
+      }
+    }
+
+    // Count / setting threshold if still nothing.
+    if (!criterion) {
+      for (const { re, polarity } of DIVINE_COUNT_PATTERNS) {
+        const m = snippet.match(re);
+        if (m) {
+          criterion        = m[0].trim();
+          criterionType    = 'count-threshold';
+          criterionPolarity = polarity;
+          break;
+        }
+      }
+    }
+
+    // ── 3. coreRule construction ────────────────────────────────────────────
+    let coreRule = '';
+    if (condition && criterion) {
+      coreRule = `${condition}: requires ${criterion}`;
+    } else {
+      // Find the first sentence that is not dominated by podcast-voice markers.
+      const sentences = snippet.split(/[.!?]+\s+/).filter(s => s.trim().length > 10);
+      const cleanSentence = sentences.find(s =>
+        !DIVINE_VOICE_MARKERS.some(vm => vm.test(s))
+      ) || sentences[0] || snippet;
+      coreRule = cleanSentence
+        .replace(/^(so|and|but|also|then|well|okay|right|now),?\s+/i, '')
+        .trim()
+        .slice(0, 120);
+    }
+    if (coreRule.length < 15) {
+      warnings.push('coreRule is very short — source snippet may lack clinical content');
+    }
+
+    // ── 4. suggestedStemType ────────────────────────────────────────────────
+    const conceptType = cluster.conceptType;
+    let suggestedStemType = 'most-likely-diagnosis';
+    if (criterionType === 'duration') {
+      suggestedStemType = 'duration-determines-dx';
+    } else if (criterionType === 'age-threshold') {
+      suggestedStemType = 'age-threshold-determines-dx';
+    } else if (conceptType === 'management-rule') {
+      suggestedStemType = 'next-best-step';
+    } else if (conceptType === 'contraindication-adverse-effect') {
+      suggestedStemType = 'contraindication-or-adverse-effect';
+    } else if (conceptType === 'mechanism') {
+      suggestedStemType = 'mechanism-explains-finding';
+    } else if (conceptType === 'diagnostic-distinction' || conceptType === 'differential-diagnosis') {
+      suggestedStemType = 'diagnosis-requires-distinction';
+    } else if (conceptType === 'exam-trap') {
+      suggestedStemType = 'exception-or-caveat';
+    } else if (conceptType === 'clinical-reasoning-framework') {
+      suggestedStemType = 'clinical-reasoning-framework';
+    }
+
+    // ── 5. naturalDistracters ───────────────────────────────────────────────
+    // Pull additional conditions mentioned in the snippet (not the primary condition).
+    const naturalDistracters = [];
+    const condLower = condition.toLowerCase();
+    for (const re of DIVINE_CONDITION_PATTERNS) {
+      // Use a fresh RegExp (without sticky) to scan the whole snippet.
+      const globalRe = new RegExp(re.source, 'gi');
+      let m;
+      while ((m = globalRe.exec(snippet)) !== null) {
+        const cand = m[0];
+        if (cand.toLowerCase() !== condLower && !naturalDistracters.some(d => d.toLowerCase() === cand.toLowerCase())) {
+          naturalDistracters.push(cand);
+        }
+        if (naturalDistracters.length >= 4) break;
+      }
+      if (naturalDistracters.length >= 4) break;
+    }
+
+    // ── 6. contentType ──────────────────────────────────────────────────────
+    // meta-commentary check first (promo/admin language).
+    const metaRe = /\b(podcast|website|course|tutoring|email me|sign up|subscribe|next week|review course|one-on-one|Apple Podcast)\b/i;
+    let contentType = 'medical-rule';
+    if (metaRe.test(snippet)) {
+      contentType = 'meta-commentary';
+    } else {
+      const sentenceList = snippet.split(/[.!?]+\s+/).filter(s => s.trim().length > 10);
+      const totalSentences = sentenceList.length || 1;
+      const voiceSentenceCount = sentenceList.filter(s =>
+        DIVINE_VOICE_MARKERS.some(vm => vm.test(s))
+      ).length;
+      const voiceFraction = voiceSentenceCount / totalSentences;
+      if (voiceFraction >= 0.70) {
+        contentType = 'conversational-explanation';
+      } else if (voiceFraction >= 0.45) {
+        contentType = 'repetition-emphasis';
+      } else if (!condition && !criterion) {
+        contentType = 'ambiguous';
+      }
+    }
+
+    // ── 7. podcastVoiceScore ────────────────────────────────────────────────
+    // Sum marker hits, normalize by (totalWords / 5) so a 50-word snippet with 3 hits ≈ 0.30.
+    const totalWords = (snippet.split(/\s+/).filter(Boolean).length) || 1;
+    let voiceHits = 0;
+    for (const vm of DIVINE_VOICE_MARKERS) {
+      const globalVm = new RegExp(vm.source, 'gi');
+      const ms = snippet.match(globalVm);
+      if (ms) voiceHits += ms.length;
+    }
+    const podcastVoiceScore = Math.min(1.0, voiceHits / Math.max(1, totalWords / 5));
+
+    // ── 8. testabilityScore ─────────────────────────────────────────────────
+    const hasMedCondition   = condition  ? 0.25 : 0;
+    const hasCriterion      = criterion  ? 0.30 : 0;
+    const hasLongCoreRule   = coreRule.length >= 30 ? 0.15 : 0;
+    const lowVoiceBonus     = podcastVoiceScore <= 0.40 ? 0.15 : 0;
+    const conceptTypeBonus  = ['high-yield-fact', 'diagnostic-distinction', 'management-rule', 'differential-diagnosis'].includes(conceptType)
+      ? 0.15 : 0.05;
+    const testabilityScore  = Math.min(1.0,
+      hasMedCondition + hasCriterion + hasLongCoreRule + lowVoiceBonus + conceptTypeBonus
+    );
+
+    // ── 9. Quality gates (computed, not enforced) ───────────────────────────
+    const gateResults = {
+      'contentType=medical-rule': contentType === 'medical-rule',
+      'podcastVoiceScore<=0.40':  podcastVoiceScore <= 0.40,
+      'testabilityScore>=0.50':   testabilityScore >= 0.50,
+      'criterion-present':        !!criterion,
+      'coreRule>=30chars':        coreRule.length >= 30
+    };
+    const failedGates = Object.entries(gateResults).filter(([, v]) => !v).map(([k]) => k);
+    if (failedGates.length > 0) {
+      warnings.push(`Gate${failedGates.length === 1 ? '' : 's'} not met: ${failedGates.join(', ')}`);
+    }
+
+    return {
+      coreRule,
+      condition,
+      criterion,
+      criterionType,
+      criterionPolarity,
+      suggestedStemType,
+      naturalDistracters,
+      contentType,
+      podcastVoiceScore: Math.round(podcastVoiceScore * 100) / 100,
+      testabilityScore:  Math.round(testabilityScore  * 100) / 100,
+      derivedFrom:       'sourceSnippet',
+      derivationMethod:  'divine-deterministic-distillation-v1',
+      warnings,
+      gateResults
+    };
   }
 
   // Deterministic scaffold templates — insert sourceSnippet verbatim.
@@ -13044,6 +13346,56 @@ const App = (() => {
       const warnHtml   = cluster.warnings.map(w =>
         `<div style="color:#92400e;font-size:10px;margin-top:2px;">⚠ ${escapeHTML(w)}</div>`
       ).join('');
+
+      // ── Distilled Objective panel (v6a) ──────────────────────────────────
+      const obj = cluster.distilledObjective;
+      let objHtml = '';
+      if (obj) {
+        // Gate badges
+        const gateBadges = Object.entries(obj.gateResults).map(([gate, pass]) => {
+          const bg = pass ? '#d1fae5' : '#fee2e2';
+          const fg = pass ? '#065f46' : '#991b1b';
+          const icon = pass ? '✓' : '✗';
+          return `<span style="background:${bg};color:${fg};font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;white-space:nowrap;">${icon} ${escapeHTML(gate)}</span>`;
+        }).join(' ');
+
+        // Testability score bar color
+        const tscore = obj.testabilityScore;
+        const tsColor = tscore >= 0.70 ? '#059669' : tscore >= 0.50 ? '#d97706' : '#dc2626';
+
+        // Distracted list
+        const distractersHtml = obj.naturalDistracters.length
+          ? `<div style="margin-top:4px;"><span style="color:#6b7280;font-size:10px;">Distracters: </span>${obj.naturalDistracters.map(d => `<span style="font-size:10px;color:#374151;font-style:italic;">${escapeHTML(d)}</span>`).join(', ')}</div>`
+          : '';
+
+        // Objective warnings (separate from cluster warnings — these are distillation-specific)
+        const objWarnHtml = obj.warnings.map(w =>
+          `<div style="color:#b45309;font-size:10px;margin-top:2px;">⚠ ${escapeHTML(w)}</div>`
+        ).join('');
+
+        objHtml = `<details style="margin-top:5px;">
+          <summary style="cursor:pointer;font-size:10px;color:#4b5563;font-weight:600;user-select:none;list-style:none;display:flex;align-items:center;gap:4px;">
+            <span style="font-size:9px;">▶</span> Distilled Objective
+            <span style="margin-left:4px;background:${tscore >= 0.50 ? '#d1fae5' : '#fee2e2'};color:${tscore >= 0.50 ? '#065f46' : '#991b1b'};font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;">testability ${Math.round(tscore * 100)}%</span>
+          </summary>
+          <div style="margin-top:5px;padding:7px 9px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;font-size:11px;">
+            <div style="font-weight:600;color:#1e293b;margin-bottom:4px;">${escapeHTML(obj.coreRule || '—')}</div>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:5px;">
+              ${obj.condition ? `<span><span style="color:#6b7280;">Condition:</span> <span style="color:#374151;font-weight:600;">${escapeHTML(obj.condition)}</span></span>` : ''}
+              ${obj.criterion ? `<span><span style="color:#6b7280;">Criterion:</span> <span style="color:#374151;font-weight:600;">${escapeHTML(obj.criterion)}</span> <span style="color:#94a3b8;font-size:10px;">(${escapeHTML(obj.criterionType)} · ${escapeHTML(obj.criterionPolarity)})</span></span>` : '<span style="color:#94a3b8;">No criterion extracted</span>'}
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:5px;align-items:center;">
+              <span><span style="color:#6b7280;">Content type:</span> <span style="color:#374151;">${escapeHTML(obj.contentType)}</span></span>
+              <span><span style="color:#6b7280;">Voice score:</span> <span style="color:${obj.podcastVoiceScore > 0.40 ? '#dc2626' : '#374151'};">${Math.round(obj.podcastVoiceScore * 100)}%</span></span>
+              <span><span style="color:#6b7280;">Stem type:</span> <span style="color:#374151;">${escapeHTML(obj.suggestedStemType)}</span></span>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px;">${gateBadges}</div>
+            ${distractersHtml}
+            ${objWarnHtml}
+          </div>
+        </details>`;
+      }
+
       return `<div style="border:1px solid ${isSelected ? color : '#e2e8f0'};border-left:3px solid ${color};border-radius:4px;padding:7px 9px;margin-bottom:5px;font-size:12px;background:${isSelected ? '#f8faff' : '#fff'};">
         <div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin-bottom:3px;">
           <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="App.toggleDivineClusterSelection('${escapeHTML(cluster.clusterId)}')" style="cursor:pointer;">
@@ -13056,6 +13408,7 @@ const App = (() => {
         </div>
         <div style="color:#374151;font-style:italic;margin-bottom:2px;">${escapeHTML(cluster.sourceSnippet.slice(0, 220))}${cluster.sourceSnippet.length > 220 ? '…' : ''}</div>
         ${warnHtml}
+        ${objHtml}
       </div>`;
     }).join('');
     const truncMsg = clusters.length > CLUSTER_CAP
