@@ -2001,7 +2001,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 <div id="modal-divine-import" class="modal-overlay">
   <div class="modal-box" style="max-width:780px;">
     <h3>Divine Transcript Import Preview</h3>
-    <p>This preview accepts plain-text transcripts from Divine Podcasts. Upload a <code>.txt</code>, <code>.md</code>, or <code>.txt.md</code> file (e.g. OpenWhispr exports) or paste the transcript directly. No audio transcription, cleaning, question generation, or save is available yet — this is a structural preview only.</p>
+    <p>This preview accepts plain-text transcripts from Divine Podcasts. Upload a <code>.txt</code>, <code>.md</code>, or <code>.txt.md</code> file (e.g. OpenWhispr exports) or paste the transcript directly. All draft choices are placeholders — expert review is required before saving. No audio transcription or Gemini is used.</p>
     <div class="form-group">
       <label class="form-label">Transcript File <span style="font-size:11px;color:#888;">(.txt, .md, .txt.md)</span></label>
       <input type="file" class="form-input" id="divine-transcript-file-input" accept=".txt,.md,.txt.md"
@@ -2090,8 +2090,44 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
     <div id="divine-draft-section" style="display:none;">
       <div class="notes-import-section-title" style="margin-top:12px;">Draft Scaffold Preview</div>
       <div id="divine-draft-status" class="notes-import-summary" style="margin-bottom:6px;"></div>
+      <div id="divine-review-summary" style="display:none;margin-bottom:6px;font-size:12px;color:#374151;"></div>
+      <div id="divine-review-bulk-bar" style="display:none;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
+          <button type="button" class="btn-card" style="font-size:11px;padding:3px 8px;" onclick="App.approveDivineAllDrafts()">Approve All</button>
+          <button type="button" class="btn-card" style="font-size:11px;padding:3px 8px;" onclick="App.rejectDivineAllDrafts()">Reject All</button>
+        </div>
+      </div>
       <div id="divine-draft-preview" class="notes-draft-preview">
         <div class="notes-import-empty">No drafts yet. Select clusters and run "Generate Draft Preview".</div>
+      </div>
+    </div>
+    <div id="divine-quiz-section">
+      <div class="notes-import-section-title" style="margin-top:12px;">Quiz Object Preview</div>
+      <div id="divine-quiz-status" class="notes-import-summary" style="margin-bottom:6px;">Approve Divine draft scaffolds to preview quiz-question objects. Nothing is saved.</div>
+      <div id="divine-quiz-preview" class="notes-draft-preview">
+        <div class="notes-import-empty">No approved Divine drafts converted.</div>
+      </div>
+    </div>
+    <div id="divine-save-section">
+      <div class="notes-import-section-title" style="margin-top:12px;">Save Approved Divine Drafts</div>
+      <div class="form-group">
+        <label class="form-label">Divine Podcasts Subfolder</label>
+        <select class="form-input" id="divine-create-test-target" onchange="App.updateDivineDraftCreateTestButton()">
+          <option value="">Choose a Divine Podcasts subfolder</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Test name</label>
+        <input type="text" class="form-input" id="divine-create-test-name" value="Divine Podcast Drafts Test" oninput="App.updateDivineDraftCreateTestButton()">
+      </div>
+      <label class="check-row" style="margin:8px 0 0;">
+        <input type="checkbox" id="divine-create-test-reviewed" onchange="App.updateDivineDraftCreateTestButton()">
+        <span>I reviewed and approve these quiz objects for test creation.</span>
+      </label>
+      <div id="divine-create-test-diagnostics" class="notes-import-summary" style="margin-top:8px;">Save readiness will appear after approved drafts are available.</div>
+      <div id="divine-create-test-error" class="notes-import-summary" style="display:none;color:#8a5a00;margin-top:4px;"></div>
+      <div class="modal-actions" style="margin-top:8px;">
+        <button type="button" class="btn-modal primary" id="divine-create-test-btn" onclick="App.createTestFromApprovedDivineDrafts()" disabled>Create Test from Approved Divine Drafts</button>
       </div>
     </div>
   </div>
@@ -11316,6 +11352,9 @@ const App = (() => {
   function openDivineTranscriptImportPreview() {
     const modal = document.getElementById('modal-divine-import');
     if (modal) modal.style.display = 'flex';
+    renderDivineDraftSaveTargetSelector(true);
+    renderDivineQuizObjectPreview();
+    updateDivineDraftCreateTestButton();
   }
 
   function closeDivineTranscriptImportPreview() {
@@ -11395,6 +11434,26 @@ const App = (() => {
     if (draftSection) draftSection.style.display = 'none';
     if (draftStatus) draftStatus.textContent = '';
     if (draftPreview) draftPreview.innerHTML = '<div class="notes-import-empty">No drafts yet. Select clusters and run "Generate Draft Preview".</div>';
+    const reviewSummary = document.getElementById('divine-review-summary');
+    const reviewBulkBar = document.getElementById('divine-review-bulk-bar');
+    const quizStatus = document.getElementById('divine-quiz-status');
+    const quizPreview = document.getElementById('divine-quiz-preview');
+    const saveTarget = document.getElementById('divine-create-test-target');
+    const saveName = document.getElementById('divine-create-test-name');
+    const saveReviewed = document.getElementById('divine-create-test-reviewed');
+    const saveDiagnostics = document.getElementById('divine-create-test-diagnostics');
+    const saveError = document.getElementById('divine-create-test-error');
+    const saveBtn = document.getElementById('divine-create-test-btn');
+    if (reviewSummary) { reviewSummary.style.display = 'none'; reviewSummary.innerHTML = ''; }
+    if (reviewBulkBar) reviewBulkBar.style.display = 'none';
+    if (quizStatus) quizStatus.textContent = 'Approve Divine draft scaffolds to preview quiz-question objects. Nothing is saved.';
+    if (quizPreview) quizPreview.innerHTML = '<div class="notes-import-empty">No approved Divine drafts converted.</div>';
+    if (saveTarget) { saveTarget.innerHTML = '<option value="">Choose a Divine Podcasts subfolder</option>'; saveTarget.value = ''; }
+    if (saveName) saveName.value = 'Divine Podcast Drafts Test';
+    if (saveReviewed) saveReviewed.checked = false;
+    if (saveDiagnostics) saveDiagnostics.textContent = 'Save readiness will appear after approved drafts are available.';
+    if (saveError) { saveError.style.display = 'none'; saveError.textContent = ''; }
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Create Test from Approved Divine Drafts'; }
   }
 
   function _divineRenderRawPreview(text, sourceName) {
@@ -13028,9 +13087,11 @@ const App = (() => {
   }
 
   function renderDivineDraftPreview(drafts) {
-    const draftSection = document.getElementById('divine-draft-section');
-    const draftStatus  = document.getElementById('divine-draft-status');
-    const draftPreview = document.getElementById('divine-draft-preview');
+    const draftSection  = document.getElementById('divine-draft-section');
+    const draftStatus   = document.getElementById('divine-draft-status');
+    const draftPreview  = document.getElementById('divine-draft-preview');
+    const reviewSummary = document.getElementById('divine-review-summary');
+    const reviewBulkBar = document.getElementById('divine-review-bulk-bar');
     if (!draftSection) return;
 
     draftSection.style.display = '';
@@ -13038,10 +13099,26 @@ const App = (() => {
     if (!drafts || drafts.length === 0) {
       if (draftStatus) draftStatus.textContent = 'No drafts generated. Select clusters and try again, or check that selected clusters have sufficient confidence.';
       if (draftPreview) draftPreview.innerHTML = '<div class="notes-import-empty">No drafts to show.</div>';
+      if (reviewSummary) { reviewSummary.style.display = 'none'; reviewSummary.innerHTML = ''; }
+      if (reviewBulkBar) reviewBulkBar.style.display = 'none';
       return;
     }
 
     if (draftStatus) draftStatus.textContent = `${drafts.length} draft scaffold${drafts.length === 1 ? '' : 's'} generated. All choices are placeholders — expert review required before use.`;
+
+    if (reviewBulkBar) reviewBulkBar.style.display = '';
+
+    // Review summary
+    const counts = _divineGetReviewStatusCounts();
+    if (reviewSummary) {
+      reviewSummary.style.display = '';
+      reviewSummary.innerHTML = [
+        `<span style="color:#059669;font-weight:600;">${counts.approved} approved</span>`,
+        `<span style="color:#dc2626;">${counts.rejected} rejected</span>`,
+        `<span style="color:#6b7280;">${counts.pending} pending</span>`,
+        `<span style="color:#374151;">/ ${counts.total} total</span>`
+      ].join(' · ');
+    }
 
     const VARIANT_COLORS = {
       'recognition/application':      '#2563eb',
@@ -13051,6 +13128,8 @@ const App = (() => {
       'management-exception':          '#dc2626',
       'clinical-reasoning-framework':  '#0891b2'
     };
+
+    const rs = (_divineImportPreview && _divineImportPreview.reviewStatus) || {};
 
     // Group by variantType.
     const byVariant = {};
@@ -13066,8 +13145,9 @@ const App = (() => {
         <div style="font-size:11px;font-weight:700;color:${vColor};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;border-bottom:1px solid #e2e8f0;padding-bottom:3px;">${escapeHTML(variant)} — ${variantDrafts.length} draft${variantDrafts.length === 1 ? '' : 's'}</div>`;
 
       for (const draft of variantDrafts) {
-        const clColor   = DIVINE_CONCEPT_TYPE_COLORS[draft.provenance.conceptType] || '#94a3b8';
-        const tsLabel   = draft.timestampRange
+        const reviewStatus  = rs[draft.draftId] || 'pending';
+        const clColor       = DIVINE_CONCEPT_TYPE_COLORS[draft.provenance.conceptType] || '#94a3b8';
+        const tsLabel       = draft.timestampRange
           ? ` · ${escapeHTML(draft.timestampRange.start)}${draft.timestampRange.end !== draft.timestampRange.start ? ' → ' + escapeHTML(draft.timestampRange.end) : ''}`
           : '';
         const choicesHtml = draft.choices.map(ch =>
@@ -13078,12 +13158,28 @@ const App = (() => {
           .map(w => `<div style="color:#92400e;font-size:10px;margin-top:2px;">⚠ ${escapeHTML(w)}</div>`)
           .join('');
 
-        html += `<div style="border:1px solid #e2e8f0;border-left:3px solid ${vColor};border-radius:4px;padding:8px 10px;margin-bottom:6px;font-size:12px;">
+        const borderColor = reviewStatus === 'approved' ? '#059669' : reviewStatus === 'rejected' ? '#dc2626' : vColor;
+        const cardBg      = reviewStatus === 'approved' ? '#f0fdf4' : reviewStatus === 'rejected' ? '#fef2f2' : '#fff';
+        const statusBadge = reviewStatus === 'approved'
+          ? `<span style="background:#059669;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;">✓ approved</span>`
+          : reviewStatus === 'rejected'
+          ? `<span style="background:#dc2626;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;">✗ rejected</span>`
+          : `<span style="background:#e2e8f0;color:#475569;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;">pending</span>`;
+
+        const eid = escapeHTML(draft.draftId);
+        const reviewBtns = `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:5px;">
+          <button type="button" onclick="App.setDivineReviewStatus('${eid}','approved')" style="font-size:10px;padding:2px 8px;background:${reviewStatus==='approved'?'#059669':'#f0fdf4'};color:${reviewStatus==='approved'?'#fff':'#059669'};border:1px solid #059669;border-radius:4px;cursor:pointer;">✓ Approve</button>
+          <button type="button" onclick="App.setDivineReviewStatus('${eid}','rejected')" style="font-size:10px;padding:2px 8px;background:${reviewStatus==='rejected'?'#dc2626':'#fef2f2'};color:${reviewStatus==='rejected'?'#fff':'#dc2626'};border:1px solid #dc2626;border-radius:4px;cursor:pointer;">✗ Reject</button>
+          <button type="button" onclick="App.setDivineReviewStatus('${eid}','pending')" style="font-size:10px;padding:2px 8px;background:#f8fafc;color:#6b7280;border:1px solid #cbd5e1;border-radius:4px;cursor:pointer;">↺ Reset</button>
+        </div>`;
+
+        html += `<div style="border:1px solid #e2e8f0;border-left:3px solid ${borderColor};border-radius:4px;padding:8px 10px;margin-bottom:6px;font-size:12px;background:${cardBg};">
           <div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin-bottom:4px;">
             <span style="color:#94a3b8;font-size:10px;">${escapeHTML(draft.draftId)}</span>
             <span style="color:#94a3b8;font-size:10px;">${escapeHTML(draft.clusterId)}</span>
             <span style="background:${clColor};color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;">${escapeHTML(draft.provenance.conceptType)}</span>
             ${tsLabel ? `<span style="color:#94a3b8;font-size:10px;">${tsLabel}</span>` : ''}
+            ${statusBadge}
           </div>
           <div style="font-weight:600;color:#1e293b;margin-bottom:5px;line-height:1.4;">${escapeHTML(draft.stem)}</div>
           <div style="margin-bottom:5px;line-height:1.5;">${choicesHtml}</div>
@@ -13091,12 +13187,22 @@ const App = (() => {
           <div style="font-size:10px;color:#475569;margin-bottom:2px;"><strong>Teaching point:</strong> ${escapeHTML(draft.teachingPoint.slice(0, 200))}${draft.teachingPoint.length > 200 ? '…' : ''}</div>
           <div style="font-size:10px;color:#64748b;font-style:italic;border-top:1px solid #f1f5f9;padding-top:3px;margin-top:2px;"><strong>Source:</strong> ${escapeHTML(draft.sourceSnippet.slice(0, 180))}${draft.sourceSnippet.length > 180 ? '…' : ''}</div>
           ${warnHtml}
+          ${reviewBtns}
         </div>`;
       }
       html += '</div>';
     }
 
     if (draftPreview) draftPreview.innerHTML = html;
+
+    // Reveal quiz and save sections
+    const quizSection = document.getElementById('divine-quiz-section');
+    const saveSection = document.getElementById('divine-save-section');
+    if (quizSection) quizSection.style.display = '';
+    if (saveSection) saveSection.style.display = '';
+
+    renderDivineQuizObjectPreview();
+    updateDivineDraftCreateTestButton();
   }
 
   function clusterAndPreviewDivineConcepts() {
@@ -13138,10 +13244,436 @@ const App = (() => {
 
     setTimeout(() => {
       const drafts = generateDivineDraftScaffolds(_divineImportPreview.clusters, _divineImportPreview.clusterSelection);
+      // Preserve existing review status for matching draftIds; new drafts start as 'pending'.
+      const existingStatus = (_divineImportPreview.reviewStatus && typeof _divineImportPreview.reviewStatus === 'object')
+        ? _divineImportPreview.reviewStatus : {};
+      const reviewStatus = {};
+      for (const d of drafts) reviewStatus[d.draftId] = existingStatus[d.draftId] || 'pending';
       _divineImportPreview.drafts = drafts;
+      _divineImportPreview.reviewStatus = reviewStatus;
       renderDivineDraftPreview(drafts);
+      renderDivineDraftSaveTargetSelector(false);
     }, 0);
   }
+
+  // ── Divine v5: review controls, quiz-object preview, controlled save ─────────
+
+  function _divineGetReviewStatusCounts() {
+    const rs     = _divineImportPreview?.reviewStatus;
+    const drafts = _divineImportPreview?.drafts;
+    if (!rs || !Array.isArray(drafts)) return { pending: 0, approved: 0, rejected: 0, total: 0 };
+    let pending = 0, approved = 0, rejected = 0;
+    for (const d of drafts) {
+      const s = rs[d.draftId] || 'pending';
+      if (s === 'approved') approved++;
+      else if (s === 'rejected') rejected++;
+      else pending++;
+    }
+    return { pending, approved, rejected, total: drafts.length };
+  }
+
+  function setDivineReviewStatus(draftId, status) {
+    if (!_divineImportPreview) return;
+    if (!_divineImportPreview.reviewStatus || typeof _divineImportPreview.reviewStatus !== 'object') {
+      _divineImportPreview.reviewStatus = {};
+    }
+    _divineImportPreview.reviewStatus[draftId] = status;
+    renderDivineDraftPreview(_divineImportPreview.drafts || []);
+  }
+
+  function approveDivineAllDrafts() {
+    const drafts = _divineImportPreview?.drafts;
+    if (!Array.isArray(drafts)) return;
+    if (!_divineImportPreview.reviewStatus || typeof _divineImportPreview.reviewStatus !== 'object') {
+      _divineImportPreview.reviewStatus = {};
+    }
+    for (const d of drafts) _divineImportPreview.reviewStatus[d.draftId] = 'approved';
+    renderDivineDraftPreview(drafts);
+  }
+
+  function rejectDivineAllDrafts() {
+    const drafts = _divineImportPreview?.drafts;
+    if (!Array.isArray(drafts)) return;
+    if (!_divineImportPreview.reviewStatus || typeof _divineImportPreview.reviewStatus !== 'object') {
+      _divineImportPreview.reviewStatus = {};
+    }
+    for (const d of drafts) _divineImportPreview.reviewStatus[d.draftId] = 'rejected';
+    renderDivineDraftPreview(drafts);
+  }
+
+  function getApprovedDivineDrafts() {
+    const drafts = _divineImportPreview?.drafts;
+    const rs     = _divineImportPreview?.reviewStatus;
+    if (!Array.isArray(drafts) || !rs || typeof rs !== 'object') return [];
+    return drafts.filter(d => rs[d.draftId] === 'approved');
+  }
+
+  function _buildDivineQuizExplanation(draft) {
+    const labels     = ['A', 'B', 'C', 'D', 'E'];
+    const rationales = draft.distractorRationales || {};
+    const rationaleText = labels
+      .map(label => (rationales[label] ? `${label}: ${rationales[label]}` : ''))
+      .filter(Boolean)
+      .join('\n');
+    return [
+      draft.teachingPoint || '',
+      rationaleText ? `Choice rationales:\n${rationaleText}` : ''
+    ].filter(Boolean).join('\n\n').trim();
+  }
+
+  function convertApprovedDivineToQuizObject(draft, idx) {
+    const clusters     = _divineImportPreview?.clusters || [];
+    const clusterIndex = clusters.findIndex(c => c.clusterId === draft.clusterId);
+    const episodeTitle = (document.getElementById('divine-episode-title')?.value || '').trim();
+    const sourceMeta   = (document.getElementById('divine-source-meta')?.value || '').trim();
+    const sourceName   = _divineImportPreview?.sourceName || '';
+
+    const quizQuestion = {
+      n: idx + 1,
+      sourceQuestionNumber: idx + 1,
+      generatedQuizQuestionNumber: idx + 1,
+      t: draft.stem,
+      o: Array.isArray(draft.choices)
+        ? draft.choices.map(ch => ({ l: ch.label, t: ch.text }))
+        : [],
+      c: draft.correctAnswer,
+      explanation: _buildDivineQuizExplanation(draft),
+      tags: ['Divine', 'Podcast', draft.variantType, draft.provenance.conceptType].filter(Boolean),
+      images: [],
+      parseConfidence: 'low',
+      parseWarnings:   Array.isArray(draft.warnings) ? draft.warnings.slice() : []
+    };
+
+    const provenance = {
+      sourceType:       'divine-podcast',
+      sourceName,
+      episodeTitle,
+      sourceMeta,
+      draftId:          draft.draftId,
+      clusterId:        draft.clusterId,
+      clusterIndex,
+      variantType:      draft.variantType,
+      draftMethod:      draft.provenance.draftMethod || 'divine-deterministic-scaffold-v1',
+      conceptType:      draft.provenance.conceptType,
+      sourceSegmentIds: Array.isArray(draft.provenance.sourceSegmentIds) ? draft.provenance.sourceSegmentIds.slice() : [],
+      originalLineRanges: Array.isArray(draft.provenance.originalLineRanges) ? draft.provenance.originalLineRanges.slice() : [],
+      cleanedLineRanges:  Array.isArray(draft.provenance.cleanedLineRanges)  ? draft.provenance.cleanedLineRanges.slice()  : [],
+      timestampRanges:  Array.isArray(draft.provenance.timestampRanges) ? draft.provenance.timestampRanges.slice() : [],
+      timestampRange:   draft.timestampRange ? { ...draft.timestampRange } : null,
+      sourceSnippet:    draft.sourceSnippet || '',
+      warnings:         Array.isArray(draft.warnings) ? draft.warnings.slice() : [],
+      createdAt:        draft.provenance.createdAt || '',
+      savedAt:          null
+    };
+
+    return { quizQuestion, provenance };
+  }
+
+  function validateDivineQuizObject(item) {
+    const errors = [];
+    const labels = ['A', 'B', 'C', 'D', 'E'];
+    const q = item?.quizQuestion || {};
+    const p = item?.provenance   || {};
+    if (!Number.isFinite(q.n)) errors.push('missing question number');
+    if (!nonemptyString(q.t))  errors.push('missing stem');
+    if (!Array.isArray(q.o) || q.o.length !== 5) errors.push('must have exactly five answer choices');
+    else q.o.forEach((ch, i) => {
+      if (ch?.l !== labels[i])    errors.push(`choice ${i + 1} must be labeled ${labels[i]}`);
+      if (!nonemptyString(ch?.t)) errors.push(`choice ${labels[i]} is missing text`);
+    });
+    if (!labels.includes(q.c))        errors.push('correct answer must be A–E');
+    if (!nonemptyString(q.explanation)) errors.push('missing explanation / teaching point');
+    if (!Array.isArray(q.tags))   errors.push('missing tags array');
+    if (!Array.isArray(q.images)) errors.push('missing images array');
+    if (!nonemptyString(p.sourceType)) errors.push('missing sourceType in provenance');
+    if (!nonemptyString(p.draftId))    errors.push('missing draftId in provenance');
+    if (!nonemptyString(p.clusterId))  errors.push('missing clusterId in provenance');
+    if (!Number.isFinite(p.clusterIndex) || p.clusterIndex < 0) errors.push('missing or invalid clusterIndex in provenance');
+    if (!nonemptyString(p.variantType))  errors.push('missing variantType in provenance');
+    if (!nonemptyString(p.conceptType))  errors.push('missing conceptType in provenance');
+    if (!Array.isArray(p.sourceSegmentIds) || !p.sourceSegmentIds.length) errors.push('missing sourceSegmentIds in provenance');
+    if (!nonemptyString(p.sourceSnippet)) errors.push('missing sourceSnippet in provenance');
+    return { ok: errors.length === 0, errors };
+  }
+
+  function getApprovedDivineQuizObjectPreviewValidation() {
+    const approvedDrafts = getApprovedDivineDrafts();
+    if (!approvedDrafts.length) {
+      return { approvedDrafts: [], items: [], errors: [], warnings: [], isValid: true };
+    }
+    const items = approvedDrafts.map((draft, idx) => convertApprovedDivineToQuizObject(draft, idx));
+    const validationIssues = items.flatMap((item, idx) =>
+      validateDivineQuizObject(item).errors.map(e => `Quiz object ${idx + 1}: ${e}`)
+    );
+    const warnings = [];
+    for (const item of items) {
+      if (Array.isArray(item.provenance?.warnings)) warnings.push(...item.provenance.warnings);
+    }
+    return {
+      approvedDrafts,
+      items,
+      errors: validationIssues,
+      warnings: [...new Set(warnings)],
+      isValid: validationIssues.length === 0
+    };
+  }
+
+  function renderDivineQuizObjectPreview() {
+    const status  = document.getElementById('divine-quiz-status');
+    const preview = document.getElementById('divine-quiz-preview');
+    if (!status || !preview) return;
+
+    const counts = _divineGetReviewStatusCounts();
+    if (counts.approved === 0) {
+      status.textContent = 'Approve Divine draft scaffolds to preview quiz-question objects. Nothing is saved.';
+      preview.innerHTML  = '<div class="notes-import-empty">No approved Divine drafts converted.</div>';
+      return;
+    }
+
+    const result = getApprovedDivineQuizObjectPreviewValidation();
+    const items  = result.items;
+
+    if (result.errors.length) {
+      status.textContent = `${items.length} quiz object${items.length === 1 ? '' : 's'} — validation failed: ${result.errors[0]}`;
+      preview.innerHTML  = `<div style="color:#b91c1c;font-size:12px;padding:6px 8px;background:#fef2f2;border:1px solid #fca5a5;border-radius:4px;">${result.errors.map(e => `<div>⛔ ${escapeHTML(e)}</div>`).join('')}</div>`;
+      return;
+    }
+
+    status.textContent = `${items.length} quiz object${items.length === 1 ? '' : 's'} ready. Review all placeholder choices before saving.`;
+
+    const cards = items.map((item, idx) => {
+      const q = item.quizQuestion;
+      const p = item.provenance;
+      const choicesHtml = (q.o || []).map(ch =>
+        `<div style="margin:2px 0;font-size:11px;"><span style="font-weight:700;margin-right:4px;">${escapeHTML(ch.l)}.</span>${escapeHTML(ch.t)}</div>`
+      ).join('');
+      return `<div style="border:1px solid #e2e8f0;border-left:3px solid #059669;border-radius:4px;padding:8px 10px;margin-bottom:6px;font-size:12px;background:#f0fdf4;">
+        <div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin-bottom:4px;">
+          <span style="color:#94a3b8;font-size:10px;">Q${idx + 1}</span>
+          <span style="color:#94a3b8;font-size:10px;">${escapeHTML(p.draftId)}</span>
+          <span style="background:#059669;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;">${escapeHTML(p.variantType)}</span>
+          <span style="color:#94a3b8;font-size:10px;">${escapeHTML(p.conceptType)}</span>
+        </div>
+        <div style="font-weight:600;color:#1e293b;margin-bottom:5px;line-height:1.4;">${escapeHTML(q.t)}</div>
+        <div style="margin-bottom:5px;">${choicesHtml}</div>
+        <div style="font-size:10px;color:#475569;"><strong>Correct:</strong> ${escapeHTML(q.c)}</div>
+        <div style="font-size:10px;color:#475569;margin-top:2px;"><strong>Explanation:</strong> ${escapeHTML((q.explanation || '').slice(0, 180))}${(q.explanation || '').length > 180 ? '…' : ''}</div>
+      </div>`;
+    }).join('');
+
+    preview.innerHTML = cards;
+  }
+
+  function getDivineSourceFolder() {
+    return DB.get().sourceFolders.find(s => s.sourceType === 'divine') || DB.getSourceFolder('src-divine-podcasts') || null;
+  }
+
+  function getDivineSubfolders() {
+    const source = getDivineSourceFolder();
+    return source ? DB.getFolders(source.id) : [];
+  }
+
+  function renderDivineDraftSaveTargetSelector(preserveSelection = true) {
+    const select = document.getElementById('divine-create-test-target');
+    if (!select) return;
+    const previousValue  = preserveSelection ? select.value : '';
+    const folders        = getDivineSubfolders();
+    const newFolderOption = '<option value="__new__">Create new Divine Podcasts folder</option>';
+    const folderOptions   = folders.map(f => `<option value="${escapeHTML(f.id)}">${escapeHTML(f.name)}</option>`).join('');
+    select.innerHTML = `<option value="">Choose a Divine Podcasts subfolder</option>${folderOptions}${newFolderOption}`;
+    if (Array.from(select.options).some(opt => opt.value === previousValue)) {
+      select.value = previousValue;
+    } else {
+      select.value = '';
+    }
+  }
+
+  function getSelectedDivineDraftSaveTarget() {
+    const selectedValue = document.getElementById('divine-create-test-target')?.value || '';
+    const source = getDivineSourceFolder();
+    if (selectedValue === '__new__') {
+      return { ok: !!source, mode: 'new-folder', source, folder: null, error: source ? '' : 'Divine Podcasts source folder is unavailable.' };
+    }
+    if (!selectedValue) return { ok: false, mode: 'none', source, folder: null, error: 'Choose a subfolder before creating a test.' };
+    const folder = getDivineSubfolders().find(f => f.id === selectedValue);
+    if (!folder) return { ok: false, mode: 'missing-folder', source, folder: null, error: 'Selected subfolder was not found.' };
+    return { ok: true, mode: 'existing-folder', source, folder, error: '' };
+  }
+
+  function getDivineDraftSaveInputs() {
+    const testName = (document.getElementById('divine-create-test-name')?.value || '').trim();
+    const reviewed = !!document.getElementById('divine-create-test-reviewed')?.checked;
+    return { testName, reviewed };
+  }
+
+  function setDivineDraftSaveError(message) {
+    const el = document.getElementById('divine-create-test-error');
+    if (!el) return;
+    el.style.display = message ? 'block' : 'none';
+    el.textContent   = message || '';
+  }
+
+  function renderDivineDraftSaveDiagnostics(result, target, readiness, inputs, lastMessage = '') {
+    const el = document.getElementById('divine-create-test-diagnostics');
+    if (!el) return;
+    const selectedValue  = document.getElementById('divine-create-test-target')?.value || '';
+    const approvedCount  = Array.isArray(result?.approvedDrafts) ? result.approvedDrafts.length : 0;
+    const previewCount   = Array.isArray(result?.items)          ? result.items.length          : 0;
+    const errors         = Array.isArray(result?.errors)         ? result.errors                : [];
+    const counts         = _divineGetReviewStatusCounts();
+    const targetLabel    = selectedValue
+      ? selectedValue === '__new__' ? 'Create new Divine Podcasts folder' : `${target?.folder?.name || 'Unknown folder'} (${selectedValue})`
+      : 'None selected';
+    const validationLabel = errors.length ? `Blocked: ${errors[0]}` : 'Passed';
+    const readinessLabel  = readiness.ok  ? 'Ready'                 : `Blocked: ${readiness.message}`;
+    el.innerHTML = [
+      `<div><strong>Selected target:</strong> ${escapeHTML(targetLabel)}</div>`,
+      `<div><strong>Test name valid:</strong> ${inputs.testName ? 'Yes' : 'No'}</div>`,
+      `<div><strong>Confirmation checked:</strong> ${inputs.reviewed ? 'Yes' : 'No'}</div>`,
+      `<div><strong>Approved drafts:</strong> ${approvedCount} (pending: ${counts.pending}, rejected: ${counts.rejected}, total: ${counts.total})</div>`,
+      `<div><strong>Quiz object previews:</strong> ${previewCount}</div>`,
+      `<div><strong>Validation:</strong> ${escapeHTML(validationLabel)}</div>`,
+      `<div><strong>Save readiness:</strong> ${escapeHTML(readinessLabel)}</div>`,
+      lastMessage ? `<div><strong>Last save:</strong> ${escapeHTML(lastMessage)}</div>` : ''
+    ].filter(Boolean).join('');
+  }
+
+  function getDivineDraftCreateTestReadiness(result, target, inputs) {
+    const approvedCount = Array.isArray(result?.approvedDrafts) ? result.approvedDrafts.length : 0;
+    const previewCount  = Array.isArray(result?.items)          ? result.items.length          : 0;
+    const errors        = Array.isArray(result?.errors)         ? result.errors                : [];
+    if (!approvedCount)  return { ok: false, message: 'Approve at least one draft before creating a test.' };
+    if (errors.length)   return { ok: false, message: `Cannot create test: ${errors[0]}` };
+    if (previewCount !== approvedCount) return { ok: false, message: 'Cannot create test: approved drafts did not produce the expected quiz objects.' };
+    if (!target?.ok)     return { ok: false, message: target?.error || 'Choose a subfolder before creating a test.' };
+    if (!inputs.testName) return { ok: false, message: 'Enter a test name before creating a test.' };
+    if (!inputs.reviewed) return { ok: false, message: 'Confirm that you reviewed and approve these quiz objects before creating a test.' };
+    return { ok: true, message: '' };
+  }
+
+  function updateDivineDraftCreateTestButton() {
+    const btn = document.getElementById('divine-create-test-btn');
+    if (!btn) return;
+    const result    = getApprovedDivineQuizObjectPreviewValidation();
+    const target    = getSelectedDivineDraftSaveTarget();
+    const inputs    = getDivineDraftSaveInputs();
+    const readiness = getDivineDraftCreateTestReadiness(result, target, inputs);
+    btn.disabled    = !readiness.ok;
+    btn.textContent = result.items.length > 0
+      ? `Create Test from Approved Divine Drafts (${result.items.length})`
+      : 'Create Test from Approved Divine Drafts';
+    btn.title = readiness.message;
+    setDivineDraftSaveError(readiness.ok ? '' : readiness.message);
+    renderDivineDraftSaveDiagnostics(result, target, readiness, inputs);
+  }
+
+  function createTestFromApprovedDivineDrafts() {
+    const result    = getApprovedDivineQuizObjectPreviewValidation();
+    const target    = getSelectedDivineDraftSaveTarget();
+    const inputs    = getDivineDraftSaveInputs();
+    const readiness = getDivineDraftCreateTestReadiness(result, target, inputs);
+    const selectedValue = document.getElementById('divine-create-test-target')?.value || '';
+
+    if (!readiness.ok) {
+      console.warn('Divine draft save blocked:', {
+        selectedTargetValue: selectedValue,
+        approvedCount:       Array.isArray(result?.approvedDrafts) ? result.approvedDrafts.length : 0,
+        quizObjectCount:     Array.isArray(result?.items)          ? result.items.length          : 0,
+        validationErrors:    result?.errors || [],
+        readinessMessage:    readiness.message
+      });
+      setDivineDraftSaveError(readiness.message);
+      renderDivineDraftSaveDiagnostics(result, target, readiness, inputs, `Blocked: ${readiness.message}`);
+      toast(readiness.message, 8000);
+      return;
+    }
+    setDivineDraftSaveError('');
+
+    try {
+      const testName         = inputs.testName;
+      const targetFolderName = target.folder?.name || 'Divine Podcasts';
+      const source           = target.source || getDivineSourceFolder();
+      const beforeCount      = DB.get().tests.length;
+
+      const questions = result.items.map(item => {
+        const question = JSON.parse(JSON.stringify(item.quizQuestion));
+        question.divineDraftProvenance = JSON.parse(JSON.stringify({
+          ...(item.provenance || {}),
+          targetFolderId:   target.folder?.id || null,
+          targetFolderName,
+          savedAt:          new Date().toISOString()
+        }));
+        return question;
+      });
+
+      // Final pre-save validation pass.
+      const immediateErrors = questions.flatMap((question, idx) =>
+        validateDivineQuizObject({
+          quizQuestion: question,
+          provenance:   question.divineDraftProvenance || {}
+        }).errors.map(e => `Question ${idx + 1}: ${e}`)
+      );
+      if (immediateErrors.length) {
+        const message = `Cannot create test: ${immediateErrors[0]}`;
+        console.warn('Divine draft save failed pre-save validation:', { validationErrors: immediateErrors });
+        setDivineDraftSaveError(message);
+        renderDivineDraftSaveDiagnostics({ ...result, errors: immediateErrors }, target, { ok: false, message }, inputs, `Failed: ${message}`);
+        toast(message, 8000);
+        return;
+      }
+
+      const targetFolder = target.folder || DB.createFolder(targetFolderName, source?.id || 'src-divine-podcasts');
+      if (!targetFolder?.id) {
+        const message = 'Could not resolve the selected Divine Podcasts target folder.';
+        console.warn('Divine draft save failed: no target folder', { selectedTargetValue: selectedValue });
+        setDivineDraftSaveError(message);
+        renderDivineDraftSaveDiagnostics(result, target, readiness, inputs, `Failed: ${message}`);
+        toast(message, 8000);
+        return;
+      }
+
+      const test        = DB.createTest(targetFolder.id, testName, questions);
+      const afterCount  = DB.get().tests.length;
+      const saved       = !!test && afterCount === beforeCount + 1;
+
+      if (!saved) {
+        const message = test
+          ? `DB.createTest returned a test, but DB test count changed from ${beforeCount} to ${afterCount}.`
+          : 'DB.createTest did not save the test. Storage may be full.';
+        console.warn('Divine draft save failed:', { testName, dbReturn: test, testsBefore: beforeCount, testsAfter: afterCount });
+        setDivineDraftSaveError(message);
+        renderDivineDraftSaveDiagnostics(result, target, readiness, inputs, `Failed: ${message}`);
+        toast(message, 8000);
+        return;
+      }
+
+      console.info('Divine draft save succeeded:', {
+        testName:      test.name,
+        testId:        test.id,
+        folderId:      targetFolder.id,
+        questionCount: questions.length,
+        testsBefore:   beforeCount,
+        testsAfter:    afterCount
+      });
+
+      renderDivineDraftSaveDiagnostics(result, target, readiness, inputs,
+        `Saved "${test.name}" (${questions.length} question${questions.length === 1 ? '' : 's'}).`);
+      setDivineDraftSaveError('');
+      toast(`Saved "${test.name}" to ${targetFolderName}.`, 6000);
+      if (typeof renderApp === 'function') renderApp();
+      renderDivineDraftSaveTargetSelector(true);
+      updateDivineDraftCreateTestButton();
+
+    } catch (err) {
+      const message = `Save failed unexpectedly: ${err?.message || String(err)}`;
+      console.error('Divine draft save threw:', err);
+      setDivineDraftSaveError(message);
+      renderDivineDraftSaveDiagnostics(result, target, readiness, inputs, `Failed: ${message}`);
+      toast(message, 8000);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
 
   function openAnkiTextImportPreview() {
     const modal = document.getElementById('modal-anki-import');
@@ -19307,6 +19839,11 @@ const App = (() => {
     deselectAllDivineClusters,
     toggleDivineClusterSelection,
     generateAndPreviewDivineDrafts,
+    setDivineReviewStatus,
+    approveDivineAllDrafts,
+    rejectDivineAllDrafts,
+    updateDivineDraftCreateTestButton,
+    createTestFromApprovedDivineDrafts,
     updateApprovedOmeDraftCreateTestButton,
     createTestFromApprovedOmeDrafts,
     exportApprovedOmeDraftsJson,
