@@ -1,10 +1,12 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
+const http = require('http');
+const fs = require('fs');
 
 const DEFAULT_DEV_URL = 'http://localhost:8888';
 const GEMINI_MODEL = 'gemini-2.5-flash';
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
-const devUrl = process.env.NBME_ELECTRON_URL || DEFAULT_DEV_URL;
+let resolvedDevUrl = null; // set at startup; see startEmbeddedServer / NBME_ELECTRON_URL override
 
 ipcMain.handle('nbme:ai:get-status', async () => ({
   available: true,
@@ -248,6 +250,97 @@ ipcMain.handle('nbme:ai:refine-uworld-draft', async (_event, payload) => {
   }
 });
 
+// ── Embedded static file server ──────────────────────────────────────────────
+// Serves index.html (and local static assets) from the project root over HTTP so
+// that Google Drive OAuth, PDF.js workers, and Tesseract workers can all use an
+// approved HTTP/HTTPS origin. Binds to 127.0.0.1 only. Not used when
+// NBME_ELECTRON_URL is set.
+
+const PROJECT_ROOT = path.resolve(__dirname, '..');
+
+const MIME = {
+  '.html':  'text/html; charset=utf-8',
+  '.js':    'application/javascript; charset=utf-8',
+  '.css':   'text/css; charset=utf-8',
+  '.json':  'application/json; charset=utf-8',
+  '.png':   'image/png',
+  '.jpg':   'image/jpeg',
+  '.jpeg':  'image/jpeg',
+  '.svg':   'image/svg+xml',
+  '.pdf':   'application/pdf',
+  '.woff':  'font/woff',
+  '.woff2': 'font/woff2',
+  '.wasm':  'application/wasm',
+  '.txt':   'text/plain; charset=utf-8'
+};
+
+function resolveLocalPath(rawUrl) {
+  try {
+    const clean = decodeURIComponent((rawUrl || '/').split('?')[0].split('#')[0]) || '/';
+    const rel = clean.startsWith('/') ? clean : '/' + clean;
+    const abs = path.resolve(PROJECT_ROOT, '.' + rel);
+    // Reject any path that escapes the project root (path traversal guard).
+    if (abs !== PROJECT_ROOT && !abs.startsWith(PROJECT_ROOT + path.sep)) return null;
+    return abs;
+  } catch (_) {
+    return null;
+  }
+}
+
+function serveIndexHtml(res) {
+  fs.readFile(path.join(PROJECT_ROOT, 'index.html'), (err, data) => {
+    if (err) { res.writeHead(500); res.end(); return; }
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
+    res.end(data);
+  });
+}
+
+function createRequestHandler() {
+  return function (req, res) {
+    const localPath = resolveLocalPath(req.url);
+    if (!localPath) return serveIndexHtml(res); // bad URL → SPA fallback
+
+    fs.stat(localPath, (err, stat) => {
+      if (err || !stat.isFile()) return serveIndexHtml(res); // not found → SPA fallback
+
+      const ext = path.extname(localPath).toLowerCase();
+      const contentType = MIME[ext];
+      if (!contentType) { res.writeHead(403); res.end(); return; } // unknown type → deny
+
+      fs.readFile(localPath, (readErr, data) => {
+        if (readErr) { res.writeHead(500); res.end(); return; }
+        res.writeHead(200, { 'Content-Type': contentType, 'Cache-Control': 'no-cache' });
+        res.end(data);
+      });
+    });
+  };
+}
+
+function tryListenOnPort(handler, port) {
+  return new Promise((resolve) => {
+    const server = http.createServer(handler);
+    server.once('error', () => { server.close(); resolve(null); });
+    server.once('listening', () => resolve(server));
+    server.listen(port, '127.0.0.1');
+  });
+}
+
+async function startEmbeddedServer() {
+  const handler = createRequestHandler();
+  for (const port of [8888, 8080]) {
+    const server = await tryListenOnPort(handler, port);
+    if (server) return server;
+  }
+  // Fall back to an OS-assigned port (port 0).
+  const server = await tryListenOnPort(handler, 0);
+  if (!server) throw new Error('[NBME] Embedded HTTP server failed to bind on any port.');
+  return server;
+}
+
+let _embeddedServer = null;
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Main process boundary:
 // Owns Electron window lifecycle and loading the existing HTTP-served app only.
 // App logic, parser/OCR/render behavior, Drive, and storage remain in index.html.
@@ -273,10 +366,20 @@ function createWindow() {
     win.show();
   });
 
-  win.loadURL(devUrl);
+  win.loadURL(resolvedDevUrl);
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  if (process.env.NBME_ELECTRON_URL) {
+    resolvedDevUrl = process.env.NBME_ELECTRON_URL;
+    console.log('[NBME] Using external URL override:', resolvedDevUrl);
+  } else {
+    _embeddedServer = await startEmbeddedServer();
+    const { port } = _embeddedServer.address();
+    resolvedDevUrl = `http://localhost:${port}`;
+    console.log('[NBME] Embedded server listening at:', resolvedDevUrl);
+  }
+
   createWindow();
 
   app.on('activate', () => {
@@ -286,4 +389,11 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('before-quit', () => {
+  if (_embeddedServer) {
+    _embeddedServer.close();
+    _embeddedServer = null;
+  }
 });
