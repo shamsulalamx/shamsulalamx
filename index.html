@@ -1921,6 +1921,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
     <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
       <button type="button" class="btn-card" onclick="App.clearMehlmanPdfImportPreview()">Clear / Reset</button>
       <button type="button" class="btn-card" id="mehlman-extract-concepts-btn" style="display:none;" onclick="App.extractAndPreviewMehlmanConcepts()">Extract Concepts</button>
+      <button type="button" class="btn-card" id="mehlman-cluster-concepts-btn" style="display:none;" onclick="App.clusterAndPreviewMehlmanConcepts()">Cluster Concepts</button>
       <button type="button" class="btn-card" onclick="App.closeMehlmanPdfImportPreview()">Close</button>
     </div>
     <div class="notes-import-section-title">Mehlman Block Preview</div>
@@ -1932,6 +1933,29 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
       <div id="mehlman-concept-status" class="notes-import-summary" style="margin-bottom:6px;"></div>
       <div id="mehlman-concept-preview" class="notes-draft-preview">
         <div class="notes-import-empty">No concepts extracted yet.</div>
+      </div>
+    </div>
+    <div id="mehlman-cluster-section" style="display:none;">
+      <div class="notes-import-section-title" style="margin-top:12px;">Mehlman Cluster Preview</div>
+      <div id="mehlman-cluster-status" class="notes-import-summary" style="margin-bottom:6px;"></div>
+      <div style="margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <button type="button" class="btn-card" onclick="App.selectAllMehlmanClusters()">Select All</button>
+        <button type="button" class="btn-card" onclick="App.deselectAllMehlmanClusters()">Deselect All</button>
+        <span id="mehlman-cluster-selection-status" style="font-size:12px;color:#555;"></span>
+      </div>
+      <div id="mehlman-cluster-preview" class="notes-draft-preview">
+        <div class="notes-import-empty">No clusters generated yet.</div>
+      </div>
+    </div>
+    <div id="mehlman-draft-section" style="display:none;">
+      <div class="notes-import-section-title" style="margin-top:12px;">Mehlman Draft Preview</div>
+      <div id="mehlman-draft-status" class="notes-import-summary" style="margin-bottom:6px;"></div>
+      <div style="margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <button type="button" class="btn-card" id="mehlman-generate-drafts-btn" style="display:none;" onclick="App.previewMehlmanDrafts()">Generate Draft Preview</button>
+        <span id="mehlman-draft-count-label" style="font-size:12px;color:#555;"></span>
+      </div>
+      <div id="mehlman-draft-preview" class="notes-draft-preview">
+        <div class="notes-import-empty">No drafts generated yet.</div>
       </div>
     </div>
   </div>
@@ -9512,16 +9536,36 @@ const App = (() => {
     const status = document.getElementById('mehlman-import-status');
     const preview = document.getElementById('mehlman-structure-preview');
     const extractBtn = document.getElementById('mehlman-extract-concepts-btn');
+    const clusterBtn = document.getElementById('mehlman-cluster-concepts-btn');
     const conceptSection = document.getElementById('mehlman-concept-section');
     const conceptStatus = document.getElementById('mehlman-concept-status');
     const conceptPreview = document.getElementById('mehlman-concept-preview');
+    const clusterSection = document.getElementById('mehlman-cluster-section');
+    const clusterStatus = document.getElementById('mehlman-cluster-status');
+    const clusterSelectionStatus = document.getElementById('mehlman-cluster-selection-status');
+    const clusterPreview = document.getElementById('mehlman-cluster-preview');
+    const draftSection = document.getElementById('mehlman-draft-section');
+    const draftStatus = document.getElementById('mehlman-draft-status');
+    const draftCountLabel = document.getElementById('mehlman-draft-count-label');
+    const draftPreview = document.getElementById('mehlman-draft-preview');
+    const generateDraftsBtn = document.getElementById('mehlman-generate-drafts-btn');
     if (input) input.value = '';
     if (status) status.textContent = 'Choose a .pdf file from the Mehlman library.';
     if (preview) preview.innerHTML = '<div class="notes-import-empty">No Mehlman structure preview loaded.</div>';
     if (extractBtn) extractBtn.style.display = 'none';
+    if (clusterBtn) clusterBtn.style.display = 'none';
     if (conceptSection) conceptSection.style.display = 'none';
     if (conceptStatus) conceptStatus.textContent = '';
     if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concepts extracted yet.</div>';
+    if (clusterSection) clusterSection.style.display = 'none';
+    if (clusterStatus) clusterStatus.textContent = '';
+    if (clusterSelectionStatus) clusterSelectionStatus.textContent = '';
+    if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No clusters generated yet.</div>';
+    if (draftSection) draftSection.style.display = 'none';
+    if (draftStatus) draftStatus.textContent = '';
+    if (draftCountLabel) draftCountLabel.textContent = '';
+    if (draftPreview) draftPreview.innerHTML = '<div class="notes-import-empty">No drafts generated yet.</div>';
+    if (generateDraftsBtn) generateDraftsBtn.style.display = 'none';
   }
 
   async function calibrateMehlmanFontThreshold(pdf) {
@@ -10005,6 +10049,10 @@ const App = (() => {
 
     if (statusEl) statusEl.textContent = `${concepts.length} concepts — ${lowConfCount} low-confidence${unknownCount ? ` — ${unknownCount} unknown` : ''}.`;
 
+    // Show "Cluster Concepts" button now that concepts are ready
+    const clusterBtn = document.getElementById('mehlman-cluster-concepts-btn');
+    if (clusterBtn) clusterBtn.style.display = '';
+
     const summaryHtml = `
       <div class="notes-import-summary" style="margin-bottom:10px;">
         <strong>${concepts.length} concepts extracted</strong>${lowConfCount > 0 ? ` · <span style="color:#c0392b;">${lowConfCount} low-confidence</span>` : ''}${unknownCount > 0 ? ` · <span style="color:#6b7280;">${unknownCount} unknown</span>` : ''}
@@ -10067,6 +10115,537 @@ const App = (() => {
       const concepts = extractMehlmanConcepts(_mehlmanImportPreview.blocks);
       _mehlmanImportPreview.concepts = concepts;
       renderMehlmanConceptPreview(concepts);
+    }, 0);
+  }
+
+  // ══ Mehlman v3: Clustering ══
+
+  // Jaccard token similarity on word-level tokens (lowercase, alphanum only, ≥3 chars)
+  function getMehlmanJaccardSimilarity(a, b) {
+    const tokenize = s => {
+      const words = String(s || '').toLowerCase().match(/[a-z0-9]{3,}/g) || [];
+      return new Set(words);
+    };
+    const setA = tokenize(a);
+    const setB = tokenize(b);
+    if (!setA.size && !setB.size) return 1;
+    if (!setA.size || !setB.size) return 0;
+    let intersection = 0;
+    setA.forEach(t => { if (setB.has(t)) intersection++; });
+    return intersection / (setA.size + setB.size - intersection);
+  }
+
+  // Build a stable cluster key: headingPath system (first element) + topic (second) + conceptType
+  function getMehlmanClusterGroupKey(concept) {
+    const h0 = concept.headingPath && concept.headingPath[0] ? concept.headingPath[0].toLowerCase().trim() : '';
+    const h1 = concept.headingPath && concept.headingPath[1] ? concept.headingPath[1].toLowerCase().trim() : '';
+    return `${h0}|${h1}|${concept.conceptType || 'unknown'}`;
+  }
+
+  function clusterMehlmanConcepts(concepts) {
+    if (!Array.isArray(concepts) || !concepts.length) {
+      return { clusters: [], clusterCount: 0, conceptCount: 0, dupWarnings: [], warnings: [] };
+    }
+
+    const DEDUP_COLLAPSE = 0.85;
+    const NEAR_DUP = 0.65;
+
+    // Group by system/topic/conceptType first
+    const groupMap = new Map();
+    concepts.forEach((concept, idx) => {
+      const key = getMehlmanClusterGroupKey(concept);
+      if (!groupMap.has(key)) groupMap.set(key, []);
+      groupMap.get(key).push(Object.assign({ _origIdx: idx }, concept));
+    });
+
+    const allClusters = [];
+    const dupWarnings = [];
+
+    groupMap.forEach(group => {
+      // Within each group: union-find by page proximity (≤5 pages apart) + similarity threshold
+      const n = group.length;
+      const parent = group.map((_, i) => i);
+      const collapseFlags = new Array(n).fill(false);  // true = this member was collapsed into representative
+      const nearDupFlags = new Array(n).fill(false);   // true = near-dup pair found
+
+      const find = i => {
+        let cur = i;
+        while (parent[cur] !== cur) { parent[cur] = parent[parent[cur]]; cur = parent[cur]; }
+        return cur;
+      };
+      const union = (a, b) => { const ra = find(a); const rb = find(b); if (ra !== rb) parent[rb] = ra; };
+
+      const collapseMap = new Map(); // root -> Set of collapsed indices
+
+      for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j < n; j++) {
+          const ci = group[i];
+          const cj = group[j];
+          const pageProx = Math.abs((ci.pageNumber || 0) - (cj.pageNumber || 0)) <= 5;
+          if (!pageProx) continue;
+          const sim = getMehlmanJaccardSimilarity(ci.sourceSnippet, cj.sourceSnippet);
+          if (sim >= DEDUP_COLLAPSE) {
+            // Collapse j into i (keep i as representative)
+            union(i, j);
+            const root = find(i);
+            if (!collapseMap.has(root)) collapseMap.set(root, new Set());
+            collapseMap.get(root).add(j);
+            collapseFlags[j] = true;
+            dupWarnings.push(`Near-duplicate collapsed: "${String(ci.sourceSnippet || '').slice(0, 60)}…" sim=${sim.toFixed(2)}`);
+          } else if (sim >= NEAR_DUP) {
+            nearDupFlags[i] = true;
+            nearDupFlags[j] = true;
+            union(i, j);
+          }
+        }
+      }
+
+      // Build clusters from union-find groups
+      const clusterMap = new Map();
+      group.forEach((concept, idx) => {
+        const root = find(idx);
+        if (!clusterMap.has(root)) clusterMap.set(root, []);
+        clusterMap.get(root).push({ concept, idx });
+      });
+
+      clusterMap.forEach((members, root) => {
+        const membersData = members.map(({ concept, idx }) => ({
+          conceptId: concept.conceptId || concept.id || `mc-${concept._origIdx}`,
+          conceptType: concept.conceptType,
+          sourceSnippet: concept.sourceSnippet || '',
+          headingPath: concept.headingPath || [],
+          pageNumber: concept.pageNumber || 0,
+          blockOrder: concept.blockOrder || 0,
+          sourceBlockIds: concept.sourceBlockIds || [],
+          confidence: concept.confidence || 0.5,
+          warnings: (concept.warnings || []).slice(),
+          isCollapsed: collapseFlags[idx],
+          isNearDup: nearDupFlags[idx]
+        }));
+
+        // Sort members by pageNumber then blockOrder
+        membersData.sort((a, b) => (a.pageNumber - b.pageNumber) || (a.blockOrder - b.blockOrder));
+
+        const representativeMember = membersData.find(m => !m.isCollapsed) || membersData[0];
+        const allPages = membersData.map(m => m.pageNumber).filter(p => p > 0);
+        const minPage = allPages.length ? Math.min(...allPages) : 0;
+        const maxPage = allPages.length ? Math.max(...allPages) : 0;
+        const allBlockIds = [];
+        membersData.forEach(m => m.sourceBlockIds.forEach(id => { if (!allBlockIds.includes(id)) allBlockIds.push(id); }));
+
+        const collapsedCount = membersData.filter(m => m.isCollapsed).length;
+        const nearDupCount = membersData.filter(m => m.isNearDup).length;
+        const clusterWarnings = [];
+        if (collapsedCount > 0) clusterWarnings.push(`${collapsedCount} near-duplicate(s) collapsed to representative.`);
+        if (nearDupCount > 0) clusterWarnings.push(`${nearDupCount} near-duplicate(s) retained (sim 0.65–0.84).`);
+        membersData.forEach(m => m.warnings.forEach(w => { if (!clusterWarnings.includes(w)) clusterWarnings.push(w); }));
+
+        const avgConfidence = membersData.reduce((sum, m) => sum + (m.confidence || 0.5), 0) / membersData.length;
+
+        const clusterId = `mcluster-${allClusters.length + 1}-${String(representativeMember.headingPath[0] || 'gen').replace(/\s+/g, '-').toLowerCase().slice(0, 20)}`;
+
+        allClusters.push({
+          clusterId,
+          clusterIndex: allClusters.length + 1,
+          conceptType: representativeMember.conceptType,
+          headingPath: representativeMember.headingPath,
+          pageRange: minPage === maxPage ? `p${minPage}` : `p${minPage}–p${maxPage}`,
+          minPage,
+          maxPage,
+          memberCount: membersData.length,
+          collapsedCount,
+          confidence: avgConfidence,
+          members: membersData,
+          representative: representativeMember,
+          sourceBlockIds: allBlockIds,
+          warnings: clusterWarnings
+        });
+      });
+    });
+
+    // Sort final clusters by minPage then clusterIndex
+    allClusters.sort((a, b) => (a.minPage - b.minPage) || (a.clusterIndex - b.clusterIndex));
+    allClusters.forEach((c, i) => { c.clusterIndex = i + 1; });
+
+    const globalWarnings = dupWarnings.length > 0
+      ? [`${dupWarnings.length} near-duplicate pair(s) collapsed across all clusters.`]
+      : [];
+
+    return {
+      clusters: allClusters,
+      clusterCount: allClusters.length,
+      conceptCount: concepts.length,
+      dupWarnings,
+      warnings: globalWarnings
+    };
+  }
+
+  function getMehlmanSelectedClusterIds() {
+    if (!_mehlmanImportPreview) return [];
+    if (Array.isArray(_mehlmanImportPreview.clusterSelection)) return _mehlmanImportPreview.clusterSelection.slice();
+    const clusters = _mehlmanImportPreview.clusters || [];
+    return clusters.map(c => c.clusterId);
+  }
+
+  function updateMehlmanClusterSelectionStatus() {
+    const el = document.getElementById('mehlman-cluster-selection-status');
+    if (!el) return;
+    const clusters = (_mehlmanImportPreview && _mehlmanImportPreview.clusters) ? _mehlmanImportPreview.clusters : [];
+    const selected = getMehlmanSelectedClusterIds();
+    el.textContent = `${selected.length} / ${clusters.length} selected`;
+    // Show/hide generate drafts button
+    const generateBtn = document.getElementById('mehlman-generate-drafts-btn');
+    if (generateBtn) generateBtn.style.display = selected.length > 0 ? '' : 'none';
+  }
+
+  function toggleMehlmanClusterSelection(clusterId) {
+    if (!_mehlmanImportPreview) return;
+    const clusters = _mehlmanImportPreview.clusters || [];
+    if (!Array.isArray(_mehlmanImportPreview.clusterSelection)) {
+      _mehlmanImportPreview.clusterSelection = clusters.map(c => c.clusterId);
+    }
+    const sel = _mehlmanImportPreview.clusterSelection;
+    const idx = sel.indexOf(clusterId);
+    if (idx === -1) sel.push(clusterId);
+    else sel.splice(idx, 1);
+    // Update checkbox state in DOM
+    const cb = document.getElementById(`mehlman-cluster-cb-${CSS.escape(clusterId)}`);
+    if (cb) cb.checked = sel.includes(clusterId);
+    updateMehlmanClusterSelectionStatus();
+  }
+
+  function selectAllMehlmanClusters() {
+    if (!_mehlmanImportPreview) return;
+    const clusters = _mehlmanImportPreview.clusters || [];
+    _mehlmanImportPreview.clusterSelection = clusters.map(c => c.clusterId);
+    // Re-check all checkboxes
+    clusters.forEach(c => {
+      const cb = document.getElementById(`mehlman-cluster-cb-${CSS.escape(c.clusterId)}`);
+      if (cb) cb.checked = true;
+    });
+    updateMehlmanClusterSelectionStatus();
+  }
+
+  function deselectAllMehlmanClusters() {
+    if (!_mehlmanImportPreview) return;
+    _mehlmanImportPreview.clusterSelection = [];
+    const clusters = _mehlmanImportPreview.clusters || [];
+    clusters.forEach(c => {
+      const cb = document.getElementById(`mehlman-cluster-cb-${CSS.escape(c.clusterId)}`);
+      if (cb) cb.checked = false;
+    });
+    updateMehlmanClusterSelectionStatus();
+  }
+
+  function renderMehlmanClusterPreview(result) {
+    const statusEl = document.getElementById('mehlman-cluster-status');
+    const previewEl = document.getElementById('mehlman-cluster-preview');
+    const section = document.getElementById('mehlman-cluster-section');
+    if (!previewEl) return;
+    if (section) section.style.display = '';
+
+    const clusters = Array.isArray(result?.clusters) ? result.clusters : [];
+    if (!clusters.length) {
+      if (statusEl) statusEl.textContent = 'No clusters generated.';
+      previewEl.innerHTML = '<div class="notes-import-empty">No clusters generated.</div>';
+      updateMehlmanClusterSelectionStatus();
+      return;
+    }
+
+    if (statusEl) {
+      const dupNote = result.dupWarnings && result.dupWarnings.length ? ` · ${result.dupWarnings.length} dedup warning(s)` : '';
+      statusEl.textContent = `${result.conceptCount} concepts → ${result.clusterCount} cluster${result.clusterCount === 1 ? '' : 's'}${dupNote}. Preview only.`;
+    }
+
+    const selectedIds = new Set(getMehlmanSelectedClusterIds());
+
+    const TYPE_COLORS = {
+      'high-yield-fact': '#2563eb',
+      'mechanism': '#7c3aed',
+      'risk-factor': '#d97706',
+      'diagnostic-distinction': '#0891b2',
+      'management-rule': '#059669',
+      'contraindication-adverse-effect': '#dc2626',
+      'exam-trap': '#c026d3',
+      'unknown': '#6b7280'
+    };
+
+    const clusterCards = clusters.map(cluster => {
+      const isSelected = selectedIds.has(cluster.clusterId);
+      const color = TYPE_COLORS[cluster.conceptType] || '#6b7280';
+      const badge = `<span style="display:inline-block;background:${color};color:#fff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:3px;">${escapeHTML(cluster.conceptType.toUpperCase().replace(/-/g, ' '))}</span>`;
+      const breadcrumb = cluster.headingPath.length
+        ? `<span style="font-size:11px;color:#888;">${cluster.headingPath.map(h => escapeHTML(h)).join(' › ')}</span>`
+        : '';
+      const memberLines = cluster.members.map(m => {
+        const dupNote = m.isCollapsed ? ' <span style="color:#c0392b;font-size:10px;">[collapsed dup]</span>' : m.isNearDup ? ' <span style="color:#d97706;font-size:10px;">[near-dup]</span>' : '';
+        return `<div style="border-top:1px solid #e2e8f0;padding:4px 0;margin-top:4px;font-size:12px;">
+          <span style="color:#888;">p${m.pageNumber}</span> ${escapeHTML(m.sourceSnippet.slice(0, 180))}${m.sourceSnippet.length > 180 ? '…' : ''}${dupNote}
+        </div>`;
+      }).join('');
+      const warnHtml = cluster.warnings.length
+        ? `<div style="color:#8a5a00;font-size:11px;margin-top:4px;">${cluster.warnings.map(w => escapeHTML(w)).join(' · ')}</div>`
+        : '';
+      const cbId = `mehlman-cluster-cb-${CSS.escape(cluster.clusterId)}`;
+      return `
+        <div class="notes-draft-card" style="border-left:3px solid ${isSelected ? color : '#d0d7de'};">
+          <div style="display:flex;gap:8px;align-items:flex-start;">
+            <input type="checkbox" id="${escapeHTML(cbId)}" ${isSelected ? 'checked' : ''}
+              style="margin-top:3px;flex-shrink:0;"
+              onchange="App.toggleMehlmanClusterSelection('${escapeHTML(cluster.clusterId)}')">
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                ${badge}
+                <span style="font-size:12px;font-weight:600;">Cluster ${escapeHTML(String(cluster.clusterIndex))}</span>
+                <span style="font-size:11px;color:#888;">${escapeHTML(cluster.pageRange)} · ${escapeHTML(String(cluster.memberCount))} concept${cluster.memberCount === 1 ? '' : 's'}</span>
+                ${breadcrumb}
+              </div>
+              <div style="margin-top:4px;font-size:12px;color:#333;">Rep: ${escapeHTML(cluster.representative.sourceSnippet.slice(0, 160))}${cluster.representative.sourceSnippet.length > 160 ? '…' : ''}</div>
+              ${warnHtml}
+              <details style="margin-top:6px;">
+                <summary style="cursor:pointer;font-size:11px;color:#555;">Members (${escapeHTML(String(cluster.memberCount))})</summary>
+                <div style="margin-top:4px;">${memberLines}</div>
+              </details>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+
+    previewEl.innerHTML = clusterCards;
+    updateMehlmanClusterSelectionStatus();
+
+    // Show draft section and generate button
+    const draftSection = document.getElementById('mehlman-draft-section');
+    if (draftSection) draftSection.style.display = '';
+    const generateBtn = document.getElementById('mehlman-generate-drafts-btn');
+    if (generateBtn) generateBtn.style.display = selectedIds.size > 0 ? '' : 'none';
+  }
+
+  function clusterAndPreviewMehlmanConcepts() {
+    const clusterSection = document.getElementById('mehlman-cluster-section');
+    const clusterStatus = document.getElementById('mehlman-cluster-status');
+
+    if (!_mehlmanImportPreview || !Array.isArray(_mehlmanImportPreview.concepts) || !_mehlmanImportPreview.concepts.length) {
+      if (clusterSection) clusterSection.style.display = '';
+      if (clusterStatus) clusterStatus.textContent = 'No concepts available. Extract concepts first.';
+      return;
+    }
+
+    if (clusterSection) clusterSection.style.display = '';
+    if (clusterStatus) clusterStatus.textContent = 'Clustering…';
+
+    setTimeout(() => {
+      const result = clusterMehlmanConcepts(_mehlmanImportPreview.concepts);
+      _mehlmanImportPreview.clusters = result.clusters;
+      _mehlmanImportPreview.clusterSelection = result.clusters.map(c => c.clusterId);
+      _mehlmanImportPreview.drafts = null;
+      renderMehlmanClusterPreview(result);
+    }, 0);
+  }
+
+  // ══ Mehlman v3: Deterministic Draft Scaffolds ══
+
+  function generateMehlmanDraftScaffolds(clusters, selectedIds) {
+    const selectedSet = new Set(selectedIds);
+    const drafts = [];
+    const dupWarnings = [];
+
+    clusters.forEach(cluster => {
+      if (!selectedSet.has(cluster.clusterId)) return;
+      const rep = cluster.representative;
+      const snippet = rep.sourceSnippet || '';
+      const headingStr = cluster.headingPath.join(' › ') || 'General';
+      const baseId = `mdraft-${cluster.clusterId}`;
+
+      // Determine which variant types apply to this cluster
+      const type = cluster.conceptType;
+      const variantTypes = ['recognition'];
+      variantTypes.push('application');
+      if (type === 'diagnostic-distinction') variantTypes.push('diagnostic-distinction');
+      if (type === 'management-rule') variantTypes.push('next-best-step');
+      if (type === 'mechanism' || type === 'risk-factor') variantTypes.push('mechanism-risk-factor');
+      if (type === 'contraindication-adverse-effect') variantTypes.push('management-exception');
+
+      variantTypes.forEach((variantType, variantIdx) => {
+        const draftId = `${baseId}-${variantType}`;
+
+        // Check for duplicate draftId
+        if (drafts.some(d => d.draftId === draftId)) {
+          dupWarnings.push(`Duplicate draftId skipped: ${draftId}`);
+          return;
+        }
+
+        let stemScaffold = '';
+        let teachingPoint = '';
+        const placeholderChoices = [
+          { label: 'A', text: '[Answer choice A — fill in]' },
+          { label: 'B', text: '[Answer choice B — fill in]' },
+          { label: 'C', text: '[Answer choice C — fill in]' },
+          { label: 'D', text: '[Answer choice D — fill in]' },
+          { label: 'E', text: '[Answer choice E — fill in]' }
+        ];
+        const placeholderRationales = { A: '[Rationale A]', B: '[Rationale B]', C: '[Rationale C]', D: '[Rationale D]', E: '[Rationale E]' };
+
+        if (variantType === 'recognition') {
+          stemScaffold = `A patient presents with [clinical scenario]. Which of the following best describes [key finding related to: ${snippet.slice(0, 120)}]?`;
+          teachingPoint = `Recognition: ${snippet.slice(0, 200)}`;
+        } else if (variantType === 'application') {
+          stemScaffold = `A [age]-year-old [gender] presents with [symptoms]. Based on the following principle — "${snippet.slice(0, 100)}" — what is the most appropriate [next step / diagnosis / explanation]?`;
+          teachingPoint = `Application: ${snippet.slice(0, 200)}`;
+        } else if (variantType === 'diagnostic-distinction') {
+          stemScaffold = `A patient presents with [shared feature]. Which of the following best distinguishes [condition A] from [condition B], given: "${snippet.slice(0, 100)}"?`;
+          teachingPoint = `Diagnostic distinction: ${snippet.slice(0, 200)}`;
+        } else if (variantType === 'next-best-step') {
+          stemScaffold = `A [age]-year-old presents with [clinical scenario]. Based on the management principle — "${snippet.slice(0, 100)}" — what is the next best step?`;
+          teachingPoint = `Management rule: ${snippet.slice(0, 200)}`;
+        } else if (variantType === 'mechanism-risk-factor') {
+          stemScaffold = `Which of the following best explains the mechanism or risk factor for [condition], given: "${snippet.slice(0, 100)}"?`;
+          teachingPoint = `Mechanism/risk factor: ${snippet.slice(0, 200)}`;
+        } else if (variantType === 'management-exception') {
+          stemScaffold = `A patient with [condition] is being considered for [treatment]. Which of the following represents a contraindication or adverse effect, per: "${snippet.slice(0, 100)}"?`;
+          teachingPoint = `Contraindication/adverse effect: ${snippet.slice(0, 200)}`;
+        }
+
+        const draftWarnings = ['draft scaffold only — requires AI refinement and expert review before use'];
+        if (cluster.warnings.length) cluster.warnings.forEach(w => { if (!draftWarnings.includes(w)) draftWarnings.push(w); });
+
+        drafts.push({
+          draftId,
+          clusterId: cluster.clusterId,
+          clusterIndex: cluster.clusterIndex,
+          variantType,
+          variantIndex: variantIdx,
+          headingPath: cluster.headingPath.slice(),
+          pageRange: cluster.pageRange,
+          conceptType: type,
+          stemScaffold,
+          choices: placeholderChoices,
+          correctAnswer: 'A',
+          teachingPoint,
+          rationales: Object.assign({}, placeholderRationales),
+          sourceBlockIds: cluster.sourceBlockIds.slice(),
+          sourceSnippet: snippet,
+          confidence: Math.max(0.1, Math.min(0.5, cluster.confidence * 0.6)),
+          needsReview: true,
+          warnings: draftWarnings
+        });
+      });
+    });
+
+    return { drafts, dupWarnings };
+  }
+
+  function renderMehlmanDraftPreview(drafts, dupWarnings) {
+    const previewEl = document.getElementById('mehlman-draft-preview');
+    const statusEl = document.getElementById('mehlman-draft-status');
+    const countLabel = document.getElementById('mehlman-draft-count-label');
+    if (!previewEl) return;
+
+    if (!drafts || !drafts.length) {
+      if (statusEl) statusEl.textContent = 'No drafts generated.';
+      previewEl.innerHTML = '<div class="notes-import-empty">No drafts generated.</div>';
+      return;
+    }
+
+    if (statusEl) {
+      const dupNote = dupWarnings && dupWarnings.length ? ` · ${dupWarnings.length} dedup warning(s)` : '';
+      statusEl.textContent = `${drafts.length} draft scaffold${drafts.length === 1 ? '' : 's'} generated. Preview only — no AI, no save.${dupNote}`;
+    }
+    if (countLabel) countLabel.textContent = `${drafts.length} scaffolds`;
+
+    const VARIANT_LABELS = {
+      'recognition': '🔎 Recognition',
+      'application': '⚙ Application',
+      'diagnostic-distinction': '🔍 Diagnostic Distinction',
+      'next-best-step': '💊 Next Best Step',
+      'mechanism-risk-factor': '⚙ Mechanism / Risk Factor',
+      'management-exception': '🚫 Management Exception'
+    };
+
+    const TYPE_COLORS = {
+      'high-yield-fact': '#2563eb',
+      'mechanism': '#7c3aed',
+      'risk-factor': '#d97706',
+      'diagnostic-distinction': '#0891b2',
+      'management-rule': '#059669',
+      'contraindication-adverse-effect': '#dc2626',
+      'exam-trap': '#c026d3',
+      'unknown': '#6b7280'
+    };
+
+    const draftCards = drafts.map(draft => {
+      const color = TYPE_COLORS[draft.conceptType] || '#6b7280';
+      const variantLabel = VARIANT_LABELS[draft.variantType] || draft.variantType;
+      const breadcrumb = draft.headingPath.length
+        ? `<div style="font-size:11px;color:#888;margin-bottom:4px;">${draft.headingPath.map(h => escapeHTML(h)).join(' › ')}</div>`
+        : '';
+      const choiceHtml = draft.choices.map(c =>
+        `<div style="font-size:12px;margin:2px 0;"><strong>${escapeHTML(c.label)}.</strong> ${escapeHTML(c.text)}</div>`
+      ).join('');
+      const warnHtml = draft.warnings.length
+        ? `<div style="color:#8a5a00;font-size:11px;margin-top:6px;">${draft.warnings.map(w => escapeHTML(w)).join(' · ')}</div>`
+        : '';
+      const sourceBox = `<div style="font-size:11px;color:#555;border-left:3px solid #e2e8f0;padding-left:8px;margin-top:6px;"><strong>Source:</strong> ${escapeHTML(draft.sourceSnippet.slice(0, 220))}${draft.sourceSnippet.length > 220 ? '…' : ''}</div>`;
+      return `
+        <details class="notes-draft-card" style="border-left:3px solid ${color};">
+          <summary class="notes-draft-summary">
+            <div class="notes-draft-title">
+              <span style="display:inline-block;background:${color};color:#fff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:3px;margin-right:4px;">${escapeHTML(draft.conceptType.toUpperCase().replace(/-/g, ' '))}</span>
+              ${escapeHTML(variantLabel)} · Cluster ${escapeHTML(String(draft.clusterIndex))} · ${escapeHTML(draft.pageRange)}
+            </div>
+            <div class="notes-draft-meta">Confidence: ${(draft.confidence * 100).toFixed(0)}% · Needs review</div>
+          </summary>
+          <div class="notes-draft-body">
+            ${breadcrumb}
+            <div style="margin-bottom:8px;">
+              <div style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;margin-bottom:4px;">Stem Scaffold</div>
+              <div style="font-size:13px;line-height:1.5;">${escapeHTML(draft.stemScaffold)}</div>
+            </div>
+            <div style="margin-bottom:8px;">
+              <div style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;margin-bottom:4px;">Choices</div>
+              ${choiceHtml}
+            </div>
+            <div style="margin-bottom:6px;">
+              <div style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;margin-bottom:2px;">Provisional Correct Answer</div>
+              <div style="font-size:12px;color:#059669;font-weight:600;">${escapeHTML(draft.correctAnswer)} — placeholder</div>
+            </div>
+            <div style="margin-bottom:6px;">
+              <div style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;margin-bottom:2px;">Teaching Point</div>
+              <div style="font-size:12px;">${escapeHTML(draft.teachingPoint)}</div>
+            </div>
+            ${sourceBox}
+            ${warnHtml}
+          </div>
+        </details>`;
+    }).join('');
+
+    previewEl.innerHTML = draftCards;
+  }
+
+  function previewMehlmanDrafts() {
+    const draftSection = document.getElementById('mehlman-draft-section');
+    const draftStatus = document.getElementById('mehlman-draft-status');
+
+    if (!_mehlmanImportPreview || !Array.isArray(_mehlmanImportPreview.clusters) || !_mehlmanImportPreview.clusters.length) {
+      if (draftSection) draftSection.style.display = '';
+      if (draftStatus) draftStatus.textContent = 'No clusters available. Cluster concepts first.';
+      return;
+    }
+
+    if (draftSection) draftSection.style.display = '';
+    if (draftStatus) draftStatus.textContent = 'Generating draft scaffolds…';
+
+    setTimeout(() => {
+      const selectedIds = getMehlmanSelectedClusterIds();
+      if (!selectedIds.length) {
+        if (draftStatus) draftStatus.textContent = 'No clusters selected. Select at least one cluster to generate drafts.';
+        const previewEl = document.getElementById('mehlman-draft-preview');
+        if (previewEl) previewEl.innerHTML = '<div class="notes-import-empty">No clusters selected.</div>';
+        return;
+      }
+      const { drafts, dupWarnings } = generateMehlmanDraftScaffolds(_mehlmanImportPreview.clusters, selectedIds);
+      _mehlmanImportPreview.drafts = drafts;
+      renderMehlmanDraftPreview(drafts, dupWarnings);
     }, 0);
   }
 
@@ -16211,6 +16790,11 @@ const App = (() => {
     clearMehlmanPdfImportPreview,
     previewMehlmanPdfImport,
     extractAndPreviewMehlmanConcepts,
+    clusterAndPreviewMehlmanConcepts,
+    toggleMehlmanClusterSelection,
+    selectAllMehlmanClusters,
+    deselectAllMehlmanClusters,
+    previewMehlmanDrafts,
     updateApprovedOmeDraftCreateTestButton,
     createTestFromApprovedOmeDrafts,
     exportApprovedOmeDraftsJson,
