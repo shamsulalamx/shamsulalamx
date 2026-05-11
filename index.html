@@ -2028,6 +2028,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
     <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
       <button type="button" class="btn-card" onclick="App.clearDivineTranscriptImportPreview()">Clear / Reset</button>
       <button type="button" class="btn-card" id="divine-clean-btn" style="display:none;" onclick="App.cleanAndPreviewDivineTranscript()">Clean Transcript</button>
+      <button type="button" class="btn-card" id="divine-segment-btn" style="display:none;" onclick="App.segmentAndPreviewDivineTranscript()">Segment Transcript</button>
       <button type="button" class="btn-card" onclick="App.closeDivineTranscriptImportPreview()">Close</button>
     </div>
     <div class="notes-import-section-title">Raw Transcript Preview</div>
@@ -2046,6 +2047,14 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
       <div id="divine-excluded-status" class="notes-import-summary" style="margin-bottom:6px;"></div>
       <div id="divine-excluded-preview" class="notes-draft-preview">
         <div class="notes-import-empty">No excluded segments.</div>
+      </div>
+    </div>
+    <div id="divine-segment-section" style="display:none;">
+      <div class="notes-import-section-title" style="margin-top:12px;">Segment Preview</div>
+      <div id="divine-segment-status" class="notes-import-summary" style="margin-bottom:6px;"></div>
+      <div id="divine-segment-summary" style="margin-bottom:8px;"></div>
+      <div id="divine-segment-preview" class="notes-draft-preview">
+        <div class="notes-import-empty">No segments yet. Run "Segment Transcript" after cleaning.</div>
       </div>
     </div>
   </div>
@@ -11286,12 +11295,17 @@ const App = (() => {
     const status = document.getElementById('divine-import-status');
     const preview = document.getElementById('divine-transcript-preview');
     const cleanBtn = document.getElementById('divine-clean-btn');
+    const segmentBtn = document.getElementById('divine-segment-btn');
     const cleanSection = document.getElementById('divine-clean-section');
     const cleanStatus = document.getElementById('divine-clean-status');
     const cleanSummary = document.getElementById('divine-clean-summary');
     const cleanedPreview = document.getElementById('divine-cleaned-preview');
     const excludedStatus = document.getElementById('divine-excluded-status');
     const excludedPreview = document.getElementById('divine-excluded-preview');
+    const segmentSection = document.getElementById('divine-segment-section');
+    const segmentStatus = document.getElementById('divine-segment-status');
+    const segmentSummary = document.getElementById('divine-segment-summary');
+    const segmentPreview = document.getElementById('divine-segment-preview');
     if (fileInput) fileInput.value = '';
     if (pasteArea) pasteArea.value = '';
     if (episodeTitle) episodeTitle.value = '';
@@ -11299,12 +11313,17 @@ const App = (() => {
     if (status) status.textContent = 'Choose a .txt, .md, or .txt.md file or paste a transcript to begin.';
     if (preview) preview.innerHTML = '<div class="notes-import-empty">No transcript loaded yet.</div>';
     if (cleanBtn) cleanBtn.style.display = 'none';
+    if (segmentBtn) segmentBtn.style.display = 'none';
     if (cleanSection) cleanSection.style.display = 'none';
     if (cleanStatus) cleanStatus.textContent = '';
     if (cleanSummary) cleanSummary.innerHTML = '';
     if (cleanedPreview) cleanedPreview.innerHTML = '<div class="notes-import-empty">No cleaned transcript yet.</div>';
     if (excludedStatus) excludedStatus.textContent = '';
     if (excludedPreview) excludedPreview.innerHTML = '<div class="notes-import-empty">No excluded segments.</div>';
+    if (segmentSection) segmentSection.style.display = 'none';
+    if (segmentStatus) segmentStatus.textContent = '';
+    if (segmentSummary) segmentSummary.innerHTML = '';
+    if (segmentPreview) segmentPreview.innerHTML = '<div class="notes-import-empty">No segments yet. Run "Segment Transcript" after cleaning.</div>';
   }
 
   function _divineRenderRawPreview(text, sourceName) {
@@ -11645,6 +11664,10 @@ const App = (() => {
         : '';
       if (excludedPreview) excludedPreview.innerHTML = cards + truncMsg;
     }
+
+    // Reveal segment button now that a clean result is available
+    const segmentBtn = document.getElementById('divine-segment-btn');
+    if (segmentBtn) segmentBtn.style.display = '';
   }
 
   function cleanAndPreviewDivineTranscript() {
@@ -11665,6 +11688,282 @@ const App = (() => {
       const result = cleanDivineTranscript(_divineImportPreview.rawText);
       _divineImportPreview.cleanResult = result;
       renderDivineCleanedPreview(result);
+    }, 0);
+  }
+
+  // ── Divine segmentation pipeline ──────────────────────────────────────────
+  // Segments the cleaned transcript (cleanedLines from cleanDivineTranscript)
+  // into reviewable blocks for later concept extraction.
+  // No AI, no medical inference. Classification is deterministic keyword matching only.
+
+  const DIVINE_SEGMENT_TYPES = [
+    'teaching-point', 'management-rule', 'diagnostic-distinction',
+    'mechanism', 'risk-factor', 'exam-trap', 'conversation', 'unknown'
+  ];
+
+  // Keyword patterns checked in priority order. First match wins.
+  const DIVINE_TYPE_PATTERNS = [
+    {
+      type: 'teaching-point',
+      re: /\b(?:key\s+point|high[\s-]yield|pearl|take\s*away|remember(?:\s+that)?|classic(?:\s+presentation)?|must\s+know|important(?:\s+to\s+know)?|bottom\s+line|the\s+point\s+is)\b/i
+    },
+    {
+      type: 'diagnostic-distinction',
+      re: /\b(?:distinguish|differentiat|versus|\bvs\.?\b|compared\s+to|unlike|contrast|differential|rule\s+out|as\s+opposed\s+to)\b/i
+    },
+    {
+      type: 'management-rule',
+      re: /\b(?:treat(?:ment|ing)?|manag(?:e|ement|ing)|therap(?:y|ies)|first[\s-]line|administer|dosing?|drug\s+of\s+choice|medication|surgical|intervention|prescri(?:be|ption)|antibiotic|steroid)\b/i
+    },
+    {
+      type: 'mechanism',
+      re: /\b(?:mechanism|pathophys|pathogenesis|leads?\s+to|results?\s+in|via\b|receptor|enzyme|channel|mutation|signaling|pathway|inhibit|activat|upregulat|downregulat)\b/i
+    },
+    {
+      type: 'risk-factor',
+      re: /\b(?:risk\s+factor|predisposed|associated\s+with|increases?\s+(?:risk|the\s+risk)|decreases?\s+(?:risk|the\s+risk)|prevalence|incidence|epidemiology|more\s+common|less\s+common)\b/i
+    },
+    {
+      type: 'exam-trap',
+      re: /\b(?:trap|trick|commonly\s+tested|often\s+missed|boards|step\s+(?:1|2|one|two)|don'?t\s+(?:forget|miss|confuse)|frequently\s+tested|testable)\b/i
+    },
+    {
+      type: 'conversation',
+      re: /\b(?:so\s+(?:today|let'?s|we'?re|I'?m|now)|let'?s\s+(?:talk|discuss|go|start)|I\s+want\s+to|we'?re\s+going\s+to|moving\s+on|next\s+(?:topic|concept|section|thing))\b/i
+    }
+  ];
+
+  // Parse a timestamp string (e.g. "[01:23]", "00:01:23") to total seconds.
+  function _divineParseTimestampSeconds(ts) {
+    if (!ts) return null;
+    const clean = ts.replace(/[\[\]\(\)]/g, '').trim();
+    const parts = clean.split(':').map(Number);
+    if (parts.some(isNaN) || parts.length < 2) return null;
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  }
+
+  // A line is "heading-like" if it is short, all-caps, ends in a colon,
+  // looks like a markdown heading, or looks like a numbered section.
+  function _divineIsHeadingLine(text) {
+    if (!text || text.length < 4) return false;
+    if (/^[A-Z][A-Z\s\-\/]{3,}$/.test(text) && text.split(/\s+/).length <= 8) return true;
+    if (/:\s*$/.test(text) && text.split(/\s+/).length <= 10) return true;
+    if (/^#{1,3}\s+/.test(text)) return true;
+    if (/^\d+[\.\)]\s+[A-Z]/.test(text) && text.split(/\s+/).length <= 12) return true;
+    return false;
+  }
+
+  // Deterministic keyword-only classifier. Does not infer medical facts.
+  // Returns segmentType, confidence (0–1), and any warnings.
+  function _divineClassifySegment(text) {
+    if (!text || text.trim().length < 10) {
+      return { segmentType: 'unknown', confidence: 0.2, warnings: ['Segment too short to classify reliably'] };
+    }
+    for (const { type, re } of DIVINE_TYPE_PATTERNS) {
+      if (re.test(text)) {
+        const matchCount = (text.match(new RegExp(re.source, 'gi')) || []).length;
+        const confidence = Math.round(Math.min(0.90, 0.60 + matchCount * 0.08) * 100) / 100;
+        return { segmentType: type, confidence, warnings: [] };
+      }
+    }
+    return { segmentType: 'unknown', confidence: 0.30, warnings: ['No clear classification pattern — manual review recommended'] };
+  }
+
+  // Soft word-count cap per segment before a forced boundary.
+  const DIVINE_SEGMENT_MAX_WORDS = 300;
+  // Minimum timestamp gap (seconds) that counts as a segment boundary.
+  const DIVINE_SEGMENT_TS_GAP_S = 45;
+
+  // Segment the cleaned transcript into logical blocks.
+  // Input: cleanedLines array from cleanDivineTranscript (never contains excluded lines).
+  // Returns: array of segment objects.
+  function segmentDivineTranscript(cleanedLines) {
+    if (!Array.isArray(cleanedLines) || cleanedLines.length === 0) return [];
+
+    const segments = [];
+    let segIdx = 0;
+    let bucket = [];      // cleanedLine records accumulating into the current segment
+    let bucketWords = 0;
+    let prevTsSeconds = null;
+
+    function flushBucket() {
+      const nonBlank = bucket.filter(l => l.text && l.text.trim());
+      if (!nonBlank.length) { bucket = []; bucketWords = 0; return; }
+
+      const textRaw = bucket.map(l => l.text).join('\n').trim();
+      const textClean = nonBlank.map(l => l.text).join(' ').replace(/\s{2,}/g, ' ').trim();
+      const firstLine = nonBlank[0];
+      const lastLine  = nonBlank[nonBlank.length - 1];
+      const timestamps = nonBlank.map(l => l.timestamp).filter(Boolean);
+      const timestampRange = timestamps.length
+        ? { start: timestamps[0], end: timestamps[timestamps.length - 1] }
+        : null;
+
+      segIdx++;
+      const segmentId = `divine-seg-${String(segIdx).padStart(4, '0')}`;
+      const { segmentType, confidence, warnings } = _divineClassifySegment(textClean);
+
+      segments.push({
+        segmentId,
+        textRaw,
+        textClean,
+        originalLineRange: [firstLine.originalLine, lastLine.originalLine],
+        cleanedLineRange: [firstLine.cleanedLineNumber, lastLine.cleanedLineNumber],
+        timestampRange,
+        segmentType,
+        confidence,
+        warnings
+      });
+
+      bucket = [];
+      bucketWords = 0;
+    }
+
+    for (const line of cleanedLines) {
+      const text = line.text || '';
+      const trimmed = text.trim();
+      const isBlank = !trimmed;
+      const wordCount = isBlank ? 0 : trimmed.split(/\s+/).filter(Boolean).length;
+
+      // Timestamp boundary: if the gap to the previous timestamp is >= threshold, flush.
+      if (line.timestamp) {
+        const tsSeconds = _divineParseTimestampSeconds(line.timestamp);
+        if (tsSeconds !== null && prevTsSeconds !== null) {
+          if (tsSeconds - prevTsSeconds >= DIVINE_SEGMENT_TS_GAP_S && bucket.length > 0) {
+            flushBucket();
+          }
+        }
+        if (tsSeconds !== null) prevTsSeconds = tsSeconds;
+      }
+
+      // Heading boundary: flush before adding the heading line.
+      if (!isBlank && _divineIsHeadingLine(trimmed) && bucket.length > 0) {
+        flushBucket();
+      }
+
+      // Word-count soft cap: flush before adding a line that would exceed the limit.
+      if (!isBlank && bucketWords + wordCount > DIVINE_SEGMENT_MAX_WORDS && bucket.length > 0) {
+        flushBucket();
+      }
+
+      bucket.push(line);
+      if (!isBlank) bucketWords += wordCount;
+
+      // Two consecutive blank lines = paragraph break → flush.
+      const tail = bucket.slice(-2);
+      if (tail.length === 2 && tail.every(l => !(l.text && l.text.trim()))) {
+        flushBucket();
+      }
+    }
+
+    // Flush any remaining lines.
+    flushBucket();
+
+    return segments;
+  }
+
+  function renderDivineSegmentPreview(segments) {
+    const segSection = document.getElementById('divine-segment-section');
+    const segStatus  = document.getElementById('divine-segment-status');
+    const segSummary = document.getElementById('divine-segment-summary');
+    const segPreview = document.getElementById('divine-segment-preview');
+    if (!segSection) return;
+
+    segSection.style.display = '';
+
+    if (!segments || segments.length === 0) {
+      if (segStatus) segStatus.textContent = 'No segments produced. Transcript may be too short or empty after cleaning.';
+      if (segSummary) segSummary.innerHTML = '';
+      if (segPreview) segPreview.innerHTML = '<div class="notes-import-empty">No segments to show.</div>';
+      return;
+    }
+
+    // Count by type
+    const typeCounts = {};
+    for (const t of DIVINE_SEGMENT_TYPES) typeCounts[t] = 0;
+    for (const seg of segments) {
+      typeCounts[seg.segmentType] = (typeCounts[seg.segmentType] || 0) + 1;
+    }
+
+    if (segStatus) {
+      segStatus.textContent = `${segments.length} segment${segments.length === 1 ? '' : 's'} produced. Review types and boundaries below.`;
+    }
+
+    // Type breakdown table
+    const typeRows = DIVINE_SEGMENT_TYPES
+      .filter(t => typeCounts[t] > 0)
+      .map(t => `<tr><td style="padding:2px 14px 2px 0;font-size:12px;color:#555;">${escapeHTML(t)}</td><td style="font-size:12px;font-weight:600;">${typeCounts[t]}</td></tr>`)
+      .join('');
+    if (segSummary) segSummary.innerHTML = `<table style="border-collapse:collapse;margin-bottom:6px;">${typeRows}</table>`;
+
+    // Color per type
+    const TYPE_COLORS = {
+      'teaching-point':        '#2563eb',
+      'management-rule':       '#059669',
+      'diagnostic-distinction':'#7c3aed',
+      'mechanism':             '#b45309',
+      'risk-factor':           '#db2777',
+      'exam-trap':             '#dc2626',
+      'conversation':          '#6b7280',
+      'unknown':               '#94a3b8'
+    };
+
+    const PREVIEW_CAP = 60;
+    const cards = segments.slice(0, PREVIEW_CAP).map(seg => {
+      const color = TYPE_COLORS[seg.segmentType] || '#94a3b8';
+      const snippet = seg.textClean.slice(0, 220);
+      const lineRange = `Lines ${seg.originalLineRange[0]}–${seg.originalLineRange[1]}`;
+      const tsLabel = seg.timestampRange
+        ? ` · ${escapeHTML(seg.timestampRange.start)}${seg.timestampRange.end !== seg.timestampRange.start ? ' → ' + escapeHTML(seg.timestampRange.end) : ''}`
+        : '';
+      const conf = `${Math.round(seg.confidence * 100)}%`;
+      const warnHtml = seg.warnings.length
+        ? `<div style="color:#92400e;font-size:10px;margin-top:2px;">⚠ ${escapeHTML(seg.warnings[0])}</div>`
+        : '';
+      return `<div style="border:1px solid #e2e8f0;border-left:3px solid ${color};border-radius:4px;padding:7px 9px;margin-bottom:5px;font-size:12px;">
+        <div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin-bottom:3px;">
+          <span style="color:#94a3b8;font-size:10px;">${escapeHTML(seg.segmentId)}</span>
+          <span style="color:#94a3b8;font-size:10px;">${escapeHTML(lineRange)}${tsLabel}</span>
+          <span style="background:${color};color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;">${escapeHTML(seg.segmentType)}</span>
+          <span style="color:#6b7280;font-size:10px;">confidence ${conf}</span>
+        </div>
+        <div style="color:#374151;">${escapeHTML(snippet)}${seg.textClean.length > 220 ? '…' : ''}</div>
+        ${warnHtml}
+      </div>`;
+    }).join('');
+
+    const truncMsg = segments.length > PREVIEW_CAP
+      ? `<div class="notes-import-empty" style="margin-top:6px;">…and ${segments.length - PREVIEW_CAP} more segments (all stored, first ${PREVIEW_CAP} shown)</div>`
+      : '';
+    if (segPreview) segPreview.innerHTML = cards + truncMsg;
+  }
+
+  function segmentAndPreviewDivineTranscript() {
+    const segStatus  = document.getElementById('divine-segment-status');
+    const segSection = document.getElementById('divine-segment-section');
+
+    if (!_divineImportPreview || !_divineImportPreview.cleanResult) {
+      if (segSection) segSection.style.display = '';
+      if (segStatus) segStatus.textContent = 'Clean the transcript first before segmenting.';
+      return;
+    }
+
+    const { cleanedLines } = _divineImportPreview.cleanResult;
+    if (!Array.isArray(cleanedLines) || cleanedLines.length === 0) {
+      if (segSection) segSection.style.display = '';
+      if (segStatus) segStatus.textContent = 'No cleaned lines available to segment.';
+      return;
+    }
+
+    if (segSection) segSection.style.display = '';
+    if (segStatus) segStatus.textContent = 'Segmenting…';
+
+    // Yield one frame so the status label renders before the synchronous loop.
+    setTimeout(() => {
+      const segments = segmentDivineTranscript(cleanedLines);
+      _divineImportPreview.segments = segments;
+      renderDivineSegmentPreview(segments);
     }, 0);
   }
 
@@ -17825,6 +18124,7 @@ const App = (() => {
     loadDivineTranscriptFile,
     loadDivineTranscriptPaste,
     cleanAndPreviewDivineTranscript,
+    segmentAndPreviewDivineTranscript,
     updateApprovedOmeDraftCreateTestButton,
     createTestFromApprovedOmeDrafts,
     exportApprovedOmeDraftsJson,
