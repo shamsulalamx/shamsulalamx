@@ -1952,11 +1952,47 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
       <div id="mehlman-draft-status" class="notes-import-summary" style="margin-bottom:6px;"></div>
       <div style="margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
         <button type="button" class="btn-card" id="mehlman-generate-drafts-btn" style="display:none;" onclick="App.previewMehlmanDrafts()">Generate Draft Preview</button>
+        <button type="button" class="btn-card" id="mehlman-approve-all-btn" style="display:none;" onclick="App.approveAllMehlmanDrafts()">Approve All</button>
+        <button type="button" class="btn-card" id="mehlman-reject-all-btn" style="display:none;" onclick="App.rejectAllMehlmanDrafts()">Reject All</button>
         <span id="mehlman-draft-count-label" style="font-size:12px;color:#555;"></span>
       </div>
+      <div id="mehlman-review-summary" style="display:none;margin-bottom:8px;" class="notes-import-summary"></div>
       <div id="mehlman-draft-preview" class="notes-draft-preview">
         <div class="notes-import-empty">No drafts generated yet.</div>
       </div>
+    </div>
+    <div id="mehlman-quiz-object-section" style="display:none;">
+      <div class="notes-import-section-title" style="margin-top:12px;">Mehlman Quiz Object Preview</div>
+      <div id="mehlman-quiz-object-status" class="notes-import-summary">Approve Mehlman drafts to preview internal quiz-question objects. Nothing is saved.</div>
+      <div id="mehlman-quiz-object-preview" class="notes-draft-preview">
+        <div class="notes-import-empty">No approved Mehlman drafts converted.</div>
+      </div>
+    </div>
+    <div id="mehlman-save-section" style="display:none;">
+      <div class="notes-import-section-title" style="margin-top:12px;">Save Approved Mehlman Drafts</div>
+      <div class="form-group">
+        <label class="form-label">Mehlman Subfolder</label>
+        <select class="form-input" id="mehlman-create-test-target" onchange="App.updateApprovedMehlmanDraftCreateTestButton()">
+          <option value="">Choose a Mehlman subfolder</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Test name</label>
+        <input type="text" class="form-input" id="mehlman-create-test-name" value="Mehlman Drafts Test" oninput="App.updateApprovedMehlmanDraftCreateTestButton()">
+      </div>
+      <label class="check-row" style="margin:8px 0 0;">
+        <input type="checkbox" id="mehlman-create-test-reviewed" onchange="App.updateApprovedMehlmanDraftCreateTestButton()">
+        <span>I reviewed and approve these quiz objects for test creation.</span>
+      </label>
+      <div id="mehlman-create-test-diagnostics" class="notes-import-summary">Save readiness will appear after approved drafts are available.</div>
+      <div id="mehlman-create-test-error" class="notes-import-summary" style="display:none;color:#8a5a00;"></div>
+      <div class="modal-actions" style="justify-content:flex-start;margin-top:10px;">
+        <button type="button" class="btn-modal primary" id="mehlman-create-test-approved" onclick="App.createTestFromApprovedMehlmanDrafts()" disabled>Create Test from Approved Mehlman Drafts</button>
+      </div>
+    </div>
+    <div class="modal-actions" style="margin-top:12px;">
+      <button type="button" class="btn-modal" onclick="App.clearMehlmanPdfImportPreview()">Clear</button>
+      <button type="button" class="btn-modal primary" onclick="App.closeMehlmanPdfImportPreview()">Done</button>
     </div>
   </div>
 </div>
@@ -9566,6 +9602,32 @@ const App = (() => {
     if (draftCountLabel) draftCountLabel.textContent = '';
     if (draftPreview) draftPreview.innerHTML = '<div class="notes-import-empty">No drafts generated yet.</div>';
     if (generateDraftsBtn) generateDraftsBtn.style.display = 'none';
+    const approveAllBtn = document.getElementById('mehlman-approve-all-btn');
+    const rejectAllBtn = document.getElementById('mehlman-reject-all-btn');
+    const reviewSummary = document.getElementById('mehlman-review-summary');
+    const quizObjectSection = document.getElementById('mehlman-quiz-object-section');
+    const quizObjectStatus = document.getElementById('mehlman-quiz-object-status');
+    const quizObjectPreview = document.getElementById('mehlman-quiz-object-preview');
+    const saveSection = document.getElementById('mehlman-save-section');
+    const saveDiagnostics = document.getElementById('mehlman-create-test-diagnostics');
+    const saveError = document.getElementById('mehlman-create-test-error');
+    const saveBtn = document.getElementById('mehlman-create-test-approved');
+    const saveTarget = document.getElementById('mehlman-create-test-target');
+    const saveNameInput = document.getElementById('mehlman-create-test-name');
+    const saveReviewedCb = document.getElementById('mehlman-create-test-reviewed');
+    if (approveAllBtn) approveAllBtn.style.display = 'none';
+    if (rejectAllBtn) rejectAllBtn.style.display = 'none';
+    if (reviewSummary) { reviewSummary.style.display = 'none'; reviewSummary.innerHTML = ''; }
+    if (quizObjectSection) quizObjectSection.style.display = 'none';
+    if (quizObjectStatus) quizObjectStatus.textContent = 'Approve Mehlman drafts to preview internal quiz-question objects. Nothing is saved.';
+    if (quizObjectPreview) quizObjectPreview.innerHTML = '<div class="notes-import-empty">No approved Mehlman drafts converted.</div>';
+    if (saveSection) saveSection.style.display = 'none';
+    if (saveDiagnostics) saveDiagnostics.textContent = 'Save readiness will appear after approved drafts are available.';
+    if (saveError) { saveError.style.display = 'none'; saveError.textContent = ''; }
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Create Test from Approved Mehlman Drafts'; }
+    if (saveTarget) saveTarget.innerHTML = '<option value="">Choose a Mehlman subfolder</option>';
+    if (saveNameInput) saveNameInput.value = 'Mehlman Drafts Test';
+    if (saveReviewedCb) saveReviewedCb.checked = false;
   }
 
   async function calibrateMehlmanFontThreshold(pdf) {
@@ -10216,7 +10278,10 @@ const App = (() => {
           headingPath: concept.headingPath || [],
           pageNumber: concept.pageNumber || 0,
           blockOrder: concept.blockOrder || 0,
-          sourceBlockIds: concept.sourceBlockIds || [],
+          // concept extraction stores the field as sourceBlockId (singular); normalise to array here
+          sourceBlockIds: Array.isArray(concept.sourceBlockIds) && concept.sourceBlockIds.length
+            ? concept.sourceBlockIds
+            : concept.sourceBlockId ? [concept.sourceBlockId] : [],
           confidence: concept.confidence || 0.5,
           warnings: (concept.warnings || []).slice(),
           isCollapsed: collapseFlags[idx],
@@ -10509,6 +10574,14 @@ const App = (() => {
         const draftWarnings = ['draft scaffold only — requires AI refinement and expert review before use'];
         if (cluster.warnings.length) cluster.warnings.forEach(w => { if (!draftWarnings.includes(w)) draftWarnings.push(w); });
 
+        // Narrow guard: skip this draft if the cluster has no real source block IDs.
+        // This protects validation downstream without fabricating IDs.
+        const resolvedBlockIds = Array.isArray(cluster.sourceBlockIds) ? cluster.sourceBlockIds.filter(id => typeof id === 'string' && id.trim().length > 0) : [];
+        if (!resolvedBlockIds.length) {
+          dupWarnings.push(`Skipped draft ${draftId}: cluster ${cluster.clusterId} has no source block IDs — cannot generate valid quiz-object provenance.`);
+          return;
+        }
+
         drafts.push({
           draftId,
           clusterId: cluster.clusterId,
@@ -10523,7 +10596,7 @@ const App = (() => {
           correctAnswer: 'A',
           teachingPoint,
           rationales: Object.assign({}, placeholderRationales),
-          sourceBlockIds: cluster.sourceBlockIds.slice(),
+          sourceBlockIds: resolvedBlockIds,
           sourceSnippet: snippet,
           confidence: Math.max(0.1, Math.min(0.5, cluster.confidence * 0.6)),
           needsReview: true,
@@ -10573,9 +10646,26 @@ const App = (() => {
       'unknown': '#6b7280'
     };
 
+    // Initialise reviewStatus for any new drafts (preserve existing status)
+    if (_mehlmanImportPreview) {
+      if (!_mehlmanImportPreview.reviewStatus || typeof _mehlmanImportPreview.reviewStatus !== 'object') {
+        _mehlmanImportPreview.reviewStatus = {};
+      }
+      drafts.forEach(draft => {
+        if (!Object.prototype.hasOwnProperty.call(_mehlmanImportPreview.reviewStatus, draft.draftId)) {
+          _mehlmanImportPreview.reviewStatus[draft.draftId] = 'pending';
+        }
+      });
+    }
+
+    const reviewStatus = (_mehlmanImportPreview && _mehlmanImportPreview.reviewStatus) ? _mehlmanImportPreview.reviewStatus : {};
+
     const draftCards = drafts.map(draft => {
       const color = TYPE_COLORS[draft.conceptType] || '#6b7280';
       const variantLabel = VARIANT_LABELS[draft.variantType] || draft.variantType;
+      const currentStatus = reviewStatus[draft.draftId] || 'pending';
+      const statusColor = currentStatus === 'approved' ? '#059669' : currentStatus === 'rejected' ? '#dc2626' : '#94a3b8';
+      const statusBadge = `<span style="display:inline-block;background:${statusColor};color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:3px;margin-left:4px;">${escapeHTML(currentStatus.toUpperCase())}</span>`;
       const breadcrumb = draft.headingPath.length
         ? `<div style="font-size:11px;color:#888;margin-bottom:4px;">${draft.headingPath.map(h => escapeHTML(h)).join(' › ')}</div>`
         : '';
@@ -10586,17 +10676,24 @@ const App = (() => {
         ? `<div style="color:#8a5a00;font-size:11px;margin-top:6px;">${draft.warnings.map(w => escapeHTML(w)).join(' · ')}</div>`
         : '';
       const sourceBox = `<div style="font-size:11px;color:#555;border-left:3px solid #e2e8f0;padding-left:8px;margin-top:6px;"><strong>Source:</strong> ${escapeHTML(draft.sourceSnippet.slice(0, 220))}${draft.sourceSnippet.length > 220 ? '…' : ''}</div>`;
+      const reviewBorderColor = currentStatus === 'approved' ? '#059669' : currentStatus === 'rejected' ? '#dc2626' : color;
       return `
-        <details class="notes-draft-card" style="border-left:3px solid ${color};">
+        <details class="notes-draft-card" style="border-left:3px solid ${reviewBorderColor};">
           <summary class="notes-draft-summary">
             <div class="notes-draft-title">
               <span style="display:inline-block;background:${color};color:#fff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:3px;margin-right:4px;">${escapeHTML(draft.conceptType.toUpperCase().replace(/-/g, ' '))}</span>
               ${escapeHTML(variantLabel)} · Cluster ${escapeHTML(String(draft.clusterIndex))} · ${escapeHTML(draft.pageRange)}
+              ${statusBadge}
             </div>
-            <div class="notes-draft-meta">Confidence: ${(draft.confidence * 100).toFixed(0)}% · Needs review</div>
+            <div class="notes-draft-meta">Confidence: ${(draft.confidence * 100).toFixed(0)}%</div>
           </summary>
           <div class="notes-draft-body">
             ${breadcrumb}
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center;">
+              <button type="button" class="btn-card" onclick="App.setMehlmanDraftReviewStatus('${escapeHTML(draft.draftId)}','approved')" ${currentStatus === 'approved' ? 'disabled' : ''}>Approve</button>
+              <button type="button" class="btn-card danger" onclick="App.setMehlmanDraftReviewStatus('${escapeHTML(draft.draftId)}','rejected')" ${currentStatus === 'rejected' ? 'disabled' : ''}>Reject</button>
+              <button type="button" class="btn-card" onclick="App.setMehlmanDraftReviewStatus('${escapeHTML(draft.draftId)}','pending')" ${currentStatus === 'pending' ? 'disabled' : ''}>Reset</button>
+            </div>
             <div style="margin-bottom:8px;">
               <div style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;margin-bottom:4px;">Stem Scaffold</div>
               <div style="font-size:13px;line-height:1.5;">${escapeHTML(draft.stemScaffold)}</div>
@@ -10620,6 +10717,23 @@ const App = (() => {
     }).join('');
 
     previewEl.innerHTML = draftCards;
+
+    // Show bulk controls now that drafts exist
+    const approveAllBtn = document.getElementById('mehlman-approve-all-btn');
+    const rejectAllBtn = document.getElementById('mehlman-reject-all-btn');
+    if (approveAllBtn) approveAllBtn.style.display = '';
+    if (rejectAllBtn) rejectAllBtn.style.display = '';
+
+    // Reveal quiz-object and save sections
+    const quizSection = document.getElementById('mehlman-quiz-object-section');
+    const saveSection = document.getElementById('mehlman-save-section');
+    if (quizSection) quizSection.style.display = '';
+    if (saveSection) saveSection.style.display = '';
+
+    renderMehlmanReviewSummary();
+    renderMehlmanSaveTargetSelector(false);
+    renderMehlmanQuizObjectPreview();
+    updateApprovedMehlmanDraftCreateTestButton();
   }
 
   function previewMehlmanDrafts() {
@@ -10645,8 +10759,448 @@ const App = (() => {
       }
       const { drafts, dupWarnings } = generateMehlmanDraftScaffolds(_mehlmanImportPreview.clusters, selectedIds);
       _mehlmanImportPreview.drafts = drafts;
+      // Reset review status when drafts are regenerated
+      _mehlmanImportPreview.reviewStatus = {};
       renderMehlmanDraftPreview(drafts, dupWarnings);
     }, 0);
+  }
+
+  // ══ Mehlman v4: Review Controls ══
+
+  function getMehlmanDraftReviewStatusSummary() {
+    const reviewStatus = (_mehlmanImportPreview && _mehlmanImportPreview.reviewStatus) ? _mehlmanImportPreview.reviewStatus : {};
+    return Object.values(reviewStatus).reduce((counts, status) => {
+      counts[status] = (counts[status] || 0) + 1;
+      return counts;
+    }, { pending: 0, approved: 0, rejected: 0 });
+  }
+
+  function renderMehlmanReviewSummary() {
+    const el = document.getElementById('mehlman-review-summary');
+    if (!el) return;
+    const counts = getMehlmanDraftReviewStatusSummary();
+    const total = (counts.pending || 0) + (counts.approved || 0) + (counts.rejected || 0);
+    if (!total) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    el.style.display = '';
+    el.innerHTML = [
+      `<strong>Review summary:</strong>`,
+      `<span style="color:#94a3b8;">Pending: <strong>${counts.pending || 0}</strong></span>`,
+      `<span style="color:#059669;">Approved: <strong>${counts.approved || 0}</strong></span>`,
+      `<span style="color:#dc2626;">Rejected: <strong>${counts.rejected || 0}</strong></span>`,
+      `<span>Total: <strong>${total}</strong></span>`
+    ].join(' · ');
+  }
+
+  function setMehlmanDraftReviewStatus(draftId, status) {
+    if (!draftId || !['pending', 'approved', 'rejected'].includes(status)) return;
+    if (!_mehlmanImportPreview) return;
+    if (!_mehlmanImportPreview.reviewStatus || typeof _mehlmanImportPreview.reviewStatus !== 'object') {
+      _mehlmanImportPreview.reviewStatus = {};
+    }
+    _mehlmanImportPreview.reviewStatus[draftId] = status;
+    // Re-render drafts (preserving review state), summary, quiz preview, and save button
+    const drafts = Array.isArray(_mehlmanImportPreview.drafts) ? _mehlmanImportPreview.drafts : [];
+    renderMehlmanDraftPreview(drafts, []);
+  }
+
+  function approveAllMehlmanDrafts() {
+    if (!_mehlmanImportPreview) return;
+    const drafts = Array.isArray(_mehlmanImportPreview.drafts) ? _mehlmanImportPreview.drafts : [];
+    if (!drafts.length) return;
+    if (!_mehlmanImportPreview.reviewStatus || typeof _mehlmanImportPreview.reviewStatus !== 'object') {
+      _mehlmanImportPreview.reviewStatus = {};
+    }
+    drafts.forEach(draft => { _mehlmanImportPreview.reviewStatus[draft.draftId] = 'approved'; });
+    renderMehlmanDraftPreview(drafts, []);
+  }
+
+  function rejectAllMehlmanDrafts() {
+    if (!_mehlmanImportPreview) return;
+    const drafts = Array.isArray(_mehlmanImportPreview.drafts) ? _mehlmanImportPreview.drafts : [];
+    if (!drafts.length) return;
+    if (!_mehlmanImportPreview.reviewStatus || typeof _mehlmanImportPreview.reviewStatus !== 'object') {
+      _mehlmanImportPreview.reviewStatus = {};
+    }
+    drafts.forEach(draft => { _mehlmanImportPreview.reviewStatus[draft.draftId] = 'rejected'; });
+    renderMehlmanDraftPreview(drafts, []);
+  }
+
+  function getApprovedMehlmanDrafts() {
+    const drafts = Array.isArray(_mehlmanImportPreview?.drafts) ? _mehlmanImportPreview.drafts : [];
+    const reviewStatus = (_mehlmanImportPreview && _mehlmanImportPreview.reviewStatus) ? _mehlmanImportPreview.reviewStatus : {};
+    return drafts.filter(draft => reviewStatus[draft.draftId] === 'approved');
+  }
+
+  // ══ Mehlman v4: Quiz-Object Preview ══
+
+  function buildMehlmanQuizObjectExplanation(draft) {
+    const ratParts = ['A', 'B', 'C', 'D', 'E'].map(label => {
+      const rationale = (draft.rationales && draft.rationales[label]) ? draft.rationales[label] : '[Rationale placeholder]';
+      return `${label}: ${rationale}`;
+    }).join('\n');
+    return [
+      draft.teachingPoint || '',
+      draft.stemScaffold ? `Stem scaffold: ${draft.stemScaffold}` : '',
+      `Choice rationales:\n${ratParts}`
+    ].filter(Boolean).join('\n\n').trim();
+  }
+
+  function convertApprovedMehlmanDraftToQuizObject(draft, idx) {
+    const sourceName = (_mehlmanImportPreview && _mehlmanImportPreview.sourceName) ? _mehlmanImportPreview.sourceName : (draft.sourceName || '');
+    const sourceHash = (_mehlmanImportPreview && _mehlmanImportPreview.sourceHash) ? _mehlmanImportPreview.sourceHash : (draft.sourceHash || '');
+
+    const quizQuestion = {
+      n: idx + 1,
+      sourceQuestionNumber: idx + 1,
+      generatedQuizQuestionNumber: idx + 1,
+      t: draft.stemScaffold || '',
+      o: Array.isArray(draft.choices)
+        ? draft.choices.map(c => ({ l: c.label, t: c.text }))
+        : [],
+      c: draft.correctAnswer || 'A',
+      explanation: buildMehlmanQuizObjectExplanation(draft),
+      tags: ['Mehlman', 'Preview', draft.variantType || 'draft', draft.conceptType || 'unknown'],
+      images: [],
+      parseConfidence: String(Math.round((draft.confidence || 0) * 100)) + '%',
+      parseWarnings: Array.isArray(draft.warnings) ? draft.warnings.slice() : []
+    };
+
+    const provenance = {
+      sourceType: 'mehlman-pdf',
+      sourceName,
+      sourceHash,
+      draftMethod: 'mehlman-deterministic-scaffold-v1',
+      draftId: draft.draftId || '',
+      clusterId: draft.clusterId || '',
+      clusterIndex: draft.clusterIndex ?? null,
+      conceptType: draft.conceptType || '',
+      variantType: draft.variantType || '',
+      headingPath: Array.isArray(draft.headingPath) ? draft.headingPath.slice() : [],
+      pageRange: draft.pageRange || '',
+      sourceBlockIds: Array.isArray(draft.sourceBlockIds) ? draft.sourceBlockIds.slice() : [],
+      sourceSnippet: draft.sourceSnippet || '',
+      warnings: Array.isArray(draft.warnings) ? draft.warnings.slice() : [],
+      createdAt: new Date().toISOString()
+    };
+
+    return { quizQuestion, provenance };
+  }
+
+  function validateMehlmanQuizObjectPreviewItem(item) {
+    const errors = [];
+    const labels = ['A', 'B', 'C', 'D', 'E'];
+    const q = item?.quizQuestion || {};
+    const prov = item?.provenance || {};
+
+    if (!nonemptyString(q.t)) errors.push('missing stem');
+    if (!Array.isArray(q.o) || q.o.length !== 5) {
+      errors.push('must have exactly five answer choices');
+    } else {
+      q.o.forEach((choice, idx) => {
+        if (choice?.l !== labels[idx]) errors.push('answer choices must be labeled A-E in order');
+        if (!nonemptyString(choice?.t)) errors.push(`choice ${labels[idx]} is missing text`);
+      });
+    }
+    if (!labels.includes(q.c)) errors.push('correct answer must be A-E');
+    if (!nonemptyString(q.explanation)) errors.push('missing explanation / teaching point');
+
+    if (!nonemptyString(prov.sourceType)) errors.push('missing source type provenance');
+    if (!nonemptyString(prov.sourceName)) errors.push('missing source name provenance');
+    if (!nonemptyString(prov.draftId)) errors.push('missing draft ID provenance');
+    if (!nonemptyString(prov.clusterId)) errors.push('missing cluster ID provenance');
+    if (!Number.isFinite(prov.clusterIndex)) errors.push('missing cluster index provenance');
+    if (!nonemptyString(prov.variantType)) errors.push('missing variant type provenance');
+    if (!Array.isArray(prov.sourceBlockIds) || !prov.sourceBlockIds.length) errors.push('missing source block IDs provenance');
+    if (!Array.isArray(prov.headingPath)) errors.push('missing heading path provenance');
+    if (!nonemptyString(prov.sourceSnippet)) errors.push('missing source snippet provenance');
+
+    return { ok: errors.length === 0, errors };
+  }
+
+  function getApprovedMehlmanQuizObjectPreviewValidation() {
+    const approved = getApprovedMehlmanDrafts();
+    const items = approved.map((draft, idx) => convertApprovedMehlmanDraftToQuizObject(draft, idx));
+    const errors = items.flatMap((item, idx) =>
+      validateMehlmanQuizObjectPreviewItem(item).errors.map(error => `Quiz object ${idx + 1}: ${error}`)
+    );
+    return { items, errors };
+  }
+
+  function renderMehlmanQuizObjectPreview() {
+    const status = document.getElementById('mehlman-quiz-object-status');
+    const preview = document.getElementById('mehlman-quiz-object-preview');
+    if (!status || !preview) return;
+
+    const approved = getApprovedMehlmanDrafts();
+    if (!approved.length) {
+      status.textContent = 'Approve Mehlman draft scaffolds to preview internal quiz-question objects. Nothing is saved.';
+      preview.innerHTML = '<div class="notes-import-empty">No approved Mehlman drafts converted.</div>';
+      updateApprovedMehlmanDraftCreateTestButton();
+      return;
+    }
+
+    const { items, errors } = getApprovedMehlmanQuizObjectPreviewValidation();
+    if (errors.length) {
+      status.textContent = `Quiz object preview blocked: ${errors[0]}`;
+      preview.innerHTML = `
+        <div class="notes-draft-card">
+          <div class="notes-draft-title">Validation errors</div>
+          <div class="notes-draft-meta">Preview blocked until approved Mehlman drafts have complete quiz-object provenance.</div>
+          <div style="color:#8a5a00;margin-top:8px;">${escapeHTML(errors.join(' · '))}</div>
+        </div>`;
+      updateApprovedMehlmanDraftCreateTestButton();
+      return;
+    }
+
+    status.textContent = `${items.length} approved Mehlman draft${items.length === 1 ? '' : 's'} converted into quiz-question object previews. Nothing was saved.`;
+    preview.innerHTML = items.map((item, idx) => {
+      const quizJson = JSON.stringify(item.quizQuestion, null, 2);
+      const provJson = JSON.stringify(item.provenance, null, 2);
+      return `
+        <details class="notes-draft-card" ${idx < 2 ? 'open' : ''}>
+          <summary class="notes-draft-summary">
+            <div class="notes-draft-title">Quiz Object ${idx + 1}: ${escapeHTML(item.provenance.variantType || 'draft')} · ${escapeHTML(item.quizQuestion.c || '?')}</div>
+            <div class="notes-draft-meta">preview only · not saved · ${escapeHTML(item.provenance.draftId || '')}</div>
+          </summary>
+          <div class="notes-draft-body">
+            <details open>
+              <summary>Quiz object JSON</summary>
+              <pre style="white-space:pre-wrap;overflow:auto;margin-top:8px;">${escapeHTML(quizJson)}</pre>
+            </details>
+            <details>
+              <summary>Provenance JSON</summary>
+              <pre style="white-space:pre-wrap;overflow:auto;margin-top:8px;">${escapeHTML(provJson)}</pre>
+            </details>
+          </div>
+        </details>`;
+    }).join('');
+    updateApprovedMehlmanDraftCreateTestButton();
+  }
+
+  // ══ Mehlman v4: Controlled Save ══
+
+  function getMehlmanSourceFolder() {
+    return DB.get().sourceFolders.find(src => src.sourceType === 'mehlman') || DB.getSourceFolder('src-mehlman') || null;
+  }
+
+  function getMehlmanSubfolders() {
+    const source = getMehlmanSourceFolder();
+    return source ? DB.getFolders(source.id) : [];
+  }
+
+  function renderMehlmanSaveTargetSelector(preserveSelection = true) {
+    const select = document.getElementById('mehlman-create-test-target');
+    if (!select) return;
+    const previousValue = preserveSelection ? select.value : '';
+    const folders = getMehlmanSubfolders();
+    const source = getMehlmanSourceFolder();
+    const folderOptions = folders.map(folder => `<option value="${escapeHTML(folder.id)}">${escapeHTML(folder.name)}</option>`).join('');
+    const newFolderOption = !folders.length ? '<option value="__new__">Create new Mehlman Notes folder</option>' : '';
+    select.innerHTML = `<option value="">Choose a Mehlman subfolder</option>${folderOptions}${newFolderOption}`;
+    const selectedValue = Array.from(select.options).some(option => option.value === previousValue) ? previousValue : '';
+    select.value = selectedValue;
+    if (!source && !folders.length) select.value = '';
+  }
+
+  function getSelectedMehlmanSaveTarget() {
+    const selectedValue = document.getElementById('mehlman-create-test-target')?.value || '';
+    const source = getMehlmanSourceFolder();
+    if (selectedValue === '__new__') {
+      return { ok: !!source, mode: 'new-folder', source, folder: null, error: source ? '' : 'Mehlman source folder is unavailable.' };
+    }
+    if (!selectedValue) return { ok: false, mode: 'none', source, folder: null, error: 'Choose a Mehlman subfolder before creating a test.' };
+    const folder = getMehlmanSubfolders().find(f => f.id === selectedValue);
+    if (!folder) return { ok: false, mode: 'missing-folder', source, folder: null, error: 'Selected Mehlman subfolder was not found.' };
+    return { ok: true, mode: 'existing-folder', source, folder, error: '' };
+  }
+
+  function getMehlmanSaveInputs() {
+    const testName = (document.getElementById('mehlman-create-test-name')?.value || '').trim();
+    const reviewed = !!document.getElementById('mehlman-create-test-reviewed')?.checked;
+    return { testName, reviewed };
+  }
+
+  function setMehlmanSaveError(message) {
+    const el = document.getElementById('mehlman-create-test-error');
+    if (!el) return;
+    el.style.display = message ? 'block' : 'none';
+    el.textContent = message || '';
+  }
+
+  function renderMehlmanSaveDiagnostics(items, errors, target, readiness, inputs, lastMessage = '', counts = null) {
+    const el = document.getElementById('mehlman-create-test-diagnostics');
+    if (!el) return;
+    const selectedValue = document.getElementById('mehlman-create-test-target')?.value || '';
+    const approvedCount = getApprovedMehlmanDrafts().length;
+    const targetLabel = selectedValue
+      ? selectedValue === '__new__' ? 'Create new Mehlman Notes folder' : `${target?.folder?.name || 'Unknown folder'} (${selectedValue})`
+      : 'None selected';
+    const validationLabel = errors.length ? `Blocked: ${errors[0]}` : 'Passed';
+    const readinessLabel = readiness.ok ? 'Ready' : `Blocked: ${readiness.message}`;
+    el.innerHTML = [
+      `<div><strong>Selected target:</strong> ${escapeHTML(targetLabel)}</div>`,
+      `<div><strong>Test name valid:</strong> ${inputs.testName ? 'Yes' : 'No'}</div>`,
+      `<div><strong>Review confirmation checked:</strong> ${inputs.reviewed ? 'Yes' : 'No'}</div>`,
+      `<div><strong>Approved count:</strong> ${approvedCount}</div>`,
+      `<div><strong>Quiz object previews:</strong> ${items.length}</div>`,
+      `<div><strong>Validation status:</strong> ${escapeHTML(validationLabel)}</div>`,
+      `<div><strong>Save readiness:</strong> ${escapeHTML(readinessLabel)}</div>`,
+      counts ? `<div><strong>DB tests before/after:</strong> ${counts.before} / ${counts.after}</div>` : '',
+      lastMessage ? `<div><strong>Last save result/error:</strong> ${escapeHTML(lastMessage)}</div>` : ''
+    ].filter(Boolean).join('');
+  }
+
+  function getApprovedMehlmanDraftCreateTestReadiness(items, errors, target, inputs) {
+    if (!items.length) return { ok: false, message: 'Approve at least one Mehlman draft before creating a test.' };
+    if (errors.length) return { ok: false, message: `Cannot create test: ${errors[0]}` };
+    if (!target?.ok) return { ok: false, message: target?.error || 'Choose a Mehlman subfolder before creating a test.' };
+    if (!inputs.testName) return { ok: false, message: 'Enter a test name before creating a test.' };
+    if (!inputs.reviewed) return { ok: false, message: 'Confirm that you reviewed and approve these quiz objects before creating a test.' };
+    return { ok: true, message: '' };
+  }
+
+  function updateApprovedMehlmanDraftCreateTestButton() {
+    const btn = document.getElementById('mehlman-create-test-approved');
+    if (!btn) return;
+    const { items, errors } = getApprovedMehlmanQuizObjectPreviewValidation();
+    const target = getSelectedMehlmanSaveTarget();
+    const inputs = getMehlmanSaveInputs();
+    const readiness = getApprovedMehlmanDraftCreateTestReadiness(items, errors, target, inputs);
+    btn.disabled = !readiness.ok;
+    btn.textContent = items.length > 0 ? `Create Test from Approved Mehlman Drafts (${items.length})` : 'Create Test from Approved Mehlman Drafts';
+    btn.title = readiness.message;
+    setMehlmanSaveError(readiness.ok ? '' : readiness.message);
+    renderMehlmanSaveDiagnostics(items, errors, target, readiness, inputs);
+  }
+
+  function createTestFromApprovedMehlmanDrafts() {
+    const { items, errors } = getApprovedMehlmanQuizObjectPreviewValidation();
+    const target = getSelectedMehlmanSaveTarget();
+    const inputs = getMehlmanSaveInputs();
+    const readiness = getApprovedMehlmanDraftCreateTestReadiness(items, errors, target, inputs);
+    const selectedValue = document.getElementById('mehlman-create-test-target')?.value || '';
+
+    if (!readiness.ok) {
+      const blockedState = {
+        clickHandlerFired: true,
+        sourceId: target?.source?.id || null,
+        selectedTargetValue: selectedValue,
+        selectedTargetMode: target?.mode || null,
+        approvedMehlmanDraftCount: getApprovedMehlmanDrafts().length,
+        quizObjectPreviewCount: items.length,
+        validationErrors: errors,
+        dbCreateTestReached: false
+      };
+      console.warn('Mehlman draft save blocked:', blockedState);
+      setMehlmanSaveError(readiness.message);
+      renderMehlmanSaveDiagnostics(items, errors, target, readiness, inputs, `Blocked: ${readiness.message}`);
+      toast(readiness.message, 8000);
+      return;
+    }
+    setMehlmanSaveError('');
+
+    try {
+      const testName = inputs.testName;
+      const targetFolderName = target.folder?.name || 'Mehlman Notes';
+      const source = target.source || getMehlmanSourceFolder();
+      const beforeCount = DB.get().tests.length;
+
+      const questions = items.map(item => {
+        const question = JSON.parse(JSON.stringify(item.quizQuestion));
+        question.mehlmanDraftProvenance = JSON.parse(JSON.stringify({
+          ...(item.provenance || {}),
+          targetFolderId: target.folder?.id || null,
+          targetFolderName,
+          savedAt: new Date().toISOString()
+        }));
+        return question;
+      });
+
+      // Final per-question validation before touching DB
+      const immediateErrors = questions.flatMap((question, idx) =>
+        validateMehlmanQuizObjectPreviewItem({
+          quizQuestion: question,
+          provenance: question.mehlmanDraftProvenance || {}
+        }).errors.map(error => `Question ${idx + 1}: ${error}`)
+      );
+      if (immediateErrors.length) {
+        const message = `Cannot create test: ${immediateErrors[0]}`;
+        console.warn('Mehlman draft save failed validation before DB.createTest:', {
+          selectedTargetValue: selectedValue,
+          approvedMehlmanDraftCount: getApprovedMehlmanDrafts().length,
+          quizObjectPreviewCount: questions.length,
+          validationErrors: immediateErrors,
+          dbCreateTestReached: false
+        });
+        setMehlmanSaveError(message);
+        renderMehlmanSaveDiagnostics(items, immediateErrors, target, { ok: false, message }, inputs, `Failed: ${message}`, { before: beforeCount, after: beforeCount });
+        toast(message, 8000);
+        return;
+      }
+
+      const targetFolder = target.folder || DB.createFolder(targetFolderName, source?.id || 'src-mehlman');
+      if (!targetFolder?.id) {
+        const message = 'Could not resolve the selected Mehlman target folder.';
+        console.warn('Mehlman draft save failed:', { selectedTargetValue: selectedValue, dbCreateTestReached: false, message });
+        setMehlmanSaveError(message);
+        renderMehlmanSaveDiagnostics(items, errors, target, readiness, inputs, `Failed: ${message}`, { before: beforeCount, after: beforeCount });
+        toast(message, 8000);
+        return;
+      }
+
+      const test = DB.createTest(targetFolder.id, testName, questions);
+      const afterCount = DB.get().tests.length;
+      const saved = !!test && afterCount === beforeCount + 1;
+      if (!saved) {
+        const message = test
+          ? `DB.createTest returned a test, but DB test count changed from ${beforeCount} to ${afterCount}.`
+          : 'DB.createTest did not save the test. Storage may be full.';
+        console.warn('Mehlman draft save failed:', {
+          selectedTargetValue: selectedValue,
+          resolvedTargetFolderId: targetFolder.id,
+          approvedMehlmanDraftCount: getApprovedMehlmanDrafts().length,
+          quizObjectPreviewCount: items.length,
+          validationErrors: errors,
+          testName,
+          reviewed: inputs.reviewed,
+          dbCreateTestReturn: test,
+          testsBefore: beforeCount,
+          testsAfter: afterCount
+        });
+        setMehlmanSaveError(message);
+        renderMehlmanSaveDiagnostics(items, errors, target, readiness, inputs, `Failed: ${message}`, { before: beforeCount, after: afterCount });
+        toast(message, 8000);
+        return;
+      }
+
+      const lastMessage = `Saved ${questions.length} quiz object${questions.length === 1 ? '' : 's'} to "${testName}" in ${targetFolder.name}.`;
+      console.info('Mehlman draft save succeeded:', {
+        selectedTargetValue: selectedValue,
+        resolvedTargetFolderId: targetFolder.id,
+        approvedMehlmanDraftCount: getApprovedMehlmanDrafts().length,
+        quizObjectPreviewCount: items.length,
+        testName,
+        reviewed: inputs.reviewed,
+        testId: test?.id || null,
+        testsBefore: beforeCount,
+        testsAfter: afterCount
+      });
+      const resolvedTarget = { ...target, mode: 'existing-folder', folder: targetFolder, ok: true, error: '' };
+      renderMehlmanSaveTargetSelector(true);
+      if (target.mode === 'new-folder') {
+        const saveTarget = document.getElementById('mehlman-create-test-target');
+        if (saveTarget && targetFolder?.id) saveTarget.value = targetFolder.id;
+      }
+      setMehlmanSaveError('');
+      renderMehlmanSaveDiagnostics(items, errors, resolvedTarget, readiness, inputs, lastMessage, { before: beforeCount, after: afterCount });
+      toast(lastMessage, 4000);
+    } catch (err) {
+      const message = `Failed to create Mehlman test: ${err?.message || 'Unknown save error.'}`;
+      console.warn('Mehlman draft save failed with exception:', err);
+      setMehlmanSaveError(message);
+      renderMehlmanSaveDiagnostics(items, errors, target, { ok: false, message }, inputs, message);
+      toast(message, 8000);
+    }
   }
 
   function openAnkiTextImportPreview() {
@@ -16795,6 +17349,11 @@ const App = (() => {
     selectAllMehlmanClusters,
     deselectAllMehlmanClusters,
     previewMehlmanDrafts,
+    setMehlmanDraftReviewStatus,
+    approveAllMehlmanDrafts,
+    rejectAllMehlmanDrafts,
+    updateApprovedMehlmanDraftCreateTestButton,
+    createTestFromApprovedMehlmanDrafts,
     updateApprovedOmeDraftCreateTestButton,
     createTestFromApprovedOmeDrafts,
     exportApprovedOmeDraftsJson,
