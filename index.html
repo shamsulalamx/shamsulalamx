@@ -1908,6 +1908,27 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
   </div>
 </div>
 
+<!-- ═══ MEHLMAN PDF IMPORT PREVIEW MODAL ═══ -->
+<div id="modal-mehlman-import" class="modal-overlay">
+  <div class="modal-box" style="max-width:780px;">
+    <h3>Mehlman PDF Structure Preview</h3>
+    <p>This preview accepts large Mehlman-style PDFs and uses PDF.js text-layer extraction only. It does not use OCR, infer medical meaning, generate questions, save quizzes, or modify stored data.</p>
+    <div class="form-group">
+      <label class="form-label">Mehlman PDF</label>
+      <input type="file" class="form-input" id="mehlman-pdf-input" accept=".pdf" onchange="App.previewMehlmanPdfImport(this)">
+    </div>
+    <div id="mehlman-import-status" class="notes-import-summary">Choose a .pdf file from the Mehlman library.</div>
+    <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+      <button type="button" class="btn-card" onclick="App.clearMehlmanPdfImportPreview()">Clear / Reset</button>
+      <button type="button" class="btn-card" onclick="App.closeMehlmanPdfImportPreview()">Close</button>
+    </div>
+    <div class="notes-import-section-title">Mehlman Block Preview</div>
+    <div id="mehlman-structure-preview" class="notes-draft-preview">
+      <div class="notes-import-empty">No Mehlman structure preview loaded.</div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ NEW FOLDER MODAL ═══ -->
 <div id="modal-new-folder" class="modal-overlay">
   <div class="modal-box" style="max-width:380px;">
@@ -1981,7 +2002,7 @@ const DB = (() => {
     { id: 'src-anki', name: 'Anki', order: 2, sourceType: 'anki', workflows: ['anki-text-preview'] },
     { id: 'src-ome', name: 'OME', order: 3, sourceType: 'ome', workflows: ['ome-pdf-preview'] },
     { id: 'src-divine-podcasts', name: 'Divine Podcasts', order: 4, sourceType: 'divine', workflows: [] },
-    { id: 'src-mehlman', name: 'Mehlman', order: 5, sourceType: 'mehlman', workflows: [] },
+    { id: 'src-mehlman', name: 'Mehlman', order: 5, sourceType: 'mehlman', workflows: ['mehlman-pdf-preview'] },
     { id: 'src-images-and-tables', name: 'Images and Tables', order: 6, sourceType: 'images-tables', workflows: [] },
     { id: 'src-amboss', name: 'Amboss', order: 7, sourceType: 'amboss', workflows: [] }
   ];
@@ -6377,6 +6398,7 @@ const App = (() => {
   let _notesImportPreview = null;
   let _ankiImportPreview = null;
   let _omeImportPreview = null;
+  let _mehlmanImportPreview = null;
   const _notesRefinePending = new Set();
   const _notesBatchRefinementCache = new Map();
   let _notesBatchRunTimer = null;
@@ -6559,6 +6581,7 @@ const App = (() => {
     if (workflows.includes('docx-notes-preview')) return 'docx-notes-preview';
     if (workflows.includes('anki-text-preview')) return 'anki-text-preview';
     if (workflows.includes('ome-pdf-preview')) return 'ome-pdf-preview';
+    if (workflows.includes('mehlman-pdf-preview')) return 'mehlman-pdf-preview';
     return null;
   }
 
@@ -6568,6 +6591,7 @@ const App = (() => {
     if (workflow === 'docx-notes-preview') return 'Import DOCX Preview';
     if (workflow === 'anki-text-preview') return 'Import Anki Text Preview';
     if (workflow === 'ome-pdf-preview') return 'Import OME PDF Preview';
+    if (workflow === 'mehlman-pdf-preview') return 'Import Mehlman PDF Preview';
     return '';
   }
 
@@ -6576,6 +6600,7 @@ const App = (() => {
     if (workflow === 'docx-notes-preview') return 'Use DOCX notes import preview from this library.';
     if (workflow === 'anki-text-preview') return 'Use Anki plain-text import preview from this library.';
     if (workflow === 'ome-pdf-preview') return 'Use OME PDF structure preview from this library.';
+    if (workflow === 'mehlman-pdf-preview') return 'Use Mehlman PDF structure preview from this library.';
     if (workflow === 'pdf-test-import') return 'No tests in this folder yet.';
     return 'No import workflow is available for this library yet.';
   }
@@ -6592,6 +6617,10 @@ const App = (() => {
     }
     if (workflow === 'ome-pdf-preview') {
       openOmePdfImportPreview();
+      return;
+    }
+    if (workflow === 'mehlman-pdf-preview') {
+      openMehlmanPdfImportPreview();
       return;
     }
     if (workflow === 'pdf-test-import') {
@@ -9433,6 +9462,308 @@ const App = (() => {
     }).join('');
 
     preview.innerHTML = `${summary}${headingPreview}${warningPreview}${pageCards}`;
+  }
+
+  // ══ Mehlman PDF Structure Preview (isolated) ══
+
+  function openMehlmanPdfImportPreview() {
+    const modal = document.getElementById('modal-mehlman-import');
+    if (modal) modal.style.display = 'flex';
+  }
+
+  function closeMehlmanPdfImportPreview() {
+    const modal = document.getElementById('modal-mehlman-import');
+    if (modal) modal.style.display = 'none';
+  }
+
+  function clearMehlmanPdfImportPreview() {
+    _mehlmanImportPreview = null;
+    const input = document.getElementById('mehlman-pdf-input');
+    const status = document.getElementById('mehlman-import-status');
+    const preview = document.getElementById('mehlman-structure-preview');
+    if (input) input.value = '';
+    if (status) status.textContent = 'Choose a .pdf file from the Mehlman library.';
+    if (preview) preview.innerHTML = '<div class="notes-import-empty">No Mehlman structure preview loaded.</div>';
+  }
+
+  async function calibrateMehlmanFontThreshold(pdf) {
+    const pagesToSample = Math.min(10, pdf.numPages);
+    const heights = [];
+    for (let i = 1; i <= pagesToSample; i++) {
+      const page = await pdf.getPage(i);
+      const tc = await page.getTextContent();
+      for (const item of tc.items) {
+        if (item.transform) {
+          const h = Math.abs(item.transform[3]);
+          if (h > 0) heights.push(h);
+        }
+      }
+    }
+    if (heights.length === 0) return { median: 12, headingThreshold: 16.8, subheadingThreshold: 13.8 };
+    heights.sort((a, b) => a - b);
+    const median = heights[Math.floor(heights.length / 2)];
+    return {
+      median,
+      headingThreshold: median * 1.4,
+      subheadingThreshold: median * 1.15
+    };
+  }
+
+  function groupMehlmanItemsIntoLines(items) {
+    const TOLERANCE = 1.5;
+    const lineMap = new Map();
+    for (const item of items) {
+      if (!item.str || !item.str.trim()) continue;
+      const y = Math.round(item.transform[5] / TOLERANCE) * TOLERANCE;
+      if (!lineMap.has(y)) lineMap.set(y, []);
+      lineMap.get(y).push(item);
+    }
+    return Array.from(lineMap.entries())
+      .sort((a, b) => b[0] - a[0]) // descending Y = top-to-bottom
+      .map(([y, lineItems]) => {
+        lineItems.sort((a, b) => a.transform[4] - b.transform[4]);
+        const text = lineItems.map(i => i.str).join(' ').replace(/\s+/g, ' ').trim();
+        const maxHeight = Math.max(...lineItems.map(i => Math.abs(i.transform[3])));
+        const x = lineItems[0].transform[4];
+        return { y, text, maxHeight, x };
+      })
+      .filter(l => l.text);
+  }
+
+  function classifyMehlmanLineBlockType(line, fontThreshold, pageLeftMargin) {
+    const { text, maxHeight, x } = line;
+    const { headingThreshold, subheadingThreshold } = fontThreshold;
+    const isIndented = x > pageLeftMargin + 8;
+    const isBullet = /^[•–\-\*]\s/.test(text) || /^\d+\.\s/.test(text);
+    const isAllCaps = text.length > 3 && text === text.toUpperCase() && /[A-Z]/.test(text);
+    const isCallout = /^(note|important|key point|pearl|tip|warning|caution)[\s:]/i.test(text);
+    const isTableCaption = /^(table|figure|fig\.?)\s*\d/i.test(text);
+    const isTableRow = (text.match(/\t/g) || []).length >= 2 || (text.match(/\s{4,}/g) || []).length >= 2;
+
+    if (maxHeight >= headingThreshold || isAllCaps) return 'heading';
+    if (maxHeight >= subheadingThreshold) return 'subheading';
+    if (isTableCaption) return 'table-caption';
+    if (isTableRow) return 'table-row';
+    if (isCallout) return 'callout';
+    if (isBullet || isIndented) return 'bullet';
+    return 'paragraph';
+  }
+
+  function buildMehlmanPageBlocks({ pageNumber, textContent, fontThreshold, headingStack, orderStart, sourceName, sourceHash }) {
+    const items = textContent.items || [];
+    const lines = groupMehlmanItemsIntoLines(items);
+    if (lines.length === 0) return { blocks: [], headingStack, nextOrder: orderStart };
+
+    const xValues = lines.map(l => l.x).filter(v => v > 0);
+    const pageLeftMargin = xValues.length ? Math.min(...xValues) : 0;
+
+    const blocks = [];
+    let order = orderStart;
+
+    for (const line of lines) {
+      const blockType = classifyMehlmanLineBlockType(line, fontThreshold, pageLeftMargin);
+
+      if (blockType === 'heading') {
+        headingStack.length = 0;
+        headingStack.push(line.text);
+      } else if (blockType === 'subheading') {
+        if (headingStack.length > 1) headingStack.splice(1);
+        if (headingStack.length === 0) headingStack.push('');
+        headingStack[headingStack.length === 1 ? 1 : 1] = line.text;
+        // Keep stack at most depth 2
+        if (headingStack.length > 2) headingStack.splice(2);
+      }
+
+      const wordCount = line.text.split(/\s+/).filter(Boolean).length;
+      const charCount = line.text.length;
+      const confidence = (() => {
+        if (blockType === 'heading' || blockType === 'subheading') return 0.9;
+        if (blockType === 'callout') return 0.85;
+        if (blockType === 'bullet') return 0.75;
+        if (blockType === 'paragraph') return wordCount >= 5 ? 0.8 : 0.65;
+        if (blockType === 'table-caption' || blockType === 'table-row') return 0.7;
+        return 0.4;
+      })();
+
+      const blockId = `mhlman-${sourceHash ? sourceHash.slice(0, 8) : 'x'}-p${pageNumber}-o${order}`;
+
+      blocks.push({
+        blockId,
+        blockType,
+        pageNumber,
+        order: order++,
+        text: line.text,
+        wordCount,
+        charCount,
+        confidence,
+        headingPath: headingStack.slice(),
+        sourceName,
+        sourceHash
+      });
+    }
+
+    return { blocks, headingStack, nextOrder: order };
+  }
+
+  async function extractMehlmanPdfStructure(file, onProgress) {
+    const pdfjsLib = window.pdfjsLib;
+    if (!pdfjsLib) throw new Error('PDF.js is not loaded.');
+
+    const sourceName = file.name;
+    const arrayBuffer = await file.arrayBuffer();
+    const uint8 = new Uint8Array(arrayBuffer);
+    const sourceHash = typeof sha256Hex === 'function' ? await sha256Hex(uint8) : '';
+
+    const pdf = await pdfjsLib.getDocument({ data: uint8 }).promise;
+    const numPages = pdf.numPages;
+
+    const fontThreshold = await calibrateMehlmanFontThreshold(pdf);
+
+    const CHUNK_SIZE = 5;
+    const allBlocks = [];
+    const headingStack = [];
+    let order = 0;
+    let warnings = [];
+
+    for (let chunkStart = 1; chunkStart <= numPages; chunkStart += CHUNK_SIZE) {
+      const chunkEnd = Math.min(chunkStart + CHUNK_SIZE - 1, numPages);
+      for (let pageNum = chunkStart; pageNum <= chunkEnd; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const textContent = await page.getTextContent();
+        const result = buildMehlmanPageBlocks({
+          pageNumber: pageNum,
+          textContent,
+          fontThreshold,
+          headingStack,
+          orderStart: order,
+          sourceName,
+          sourceHash
+        });
+        allBlocks.push(...result.blocks);
+        order = result.nextOrder;
+      }
+
+      if (typeof onProgress === 'function') {
+        onProgress(Math.round((chunkEnd / numPages) * 100), chunkEnd, numPages);
+      }
+
+      // Yield to keep UI responsive
+      await new Promise(r => setTimeout(r, 0));
+    }
+
+    const lowConfidenceCount = allBlocks.filter(b => b.confidence < 0.7).length;
+    if (lowConfidenceCount > allBlocks.length * 0.3) {
+      warnings.push(`${lowConfidenceCount} blocks have low classification confidence — PDF may have complex layout or scanned pages.`);
+    }
+
+    const headingBlocks = allBlocks.filter(b => b.blockType === 'heading');
+    const uniqueHeadings = [...new Set(headingBlocks.map(b => b.text))];
+
+    return {
+      sourceName,
+      sourceHash,
+      numPages,
+      totalBlocks: allBlocks.length,
+      uniqueHeadings,
+      fontThreshold,
+      blocks: allBlocks,
+      warnings
+    };
+  }
+
+  async function previewMehlmanPdfImport(input) {
+    const file = input && input.files && input.files[0];
+    const status = document.getElementById('mehlman-import-status');
+    const preview = document.getElementById('mehlman-structure-preview');
+
+    if (!file) {
+      if (status) status.textContent = 'No file selected.';
+      return;
+    }
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      if (status) status.textContent = 'Only .pdf files are accepted.';
+      return;
+    }
+
+    _mehlmanImportPreview = null;
+    if (status) status.textContent = 'Extracting PDF structure… (0%)';
+    if (preview) preview.innerHTML = '<div class="notes-import-empty">Extracting…</div>';
+
+    try {
+      const structure = await extractMehlmanPdfStructure(file, (pct, done, total) => {
+        if (status) status.textContent = `Extracting PDF structure… (${pct}% — page ${done}/${total})`;
+      });
+      _mehlmanImportPreview = structure;
+      if (status) status.textContent = `Done. ${structure.totalBlocks} blocks extracted from ${structure.numPages} pages.`;
+      renderMehlmanStructurePreview(structure);
+    } catch (err) {
+      if (status) status.textContent = `Error: ${err.message || 'PDF extraction failed.'}`;
+      if (preview) preview.innerHTML = '<div class="notes-import-empty">Extraction failed.</div>';
+    }
+  }
+
+  function renderMehlmanStructurePreview(result) {
+    const preview = document.getElementById('mehlman-structure-preview');
+    if (!preview || !result) return;
+
+    const { sourceName, numPages, totalBlocks, uniqueHeadings, fontThreshold, blocks, warnings } = result;
+
+    const typeCounts = {};
+    for (const b of blocks) typeCounts[b.blockType] = (typeCounts[b.blockType] || 0) + 1;
+    const typeRows = Object.entries(typeCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([t, n]) => `<tr><td>${escapeHTML(t)}</td><td>${n}</td></tr>`).join('');
+
+    const summary = `
+      <div class="notes-import-summary" style="margin-bottom:8px;">
+        <strong>${escapeHTML(sourceName)}</strong> — ${numPages} pages, ${totalBlocks} blocks
+        <table style="margin-top:6px;font-size:12px;border-collapse:collapse;">
+          <thead><tr><th style="text-align:left;padding-right:12px;">Block type</th><th>Count</th></tr></thead>
+          <tbody>${typeRows}</tbody>
+        </table>
+        <div style="margin-top:4px;font-size:11px;color:#888;">
+          Median font height: ${fontThreshold.median.toFixed(1)}px |
+          Heading threshold: ${fontThreshold.headingThreshold.toFixed(1)}px
+        </div>
+      </div>`;
+
+    const warningPreview = warnings.length
+      ? `<div class="notes-import-warning">${warnings.map(w => escapeHTML(w)).join('<br>')}</div>`
+      : '';
+
+    const headingPreview = uniqueHeadings.length
+      ? `<details style="margin-bottom:8px;"><summary style="cursor:pointer;font-size:13px;">${uniqueHeadings.length} unique headings detected</summary>
+          <ul style="margin:4px 0 0 16px;font-size:12px;">${uniqueHeadings.slice(0, 60).map(h => `<li>${escapeHTML(h)}</li>`).join('')}${uniqueHeadings.length > 60 ? `<li>…and ${uniqueHeadings.length - 60} more</li>` : ''}</ul>
+        </details>`
+      : '';
+
+    // Show up to 200 blocks, grouped by page
+    const pageNums = [...new Set(blocks.map(b => b.pageNumber))].sort((a, b) => a - b);
+    const MAX_PAGES_SHOWN = 40;
+    const pagesToShow = pageNums.slice(0, MAX_PAGES_SHOWN);
+
+    const pageCards = pagesToShow.map(pageNum => {
+      const pageBlocks = blocks.filter(b => b.pageNumber === pageNum);
+      const blockRows = pageBlocks.map(b => {
+        const confidenceClass = b.confidence < 0.7 ? 'color:#c0392b' : b.confidence >= 0.85 ? 'color:#27ae60' : 'color:#888';
+        return `<tr>
+          <td style="padding:2px 6px 2px 0;font-size:11px;white-space:nowrap;${confidenceClass}">${escapeHTML(b.blockType)}</td>
+          <td style="padding:2px 0;font-size:12px;word-break:break-word;">${escapeHTML(b.text.slice(0, 160))}${b.text.length > 160 ? '…' : ''}</td>
+        </tr>`;
+      }).join('');
+
+      return `
+        <details style="margin-bottom:4px;">
+          <summary style="cursor:pointer;font-size:13px;font-weight:600;">Page ${pageNum} (${pageBlocks.length} blocks)</summary>
+          <table style="width:100%;border-collapse:collapse;margin-top:4px;">${blockRows}</table>
+        </details>`;
+    }).join('');
+
+    const truncNote = pageNums.length > MAX_PAGES_SHOWN
+      ? `<div style="font-size:12px;color:#888;margin-top:6px;">Showing first ${MAX_PAGES_SHOWN} of ${pageNums.length} pages.</div>`
+      : '';
+
+    preview.innerHTML = `${summary}${warningPreview}${headingPreview}${pageCards}${truncNote}`;
   }
 
   function openAnkiTextImportPreview() {
@@ -15571,6 +15902,10 @@ const App = (() => {
     clearOmePdfImportPreview,
     previewOmePdfImport,
     setOmeDraftReviewStatus,
+    openMehlmanPdfImportPreview,
+    closeMehlmanPdfImportPreview,
+    clearMehlmanPdfImportPreview,
+    previewMehlmanPdfImport,
     updateApprovedOmeDraftCreateTestButton,
     createTestFromApprovedOmeDrafts,
     exportApprovedOmeDraftsJson,
