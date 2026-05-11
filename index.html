@@ -8588,7 +8588,7 @@ const App = (() => {
       },
       drafts: approved.map(({ draft }) => ({
         reviewStatus: 'approved',
-        draftId: draft.id,
+        draftId: getAnkiVariantDraftIdentity(draft),
         clusterId: draft.clusterId,
         clusterIndex: draft.clusterIndex,
         clusterType: draft.clusterType,
@@ -9570,7 +9570,7 @@ const App = (() => {
       const result = parseAnkiTextExport(text, file.name);
       const conceptResult = extractAnkiConceptCandidates(result.normalizedCards);
       const clusterResult = clusterAnkiConceptCandidates(conceptResult.candidates);
-      const variantResult = buildAnkiVariantDrafts(clusterResult);
+      const variantResult = buildAnkiVariantDrafts(clusterResult, _ankiImportPreview?.variantResult?.reviewStatus || null);
       result.conceptResult = conceptResult;
       result.clusterResult = clusterResult;
       result.variantResult = variantResult;
@@ -9583,6 +9583,7 @@ const App = (() => {
       renderAnkiConceptPreview(conceptResult);
       renderAnkiClusterPreview(clusterResult);
       renderAnkiVariantPreview(variantResult);
+      renderAnkiQuizObjectPreview();
       renderAnkiDraftSaveTargetSelector(false);
     } catch (err) {
       _ankiImportPreview = null;
@@ -9946,7 +9947,7 @@ const App = (() => {
     const warnings = [];
     const hasDeck = !!(card?.deckRaw || (card?.deckPath || []).length);
     const hasTags = Array.isArray(card?.tagsExact) && card.tagsExact.length > 0;
-    if (!hasDeck) warnings.push('Missing deck hierarchy.');
+    if (!hasDeck) warnings.push(hasTags ? 'Deck hierarchy not present in export; tags will be used as the primary signal.' : 'Missing deck hierarchy.');
     if (!hasTags) warnings.push('Missing exact tags.');
     else if (card.tagsExact.every(tag => isBroadAnkiTag(tag))) warnings.push('Only broad tags found; not treated as a strong signal.');
     if ((card.noteFields || []).some(hasAnkiHtmlLeftovers) || (card.cleanedFields || []).some(hasAnkiHtmlLeftovers)) {
@@ -10032,8 +10033,14 @@ const App = (() => {
         const warnings = [...baseWarnings];
         const explicitBasic = String(card.noteType || '').trim().toLowerCase() === 'basic';
         if (!explicitBasic) warnings.push('Basic mapping inferred from plain-text fields.');
-        if (noteFields.length < 2) warnings.push('Only one note field found; Basic front/back mapping is incomplete.');
-        if (noteFields.length > 2) warnings.push('More than two note fields found; Basic front/back mapping is ambiguous.');
+        const contentFields = noteFields
+          .map((fieldText, idx) => ({
+            fieldText: String(fieldText || ''),
+            fieldIndex: noteFieldIndexes[idx] ?? idx
+          }))
+          .filter(item => nonemptyString(item.fieldText));
+        if (contentFields.length < 2) warnings.push('Only one non-tag content field found; Basic front/back mapping is incomplete.');
+        if (contentFields.length > 2) warnings.push('More than two non-tag content fields found; Basic front/back mapping is ambiguous.');
         const sourceSnippets = noteFields.map((fieldText, idx) => ({
           fieldIndex: noteFieldIndexes[idx] ?? idx,
           sourceSnippet: createAnkiSourceSnippet(fieldText),
@@ -10042,8 +10049,11 @@ const App = (() => {
         if (sourceSnippets.some(snippet => hasAnkiHtmlLeftovers(snippet.sourceSnippet) || hasAnkiHtmlLeftovers(snippet.contextSnippet))) {
           warnings.push('Noisy HTML leftovers detected in source snippets.');
         }
-        const frontText = noteFields[0] || '';
-        const backText = noteFields[1] || '';
+        const frontField = contentFields[0] || null;
+        const backField = contentFields[1] || null;
+        const frontText = frontField?.fieldText || '';
+        const backText = backField?.fieldText || '';
+        const contentFieldIndexes = contentFields.map(item => item.fieldIndex);
         candidates.push({
           id: `anki-concept-${card.sourceCardIndex || card.originalRow}-basic`,
           sourceKind: 'basic',
@@ -10058,11 +10068,11 @@ const App = (() => {
           tagsExact: Array.isArray(card.tagsExact) ? card.tagsExact.slice() : [],
           tagsNormalized: Array.isArray(card.tagsNormalized) ? card.tagsNormalized.slice() : [],
           sourceHash: card.sourceHash || '',
-          sourceFieldIndex: noteFieldIndexes[0] ?? null,
+          sourceFieldIndex: contentFieldIndexes[0] ?? noteFieldIndexes[0] ?? null,
           sourceFieldIndexes: noteFieldIndexes,
           sourceSnippets,
-          frontFieldIndex: noteFieldIndexes[0] ?? null,
-          backFieldIndex: noteFieldIndexes[1] ?? null,
+          frontFieldIndex: contentFieldIndexes[0] ?? null,
+          backFieldIndex: contentFieldIndexes[1] ?? null,
           frontText: createAnkiSourceSnippet(frontText),
           backText: createAnkiSourceSnippet(backText),
           conceptText: frontText || backText || `Basic card ${card.sourceCardIndex || card.originalRow || ''}`.trim(),
@@ -10396,6 +10406,266 @@ const App = (() => {
     };
   }
 
+  function getAnkiCandidateTopicText(candidate) {
+    return normalizeAnkiSimilarityText([
+      candidate?.conceptText || '',
+      candidate?.frontText || '',
+      candidate?.backText || '',
+      (candidate?.sourceSnippets || []).map(snippet => snippet.contextSnippet || snippet.sourceSnippet || '').join(' '),
+      (candidate?.clozeEntries || []).map(entry => entry.deletedText || '').join(' ')
+    ].join(' '));
+  }
+
+  function getAnkiCandidateTopicTokens(candidate) {
+    return tokenizeAnkiSimilarityText(
+      candidate?.conceptText,
+      candidate?.frontText,
+      candidate?.backText,
+      (candidate?.sourceSnippets || []).map(snippet => snippet.contextSnippet || snippet.sourceSnippet || '').join(' '),
+      (candidate?.clozeEntries || []).map(entry => entry.deletedText || '').join(' ')
+    );
+  }
+
+  function isAnkiDiagramOnlyNoise(candidate) {
+    const topicText = getAnkiCandidateTopicText(candidate);
+    const warnings = uniqueAnkiStrings(candidate?.warnings || []);
+    if (!topicText) return true;
+    if (topicText.split(' ').filter(Boolean).length < 2) return true;
+    if (warnings.some(warning => /diagram-only|image-only|figure-only|chart-only/i.test(warning))) return true;
+    return false;
+  }
+
+  function assessAnkiRecognitionFallback(cluster) {
+    const members = Array.isArray(cluster?.members) ? cluster.members : [];
+    const sourceText = normalizeAnkiSimilarityText(getAnkiClusterVariantTextBlob(cluster));
+    const hasSourceText = sourceText.length >= 8;
+    const hasProvenance = members.some(member => nonemptyString(member?.id) || Number.isFinite(Number(member?.sourceCardIndex)) || nonemptyString(member?.sourceHash));
+    const hasUsableCloze = members.some(member => member?.sourceKind === 'cloze' && (
+      (Array.isArray(member.clozeTexts) && member.clozeTexts.some(text => nonemptyString(text))) ||
+      (Array.isArray(member.clozeEntries) && member.clozeEntries.some(entry => nonemptyString(entry?.deletedText)))
+    ));
+    const hasUsableBasic = members.some(member => member?.sourceKind === 'basic' && (
+      nonemptyString(member?.frontText) && nonemptyString(member?.backText)
+    ));
+    const nonNoiseMembers = members.filter(member => !isAnkiDiagramOnlyNoise(member));
+    const supported = hasSourceText && hasProvenance && (hasUsableCloze || hasUsableBasic) && nonNoiseMembers.length > 0;
+    const reasons = uniqueAnkiStrings([
+      !hasSourceText ? 'missing source text' : '',
+      !hasProvenance ? 'missing provenance' : '',
+      !(hasUsableCloze || hasUsableBasic) ? 'no usable cloze/basic field' : '',
+      !nonNoiseMembers.length ? 'diagram-only source' : ''
+    ].filter(Boolean));
+    const topicScore = Array.isArray(members) && members.length > 1
+      ? members.slice(1).reduce((minScore, member, index) => {
+          const comparisons = members.slice(0, index + 1).map(other => getAnkiTextSimilarityScore(member, other));
+          return Math.min(minScore, Math.max(...comparisons, 0));
+        }, 1)
+      : 1;
+    return {
+      supported,
+      reasons,
+      topicScore,
+      fallback: cluster?.confidence !== 'high' || !(cluster?.sharedStrongTags || []).length || cluster?.memberCount < 2
+    };
+  }
+
+  function getAnkiTopicSplitDecision(a, b) {
+    const sharedStrongTags = (a.strongTags || []).filter(tag => (b.strongTags || []).includes(tag));
+    const deckScore = getAnkiDeckProximityScore(a, b);
+    const textScore = getAnkiTextSimilarityScore(a, b);
+    const sameCard = a.sourceCardIndex && b.sourceCardIndex && a.sourceCardIndex === b.sourceCardIndex;
+    const sameClozeNumber = a.sourceKind === 'cloze' && b.sourceKind === 'cloze' && a.clozeNumber === b.clozeNumber;
+    const sameDeckRoot = getAnkiDeckRoot(a) && getAnkiDeckRoot(a) === getAnkiDeckRoot(b);
+
+    if (sameCard && sameClozeNumber) {
+      return { merge: true, basis: 'same cloze number', confidence: 'high' };
+    }
+
+    if (sameCard && a.sourceKind === 'cloze' && b.sourceKind === 'cloze') {
+      return {
+        merge: sharedStrongTags.length >= 2 && textScore >= 0.85 && deckScore >= 0.85,
+        basis: 'distinct cloze numbers kept separate unless strong evidence exists',
+        confidence: sharedStrongTags.length >= 2 && textScore >= 0.85 && deckScore >= 0.85 ? 'medium' : 'low'
+      };
+    }
+
+    if (sharedStrongTags.length >= 2 && textScore >= 0.25) {
+      return { merge: true, basis: 'shared exact tag plus topic support', confidence: textScore >= 0.7 ? 'high' : 'medium' };
+    }
+
+    if (sharedStrongTags.length >= 1 && textScore >= 0.75 && deckScore >= 0.65) {
+      return { merge: true, basis: 'shared exact tag plus strong topic cohesion', confidence: 'medium' };
+    }
+
+    if (textScore >= 0.82 && deckScore >= 0.55) {
+      return { merge: true, basis: 'topic cohesion', confidence: 'medium' };
+    }
+
+    if (textScore >= 0.85 && sameDeckRoot) {
+      return { merge: true, basis: 'strong same-deck topic cohesion', confidence: 'medium' };
+    }
+
+    return { merge: false, basis: 'insufficient topic cohesion', confidence: 'low' };
+  }
+
+  function splitAnkiClusterByTopic(cluster) {
+    const members = Array.isArray(cluster?.members) ? cluster.members.slice() : [];
+    if (members.length <= 1) return [members];
+
+    const parent = members.map((_, idx) => idx);
+    const find = idx => {
+      let current = idx;
+      while (parent[current] !== current) {
+        parent[current] = parent[parent[current]];
+        current = parent[current];
+      }
+      return current;
+    };
+    const union = (a, b) => {
+      const rootA = find(a);
+      const rootB = find(b);
+      if (rootA === rootB) return false;
+      parent[rootB] = rootA;
+      return true;
+    };
+
+    for (let i = 0; i < members.length; i += 1) {
+      members[i].topicTokens = getAnkiCandidateTopicTokens(members[i]);
+      for (let j = i + 1; j < members.length; j += 1) {
+        const decision = getAnkiTopicSplitDecision(members[i], members[j]);
+        if (decision.merge) union(i, j);
+      }
+    }
+
+    const groups = new Map();
+    members.forEach((member, idx) => {
+      const root = find(idx);
+      if (!groups.has(root)) groups.set(root, []);
+      groups.get(root).push(member);
+    });
+    return Array.from(groups.values()).sort((a, b) => {
+      const firstA = a[0]?.sourceCardOrder || a[0]?.sourceCardIndex || a[0]?.originalRow || 0;
+      const firstB = b[0]?.sourceCardOrder || b[0]?.sourceCardIndex || b[0]?.originalRow || 0;
+      return firstA - firstB;
+    });
+  }
+
+  function buildAnkiClusterSummary(members, clusterIndex, template = {}) {
+    const orderedMembers = Array.isArray(members) ? members.slice().sort((a, b) => (a.sourceCardOrder || 0) - (b.sourceCardOrder || 0) || (a.originalLine || 0) - (b.originalLine || 0) || String(a.id).localeCompare(String(b.id))) : [];
+    const strongTagCounts = new Map();
+    const broadTagCounts = new Map();
+    const deckPaths = [];
+    const deckKeys = new Set();
+    const memberWarnings = [];
+
+    orderedMembers.forEach(member => {
+      (member.strongTags || getAnkiStrongTags(member)).forEach(tag => strongTagCounts.set(tag, (strongTagCounts.get(tag) || 0) + 1));
+      (member.broadTags || getAnkiBroadTags(member)).forEach(tag => broadTagCounts.set(tag, (broadTagCounts.get(tag) || 0) + 1));
+      const deckLabel = member.deckPath?.length ? member.deckPath.join(' > ') : 'Not mapped';
+      if (!deckKeys.has(deckLabel)) {
+        deckKeys.add(deckLabel);
+        deckPaths.push(deckLabel);
+      }
+      memberWarnings.push(...(member.warnings || []));
+    });
+
+    const primaryStrongTags = Array.from(strongTagCounts.entries())
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([tag]) => tag)
+      .slice(0, 4);
+    const primaryBroadTags = Array.from(broadTagCounts.entries())
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([tag]) => tag)
+      .slice(0, 4);
+    const sharedStrongTags = orderedMembers.reduce((shared, member) => {
+      const memberSet = new Set(member.strongTags || getAnkiStrongTags(member));
+      return shared.filter(tag => memberSet.has(tag));
+    }, orderedMembers[0]?.strongTags ? orderedMembers[0].strongTags.slice() : orderedMembers[0] ? getAnkiStrongTags(orderedMembers[0]).slice() : []);
+    const clusterTextScore = orderedMembers.length > 1
+      ? orderedMembers.slice(1).reduce((minScore, member, index) => {
+          const comparisons = orderedMembers.slice(0, index + 1).map(other => getAnkiTextSimilarityScore(member, other));
+          return Math.min(minScore, Math.max(...comparisons, 0));
+        }, 1)
+      : 1;
+    const clusterDeckScore = orderedMembers.length > 1
+      ? orderedMembers.slice(1).reduce((minScore, member, index) => {
+          const comparisons = orderedMembers.slice(0, index + 1).map(other => getAnkiDeckProximityScore(member, other));
+          return Math.min(minScore, Math.max(...comparisons, 0));
+        }, 1)
+      : 1;
+    const confidence = orderedMembers.length <= 1
+      ? (clusterTextScore >= 0.5 ? 'medium' : 'low')
+      : (clusterTextScore >= 0.75 && (sharedStrongTags.length > 0 || deckPaths.length === 1)
+        ? 'high'
+        : (clusterTextScore >= 0.45 || clusterDeckScore >= 0.6 ? 'medium' : 'low'));
+    const warnings = uniqueAnkiStrings([
+      ...memberWarnings,
+      ...(orderedMembers.length > 1 && sharedStrongTags.length ? [] : (orderedMembers.length > 1 ? ['No shared strong exact tag across this cluster.'] : [])),
+      ...(primaryStrongTags.length ? [] : (primaryBroadTags.length ? ['Only broad tags are available for this cluster.'] : ['No tags are available for this cluster.'])),
+      ...(deckPaths.length > 1 ? ['Mixed deck paths reduce confidence.'] : []),
+      ...(clusterTextScore < 0.45 ? ['Text similarity is weak; cluster should not be treated as a merge.'] : []),
+      ...(clusterDeckScore < 0.55 && orderedMembers.length > 1 ? ['Deck proximity is weak for a multi-item cluster.'] : []),
+      ...(template.splitReason ? [template.splitReason] : [])
+    ]);
+
+    return {
+      id: `anki-cluster-${clusterIndex}`,
+      clusterIndex,
+      members: orderedMembers,
+      memberCount: orderedMembers.length,
+      primaryTags: primaryStrongTags,
+      broadTags: primaryBroadTags,
+      deckPaths,
+      deckKeys: Array.from(deckKeys),
+      sharedStrongTags,
+      warnings,
+      confidence,
+      conceptIds: orderedMembers.map(member => member.id),
+      conceptsPerCluster: orderedMembers.length,
+      splitFromClusterId: template.parentClusterId || null,
+      splitFromClusterIndex: template.parentClusterIndex || null,
+      splitReason: template.splitReason || '',
+      rawPreview: orderedMembers.map(member => ({
+        id: member.id,
+        sourceCardIndex: member.sourceCardIndex,
+        sourceCardOrder: member.sourceCardOrder,
+        originalRow: member.originalRow,
+        originalLine: member.originalLine,
+        guid: member.guid,
+        noteType: member.noteType,
+        deckRaw: member.deckRaw,
+        deckPath: member.deckPath,
+        tagsExact: member.tagsExact,
+        tagsNormalized: member.tagsNormalized,
+        clozeNumber: member.clozeNumber || null,
+        clozeEntries: member.clozeEntries || [],
+        sourceFieldIndex: member.sourceFieldIndex,
+        sourceFieldIndexes: member.sourceFieldIndexes,
+        sourceSnippets: member.sourceSnippets,
+        conceptText: member.conceptText,
+        warnings: member.warnings || []
+      }))
+    };
+  }
+
+  function assessAnkiClusterDraftReasons(cluster) {
+    const recognition = assessAnkiRecognitionFallback(cluster);
+    const reasons = [];
+    if (!recognition.supported) reasons.push(...recognition.reasons);
+    if (cluster?.confidence !== 'high') reasons.push('low confidence');
+    if (!(cluster?.sharedStrongTags || []).length) reasons.push('broad tags only');
+    if ((cluster?.memberCount || 0) > 1 && (cluster?.warnings || []).some(warning => /Text similarity is weak|No shared strong exact tag|Mixed deck paths/i.test(warning))) {
+      reasons.push('insufficient topic cohesion');
+    }
+    if (!(cluster?.members || []).some(member => member?.sourceKind === 'basic' || member?.sourceKind === 'cloze')) {
+      reasons.push('unsupported structure');
+    }
+    return {
+      recognition,
+      reasons: uniqueAnkiStrings(reasons)
+    };
+  }
+
   function clusterAnkiConceptCandidates(candidates) {
     const concepts = Array.isArray(candidates) ? candidates.map((candidate, idx) => Object.assign({ clusterIndex: idx }, candidate)) : [];
     if (!concepts.length) {
@@ -10450,94 +10720,23 @@ const App = (() => {
       clusterMap.get(root).push(concept);
     });
 
-    const clusters = Array.from(clusterMap.values()).map((members, idx) => {
-      const orderedMembers = members.slice().sort((a, b) => (a.sourceCardOrder || 0) - (b.sourceCardOrder || 0) || (a.originalLine || 0) - (b.originalLine || 0) || String(a.id).localeCompare(String(b.id)));
-      const strongTagCounts = new Map();
-      const broadTagCounts = new Map();
-      const deckPaths = [];
-      const deckKeys = new Set();
-      const memberWarnings = [];
+    const initialClusters = Array.from(clusterMap.values()).map((members, idx) => buildAnkiClusterSummary(members, idx + 1));
+    const clusters = [];
+    initialClusters.forEach(cluster => {
+      const topicGroups = splitAnkiClusterByTopic(cluster);
+      if (topicGroups.length <= 1) {
+        clusters.push(cluster);
+        return;
+      }
 
-      orderedMembers.forEach(member => {
-        member.strongTags.forEach(tag => strongTagCounts.set(tag, (strongTagCounts.get(tag) || 0) + 1));
-        member.broadTags.forEach(tag => broadTagCounts.set(tag, (broadTagCounts.get(tag) || 0) + 1));
-        const deckLabel = member.deckPath?.length ? member.deckPath.join(' > ') : 'Not mapped';
-        if (!deckKeys.has(deckLabel)) {
-          deckKeys.add(deckLabel);
-          deckPaths.push(deckLabel);
-        }
-        memberWarnings.push(...(member.warnings || []));
+      const splitReason = 'Split conservative topic subclusters within a shared tag bucket.';
+      topicGroups.forEach(group => {
+        clusters.push(buildAnkiClusterSummary(group, clusters.length + 1, {
+          parentClusterId: cluster.id,
+          parentClusterIndex: cluster.clusterIndex,
+          splitReason
+        }));
       });
-
-      const primaryStrongTags = Array.from(strongTagCounts.entries())
-        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-        .map(([tag]) => tag)
-        .slice(0, 4);
-      const primaryBroadTags = Array.from(broadTagCounts.entries())
-        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-        .map(([tag]) => tag)
-        .slice(0, 4);
-      const sharedStrongTags = orderedMembers.reduce((shared, member) => {
-        const memberSet = new Set(member.strongTags || []);
-        return shared.filter(tag => memberSet.has(tag));
-      }, orderedMembers[0]?.strongTags ? orderedMembers[0].strongTags.slice() : []);
-      const clusterTextScore = orderedMembers.length > 1
-        ? orderedMembers.slice(1).reduce((minScore, member, index) => {
-            const comparisons = orderedMembers.slice(0, index + 1).map(other => getAnkiTextSimilarityScore(member, other));
-            return Math.min(minScore, Math.max(...comparisons, 0));
-          }, 1)
-        : 1;
-      const clusterDeckScore = orderedMembers.length > 1
-        ? orderedMembers.slice(1).reduce((minScore, member, index) => {
-            const comparisons = orderedMembers.slice(0, index + 1).map(other => getAnkiDeckProximityScore(member, other));
-            return Math.min(minScore, Math.max(...comparisons, 0));
-          }, 1)
-        : 1;
-      const warnings = uniqueAnkiStrings([
-        ...memberWarnings,
-        ...(orderedMembers.length > 1 && sharedStrongTags.length ? [] : (orderedMembers.length > 1 ? ['No shared strong exact tag across this cluster.'] : [])),
-        ...(primaryStrongTags.length ? [] : (primaryBroadTags.length ? ['Only broad tags are available for this cluster.'] : ['No tags are available for this cluster.'])),
-        ...(deckPaths.length > 1 ? ['Mixed deck paths reduce confidence.'] : []),
-        ...(clusterTextScore < 0.45 ? ['Text similarity is weak; cluster should not be treated as a merge.'] : []),
-        ...(clusterDeckScore < 0.55 && orderedMembers.length > 1 ? ['Deck proximity is weak for a multi-item cluster.'] : [])
-      ]);
-      const confidence = warnings.length ? 'low' : 'high';
-
-      return {
-        id: `anki-cluster-${idx + 1}`,
-        clusterIndex: idx + 1,
-        members: orderedMembers,
-        memberCount: orderedMembers.length,
-        primaryTags: primaryStrongTags,
-        broadTags: primaryBroadTags,
-        deckPaths,
-        deckKeys: Array.from(deckKeys),
-        sharedStrongTags,
-        warnings,
-        confidence,
-        conceptIds: orderedMembers.map(member => member.id),
-        conceptsPerCluster: orderedMembers.length,
-        rawPreview: orderedMembers.map(member => ({
-          id: member.id,
-          sourceCardIndex: member.sourceCardIndex,
-          sourceCardOrder: member.sourceCardOrder,
-          originalRow: member.originalRow,
-          originalLine: member.originalLine,
-          guid: member.guid,
-          noteType: member.noteType,
-          deckRaw: member.deckRaw,
-          deckPath: member.deckPath,
-          tagsExact: member.tagsExact,
-          tagsNormalized: member.tagsNormalized,
-          clozeNumber: member.clozeNumber || null,
-          clozeEntries: member.clozeEntries || [],
-          sourceFieldIndex: member.sourceFieldIndex,
-          sourceFieldIndexes: member.sourceFieldIndexes,
-          sourceSnippets: member.sourceSnippets,
-          conceptText: member.conceptText,
-          warnings: member.warnings || []
-        }))
-      };
     });
 
     const warnings = uniqueAnkiStrings(clusters.flatMap(cluster => cluster.warnings || []));
@@ -10766,7 +10965,34 @@ const App = (() => {
     }));
   }
 
-  function buildAnkiVariantDraft(cluster, variantType, support) {
+  function buildAnkiVariantDraftStableId(cluster, variantType, options = {}) {
+    const members = Array.isArray(cluster?.members) ? cluster.members : [];
+    const marker = options.generationTier === 'fallback-recognition' ? 'fallback' : 'standard';
+    const sourceCardIndexes = uniqueAnkiStrings(members.map(member => String(member?.sourceCardIndex ?? member?.originalRow ?? '')).filter(Boolean));
+    const sourceCardOrders = uniqueAnkiStrings(members.map(member => String(member?.sourceCardOrder ?? member?.sourceCardIndex ?? member?.originalRow ?? '')).filter(Boolean));
+    const clozeNumbers = uniqueAnkiStrings(members.flatMap(member => Number.isFinite(Number(member?.clozeNumber)) ? [String(member.clozeNumber)] : []));
+    const sourceHashes = uniqueAnkiStrings(members.map(member => String(member?.sourceHash || '')).filter(Boolean));
+    const provenanceSeed = [
+      cluster?.id || `cluster-${cluster?.clusterIndex ?? 'na'}`,
+      variantType,
+      marker,
+      `cards:${sourceCardIndexes.join(',') || 'none'}`,
+      `orders:${sourceCardOrders.join(',') || 'none'}`,
+      `clozes:${clozeNumbers.join(',') || 'none'}`,
+      `hashes:${sourceHashes.slice(0, 4).join(',') || 'none'}`
+    ].join('|');
+    const suffix = fallbackTextHash(provenanceSeed).slice(0, 10);
+    const cardSlug = sourceCardIndexes.join('_') || 'none';
+    const orderSlug = sourceCardOrders.join('_') || 'none';
+    const clozeSlug = clozeNumbers.length ? `-z${clozeNumbers.join('_')}` : '';
+    return `anki-variant-${variantType}-${marker}-c${cardSlug}-o${orderSlug}${clozeSlug}-${suffix}`;
+  }
+
+  function getAnkiVariantDraftIdentity(draft) {
+    return String(draft?.draftId || draft?.id || '').trim();
+  }
+
+  function buildAnkiVariantDraft(cluster, variantType, support, options = {}) {
     const anchorLabel = support.anchorLabel || getAnkiClusterVariantAnchorLabel(cluster);
     const siblingLabel = support.siblingLabel || getAnkiClusterVariantSiblingLabel(cluster);
     const choices = buildAnkiVariantChoices(variantType, cluster, support);
@@ -10807,13 +11033,16 @@ const App = (() => {
     const variantWarnings = uniqueAnkiStrings([
       ...((cluster.warnings || [])),
       ...sourceCardWarnings,
-      'Deterministic scaffold only. Review required before any quiz use.'
+      'Deterministic scaffold only. Review required before any quiz use.',
+      options.generationTier === 'fallback-recognition' ? 'Fallback recognition draft generated from a weak cluster. Requires review.' : ''
     ]);
     return {
-      id: `anki-variant-${cluster.clusterIndex}-${variantType}`,
+      draftId: buildAnkiVariantDraftStableId(cluster, variantType, options),
+      id: buildAnkiVariantDraftStableId(cluster, variantType, options),
       clusterId: cluster.id,
       clusterIndex: cluster.clusterIndex,
       variantType,
+      generationTier: options.generationTier || 'standard',
       anchorLabel,
       siblingLabel: siblingLabel || '',
       stemScaffold: {
@@ -10851,7 +11080,9 @@ const App = (() => {
       clozeProvenance,
       sourceSnippets,
       warnings: variantWarnings,
-      confidence: variantType === 'recognition' && cluster.confidence === 'high' ? 'medium' : 'low',
+      confidence: options.generationTier === 'fallback-recognition'
+        ? 'low'
+        : (variantType === 'recognition' && cluster.confidence === 'high' ? 'medium' : 'low'),
       sourceProof: {
         managementEvidence: variantType === 'management' ? support.managementEvidence : null,
         contrastEvidence: variantType === 'differentiation' ? support.contrastEvidence : null
@@ -10859,22 +11090,29 @@ const App = (() => {
     };
   }
 
-  function buildAnkiVariantDrafts(clusterResult) {
+  let _ankiQuizPreviewActive = false;
+
+  function buildAnkiVariantDrafts(clusterResult, existingReviewStatus = null) {
+    if (_ankiQuizPreviewActive && Array.isArray(_ankiImportPreview?.variantResult?.drafts) && _ankiImportPreview.variantResult.drafts.length) {
+      console.warn('Anki quiz preview attempted to rebuild variant drafts.');
+      return _ankiImportPreview.variantResult;
+    }
     const clusters = Array.isArray(clusterResult?.clusters) ? clusterResult.clusters : [];
     const drafts = [];
     const skippedClusters = [];
+    const skipReasonSet = new Set();
+    let fallbackRecognitionCount = 0;
 
     clusters.forEach(cluster => {
-      if (!isAnkiStrongVariantCluster(cluster)) {
+      const clusterAssessment = assessAnkiClusterDraftReasons(cluster);
+      const recognitionAssessment = clusterAssessment.recognition;
+      if (!recognitionAssessment.supported) {
         skippedClusters.push({
           clusterIndex: cluster.clusterIndex,
           clusterId: cluster.id,
-          reasons: uniqueAnkiStrings([
-            cluster.memberCount < 2 ? 'Too few concepts in cluster.' : '',
-            cluster.confidence !== 'high' ? 'Cluster confidence is too low for draft generation.' : '',
-            !(cluster.sharedStrongTags || []).length ? 'No shared exact tag support.' : ''
-          ].filter(Boolean))
+          reasons: clusterAssessment.reasons
         });
+        clusterAssessment.reasons.forEach(reason => skipReasonSet.add(reason));
         return;
       }
 
@@ -10882,6 +11120,7 @@ const App = (() => {
       const siblingLabel = getAnkiClusterVariantSiblingLabel(cluster);
       const managementEvidence = analyzeAnkiClusterManagementEvidence(cluster);
       const contrastEvidence = analyzeAnkiClusterContrastEvidence(cluster);
+      const isStrongCluster = isAnkiStrongVariantCluster(cluster);
       const support = {
         anchorLabel,
         siblingLabel,
@@ -10891,9 +11130,11 @@ const App = (() => {
         contrastLabel: siblingLabel || anchorLabel
       };
 
-      drafts.push(buildAnkiVariantDraft(cluster, 'recognition', support));
-      if (managementEvidence.supported) drafts.push(buildAnkiVariantDraft(cluster, 'management', support));
-      if (contrastEvidence.supported) drafts.push(buildAnkiVariantDraft(cluster, 'differentiation', support));
+      const recognitionTier = isStrongCluster ? 'standard-recognition' : 'fallback-recognition';
+      drafts.push(buildAnkiVariantDraft(cluster, 'recognition', support, { generationTier: recognitionTier }));
+      if (recognitionTier === 'fallback-recognition') fallbackRecognitionCount += 1;
+      if (isStrongCluster && managementEvidence.supported) drafts.push(buildAnkiVariantDraft(cluster, 'management', support, { generationTier: 'standard-management' }));
+      if (isStrongCluster && contrastEvidence.supported) drafts.push(buildAnkiVariantDraft(cluster, 'differentiation', support, { generationTier: 'standard-differentiation' }));
     });
 
     const warnings = uniqueAnkiStrings([
@@ -10904,17 +11145,31 @@ const App = (() => {
     return {
       drafts,
       draftCount: drafts.length,
+      fallbackRecognitionCount,
       strongClusterCount: clusters.filter(isAnkiStrongVariantCluster).length,
       clusterCount: clusters.length,
       rawConceptCount: clusterResult?.conceptCount || 0,
       conceptsPerCluster: clusters.map(cluster => cluster.memberCount),
-      reviewStatus: Object.fromEntries(drafts.map(draft => [draft.id, 'pending'])),
+      reviewStatus: buildAnkiVariantPendingReviewStatusMap(drafts, existingReviewStatus || _ankiImportPreview?.variantResult?.reviewStatus || null),
       recognitionCount: drafts.filter(draft => draft.variantType === 'recognition').length,
       managementCount: drafts.filter(draft => draft.variantType === 'management').length,
       differentiationCount: drafts.filter(draft => draft.variantType === 'differentiation').length,
       skippedClusters,
+      skipReasons: uniqueAnkiStrings(Array.from(skipReasonSet)),
       warnings
     };
+  }
+
+  function buildAnkiVariantPendingReviewStatusMap(drafts, existingReviewStatus = null) {
+    const reviewStatus = existingReviewStatus && typeof existingReviewStatus === 'object' ? { ...existingReviewStatus } : {};
+    (Array.isArray(drafts) ? drafts : []).forEach(draft => {
+      const draftId = getAnkiVariantDraftIdentity(draft);
+      if (!draftId) return;
+      if (!Object.prototype.hasOwnProperty.call(reviewStatus, draftId)) {
+        reviewStatus[draftId] = 'pending';
+      }
+    });
+    return reviewStatus;
   }
 
   function renderAnkiVariantPreview(result) {
@@ -10923,25 +11178,63 @@ const App = (() => {
     if (!status || !preview) return;
 
     const drafts = Array.isArray(result?.drafts) ? result.drafts : [];
-    const reviewStatus = result?.reviewStatus || {};
+    const snapshot = getAnkiVariantReviewSnapshot();
+    const reviewStatus = getAnkiVariantCanonicalReviewStatusMap();
     updateAnkiVariantExportButton();
+    const warningCount = Array.isArray(result?.warnings) ? result.warnings.length : 0;
+    const statusCounts = snapshot.statusCounts || { pending: 0, approved: 0, rejected: 0 };
+    const skippedCount = Array.isArray(result?.skippedClusters) ? result.skippedClusters.length : 0;
+    const skipReasons = uniqueAnkiStrings([
+      ...(result?.skipReasons || []),
+      ...(result?.skippedClusters || []).flatMap(item => item.reasons || [])
+    ]);
+    const fallbackRecognitionCount = Number(result?.fallbackRecognitionCount || 0);
+    status.textContent = drafts.length
+      ? `${result.draftCount} deterministic variant draft${result.draftCount === 1 ? '' : 's'} generated (${fallbackRecognitionCount} fallback recognition) from ${result.clusterCount} cluster${result.clusterCount === 1 ? '' : 's'}. Review state: ${statusCounts.pending} pending, ${statusCounts.approved} approved, ${statusCounts.rejected} rejected. Preview only.`
+      : `No variant drafts generated. ${skippedCount} cluster${skippedCount === 1 ? '' : 's'} were skipped.${skipReasons.length ? ` Skip reasons: ${skipReasons.join(' · ')}.` : ''}`;
+
+    const summaryHtml = `
+      <div class="notes-import-stats">
+        <span><strong>Raw concepts</strong> ${escapeHTML(String(result.rawConceptCount || 0))}</span>
+        <span><strong>Cluster count</strong> ${escapeHTML(String(result.clusterCount || 0))}</span>
+        <span><strong>Concepts per cluster</strong> ${escapeHTML((result.conceptsPerCluster || []).join(', ') || 'None')}</span>
+        <span><strong>Warnings</strong> ${escapeHTML(String(warningCount || 0))}</span>
+      </div>
+      <div class="notes-import-stats" style="margin-top:8px;">
+        <span><strong>Generated drafts</strong> ${escapeHTML(String(result.draftCount || 0))}</span>
+        <span><strong>Fallback recognition</strong> ${escapeHTML(String(fallbackRecognitionCount || 0))}</span>
+        <span><strong>Skipped clusters</strong> ${escapeHTML(String(skippedCount || 0))}</span>
+        <span><strong>Skip reasons</strong> ${escapeHTML(skipReasons.length ? skipReasons.join(' · ') : 'None')}</span>
+      </div>
+      <div class="notes-import-stats" style="margin-top:8px;">
+        <span><strong>Pending</strong> ${escapeHTML(String(statusCounts.pending || 0))}</span>
+        <span><strong>Approved</strong> ${escapeHTML(String(statusCounts.approved || 0))}</span>
+        <span><strong>Rejected</strong> ${escapeHTML(String(statusCounts.rejected || 0))}</span>
+        <span><strong>Total drafts</strong> ${escapeHTML(String(result.draftCount || 0))}</span>
+      </div>
+      ${statusCounts.approved !== snapshot.approvedCount ? `<div style="color:#8a5a00;margin-top:8px;">Consistency warning: review summary approved count (${escapeHTML(String(statusCounts.approved || 0))}) does not match approved getter count (${escapeHTML(String(snapshot.approvedCount || 0))}).</div>` : ''}
+    `;
+
     if (!drafts.length) {
-      const skippedCount = Array.isArray(result?.skippedClusters) ? result.skippedClusters.length : 0;
-      status.textContent = skippedCount
-        ? `No strong clusters met the draft guardrails. ${skippedCount} cluster${skippedCount === 1 ? '' : 's'} were skipped.`
-        : 'No variant drafts generated from the clusters.';
-      preview.innerHTML = '<div class="notes-import-empty">No variant drafts generated.</div>';
+      preview.innerHTML = `
+        ${summaryHtml}
+        ${skippedCount ? `
+          <div class="notes-draft-card">
+            <div class="notes-draft-title">Skipped clusters</div>
+            ${skipReasons.length ? `<div class="notes-draft-meta">Reasons: ${escapeHTML(skipReasons.join(' · '))}</div>` : '<div class="notes-import-empty">No skip reasons recorded.</div>'}
+            <div class="notes-draft-body">
+              ${(result.skippedClusters || []).slice(0, 18).map(item => `
+                <div style="border-top:1px solid #d7e0e9;padding-top:8px;margin-top:8px;">
+                  <div class="notes-draft-meta">Cluster ${escapeHTML(String(item.clusterIndex || '?'))} · ${escapeHTML((item.reasons || []).join(' · ') || 'No skip reasons recorded')}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : '<div class="notes-import-empty">No variant drafts generated.</div>'}
+      `;
       updateAnkiVariantExportButton();
       return;
     }
-
-    const warningCount = Array.isArray(result?.warnings) ? result.warnings.length : 0;
-    const statusCounts = drafts.reduce((counts, draft) => {
-      const state = reviewStatus[draft.id] || 'pending';
-      counts[state] = (counts[state] || 0) + 1;
-      return counts;
-    }, { pending: 0, approved: 0, rejected: 0 });
-    status.textContent = `${result.draftCount} deterministic variant draft${result.draftCount === 1 ? '' : 's'} generated from ${result.strongClusterCount} strong cluster${result.strongClusterCount === 1 ? '' : 's'}. Review state: ${statusCounts.pending} pending, ${statusCounts.approved} approved, ${statusCounts.rejected} rejected. Preview only.`;
 
     const cards = drafts.slice(0, 18).map(draft => {
       const choiceHtml = (draft.choices || []).map(choice => `
@@ -10951,16 +11244,22 @@ const App = (() => {
         </div>
       `).join('');
       const warnings = Array.isArray(draft.warnings) ? draft.warnings : [];
-      const currentReviewStatus = reviewStatus[draft.id] || 'pending';
+      const draftId = getAnkiVariantDraftIdentity(draft);
+      const currentReviewStatus = getAnkiVariantReviewStatusLabel(reviewStatus[draftId]);
+      const confidenceLabel = draft.confidence === 'medium' ? 'Medium confidence' : 'Low confidence';
+      const generationLabel = draft.generationTier === 'fallback-recognition'
+        ? 'Fallback recognition'
+        : (draft.variantType === 'management' ? 'Management' : (draft.variantType === 'differentiation' ? 'Differentiation' : 'Recognition'));
       const reviewControls = `
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
-          <button type="button" class="btn-card" onclick="App.setAnkiVariantReviewStatus('${escapeHTML(draft.id)}','approved')" ${currentReviewStatus === 'approved' ? 'disabled' : ''}>Approve</button>
-          <button type="button" class="btn-card danger" onclick="App.setAnkiVariantReviewStatus('${escapeHTML(draft.id)}','rejected')" ${currentReviewStatus === 'rejected' ? 'disabled' : ''}>Reject</button>
-          <button type="button" class="btn-card" onclick="App.setAnkiVariantReviewStatus('${escapeHTML(draft.id)}','pending')" ${currentReviewStatus === 'pending' ? 'disabled' : ''}>Reset</button>
+          <button type="button" class="btn-card" data-anki-review-id="${escapeHTML(draftId)}" data-anki-review-status="approved" ${currentReviewStatus === 'approved' ? 'disabled' : ''}>Approve</button>
+          <button type="button" class="btn-card danger" data-anki-review-id="${escapeHTML(draftId)}" data-anki-review-status="rejected" ${currentReviewStatus === 'rejected' ? 'disabled' : ''}>Reject</button>
+          <button type="button" class="btn-card" data-anki-review-id="${escapeHTML(draftId)}" data-anki-review-status="pending" ${currentReviewStatus === 'pending' ? 'disabled' : ''}>Reset</button>
         </div>
       `;
       const provenance = JSON.stringify({
         id: draft.id,
+        draftId: draftId,
         clusterId: draft.clusterId,
         clusterIndex: draft.clusterIndex,
         variantType: draft.variantType,
@@ -10977,11 +11276,13 @@ const App = (() => {
       return `
         <div class="notes-draft-card">
           <div class="notes-draft-title">Cluster ${escapeHTML(String(draft.clusterIndex))} · ${escapeHTML(draft.variantType)} scaffold · provisional ${escapeHTML(draft.provisionalCorrectAnswer)}</div>
+          <div class="notes-draft-meta">Draft ID: ${escapeHTML(draftId)}</div>
           <div class="notes-draft-meta">Source cards: ${escapeHTML((draft.sourceCardIds || []).join(', ') || 'None')} · Orders: ${escapeHTML((draft.sourceCardOrders || []).map(value => String(value)).join(', ') || 'None')}</div>
         <div class="notes-draft-meta">Tags: ${escapeHTML((draft.tagsExact || []).join(' ') || 'None')} · Deck paths: ${escapeHTML((draft.deckPaths || []).join(' | ') || 'Not mapped')}</div>
         <div style="margin-top:8px;">${escapeHTML(draft.stemScaffold || '')}</div>
         <div class="notes-draft-meta" style="margin-top:8px;">Teaching point: ${escapeHTML(draft.teachingPoint || '')}</div>
         <div class="notes-draft-meta">Review status: ${escapeHTML(currentReviewStatus)}</div>
+        <div class="notes-draft-meta">Generation tier: ${escapeHTML(generationLabel)} · ${escapeHTML(confidenceLabel)}${draft.generationTier === 'fallback-recognition' ? ' · generated from weak cluster · requires review' : ''}</div>
         <div class="notes-draft-meta">Placeholder distractor rationales: ${escapeHTML((draft.placeholderDistractorRationales || []).join(' | ') || 'None')}</div>
         ${warnings.length ? `<div style="color:#8a5a00;margin-top:8px;">${escapeHTML(warnings.join(' '))}</div>` : '<div class="notes-import-empty">No draft warnings.</div>'}
         ${reviewControls}
@@ -10998,50 +11299,146 @@ const App = (() => {
     }).join('');
 
     preview.innerHTML = `
-      <div class="notes-import-stats">
-        <span><strong>Raw concepts</strong> ${escapeHTML(String(result.rawConceptCount || 0))}</span>
-        <span><strong>Cluster count</strong> ${escapeHTML(String(result.clusterCount || 0))}</span>
-        <span><strong>Concepts per cluster</strong> ${escapeHTML((result.conceptsPerCluster || []).join(', ') || 'None')}</span>
-        <span><strong>Warnings</strong> ${escapeHTML(String(warningCount || 0))}</span>
-      </div>
+      ${summaryHtml}
       <div class="notes-import-stats" style="margin-top:8px;">
-        <span><strong>Strong clusters used</strong> ${escapeHTML(String(result.strongClusterCount || 0))}</span>
-        <span><strong>Draft variants</strong> ${escapeHTML(String(result.draftCount || 0))}</span>
         <span><strong>Recognition</strong> ${escapeHTML(String(result.recognitionCount || 0))}</span>
         <span><strong>Management</strong> ${escapeHTML(String(result.managementCount || 0))}</span>
         <span><strong>Differentiation</strong> ${escapeHTML(String(result.differentiationCount || 0))}</span>
-        <span><strong>Skipped clusters</strong> ${escapeHTML(String((result.skippedClusters || []).length))}</span>
-      </div>
-      <div class="notes-import-stats" style="margin-top:8px;">
-        <span><strong>Pending</strong> ${escapeHTML(String(statusCounts.pending || 0))}</span>
-        <span><strong>Approved</strong> ${escapeHTML(String(statusCounts.approved || 0))}</span>
-        <span><strong>Rejected</strong> ${escapeHTML(String(statusCounts.rejected || 0))}</span>
-        <span><strong>Total drafts</strong> ${escapeHTML(String(result.draftCount || 0))}</span>
+        <span><strong>Strong clusters used</strong> ${escapeHTML(String(result.strongClusterCount || 0))}</span>
       </div>
       ${cards}
       ${drafts.length > 18 ? `<div class="notes-import-empty">Showing first 18 of ${drafts.length} variant drafts.</div>` : ''}
     `;
+    bindAnkiVariantReviewControls();
     updateAnkiVariantExportButton();
-    renderAnkiQuizObjectPreview();
+  }
+
+  function bindAnkiVariantReviewControls() {
+    const preview = document.getElementById('anki-variant-preview');
+    if (!preview || preview.__ankiReviewControlsBound) return;
+    preview.__ankiReviewControlsBound = true;
+    preview.addEventListener('click', event => {
+      const target = event.target;
+      const button = target && target.closest ? target.closest('button[data-anki-review-id][data-anki-review-status]') : null;
+      if (!button || !preview.contains(button)) return;
+      const draftId = button.getAttribute('data-anki-review-id');
+      const reviewStatus = button.getAttribute('data-anki-review-status');
+      if (!draftId || !reviewStatus) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setAnkiVariantReviewStatus(draftId, reviewStatus);
+    });
   }
 
   function setAnkiVariantReviewStatus(draftId, status) {
     if (!_ankiImportPreview?.variantResult?.drafts?.length) return;
     if (!['pending', 'approved', 'rejected'].includes(status)) return;
-    const exists = _ankiImportPreview.variantResult.drafts.some(draft => draft.id === draftId);
+    const exists = _ankiImportPreview.variantResult.drafts.some(draft => getAnkiVariantDraftIdentity(draft) === draftId);
     if (!exists) return;
     _ankiImportPreview.variantResult.reviewStatus = _ankiImportPreview.variantResult.reviewStatus || {};
     _ankiImportPreview.variantResult.reviewStatus[draftId] = status;
     renderAnkiVariantPreview(_ankiImportPreview.variantResult);
+    renderAnkiQuizObjectPreview();
+  }
+
+  function isAnkiVariantApprovedStatus(value) {
+    if (typeof value === 'string') return value.trim().toLowerCase() === 'approved';
+    if (value && typeof value === 'object') {
+      if (typeof value.status === 'string' && value.status.trim().toLowerCase() === 'approved') return true;
+      if (typeof value.reviewStatus === 'string' && value.reviewStatus.trim().toLowerCase() === 'approved') return true;
+      if (typeof value.state === 'string' && value.state.trim().toLowerCase() === 'approved') return true;
+      if (typeof value.value === 'string' && value.value.trim().toLowerCase() === 'approved') return true;
+    }
+    return false;
+  }
+
+  function getAnkiVariantReviewStatusLabel(value) {
+    if (isAnkiVariantApprovedStatus(value)) return 'approved';
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      if (normalized === 'pending' || normalized === 'rejected') return normalized;
+    }
+    if (value && typeof value === 'object') {
+      const raw = typeof value.status === 'string' ? value.status
+        : typeof value.reviewStatus === 'string' ? value.reviewStatus
+        : typeof value.state === 'string' ? value.state
+        : typeof value.value === 'string' ? value.value
+        : '';
+      const normalized = String(raw || '').trim().toLowerCase();
+      if (normalized === 'approved' || normalized === 'pending' || normalized === 'rejected') return normalized;
+    }
+    return 'pending';
+  }
+
+  function getAnkiVariantCanonicalReviewStatusMap() {
+    const reviewStatus = _ankiImportPreview?.variantResult?.reviewStatus;
+    return reviewStatus && typeof reviewStatus === 'object' ? reviewStatus : {};
+  }
+
+  function getAnkiVariantReviewSnapshot() {
+    const result = _ankiImportPreview?.variantResult || null;
+    const drafts = Array.isArray(result?.drafts) ? result.drafts : [];
+    const reviewStatus = getAnkiVariantCanonicalReviewStatusMap();
+    const approved = [];
+    const seen = new Set();
+    drafts.forEach(draft => {
+      const draftId = getAnkiVariantDraftIdentity(draft);
+      if (!isAnkiVariantApprovedStatus(reviewStatus[draftId])) return;
+      if (seen.has(draftId)) return;
+      seen.add(draftId);
+      approved.push({ draftId, draft });
+    });
+    const statusCounts = drafts.reduce((counts, draft) => {
+      const value = reviewStatus[getAnkiVariantDraftIdentity(draft)];
+      const state = getAnkiVariantReviewStatusLabel(value);
+      counts[state] = (counts[state] || 0) + 1;
+      return counts;
+    }, { pending: 0, approved: 0, rejected: 0 });
+    return {
+      result,
+      drafts,
+      reviewStatus,
+      reviewStatusIsCanonical: reviewStatus === _ankiImportPreview?.variantResult?.reviewStatus,
+      approved,
+      approvedCount: approved.length,
+      statusCounts
+    };
+  }
+
+  function getAnkiVariantDraftIdentityIssues(snapshot = getAnkiVariantReviewSnapshot()) {
+    const drafts = Array.isArray(snapshot?.drafts) ? snapshot.drafts : [];
+    const draftIds = drafts.map(draft => getAnkiVariantDraftIdentity(draft)).filter(Boolean);
+    const missingCount = drafts.length - draftIds.length;
+    const duplicateIds = draftIds.filter((id, idx, arr) => arr.indexOf(id) !== idx);
+    const issues = [];
+    if (missingCount > 0) issues.push(`Missing draft ID on ${missingCount} Anki variant draft${missingCount === 1 ? '' : 's'}.`);
+    if (duplicateIds.length > 0) issues.push(`Duplicate draft ID detected: ${uniqueAnkiStrings(duplicateIds).join(' | ')}.`);
+    return {
+      draftIds,
+      missingCount,
+      duplicateIds: uniqueAnkiStrings(duplicateIds),
+      issues
+    };
   }
 
   function getApprovedAnkiVariantDrafts() {
-    const result = _ankiImportPreview?.variantResult;
-    const drafts = Array.isArray(result?.drafts) ? result.drafts : [];
-    const reviewStatus = result?.reviewStatus || {};
-    return drafts
-      .filter(draft => reviewStatus[draft.id] === 'approved')
-      .map(draft => ({ draftId: draft.id, draft }));
+    return getApprovedAnkiDraftsFromReviewSnapshot();
+  }
+
+  function getApprovedAnkiDraftsFromReviewSnapshot() {
+    const drafts = _ankiImportPreview?.variantResult?.drafts;
+    const reviewStatus = _ankiImportPreview?.variantResult?.reviewStatus;
+    if (!Array.isArray(drafts) || !reviewStatus || typeof reviewStatus !== 'object') return [];
+    const seen = new Set();
+    const approved = [];
+    drafts.forEach(draft => {
+      const draftId = getAnkiVariantDraftIdentity(draft);
+      if (!draftId || seen.has(draftId)) return;
+      if (!isAnkiVariantApprovedStatus(reviewStatus[draftId])) return;
+      seen.add(draftId);
+      approved.push({ draftId, draft });
+    });
+    return approved;
   }
 
   function updateAnkiVariantExportButton() {
@@ -11071,6 +11468,7 @@ const App = (() => {
   }
 
   function convertApprovedAnkiVariantToQuizObject(draft, idx) {
+    const draftId = getAnkiVariantDraftIdentity(draft);
     const quizQuestion = {
       n: idx + 1,
       sourceQuestionNumber: idx + 1,
@@ -11089,7 +11487,7 @@ const App = (() => {
       sourceType: 'anki-text',
       sourceName: _ankiImportPreview?.fileName || '',
       sourceHash: _ankiImportPreview?.sourceHash || '',
-      draftId: draft?.id || '',
+      draftId,
       clusterId: draft?.clusterId || '',
       clusterIndex: draft?.clusterIndex ?? null,
       variantType: draft?.variantType || '',
@@ -11144,8 +11542,14 @@ const App = (() => {
     if (!Array.isArray(provenance.sourceCardOrders) || provenance.sourceCardOrders.length !== provenance.sourceCardIds.length) errors.push('missing source card orders provenance');
     if (!Array.isArray(provenance.sourceGuids) || provenance.sourceGuids.length !== provenance.sourceCardIds.length) errors.push('missing GUID provenance');
     if (!Array.isArray(provenance.sourceNoteTypes) || provenance.sourceNoteTypes.length !== provenance.sourceCardIds.length) errors.push('missing note type provenance');
-    if (!Array.isArray(provenance.sourceDeckRaws) || provenance.sourceDeckRaws.length !== provenance.sourceCardIds.length) errors.push('missing deckRaw provenance');
-    if (!Array.isArray(provenance.sourceDeckPathValues) || provenance.sourceDeckPathValues.length !== provenance.sourceCardIds.length) errors.push('missing deckPath provenance');
+    const hasDeckHierarchy = Array.isArray(provenance.sourceDeckRaws) && provenance.sourceDeckRaws.length === provenance.sourceCardIds.length && provenance.sourceDeckRaws.some(value => nonemptyString(value)) &&
+      Array.isArray(provenance.sourceDeckPathValues) && provenance.sourceDeckPathValues.length === provenance.sourceCardIds.length && provenance.sourceDeckPathValues.some(value => Array.isArray(value) && value.length);
+    if (!hasDeckHierarchy) {
+      provenance.warnings = Array.isArray(provenance.warnings) ? provenance.warnings : [];
+      if (!provenance.warnings.some(warning => /Missing deck hierarchy/i.test(warning))) {
+        provenance.warnings.push('Missing deck hierarchy; using tags and source card provenance only.');
+      }
+    }
     if (!Array.isArray(provenance.tagsExact)) errors.push('missing exact tags provenance');
     if (!Array.isArray(provenance.clozeProvenance)) errors.push('missing cloze provenance');
     if (!Array.isArray(provenance.warnings)) errors.push('missing warnings provenance');
@@ -11154,64 +11558,146 @@ const App = (() => {
   }
 
   function getApprovedAnkiQuizObjectPreviewValidation() {
-    const approved = getApprovedAnkiVariantDrafts();
-    const items = approved.map(({ draft }, idx) => convertApprovedAnkiVariantToQuizObject(draft, idx));
-    const errors = items.flatMap((item, idx) => validateAnkiQuizObjectPreviewItem(item).map(error => `Quiz object ${idx + 1}: ${error}`));
-    return { items, errors };
+    const approvedDrafts = getApprovedAnkiDraftsFromReviewSnapshot();
+    const snapshot = getAnkiVariantReviewSnapshot();
+    const identityIssues = getAnkiVariantDraftIdentityIssues(snapshot);
+    if (identityIssues.issues.length) {
+      return {
+        approvedDrafts,
+        items: [],
+        errors: identityIssues.issues.map(issue => `Identity: ${issue}`),
+        warnings: [],
+        isValid: false
+      };
+    }
+    const items = approvedDrafts.map(({ draft }, idx) => convertApprovedAnkiVariantToQuizObject(draft, idx));
+    const validationIssues = items.flatMap((item, idx) => validateAnkiQuizObjectPreviewItem(item).errors.map(error => `Quiz object ${idx + 1}: ${error}`));
+    const warnings = uniqueAnkiStrings([
+      ...(snapshot?.warnings || []),
+      ...items.flatMap(item => Array.isArray(item?.provenance?.warnings) ? item.provenance.warnings : [])
+    ]);
+    const errors = validationIssues.slice();
+    if (approvedDrafts.length > 0 && errors.length === 0 && items.length !== approvedDrafts.length) {
+      const message = 'Internal Anki conversion bug: approved drafts validated but produced zero quiz objects.';
+      console.warn(message, {
+        approvedDraftCount: approvedDrafts.length,
+        quizObjectCount: items.length,
+        draftIds: approvedDrafts.map(item => item.draftId)
+      });
+      errors.push(message);
+    }
+    return {
+      approvedDrafts,
+      items,
+      errors,
+      warnings,
+      isValid: errors.length === 0
+    };
   }
 
   function renderAnkiQuizObjectPreview() {
     const status = document.getElementById('anki-quiz-object-status');
     const preview = document.getElementById('anki-quiz-object-preview');
     if (!status || !preview) return;
-
-    const approved = getApprovedAnkiVariantDrafts();
-    if (!approved.length) {
-      status.textContent = 'Approve Anki variant drafts to preview quiz-question objects. Nothing is saved.';
-      preview.innerHTML = '<div class="notes-import-empty">No approved Anki variants converted.</div>';
-      updateApprovedAnkiDraftCreateTestButton();
-      return;
-    }
-
-    const { items, errors } = getApprovedAnkiQuizObjectPreviewValidation();
-    if (errors.length) {
-      const message = `Anki quiz object preview blocked: ${errors[0]}`;
-      status.textContent = message;
-      preview.innerHTML = `
-        <div class="notes-draft-card">
-          <div class="notes-draft-title">Validation errors</div>
-          <div class="notes-draft-meta">Preview blocked until approved variants contain complete quiz-object provenance.</div>
-          <div style="color:#8a5a00;margin-top:8px;">${escapeHTML(errors.join(' '))}</div>
-        </div>
-      `;
-      updateApprovedAnkiDraftCreateTestButton();
-      return;
-    }
-
-    status.textContent = `${items.length} approved Anki variant${items.length === 1 ? '' : 's'} converted into quiz-question object previews. Nothing was saved.`;
-    preview.innerHTML = items.map((item, idx) => {
-      const quizJson = JSON.stringify(item.quizQuestion, null, 2);
-      const provenanceJson = JSON.stringify(item.provenance, null, 2);
-      return `
-        <details class="notes-draft-card" ${idx < 2 ? 'open' : ''}>
-          <summary class="notes-draft-summary">
-            <div class="notes-draft-title">Quiz Object ${idx + 1}: ${escapeHTML(item.provenance.variantType || 'variant')} · ${escapeHTML(item.quizQuestion.c || '?')}</div>
-            <div class="notes-draft-meta">preview only · not saved · ${escapeHTML(item.provenance.draftId || '')}</div>
-          </summary>
-          <div class="notes-draft-body">
-            <details open>
-              <summary>Quiz object JSON</summary>
-              <pre style="white-space:pre-wrap;overflow:auto;margin-top:8px;">${escapeHTML(quizJson)}</pre>
-            </details>
-            <details>
-              <summary>Provenance JSON</summary>
-              <pre style="white-space:pre-wrap;overflow:auto;margin-top:8px;">${escapeHTML(provenanceJson)}</pre>
-            </details>
+    _ankiQuizPreviewActive = true;
+    try {
+      const snapshot = getAnkiVariantReviewSnapshot();
+      const approvedKeysBeforeValidation = Object.keys(getAnkiVariantCanonicalReviewStatusMap()).filter(key => isAnkiVariantApprovedStatus(getAnkiVariantCanonicalReviewStatusMap()[key]));
+      const result = getApprovedAnkiQuizObjectPreviewValidation();
+      const approvedDrafts = Array.isArray(result?.approvedDrafts) ? result.approvedDrafts : [];
+      const approvedKeysAfterValidation = Object.keys(getAnkiVariantCanonicalReviewStatusMap()).filter(key => isAnkiVariantApprovedStatus(getAnkiVariantCanonicalReviewStatusMap()[key]));
+      if (approvedKeysBeforeValidation.length && approvedKeysAfterValidation.length !== approvedKeysBeforeValidation.length) {
+        const message = 'Anki reviewStatus was mutated during quiz preview validation.';
+        console.warn(message, {
+          approvedKeysBeforeValidation,
+          approvedKeysAfterValidation
+        });
+        status.textContent = message;
+        preview.innerHTML = `
+          <div class="notes-draft-card">
+            <div class="notes-draft-title">Internal review-state error</div>
+            <div class="notes-draft-meta">${escapeHTML(message)}</div>
           </div>
-        </details>
-      `;
-    }).join('');
-    updateApprovedAnkiDraftCreateTestButton();
+        `;
+        updateApprovedAnkiDraftCreateTestButton();
+        return;
+      }
+      const identityIssues = getAnkiVariantDraftIdentityIssues(snapshot);
+      if (identityIssues.issues.length) {
+        const message = `Anki quiz object preview blocked: ${identityIssues.issues[0]}`;
+        status.textContent = message;
+        preview.innerHTML = `
+          <div class="notes-draft-card">
+            <div class="notes-draft-title">Identity errors</div>
+            <div class="notes-draft-meta">Preview blocked until every approved draft has one stable unique draft ID.</div>
+            <div style="color:#8a5a00;margin-top:8px;">${escapeHTML(identityIssues.issues.join(' '))}</div>
+          </div>
+        `;
+        updateApprovedAnkiDraftCreateTestButton();
+        return;
+      }
+
+      if (approvedDrafts.length > 0 && result.items.length === 0) {
+        const message = 'Internal Anki conversion bug: approved drafts validated but produced zero quiz objects.';
+        status.textContent = message;
+        preview.innerHTML = `
+          <div class="notes-draft-card">
+            <div class="notes-draft-title">Internal conversion error</div>
+            <div class="notes-draft-meta">${escapeHTML(message)}</div>
+          </div>
+        `;
+        updateApprovedAnkiDraftCreateTestButton();
+        return;
+      }
+
+      if (!result.isValid) {
+        const message = `Anki quiz object preview blocked: ${result.errors[0]}`;
+        status.textContent = message;
+        preview.innerHTML = `
+          <div class="notes-draft-card">
+            <div class="notes-draft-title">Validation errors</div>
+            <div class="notes-draft-meta">Preview blocked until approved variants contain complete quiz-object provenance.</div>
+            <div style="color:#8a5a00;margin-top:8px;">${escapeHTML(result.errors.join(' '))}</div>
+          </div>
+        `;
+        updateApprovedAnkiDraftCreateTestButton();
+        return;
+      }
+
+      if (!approvedDrafts.length) {
+        status.textContent = 'Approve Anki variant drafts to preview quiz-question objects. Nothing is saved.';
+        preview.innerHTML = '<div class="notes-import-empty">No approved Anki variants converted.</div>';
+        updateApprovedAnkiDraftCreateTestButton();
+        return;
+      }
+
+      status.textContent = `${result.items.length} approved Anki variant${result.items.length === 1 ? '' : 's'} converted into quiz-question object previews. Nothing was saved.`;
+      preview.innerHTML = result.items.map((item, idx) => {
+        const quizJson = JSON.stringify(item.quizQuestion, null, 2);
+        const provenanceJson = JSON.stringify(item.provenance, null, 2);
+        return `
+          <details class="notes-draft-card" ${idx < 2 ? 'open' : ''}>
+            <summary class="notes-draft-summary">
+              <div class="notes-draft-title">Quiz Object ${idx + 1}: ${escapeHTML(item.provenance.variantType || 'variant')} · ${escapeHTML(item.quizQuestion.c || '?')}</div>
+              <div class="notes-draft-meta">preview only · not saved · ${escapeHTML(item.provenance.draftId || '')}</div>
+            </summary>
+            <div class="notes-draft-body">
+              <details open>
+                <summary>Quiz object JSON</summary>
+                <pre style="white-space:pre-wrap;overflow:auto;margin-top:8px;">${escapeHTML(quizJson)}</pre>
+              </details>
+              <details>
+                <summary>Provenance JSON</summary>
+                <pre style="white-space:pre-wrap;overflow:auto;margin-top:8px;">${escapeHTML(provenanceJson)}</pre>
+              </details>
+            </div>
+          </details>
+        `;
+      }).join('');
+      updateApprovedAnkiDraftCreateTestButton();
+    } finally {
+      _ankiQuizPreviewActive = false;
+    }
   }
 
   function getAnkiSourceFolder() {
@@ -11263,11 +11749,14 @@ const App = (() => {
     el.textContent = message || '';
   }
 
-  function renderAnkiDraftSaveDiagnostics(items, errors, target, readiness, inputs, lastMessage = '', counts = null) {
+  function renderAnkiDraftSaveDiagnostics(result, target, readiness, inputs, lastMessage = '', counts = null) {
     const el = document.getElementById('anki-create-test-diagnostics');
     if (!el) return;
+    const snapshot = getAnkiVariantReviewSnapshot();
     const selectedValue = document.getElementById('anki-create-test-target')?.value || '';
-    const approvedCount = getApprovedAnkiVariantDrafts().length;
+    const approvedCount = Array.isArray(result?.approvedDrafts) ? result.approvedDrafts.length : 0;
+    const previewCount = Array.isArray(result?.items) ? result.items.length : 0;
+    const errors = Array.isArray(result?.errors) ? result.errors : [];
     const targetLabel = selectedValue
       ? selectedValue === '__new__' ? 'Create new Anki Notes folder' : `${target?.folder?.name || 'Unknown folder'} (${selectedValue})`
       : 'None selected';
@@ -11278,17 +11767,22 @@ const App = (() => {
       `<div><strong>Test name valid:</strong> ${inputs.testName ? 'Yes' : 'No'}</div>`,
       `<div><strong>Review confirmation checked:</strong> ${inputs.reviewed ? 'Yes' : 'No'}</div>`,
       `<div><strong>Approved variants:</strong> ${approvedCount}</div>`,
-      `<div><strong>Quiz object previews:</strong> ${items.length}</div>`,
+      `<div><strong>Quiz object previews:</strong> ${previewCount}</div>`,
       `<div><strong>Validation:</strong> ${escapeHTML(validationLabel)}</div>`,
       `<div><strong>Save readiness:</strong> ${escapeHTML(readinessLabel)}</div>`,
+      snapshot.statusCounts.approved !== approvedCount ? `<div><strong>Consistency warning:</strong> review summary approved count (${snapshot.statusCounts.approved}) does not match approved getter count (${approvedCount}).</div>` : '',
       counts ? `<div><strong>DB tests before/after:</strong> ${counts.before} / ${counts.after}</div>` : '',
       lastMessage ? `<div><strong>Last save:</strong> ${escapeHTML(lastMessage)}</div>` : ''
     ].filter(Boolean).join('');
   }
 
-  function getApprovedAnkiDraftCreateTestReadiness(items, errors, target, inputs) {
-    if (!items.length) return { ok: false, message: 'Approve at least one Anki variant before creating a test.' };
+  function getApprovedAnkiDraftCreateTestReadiness(result, target, inputs) {
+    const approvedCount = Array.isArray(result?.approvedDrafts) ? result.approvedDrafts.length : 0;
+    const previewCount = Array.isArray(result?.items) ? result.items.length : 0;
+    const errors = Array.isArray(result?.errors) ? result.errors : [];
+    if (!approvedCount) return { ok: false, message: 'Approve at least one Anki variant before creating a test.' };
     if (errors.length) return { ok: false, message: `Cannot create test: ${errors[0]}` };
+    if (previewCount !== approvedCount) return { ok: false, message: 'Cannot create test: approved variants did not produce the expected quiz objects.' };
     if (!target?.ok) return { ok: false, message: target?.error || 'Choose an Anki subfolder before creating a test.' };
     if (!inputs.testName) return { ok: false, message: 'Enter a test name before creating a test.' };
     if (!inputs.reviewed) return { ok: false, message: 'Confirm that you reviewed and approve these quiz objects before creating a test.' };
@@ -11298,22 +11792,22 @@ const App = (() => {
   function updateApprovedAnkiDraftCreateTestButton() {
     const btn = document.getElementById('anki-create-test-approved');
     if (!btn) return;
-    const { items, errors } = getApprovedAnkiQuizObjectPreviewValidation();
+    const result = getApprovedAnkiQuizObjectPreviewValidation();
     const target = getSelectedAnkiDraftSaveTarget();
     const inputs = getAnkiDraftSaveInputs();
-    const readiness = getApprovedAnkiDraftCreateTestReadiness(items, errors, target, inputs);
+    const readiness = getApprovedAnkiDraftCreateTestReadiness(result, target, inputs);
     btn.disabled = !readiness.ok;
-    btn.textContent = items.length > 0 ? `Create Test from Approved Anki Variants (${items.length})` : 'Create Test from Approved Anki Variants';
+    btn.textContent = result.items.length > 0 ? `Create Test from Approved Anki Variants (${result.items.length})` : 'Create Test from Approved Anki Variants';
     btn.title = readiness.message;
     setAnkiDraftSaveError(readiness.ok ? '' : readiness.message);
-    renderAnkiDraftSaveDiagnostics(items, errors, target, readiness, inputs);
+    renderAnkiDraftSaveDiagnostics(result, target, readiness, inputs);
   }
 
   function createTestFromApprovedAnkiVariants() {
-    const { items, errors } = getApprovedAnkiQuizObjectPreviewValidation();
+    const result = getApprovedAnkiQuizObjectPreviewValidation();
     const target = getSelectedAnkiDraftSaveTarget();
     const inputs = getAnkiDraftSaveInputs();
-    const readiness = getApprovedAnkiDraftCreateTestReadiness(items, errors, target, inputs);
+    const readiness = getApprovedAnkiDraftCreateTestReadiness(result, target, inputs);
     const selectedValue = document.getElementById('anki-create-test-target')?.value || '';
 
     if (!readiness.ok) {
@@ -11324,14 +11818,14 @@ const App = (() => {
         selectedTargetValue: selectedValue,
         selectedTargetMode: target?.mode || null,
         selectedFolderId: target?.folder?.id || null,
-        approvedAnkiVariantCount: getApprovedAnkiVariantDrafts().length,
-        quizObjectPreviewCount: items.length,
-        validationErrors: errors,
+        approvedAnkiVariantCount: Array.isArray(result?.approvedDrafts) ? result.approvedDrafts.length : 0,
+        quizObjectPreviewCount: Array.isArray(result?.items) ? result.items.length : 0,
+        validationErrors: result?.errors || [],
         dbCreateTestReached: false
       };
       console.warn('Anki variant save blocked:', blockedState);
       setAnkiDraftSaveError(readiness.message);
-      renderAnkiDraftSaveDiagnostics(items, errors, target, readiness, inputs, `Blocked: ${readiness.message}`);
+      renderAnkiDraftSaveDiagnostics(result, target, readiness, inputs, `Blocked: ${readiness.message}`);
       toast(readiness.message, 8000);
       return;
     }
@@ -11342,7 +11836,7 @@ const App = (() => {
       const targetFolderName = target.folder?.name || 'Anki Notes';
       const source = target.source || getAnkiSourceFolder();
       const beforeCount = DB.get().tests.length;
-      const questions = items.map(item => {
+      const questions = result.items.map(item => {
         const question = JSON.parse(JSON.stringify(item.quizQuestion));
         question.ankiVariantProvenance = JSON.parse(JSON.stringify({
           ...(item.provenance || {}),
@@ -11355,18 +11849,18 @@ const App = (() => {
       const immediateErrors = questions.flatMap((question, idx) => validateAnkiQuizObjectPreviewItem({
         quizQuestion: question,
         provenance: question.ankiVariantProvenance || {}
-      }).map(error => `Question ${idx + 1}: ${error}`));
+      }).errors.map(error => `Question ${idx + 1}: ${error}`));
       if (immediateErrors.length) {
         const message = `Cannot create test: ${immediateErrors[0]}`;
         console.warn('Anki variant save failed validation before DB.createTest:', {
           selectedTargetValue: selectedValue,
-          approvedAnkiVariantCount: getApprovedAnkiVariantDrafts().length,
+          approvedAnkiVariantCount: Array.isArray(result?.approvedDrafts) ? result.approvedDrafts.length : 0,
           quizObjectPreviewCount: questions.length,
           validationErrors: immediateErrors,
           dbCreateTestReached: false
         });
         setAnkiDraftSaveError(message);
-        renderAnkiDraftSaveDiagnostics(items, immediateErrors, target, { ok: false, message }, inputs, `Failed: ${message}`, { before: beforeCount, after: beforeCount });
+        renderAnkiDraftSaveDiagnostics({ ...result, errors: immediateErrors }, target, { ok: false, message }, inputs, `Failed: ${message}`, { before: beforeCount, after: beforeCount });
         toast(message, 8000);
         return;
       }
@@ -11376,7 +11870,7 @@ const App = (() => {
         const message = 'Could not resolve the selected Anki target folder.';
         console.warn('Anki variant save failed:', { selectedTargetValue: selectedValue, dbCreateTestReached: false, message });
         setAnkiDraftSaveError(message);
-        renderAnkiDraftSaveDiagnostics(items, errors, target, readiness, inputs, `Failed: ${message}`, { before: beforeCount, after: beforeCount });
+        renderAnkiDraftSaveDiagnostics(result, target, readiness, inputs, `Failed: ${message}`, { before: beforeCount, after: beforeCount });
         toast(message, 8000);
         return;
       }
@@ -11391,9 +11885,9 @@ const App = (() => {
         console.warn('Anki variant save failed:', {
           selectedTargetValue: selectedValue,
           resolvedTargetFolderId: targetFolder.id,
-          approvedAnkiVariantCount: getApprovedAnkiVariantDrafts().length,
-          quizObjectPreviewCount: items.length,
-          validationErrors: errors,
+          approvedAnkiVariantCount: Array.isArray(result?.approvedDrafts) ? result.approvedDrafts.length : 0,
+          quizObjectPreviewCount: Array.isArray(result?.items) ? result.items.length : 0,
+          validationErrors: result?.errors || [],
           testName,
           reviewed: inputs.reviewed,
           dbCreateTestArgs: { folderId: targetFolder.id, name: testName, questionCount: questions.length },
@@ -11403,7 +11897,7 @@ const App = (() => {
           uiRefreshStarted: false
         });
         setAnkiDraftSaveError(message);
-        renderAnkiDraftSaveDiagnostics(items, errors, target, readiness, inputs, `Failed: ${message}`, { before: beforeCount, after: afterCount });
+        renderAnkiDraftSaveDiagnostics(result, target, readiness, inputs, `Failed: ${message}`, { before: beforeCount, after: afterCount });
         toast(message, 8000);
         return;
       }
@@ -11411,9 +11905,9 @@ const App = (() => {
       console.info('Anki variant save succeeded:', {
         selectedTargetValue: selectedValue,
         resolvedTargetFolderId: targetFolder.id,
-        approvedAnkiVariantCount: getApprovedAnkiVariantDrafts().length,
-        quizObjectPreviewCount: items.length,
-        validationErrors: errors,
+        approvedAnkiVariantCount: Array.isArray(result?.approvedDrafts) ? result.approvedDrafts.length : 0,
+        quizObjectPreviewCount: Array.isArray(result?.items) ? result.items.length : 0,
+        validationErrors: result?.errors || [],
         testName,
         reviewed: inputs.reviewed,
         dbCreateTestArgs: { folderId: targetFolder.id, name: testName, questionCount: questions.length },
@@ -11423,7 +11917,7 @@ const App = (() => {
         uiRefreshStarted: true
       });
 
-      renderAnkiDraftSaveDiagnostics(items, errors, target, readiness, inputs, `Saved "${test.name}".`, { before: beforeCount, after: afterCount });
+      renderAnkiDraftSaveDiagnostics(result, target, readiness, inputs, `Saved "${test.name}".`, { before: beforeCount, after: afterCount });
       _currentFolder = targetFolder.id;
       setSourceFromFolder(targetFolder.id);
       renderSidebar();
@@ -11432,14 +11926,14 @@ const App = (() => {
       const message = `Save failed: ${err?.message || String(err)}`;
       console.warn('Anki variant save failed:', {
         selectedTargetValue: selectedValue,
-        approvedAnkiVariantCount: getApprovedAnkiVariantDrafts().length,
-        quizObjectPreviewCount: items.length,
-        validationErrors: errors,
+        approvedAnkiVariantCount: Array.isArray(result?.approvedDrafts) ? result.approvedDrafts.length : 0,
+        quizObjectPreviewCount: Array.isArray(result?.items) ? result.items.length : 0,
+        validationErrors: result?.errors || [],
         dbCreateTestReached: false,
         error: err?.stack || err?.message || String(err)
       });
       setAnkiDraftSaveError(message);
-      renderAnkiDraftSaveDiagnostics(items, errors, target, readiness, inputs, message);
+      renderAnkiDraftSaveDiagnostics(result, target, readiness, inputs, message);
       toast(message, 8000);
       return;
     }
@@ -11498,7 +11992,8 @@ const App = (() => {
   }
 
   function exportApprovedAnkiVariantsJson() {
-    const approved = getApprovedAnkiVariantDrafts();
+    const result = getApprovedAnkiQuizObjectPreviewValidation();
+    const approved = Array.isArray(result?.approvedDrafts) ? result.approvedDrafts : [];
     if (!approved.length) {
       const message = 'Approve at least one Anki variant draft before exporting.';
       toast(message, 8000);
@@ -11511,7 +12006,7 @@ const App = (() => {
     const sourceName = _ankiImportPreview?.fileName || '';
     const sourceHash = _ankiImportPreview?.sourceHash || fallbackTextHash(JSON.stringify({
       sourceName,
-      draftIds: approved.map(item => item.draft.id),
+      draftIds: approved.map(item => getAnkiVariantDraftIdentity(item.draft)),
       sourceCardIds: approved.flatMap(item => item.draft.sourceCardIds || []),
       sourceHashes: approved.flatMap(item => item.draft.sourceHashes || [])
     }));
@@ -11528,7 +12023,7 @@ const App = (() => {
       },
       drafts: approved.map(({ draft }) => ({
         reviewStatus: 'approved',
-        draftId: draft.id,
+        draftId: getAnkiVariantDraftIdentity(draft),
         clusterId: draft.clusterId,
         clusterIndex: draft.clusterIndex,
         sourceName,
