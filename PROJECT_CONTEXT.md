@@ -83,7 +83,7 @@ Future importer and render work should preserve the current stable browser behav
 
 The UWorld DOCX importer is separate from the NBME PDF parser/OCR/render path. UWorld work must not modify NBME parser logic, OCR normalization, grouped-question handling, or existing rendering invariants.
 
-Status: UWorld v1 implementation complete, pending real-world validation.
+Status: UWorld v1 implementation complete. Electron Gemini JSON extraction hardened (tagged uworld-gemini-v1-stable). Pending real-world validation.
 
 Current UWorld flow:
 
@@ -108,7 +108,7 @@ Live batch refinement is implemented as a conservative one-at-a-time Electron ma
 
 ## OME Notes Pipeline
 
-Status: OME v1 implementation complete, pending real-world validation.
+Status: OME v1 implementation complete. Cluster index provenance bug fixed (tagged ome-v1-stable). Pending real-world validation.
 
 Current OME flow:
 
@@ -140,7 +140,7 @@ Current OME safeguards:
 
 ## Anki Notes Pipeline
 
-Status: Anki v1 implementation complete, pending real-world validation.
+Status: Anki v1 implementation complete. Approval-state and save-path bugs fixed (tagged anki-v1-stable). Pending real-world validation.
 
 Current Anki flow:
 

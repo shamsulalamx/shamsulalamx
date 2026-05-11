@@ -21,11 +21,11 @@ Ownership: this file is the staged Electron roadmap. Durable architecture rules 
 - Electron dev scaffolding and planning have started.
 - Browser/Netlify mode remains a rollback and compatibility layer until desktop-native Gemini, storage, backup/restore, and packaging paths are verified.
 - UWorld DOCX pipeline is implemented inside the current app and now includes normalized blocks, concept extraction, deterministic clustering/deduplication, selected clusters, deterministic draft scaffolds, one-at-a-time Electron-local Gemini refinement, live batch queue controls, review controls, duplicate warnings, section/topic coverage summaries, preflight safeguards, approved JSON export, quiz-object preview, and controlled save into real tests.
-- Electron-local UWorld Gemini refinement uses Electron main/preload. The renderer never receives the API key, and `GEMINI_API_KEY` is read from `process.env` only.
+- Electron-local UWorld Gemini refinement uses Electron main/preload. The renderer never receives the API key, and `GEMINI_API_KEY` is read from `process.env` only. Gemini JSON extraction hardened with two-attempt brace-scanning strategy (tagged uworld-gemini-v1-stable).
 - UWorld v1 implementation complete, pending real-world validation.
-- Anki v1 is implemented inside the current app using plain-text `.txt` imports only, cloze/basic concept extraction, tag-first clustering, deterministic variant draft preview, review controls, approved-variant JSON export, quiz-object preview, and controlled save into real tests.
+- Anki v1 is implemented inside the current app using plain-text `.txt` imports only, cloze/basic concept extraction, tag-first clustering, deterministic variant draft preview, review controls, approved-variant JSON export, quiz-object preview, and controlled save into real tests. Approval-state and save-path bugs fixed (tagged anki-v1-stable).
 - Anki v1 intentionally does not use Gemini yet.
-- OME v1 is implemented inside the current app using short high-quality PDF imports only, PDF.js text-layer extraction only, structure/block preview, concept extraction, concept clustering, selected clusters, deterministic draft preview, review controls, approved-draft JSON export, quiz-object preview, and controlled save into real tests.
+- OME v1 is implemented inside the current app using short high-quality PDF imports only, PDF.js text-layer extraction only, structure/block preview, concept extraction, concept clustering, selected clusters, deterministic draft preview, review controls, approved-draft JSON export, quiz-object preview, and controlled save into real tests. Cluster index provenance bug fixed (tagged ome-v1-stable).
 - OME v1 intentionally does not add OCR fallback and does not use Gemini yet.
 - Source-level validation across NBME, UWorld, Anki, and OME passed without modifying files during validation.
 - Runtime and live fixture validation remain pending.
@@ -502,6 +502,14 @@ Append future entries here.
 - Verification: Source-level and syntax checks passed during implementation work. Live Gemini validation/testing is intentionally deferred to conserve API credits.
 - Decision: Preserve Electron-first direction while keeping browser/Netlify rollback support. Preserve NBME parser isolation, grouped-question safeguards, and existing browser storage paths.
 - Rollback notes: No OCR/PDF parser logic, grouped-question behavior, Netlify removal, app-data migration, packaging, push, or deployment is part of UWorld v1 completion.
+
+### 2026-05-11
+
+- Stage: Bug fixes across Anki v1, OME v1, and UWorld Electron Gemini (no new importers).
+- Change: (1) Anki approval-state and save-path bugs fixed in `index.html`: `getApprovedAnkiVariantDrafts()` now calls `getApprovedAnkiDraftsFromReviewSnapshot()` directly; two `.map()` calls on the `{ ok, errors }` return value of `validateAnkiQuizObjectPreviewItem()` fixed to `.errors.map()` in the preview and save paths; temporary debug panels removed. (2) OME cluster index provenance bug fixed in `index.html`: `createOmeCluster()` now stores `clusterIndex: index` on the returned object, unblocking quiz-object preview validation and controlled save. (3) UWorld Electron Gemini JSON extraction hardened in `electron/main.js`: `extractGeminiJson()` now attempts fence-stripping parse first, then falls back to brace-depth scanning for prose-wrapped JSON; parse failures and schema validation failures return distinct `MODEL_RESPONSE_INVALID` messages with `reason` fields; no API key, prompt text, or source content appears in error messages; no auto-retry added.
+- Verification: `node -c electron/main.js` syntax check passed. `git diff --check` whitespace check passed. Only `index.html` and `electron/main.js` modified; `electron/preload.js` and `deno.lock` untouched.
+- Decision: Remaining work is real-world validation and eventual modularization, not new importers. `deno.lock` remains untracked.
+- Rollback notes: All changes are targeted single-function fixes. NBME OCR/parser/render, UWorld renderer logic, Drive, and Netlify paths were not modified. Rollback by reverting `index.html` and `electron/main.js` to prior state if regressions appear.
 
 ### Entry Template
 

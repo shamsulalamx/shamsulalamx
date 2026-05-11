@@ -1,6 +1,6 @@
 # NBME Self-Assessment Suite Project Status
 
-Last updated: 2026-05-10
+Last updated: 2026-05-11
 
 This file captures the current working state after the landing-page library rehaul, PDF report naming update, and local grouped-question parser/render stabilization. It supersedes older status files where they conflict.
 
@@ -155,7 +155,7 @@ Storage direction:
 
 ## UWorld DOCX Pipeline Status
 
-Status: UWorld v1 implementation complete, pending real-world validation.
+Status: UWorld v1 implementation complete. Electron Gemini JSON extraction hardened (tagged uworld-gemini-v1-stable). Pending real-world validation.
 
 Implemented UWorld Notes flow:
 
@@ -188,9 +188,17 @@ Current safeguards:
 - Browser `prompt()`/`confirm()` are not part of the UWorld save flow.
 - Live Gemini validation/testing is intentionally deferred to conserve API credits.
 
+Bug fixed (2026-05-11, electron/main.js only):
+
+- `extractGeminiJson()` previously stripped only simple leading/trailing markdown fences and called `JSON.parse()` once. Any prose before or after the JSON object caused `SyntaxError`, reported only as the generic "Gemini returned malformed JSON." message with no distinction from schema failures.
+- Fixed with a two-attempt strategy: (1) strip fences and parse directly; (2) if that fails, scan for the first `{` and walk brace depth tracking string/escape state to extract the first complete top-level JSON object without `eval`. If both fail, throw `SyntaxError('no valid JSON object found in model response')`.
+- Parse failures and schema validation failures now return separate `MODEL_RESPONSE_INVALID` messages with distinct `reason` fields. No API key, prompt text, or source content appears in any error message.
+- `responseMimeType: 'application/json'` was already present in the request and was not changed.
+- No auto-retry was added.
+
 ## Anki Notes Pipeline Status
 
-Status: Anki v1 implementation complete, pending real-world validation.
+Status: Anki v1 implementation complete. Approval-state and save-path bugs fixed (tagged anki-v1-stable). Pending real-world validation.
 
 Current Anki flow:
 
@@ -215,6 +223,12 @@ Current Anki safeguards:
 - Anki provenance stays separate from UWorld provenance and quiz-object review state.
 - The Anki and UWorld pipelines remain isolated.
 
+Bugs fixed (2026-05-11):
+
+- `getApprovedAnkiVariantDrafts()` was going through an indirect path; now calls `getApprovedAnkiDraftsFromReviewSnapshot()` directly.
+- `validateAnkiQuizObjectPreviewItem()` returns `{ ok, errors }`, not an array. Two call sites in `getApprovedAnkiQuizObjectPreviewValidation()` and `createTestFromApprovedAnkiVariants()` were calling `.map()` on the object, crashing the preview and save path. Fixed to `.errors.map()`.
+- Temporary debug panels (Anki Review State Debug, Quiz Preview Debug) removed after fix confirmation.
+
 Unresolved validation tasks:
 
 - Validate the plain-text Anki import flow against several real `.txt` exports.
@@ -225,7 +239,7 @@ Unresolved validation tasks:
 
 ## OME Notes Pipeline Status
 
-Status: OME v1 implementation complete, pending real-world validation.
+Status: OME v1 implementation complete. Cluster index provenance bug fixed (tagged ome-v1-stable). Pending real-world validation.
 
 Current flow:
 
@@ -254,6 +268,10 @@ Current safeguards:
 - OME provenance stays separate from UWorld provenance and Anki provenance.
 - No Gemini is used in OME v1 yet.
 - OME v1 does not modify NBME parser/OCR/render behavior.
+
+Bug fixed (2026-05-11):
+
+- `createOmeCluster(members, index)` built the cluster `id` from `index` but never stored `clusterIndex: index` on the returned object. All downstream provenance reads got `undefined`, which propagated as `null` through quiz-object preview and failed `Number.isFinite(null)` validation, blocking save. Fixed by adding `clusterIndex: index` to the returned object.
 
 Unresolved validation tasks:
 
@@ -571,6 +589,15 @@ Recent verification after the latest local parser/render stabilization:
 - Gemini live validation for UWorld v1 is intentionally deferred to conserve API credits.
 - No parser, render, OCR, Gemini, or Google Drive logic was modified for Stage 2 verification.
 
+Verification after 2026-05-11 bug fixes:
+
+- `node -c electron/main.js` syntax check passed.
+- `git diff --check` whitespace check passed on `electron/main.js`.
+- No API key, prompt text, or source content exposed in any error path (confirmed by diff sweep).
+- Only `electron/main.js` was modified; `index.html`, `electron/preload.js`, and `deno.lock` were not touched.
+- Anki `.errors.map` fix: `node -c` syntax check on `index.html` passed; no NBME/UWorld/OME/Gemini logic modified.
+- OME `clusterIndex` fix: single-line change to `createOmeCluster`; no NBME/UWorld/Anki/Gemini logic modified.
+
 For deployment and sync testing, use the deployed HTTPS Netlify URL or Netlify local dev. Do not test Drive or Gemini from a `file://` URL.
 
 ## High-Risk Areas
@@ -587,8 +614,11 @@ Use extra caution around:
 
 ## Recommended Next Steps
 
-- Begin the Electron migration as the next planned phase.
-- Start Electron migration by wrapping the current stable app without behavior changes.
+- Remaining work is real-world validation and eventual modularization, not new importers.
+- Validate Anki v1 end-to-end against real `.txt` exports; confirm approval → preview → save path with mixed note types.
+- Validate OME v1 end-to-end against real short high-quality PDFs; confirm cluster provenance, approved-draft export, quiz-object preview, and controlled save.
+- Validate UWorld v1 Electron Gemini refinement with a small live batch using real imported notes before any large run.
+- Continue Electron migration by adding desktop-native storage, backup/restore, and Gemini service boundaries as the next planned phase.
 - During Electron migration, preserve the current local browser behavior before changing importer or renderer architecture.
 - Design the future importer around a common intermediate format shared by PDFs, DOCX, pasted text, Anki, audio/podcast transcripts, video transcripts, lecture notes, screenshots, and future source types.
 - Add a reviewable render-mode decision layer so each question can be displayed as text, image, or hybrid based on metadata, confidence, and content type.
