@@ -12977,7 +12977,16 @@ const App = (() => {
     // ── 3. coreRule construction ────────────────────────────────────────────
     let coreRule = '';
     if (condition && criterion) {
-      coreRule = `${condition}: requires ${criterion}`;
+      // Build a clean declarative statement using criterion type for natural phrasing.
+      if (criterionType === 'age-threshold') {
+        coreRule = `${condition}: must be diagnosed ${criterion}`;
+      } else if (criterionType === 'duration') {
+        coreRule = `${condition}: symptoms persist ${criterion}`;
+      } else if (criterionType === 'count-threshold') {
+        coreRule = `${condition}: requires ${criterion}`;
+      } else {
+        coreRule = `${condition}: criterion is ${criterion}`;
+      }
     } else {
       // Find the first sentence that is not dominated by podcast-voice markers.
       const sentences = snippet.split(/[.!?]+\s+/).filter(s => s.trim().length > 10);
@@ -13033,12 +13042,20 @@ const App = (() => {
     }
 
     // ── 6. contentType ──────────────────────────────────────────────────────
-    // meta-commentary check first (promo/admin language).
+    // Priority order:
+    //  1. meta-commentary — promo/admin language present
+    //  2. medical-rule   — both condition AND criterion extracted (voice language is incidental)
+    //  3. voice-fraction heuristic — for snippets lacking a testable condition+criterion pair
     const metaRe = /\b(podcast|website|course|tutoring|email me|sign up|subscribe|next week|review course|one-on-one|Apple Podcast)\b/i;
     let contentType = 'medical-rule';
     if (metaRe.test(snippet)) {
       contentType = 'meta-commentary';
+    } else if (condition && criterion) {
+      // Both a named condition and a testable criterion were extracted — this IS a medical rule
+      // being communicated, even if coaching/repetition language appears alongside it.
+      contentType = 'medical-rule';
     } else {
+      // No condition+criterion pair — fall back to voice-fraction analysis.
       const sentenceList = snippet.split(/[.!?]+\s+/).filter(s => s.trim().length > 10);
       const totalSentences = sentenceList.length || 1;
       const voiceSentenceCount = sentenceList.filter(s =>
@@ -13105,6 +13122,60 @@ const App = (() => {
       warnings,
       gateResults
     };
+  }
+
+  // ── Divine v6b: Hard gate enforcement ──────────────────────────────────────
+  // Checks all hard gates on a cluster's distilledObjective.
+  // Returns { blocked: bool, reasons: string[] }.
+  // Does NOT block clusters that have no distilledObjective (backwards compat).
+  function _divineCheckObjectiveGates(cluster) {
+    const obj = cluster.distilledObjective;
+    if (!obj) return { blocked: false, reasons: [] };
+
+    // Words that should never appear in a medically testable coreRule.
+    const CORE_RULE_VOICE_PATTERNS = [
+      { re: /\bpodcast\b/i,                 label: 'podcast' },
+      { re: /\bhigh[\s-]yield\b/i,          label: 'high yield' },
+      { re: /\bremember\b/i,                label: 'remember' },
+      { re: /\byou\s+need\s+to\s+know\b/i,  label: 'you need to know' },
+      { re: /\bboards?\b/i,                 label: 'boards' },
+      { re: /\bexam\b/i,                    label: 'exam' },
+      { re: /\bquestion\b/i,               label: 'question' },
+      { re: /\bthey\s+give\s+you\b/i,       label: 'they give you' },
+      { re: /\bI\b/,                        label: 'first-person I' },
+      { re: /\bwe\b/i,                      label: 'we' },
+      { re: /\byou\b/i,                     label: 'you' }
+    ];
+
+    const reasons = [];
+
+    if (obj.contentType !== 'medical-rule') {
+      reasons.push(`contentType is "${obj.contentType}" (not medical-rule)`);
+    }
+    // voiceScore gate applies only when contentType is NOT 'medical-rule'.
+    // When both condition AND criterion were extracted (making contentType='medical-rule'),
+    // podcast-register language is incidental to the medical content and the gate is redundant.
+    if (obj.contentType !== 'medical-rule' && obj.podcastVoiceScore > 0.40) {
+      reasons.push(`podcastVoiceScore ${obj.podcastVoiceScore.toFixed(2)} > 0.40`);
+    }
+    if (obj.testabilityScore < 0.50) {
+      reasons.push(`testabilityScore ${obj.testabilityScore.toFixed(2)} < 0.50`);
+    }
+    if (!obj.criterion) {
+      reasons.push('no criterion extracted');
+    }
+    if (obj.coreRule.length < 30) {
+      reasons.push(`coreRule too short (${obj.coreRule.length} chars, need ≥ 30)`);
+    }
+    // Check coreRule for podcast/meta phrasing — only report the first match.
+    for (const { re, label } of CORE_RULE_VOICE_PATTERNS) {
+      if (re.test(obj.coreRule)) {
+        reasons.push(`coreRule contains podcast/meta phrasing: "${label}"`);
+        break;
+      }
+    }
+
+    return { blocked: reasons.length > 0, reasons };
   }
 
   // Deterministic scaffold templates — insert sourceSnippet verbatim.
@@ -13262,13 +13333,24 @@ const App = (() => {
   }
 
   // Generate draft scaffolds for all selected clusters.
+  // v6b: enforces distilledObjective quality gates — non-testable clusters are skipped.
   // Skips clusters with confidence < 0.25 or snippet < 20 chars.
   // Generates at most 2 variants per cluster to avoid bloat.
+  // Returns { drafts: [...], skipped: [{ cluster, reasons }] }.
   function generateDivineDraftScaffolds(clusters, selection) {
     const drafts = [];
+    const skipped = [];
     const draftIdxRef = { value: 0 };
     for (const cluster of clusters) {
       if (!selection[cluster.clusterId]) continue;
+
+      // v6b hard gate: check distilledObjective quality gates first.
+      const gate = _divineCheckObjectiveGates(cluster);
+      if (gate.blocked) {
+        skipped.push({ cluster, reasons: gate.reasons });
+        continue;
+      }
+
       const variants = DIVINE_DRAFT_VARIANT_MAP[cluster.conceptType];
       if (!variants || variants.length === 0) continue;
       if (cluster.confidence < 0.25 || (cluster.sourceSnippet || '').trim().length < 20) continue;
@@ -13277,7 +13359,7 @@ const App = (() => {
         if (draft) drafts.push(draft);
       }
     }
-    return drafts;
+    return { drafts, skipped };
   }
 
   function _divineUpdateClusterSelectedCount() {
@@ -13439,6 +13521,42 @@ const App = (() => {
     _divineUpdateClusterSelectedCount();
   }
 
+  // v6b: render a collapsible skipped-clusters warning panel.
+  // Returns an HTML string (empty string when there are no skipped clusters).
+  function _divineRenderSkippedClusters(skipped) {
+    if (!Array.isArray(skipped) || skipped.length === 0) return '';
+
+    const SKIP_CAP = 20;
+    const rows = skipped.slice(0, SKIP_CAP).map(({ cluster, reasons }) => {
+      const snippet = (cluster.sourceSnippet || '').slice(0, 140);
+      const reasonHtml = reasons.map(r =>
+        `<li style="color:#92400e;font-size:10px;margin:1px 0;">${escapeHTML(r)}</li>`
+      ).join('');
+      return `<div style="border:1px solid #fde68a;border-left:3px solid #d97706;border-radius:4px;padding:6px 8px;margin-bottom:4px;background:#fffbeb;">
+        <div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin-bottom:3px;">
+          <span style="color:#92400e;font-size:10px;font-weight:700;">⊘ blocked</span>
+          <span style="color:#92400e;font-size:10px;">${escapeHTML(cluster.clusterId)}</span>
+          <span style="background:#fde68a;color:#92400e;font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;">${escapeHTML(cluster.conceptType)}</span>
+        </div>
+        <div style="color:#78350f;font-style:italic;font-size:11px;margin-bottom:4px;">"${escapeHTML(snippet)}${cluster.sourceSnippet.length > 140 ? '…' : ''}"</div>
+        <ul style="margin:0;padding-left:14px;">${reasonHtml}</ul>
+      </div>`;
+    }).join('');
+
+    const extraMsg = skipped.length > SKIP_CAP
+      ? `<div style="font-size:10px;color:#92400e;margin-top:3px;">…and ${skipped.length - SKIP_CAP} more skipped clusters (first ${SKIP_CAP} shown)</div>`
+      : '';
+
+    return `<details style="margin-bottom:8px;">
+      <summary style="cursor:pointer;font-size:11px;color:#92400e;font-weight:700;user-select:none;list-style:none;display:flex;align-items:center;gap:5px;padding:5px 7px;background:#fffbeb;border:1px solid #fde68a;border-radius:4px;">
+        <span>⊘</span>
+        <span>${skipped.length} cluster${skipped.length === 1 ? '' : 's'} blocked by quality gates — not shown as drafts</span>
+        <span style="font-size:9px;font-weight:400;color:#b45309;">(click to expand)</span>
+      </summary>
+      <div style="margin-top:5px;">${rows}${extraMsg}</div>
+    </details>`;
+  }
+
   function renderDivineDraftPreview(drafts) {
     const draftSection  = document.getElementById('divine-draft-section');
     const draftStatus   = document.getElementById('divine-draft-status');
@@ -13449,15 +13567,24 @@ const App = (() => {
 
     draftSection.style.display = '';
 
+    // v6b: skipped-cluster panel — always built from live state so it stays current on re-renders.
+    const skipped = Array.isArray(_divineImportPreview?.skippedClusters) ? _divineImportPreview.skippedClusters : [];
+
     if (!drafts || drafts.length === 0) {
-      if (draftStatus) draftStatus.textContent = 'No drafts generated. Select clusters and try again, or check that selected clusters have sufficient confidence.';
-      if (draftPreview) draftPreview.innerHTML = '<div class="notes-import-empty">No drafts to show.</div>';
+      const skippedNote = skipped.length > 0
+        ? ` ${skipped.length} cluster${skipped.length === 1 ? '' : 's'} blocked by quality gates (see below).`
+        : '';
+      if (draftStatus) draftStatus.textContent = `No drafts generated. Select clusters and try again, or check quality gates.${skippedNote}`;
+      if (draftPreview) draftPreview.innerHTML = _divineRenderSkippedClusters(skipped) + '<div class="notes-import-empty">No drafts passed quality gates.</div>';
       if (reviewSummary) { reviewSummary.style.display = 'none'; reviewSummary.innerHTML = ''; }
       if (reviewBulkBar) reviewBulkBar.style.display = 'none';
       return;
     }
 
-    if (draftStatus) draftStatus.textContent = `${drafts.length} draft scaffold${drafts.length === 1 ? '' : 's'} generated. All choices are placeholders — expert review required before use.`;
+    const skippedNote = skipped.length > 0
+      ? ` · ${skipped.length} cluster${skipped.length === 1 ? '' : 's'} blocked by quality gates`
+      : '';
+    if (draftStatus) draftStatus.textContent = `${drafts.length} draft scaffold${drafts.length === 1 ? '' : 's'} generated. All choices are placeholders — expert review required before use.${skippedNote}`;
 
     if (reviewBulkBar) reviewBulkBar.style.display = '';
 
@@ -13546,7 +13673,7 @@ const App = (() => {
       html += '</div>';
     }
 
-    if (draftPreview) draftPreview.innerHTML = html;
+    if (draftPreview) draftPreview.innerHTML = _divineRenderSkippedClusters(skipped) + html;
 
     // Reveal quiz and save sections
     const quizSection = document.getElementById('divine-quiz-section');
@@ -13596,13 +13723,15 @@ const App = (() => {
     if (draftStatus) draftStatus.textContent = 'Generating draft scaffolds…';
 
     setTimeout(() => {
-      const drafts = generateDivineDraftScaffolds(_divineImportPreview.clusters, _divineImportPreview.clusterSelection);
+      const result = generateDivineDraftScaffolds(_divineImportPreview.clusters, _divineImportPreview.clusterSelection);
+      const { drafts, skipped } = result;
       // Preserve existing review status for matching draftIds; new drafts start as 'pending'.
       const existingStatus = (_divineImportPreview.reviewStatus && typeof _divineImportPreview.reviewStatus === 'object')
         ? _divineImportPreview.reviewStatus : {};
       const reviewStatus = {};
       for (const d of drafts) reviewStatus[d.draftId] = existingStatus[d.draftId] || 'pending';
       _divineImportPreview.drafts = drafts;
+      _divineImportPreview.skippedClusters = skipped;
       _divineImportPreview.reviewStatus = reviewStatus;
       renderDivineDraftPreview(drafts);
       renderDivineDraftSaveTargetSelector(false);
