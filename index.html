@@ -2029,6 +2029,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
       <button type="button" class="btn-card" onclick="App.clearDivineTranscriptImportPreview()">Clear / Reset</button>
       <button type="button" class="btn-card" id="divine-clean-btn" style="display:none;" onclick="App.cleanAndPreviewDivineTranscript()">Clean Transcript</button>
       <button type="button" class="btn-card" id="divine-segment-btn" style="display:none;" onclick="App.segmentAndPreviewDivineTranscript()">Segment Transcript</button>
+      <button type="button" class="btn-card" id="divine-concept-btn" style="display:none;" onclick="App.extractAndPreviewDivineConcepts()">Extract Concepts</button>
       <button type="button" class="btn-card" onclick="App.closeDivineTranscriptImportPreview()">Close</button>
     </div>
     <div class="notes-import-section-title">Raw Transcript Preview</div>
@@ -2055,6 +2056,20 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
       <div id="divine-segment-summary" style="margin-bottom:8px;"></div>
       <div id="divine-segment-preview" class="notes-draft-preview">
         <div class="notes-import-empty">No segments yet. Run "Segment Transcript" after cleaning.</div>
+      </div>
+    </div>
+    <div id="divine-concept-section" style="display:none;">
+      <div class="notes-import-section-title" style="margin-top:12px;">Concept Preview</div>
+      <div id="divine-concept-status" class="notes-import-summary" style="margin-bottom:6px;"></div>
+      <div id="divine-concept-summary" style="margin-bottom:8px;"></div>
+      <div id="divine-concept-preview" class="notes-draft-preview">
+        <div class="notes-import-empty">No concepts yet. Run "Extract Concepts" after segmenting.</div>
+      </div>
+      <div id="divine-unknown-concept-wrap" style="display:none;margin-top:6px;">
+        <details>
+          <summary style="cursor:pointer;font-size:12px;color:#6b7280;padding:4px 0;user-select:none;">Unknown / unclassified concepts</summary>
+          <div id="divine-unknown-concept-preview" class="notes-draft-preview" style="margin-top:4px;"></div>
+        </details>
       </div>
     </div>
   </div>
@@ -11306,6 +11321,13 @@ const App = (() => {
     const segmentStatus = document.getElementById('divine-segment-status');
     const segmentSummary = document.getElementById('divine-segment-summary');
     const segmentPreview = document.getElementById('divine-segment-preview');
+    const conceptBtn = document.getElementById('divine-concept-btn');
+    const conceptSection = document.getElementById('divine-concept-section');
+    const conceptStatus = document.getElementById('divine-concept-status');
+    const conceptSummary = document.getElementById('divine-concept-summary');
+    const conceptPreview = document.getElementById('divine-concept-preview');
+    const unknownWrap = document.getElementById('divine-unknown-concept-wrap');
+    const unknownPreview = document.getElementById('divine-unknown-concept-preview');
     if (fileInput) fileInput.value = '';
     if (pasteArea) pasteArea.value = '';
     if (episodeTitle) episodeTitle.value = '';
@@ -11314,6 +11336,7 @@ const App = (() => {
     if (preview) preview.innerHTML = '<div class="notes-import-empty">No transcript loaded yet.</div>';
     if (cleanBtn) cleanBtn.style.display = 'none';
     if (segmentBtn) segmentBtn.style.display = 'none';
+    if (conceptBtn) conceptBtn.style.display = 'none';
     if (cleanSection) cleanSection.style.display = 'none';
     if (cleanStatus) cleanStatus.textContent = '';
     if (cleanSummary) cleanSummary.innerHTML = '';
@@ -11324,6 +11347,12 @@ const App = (() => {
     if (segmentStatus) segmentStatus.textContent = '';
     if (segmentSummary) segmentSummary.innerHTML = '';
     if (segmentPreview) segmentPreview.innerHTML = '<div class="notes-import-empty">No segments yet. Run "Segment Transcript" after cleaning.</div>';
+    if (conceptSection) conceptSection.style.display = 'none';
+    if (conceptStatus) conceptStatus.textContent = '';
+    if (conceptSummary) conceptSummary.innerHTML = '';
+    if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concepts yet. Run "Extract Concepts" after segmenting.</div>';
+    if (unknownWrap) unknownWrap.style.display = 'none';
+    if (unknownPreview) unknownPreview.innerHTML = '';
   }
 
   function _divineRenderRawPreview(text, sourceName) {
@@ -11448,139 +11477,277 @@ const App = (() => {
     return m ? { timestamp: m[0].trim(), rest: line.slice(m[0].length) } : { timestamp: null, rest: line };
   }
 
-  function cleanDivineTranscript(rawText) {
-    // Split into lines, preserving original line numbers (1-based)
+  // ── Pre-cleaning normalisation helpers ───────────────────────────────────
+  // Lines longer than this are split into atomic units before promo testing.
+  // This is the primary fix for monolithic OpenWhispr single-string transcripts.
+  const DIVINE_LONG_LINE_THRESHOLD = 400;
+
+  // Split a long line into smaller units and append them to the units array.
+  // Strategy A: split on embedded timestamp markers ([MM:SS], (MM:SS), HH:MM:SS).
+  // Strategy B: split on sentence-ending punctuation grouped into ~240-char chunks.
+  function _divineSplitLongLineIntoUnits(text, originalLine, units) {
+    // Strategy A: embedded timestamps — each timestamp token starts a new unit.
+    const tsTokenRe = /([\[\(]\d{1,2}:\d{2}(?::\d{2})?[\]\)])\s*/g;
+    if (tsTokenRe.test(text)) {
+      tsTokenRe.lastIndex = 0;
+      const parts = text.split(tsTokenRe); // alternates: [pre, ts, body, ts, body, …]
+      let curTs = null;
+      let curText = '';
+      for (let i = 0; i < parts.length; i++) {
+        const p = parts[i];
+        if (!p) continue;
+        if (/^[\[\(]\d{1,2}:\d{2}(?::\d{2})?[\]\)]$/.test(p.trim())) {
+          if (curText.trim()) units.push({ text: curText.trim(), originalLine, isBlank: false, timestamp: curTs });
+          curTs = p.trim();
+          curText = '';
+        } else {
+          curText += p;
+        }
+      }
+      if (curText.trim()) units.push({ text: curText.trim(), originalLine, isBlank: false, timestamp: curTs });
+      return;
+    }
+
+    // Strategy B: sentence-boundary split, then group into ~240-char chunks.
+    const sentRe = /[^.!?]*[.!?]+(?=\s+[A-Z]|\s*$)/g;
+    const sentences = [];
+    let m2;
+    let lastEnd = 0;
+    while ((m2 = sentRe.exec(text)) !== null) {
+      sentences.push(text.slice(lastEnd, m2.index + m2[0].length).trim());
+      lastEnd = m2.index + m2[0].length;
+    }
+    if (lastEnd < text.length) sentences.push(text.slice(lastEnd).trim());
+
+    if (sentences.length <= 1) {
+      // Cannot split further — emit whole line as one unit.
+      const { timestamp, rest } = _divineExtractTimestamp(text);
+      units.push({ text: rest.trim() || text, originalLine, isBlank: false, timestamp });
+      return;
+    }
+
+    let chunk = '';
+    for (const sent of sentences) {
+      const s = sent.trim();
+      if (!s) continue;
+      const candidate = chunk ? chunk + ' ' + s : s;
+      if (chunk && candidate.length > 240) {
+        const { timestamp, rest } = _divineExtractTimestamp(chunk.trim());
+        units.push({ text: rest.trim() || chunk.trim(), originalLine, isBlank: false, timestamp });
+        chunk = s;
+      } else {
+        chunk = candidate;
+      }
+    }
+    if (chunk.trim()) {
+      const { timestamp, rest } = _divineExtractTimestamp(chunk.trim());
+      units.push({ text: rest.trim() || chunk.trim(), originalLine, isBlank: false, timestamp });
+    }
+  }
+
+  // Convert raw transcript text into an array of atomic processing units.
+  // Each unit: { text, originalLine, isBlank, timestamp }
+  // Long lines are split BEFORE any promo testing so that a single late outro phrase
+  // cannot exclude an entire monolithic paragraph.
+  function _divineNormalizeToUnits(rawText) {
     const rawLines = rawText.split('\n');
-    const totalLines = rawLines.length;
-
-    const excludedSegments = [];   // { originalLine, text, reason, timestamp }
-    const cleanedLines = [];       // { originalLine, cleanedLine, timestamp }
-    const dupSet = new Set();
-
-    let promoLineCount = 0;
-    let dupLineCount = 0;
-    let fillerCleanupCount = 0;
-
-    // Pass 1: per-line classification and promo exclusion
-    const lineRecords = rawLines.map((raw, idx) => {
-      const originalLine = idx + 1;
-      const trimmed = raw.trim();
-
-      // Extract timestamp prefix if present
-      const { timestamp, rest } = _divineExtractTimestamp(trimmed);
-      const textForTest = rest.trim();
-
-      // Empty or near-empty lines are kept as structure (blank line = paragraph break)
-      if (!textForTest) return { originalLine, raw, trimmed, timestamp, textForTest, action: 'keep-blank' };
-
-      // Promo/ad detection: match any promo pattern
-      const promoMatch = DIVINE_PROMO_PATTERNS.find(re => re.test(textForTest));
-      if (promoMatch) {
-        return { originalLine, raw, trimmed, timestamp, textForTest, action: 'exclude-promo', reason: `Promotional/non-medical content: matched "${promoMatch.source.slice(0, 60)}"` };
+    const units = [];
+    for (let lineIdx = 0; lineIdx < rawLines.length; lineIdx++) {
+      const trimmed = rawLines[lineIdx].trim();
+      const originalLine = lineIdx + 1;
+      if (!trimmed) {
+        units.push({ text: '', originalLine, isBlank: true, timestamp: null });
+        continue;
       }
-
-      return { originalLine, raw, trimmed, timestamp, textForTest, action: 'keep' };
-    });
-
-    // Pass 2: exact duplicate collapse (consecutive or full-transcript)
-    // Exact duplicates of content text (ignoring timestamp prefix) are collapsed.
-    const seenContent = new Map(); // content → first originalLine it appeared on
-
-    for (const rec of lineRecords) {
-      if (rec.action !== 'keep') continue;
-      const key = rec.textForTest.toLowerCase().replace(/\s+/g, ' ');
-      if (key.length < 8) continue; // short fragments not worth deduping
-      if (seenContent.has(key)) {
-        rec.action = 'exclude-dup';
-        rec.reason = `Exact duplicate of line ${seenContent.get(key)}`;
+      if (trimmed.length <= DIVINE_LONG_LINE_THRESHOLD) {
+        const { timestamp, rest } = _divineExtractTimestamp(trimmed);
+        units.push({ text: rest.trim() || trimmed, originalLine, isBlank: false, timestamp });
       } else {
-        seenContent.set(key, rec.originalLine);
+        _divineSplitLongLineIntoUnits(trimmed, originalLine, units);
       }
     }
+    return units;
+  }
 
-    // Pass 3: adjacent repeated short-phrase collapse
-    // If the same short phrase (< 10 words) appears in two consecutive kept lines, collapse second.
-    let prevKeptText = '';
-    for (const rec of lineRecords) {
-      if (rec.action !== 'keep') continue;
-      const wordCount = rec.textForTest.split(/\s+/).filter(Boolean).length;
-      if (wordCount <= 10 && rec.textForTest.toLowerCase() === prevKeptText.toLowerCase()) {
-        rec.action = 'exclude-dup';
-        rec.reason = 'Adjacent repeated short phrase';
-      } else {
-        prevKeptText = rec.textForTest;
-      }
+  // Scoped promo exclusion: when a promo phrase fires inside a unit, only
+  // exclude the portion from the nearest preceding sentence boundary onward.
+  // If the phrase appears in the first 60% of the unit, the whole unit is promo.
+  // If it appears in the last 40%, the educational prefix is preserved.
+  function _divinePromoScope(unitText, promoRe) {
+    const m = promoRe.exec(unitText);
+    if (!m) return { keepText: unitText, excludeText: '', partial: false };
+
+    const matchFraction = m.index / unitText.length;
+    if (matchFraction < 0.60) {
+      return { keepText: null, excludeText: unitText, partial: false };
     }
 
-    // Pass 4: filler word removal within kept lines
-    let cleanedLineNumber = 0;
-    for (const rec of lineRecords) {
-      if (rec.action === 'keep-blank') {
-        cleanedLineNumber++;
-        cleanedLines.push({ originalLine: rec.originalLine, cleanedLineNumber, text: '', timestamp: rec.timestamp });
-        continue;
-      }
+    const before = unitText.slice(0, m.index);
+    const after  = unitText.slice(m.index);
+    const lastPeriod = Math.max(
+      before.lastIndexOf('. '), before.lastIndexOf('! '), before.lastIndexOf('? ')
+    );
 
-      if (rec.action === 'exclude-promo') {
-        promoLineCount++;
-        excludedSegments.push({
-          originalLine: rec.originalLine,
-          text: rec.textForTest,
-          timestamp: rec.timestamp,
-          reason: rec.reason
-        });
-        continue;
-      }
+    if (lastPeriod > 0 && lastPeriod > before.length * 0.15) {
+      const keepPart    = before.slice(0, lastPeriod + 1).trim();
+      const excludePart = (before.slice(lastPeriod + 2) + ' ' + after).trim();
+      return { keepText: keepPart || null, excludeText: excludePart, partial: true };
+    }
 
-      if (rec.action === 'exclude-dup') {
-        dupLineCount++;
-        excludedSegments.push({
-          originalLine: rec.originalLine,
-          text: rec.textForTest,
-          timestamp: rec.timestamp,
-          reason: rec.reason
-        });
-        continue;
-      }
+    const keepPart = before.trim();
+    return { keepText: keepPart || null, excludeText: after.trim(), partial: true };
+  }
 
-      // action === 'keep': apply filler cleanup inline
-      let cleaned = rec.textForTest;
+  function cleanDivineTranscript(rawText) {
+    const rawWordCount = rawText.trim().split(/\s+/).filter(Boolean).length;
+    const totalLines = rawText.split('\n').length;
 
-      // Count filler matches before stripping
-      const fillerMatches = (cleaned.match(DIVINE_FILLER_RE) || []).length
-                          + (cleaned.match(DIVINE_DISCOURSE_RE) || []).length;
-      if (fillerMatches > 0) fillerCleanupCount += fillerMatches;
+    // Pass 0: normalise into atomic units BEFORE promo testing.
+    // Root-cause fix: prevents a late outro phrase from excluding a whole monolithic line.
+    const normalizedUnits = _divineNormalizeToUnits(rawText);
+    const normalizedUnitCount = normalizedUnits.length;
+    const contentUnits = normalizedUnits.filter(u => !u.isBlank && u.text.trim());
+    const avgUnitLength = contentUnits.length
+      ? Math.round(contentUnits.reduce((s, u) => s + u.text.length, 0) / contentUnits.length)
+      : 0;
 
-      cleaned = cleaned.replace(DIVINE_FILLER_RE, '').replace(DIVINE_DISCOURSE_RE, '');
-      // Collapse multiple spaces left by removal
-      cleaned = cleaned.replace(/\s{2,}/g, ' ').trim();
+    // Inner cleaning runner — called in normal mode, then again in conservative mode
+    // if the fallback guard trips (>80% of words would be excluded).
+    function runCleaningPasses(units, conservativeMode) {
+      const excludedSegments = [];
+      let promoUnitCount = 0;
+      let promoSpansRemoved = 0;
+      let dupLineCount = 0;
+      let fillerCleanupCount = 0;
 
-      // Reconstruct with timestamp prefix
-      const fullCleaned = rec.timestamp ? `${rec.timestamp} ${cleaned}` : cleaned;
+      // Pass 1: per-unit promo detection with scoped exclusion.
+      const records = units.map(u => {
+        if (u.isBlank || !u.text.trim()) return { ...u, textForTest: '', action: 'keep-blank' };
+        const textForTest = u.text;
+        const promoMatch = DIVINE_PROMO_PATTERNS.find(re => re.test(textForTest));
 
-      cleanedLineNumber++;
-      cleanedLines.push({
-        originalLine: rec.originalLine,
-        cleanedLineNumber,
-        text: fullCleaned,
-        timestamp: rec.timestamp
+        if (promoMatch) {
+          if (conservativeMode) {
+            // Conservative: only exclude if promo appears within the first 30%
+            // of the unit. Later promo phrases are kept with a warning.
+            const cm = promoMatch.exec(textForTest);
+            if (!cm || cm.index / textForTest.length >= 0.30) {
+              return { ...u, textForTest, action: 'keep', promoWarning: true };
+            }
+          }
+          // Scoped exclusion: try to keep educational prefix if promo is late.
+          const scope = _divinePromoScope(textForTest, promoMatch);
+          if (scope.partial && scope.keepText) {
+            promoSpansRemoved++;
+            promoUnitCount++;
+            excludedSegments.push({
+              originalLine: u.originalLine, text: scope.excludeText,
+              timestamp: u.timestamp, reason: 'Partial promo/outro isolated — educational prefix retained'
+            });
+            return { ...u, text: scope.keepText, textForTest: scope.keepText, action: 'keep' };
+          }
+          promoUnitCount++;
+          return { ...u, textForTest, action: 'exclude-promo',
+            reason: `Promotional/non-medical content: matched "${promoMatch.source.slice(0, 60)}"` };
+        }
+        return { ...u, textForTest, action: 'keep' };
       });
+
+      // Pass 2: exact duplicate collapse.
+      const seenContent = new Map();
+      for (const rec of records) {
+        if (rec.action !== 'keep') continue;
+        const key = rec.textForTest.toLowerCase().replace(/\s+/g, ' ');
+        if (key.length < 8) continue;
+        if (seenContent.has(key)) {
+          rec.action = 'exclude-dup';
+          rec.reason = `Exact duplicate of line ${seenContent.get(key)}`;
+        } else {
+          seenContent.set(key, rec.originalLine);
+        }
+      }
+
+      // Pass 3: adjacent repeated short-phrase collapse.
+      let prevKeptText = '';
+      for (const rec of records) {
+        if (rec.action !== 'keep') continue;
+        const wordCount = rec.textForTest.split(/\s+/).filter(Boolean).length;
+        if (wordCount <= 10 && rec.textForTest.toLowerCase() === prevKeptText.toLowerCase()) {
+          rec.action = 'exclude-dup';
+          rec.reason = 'Adjacent repeated short phrase';
+        } else {
+          prevKeptText = rec.textForTest;
+        }
+      }
+
+      // Pass 4: filler removal and final assembly.
+      const cleanedLines = [];
+      let cleanedLineNumber = 0;
+      for (const rec of records) {
+        if (rec.action === 'keep-blank') {
+          cleanedLineNumber++;
+          cleanedLines.push({ originalLine: rec.originalLine, cleanedLineNumber, text: '', timestamp: rec.timestamp });
+          continue;
+        }
+        if (rec.action === 'exclude-promo') {
+          excludedSegments.push({ originalLine: rec.originalLine, text: rec.textForTest, timestamp: rec.timestamp, reason: rec.reason });
+          continue;
+        }
+        if (rec.action === 'exclude-dup') {
+          dupLineCount++;
+          excludedSegments.push({ originalLine: rec.originalLine, text: rec.textForTest, timestamp: rec.timestamp, reason: rec.reason });
+          continue;
+        }
+        // action === 'keep': inline filler cleanup.
+        let cleaned = rec.textForTest;
+        if (!conservativeMode) {
+          const fm = (cleaned.match(DIVINE_FILLER_RE) || []).length + (cleaned.match(DIVINE_DISCOURSE_RE) || []).length;
+          if (fm > 0) fillerCleanupCount += fm;
+          cleaned = cleaned.replace(DIVINE_FILLER_RE, '').replace(DIVINE_DISCOURSE_RE, '');
+          cleaned = cleaned.replace(/\s{2,}/g, ' ').trim();
+        }
+        const fullCleaned = rec.timestamp ? `${rec.timestamp} ${cleaned}` : cleaned;
+        cleanedLineNumber++;
+        cleanedLines.push({ originalLine: rec.originalLine, cleanedLineNumber, text: fullCleaned, timestamp: rec.timestamp });
+      }
+
+      return { cleanedLines, excludedSegments, promoUnitCount, promoSpansRemoved, dupLineCount, fillerCleanupCount };
     }
 
-    // Build cleaned text for downstream use
+    // Run normal mode first.
+    let runResult = runCleaningPasses(normalizedUnits, false);
+
+    // Fallback guard: if normal mode would exclude >80% of words, revert to
+    // conservative mode. This protects monolithic transcripts where a late promo
+    // phrase would otherwise cascade into total exclusion.
+    const firstExcludedWords = runResult.excludedSegments.reduce(
+      (s, e) => s + e.text.split(/\s+/).filter(Boolean).length, 0
+    );
+    let fallbackModeTriggered = false;
+    if (rawWordCount > 0 && firstExcludedWords / rawWordCount > 0.80) {
+      fallbackModeTriggered = true;
+      runResult = runCleaningPasses(normalizedUnits, true);
+    }
+
+    const { cleanedLines, excludedSegments, promoUnitCount, promoSpansRemoved, dupLineCount, fillerCleanupCount } = runResult;
     const cleanedText = cleanedLines.map(l => l.text).join('\n');
     const cleanedWordCount = cleanedText.trim().split(/\s+/).filter(Boolean).length;
     const excludedLineCount = excludedSegments.length;
-    const excludedWordCount = excludedSegments.reduce((sum, s) => sum + s.text.split(/\s+/).filter(Boolean).length, 0);
-    const rawWordCount = rawText.trim().split(/\s+/).filter(Boolean).length;
+    const excludedWordCount = excludedSegments.reduce((s, e) => s + e.text.split(/\s+/).filter(Boolean).length, 0);
     const exclusionRate = rawWordCount > 0 ? excludedWordCount / rawWordCount : 0;
 
     const warnings = [];
-    if (exclusionRate > 0.15) {
-      warnings.push(`High exclusion rate: ${(exclusionRate * 100).toFixed(1)}% of transcript words were excluded. Review the excluded segments carefully.`);
+    if (fallbackModeTriggered) {
+      warnings.push('Conservative cleaning mode activated: normal mode would have excluded >80% of transcript words. Promo detection was restricted to clearly promotional units only.');
     }
-    if (promoLineCount === 0 && dupLineCount === 0 && fillerCleanupCount === 0) {
-      warnings.push('No promotional content, duplicates, or fillers were detected. Transcript may already be clean, or patterns may not match this format.');
+    if (exclusionRate > 0.15 && !fallbackModeTriggered) {
+      warnings.push(`Elevated exclusion rate: ${(exclusionRate * 100).toFixed(1)}% of transcript words excluded. Review excluded segments below.`);
+    }
+    if (cleanedWordCount === 0) {
+      warnings.push('CRITICAL: No content survived cleaning. All units were excluded or empty. Review the excluded segments section and consider pasting the transcript directly.');
+    }
+    if (promoUnitCount === 0 && dupLineCount === 0 && fillerCleanupCount === 0 && !fallbackModeTriggered) {
+      warnings.push('No promotional content, duplicates, or fillers detected. Transcript may already be clean, or promo patterns may not match this format.');
     }
 
     return {
@@ -11588,21 +11755,25 @@ const App = (() => {
       cleanedLines,
       excludedSegments,
       totalLines,
+      normalizedUnitCount,
+      avgUnitLength,
       cleanedLineCount: cleanedLines.filter(l => l.text.trim()).length,
       excludedLineCount,
+      promoLineCount: promoUnitCount,
+      promoSpansRemoved,
       dupLineCount,
-      promoLineCount,
       fillerCleanupCount,
       cleanedWordCount,
       excludedWordCount,
       exclusionRate,
+      fallbackModeTriggered,
       warnings
     };
   }
 
   function renderDivineCleanedPreview(result) {
     const cleanSection = document.getElementById('divine-clean-section');
-    const cleanStatus = document.getElementById('divine-clean-status');
+    const cleanStatus  = document.getElementById('divine-clean-status');
     const cleanSummary = document.getElementById('divine-clean-summary');
     const cleanedPreview = document.getElementById('divine-cleaned-preview');
     const excludedStatus = document.getElementById('divine-excluded-status');
@@ -11611,22 +11782,33 @@ const App = (() => {
 
     cleanSection.style.display = '';
 
-    // Status line
+    // Status line — always shows something meaningful, never silently empty.
     const exclusionPct = (result.exclusionRate * 100).toFixed(1);
-    const statusText = result.warnings.length
-      ? result.warnings[0]
-      : `Cleaning complete. ${result.cleanedWordCount.toLocaleString()} words retained, ${result.excludedWordCount.toLocaleString()} excluded (${exclusionPct}%).`;
+    let statusText;
+    if (result.cleanedWordCount === 0) {
+      statusText = 'Cleaning produced no retained content. See diagnostics and excluded segments below.';
+    } else if (result.fallbackModeTriggered) {
+      statusText = `Conservative mode active: ${result.cleanedWordCount.toLocaleString()} words retained (normal mode would have excluded >80% — see warnings).`;
+    } else if (result.warnings.length) {
+      statusText = result.warnings[0];
+    } else {
+      statusText = `Cleaning complete. ${result.cleanedWordCount.toLocaleString()} words retained, ${result.excludedWordCount.toLocaleString()} excluded (${exclusionPct}%).`;
+    }
     if (cleanStatus) cleanStatus.textContent = statusText;
 
-    // Summary stats table
+    // Summary stats table — includes normalisation diagnostics.
     const summaryRows = [
-      ['Total lines', result.totalLines],
-      ['Cleaned lines (non-blank)', result.cleanedLineCount],
-      ['Excluded lines', result.excludedLineCount],
-      ['— Promo / ad / social lines removed', result.promoLineCount],
-      ['— Duplicate lines collapsed', result.dupLineCount],
-      ['Filler instances removed', result.fillerCleanupCount],
-      ['Exclusion rate (by word)', `${exclusionPct}%`]
+      ['Input lines (raw)',              result.totalLines],
+      ['Normalised units',               result.normalizedUnitCount],
+      ['Avg. unit length (chars)',        result.avgUnitLength],
+      ['Cleaned units (non-blank)',       result.cleanedLineCount],
+      ['Excluded units',                 result.excludedLineCount],
+      ['— Promo / ad / social removed',  result.promoLineCount],
+      ['— Partial promo spans isolated', result.promoSpansRemoved],
+      ['— Duplicate units collapsed',    result.dupLineCount],
+      ['Filler instances removed',        result.fillerCleanupCount],
+      ['Exclusion rate (by word)',         `${exclusionPct}%`],
+      ['Conservative fallback',           result.fallbackModeTriggered ? 'YES ⚠' : 'No']
     ];
     const rowHtml = summaryRows.map(([label, val]) =>
       `<tr><td style="padding:2px 14px 2px 0;font-size:12px;color:#555;">${escapeHTML(String(label))}</td><td style="font-size:12px;font-weight:600;">${escapeHTML(String(val))}</td></tr>`
@@ -11635,12 +11817,21 @@ const App = (() => {
       <table style="border-collapse:collapse;margin-bottom:6px;">${rowHtml}</table>
       ${result.warnings.map(w => `<div style="color:#8a5a00;font-size:12px;margin-top:4px;">⚠ ${escapeHTML(w)}</div>`).join('')}`;
 
-    // Cleaned transcript preview (first 3000 chars)
-    const cleanedSnippet = result.cleanedText.slice(0, 3000);
-    const truncated = result.cleanedText.length > 3000;
-    if (cleanedPreview) cleanedPreview.innerHTML = `<pre style="white-space:pre-wrap;overflow:auto;max-height:300px;font-size:11px;padding:8px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:4px;">${escapeHTML(cleanedSnippet)}${truncated ? '\n\n[…preview truncated — full cleaned text stored]' : ''}</pre>`;
+    // Cleaned transcript preview — explicit failure state if nothing survived.
+    if (result.cleanedWordCount === 0) {
+      if (cleanedPreview) cleanedPreview.innerHTML = `<div style="color:#dc2626;font-size:12px;padding:8px;background:#fef2f2;border:1px solid #fca5a5;border-radius:4px;">
+        <strong>No content retained after cleaning.</strong><br>
+        Normalised units: ${result.normalizedUnitCount} &nbsp;·&nbsp; Excluded: ${result.excludedLineCount}<br>
+        Conservative fallback: ${result.fallbackModeTriggered ? 'triggered but still produced empty output' : 'not triggered'}<br>
+        Review the excluded segments below. If all content is educational, try pasting the transcript directly.
+      </div>`;
+    } else {
+      const cleanedSnippet = result.cleanedText.slice(0, 3000);
+      const truncated = result.cleanedText.length > 3000;
+      if (cleanedPreview) cleanedPreview.innerHTML = `<pre style="white-space:pre-wrap;overflow:auto;max-height:300px;font-size:11px;padding:8px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:4px;">${escapeHTML(cleanedSnippet)}${truncated ? '\n\n[…preview truncated — full cleaned text stored]' : ''}</pre>`;
+    }
 
-    // Excluded segments list
+    // Excluded segments list.
     const excluded = result.excludedSegments;
     if (!excluded.length) {
       if (excludedStatus) excludedStatus.textContent = 'No segments excluded.';
@@ -11649,7 +11840,8 @@ const App = (() => {
       if (excludedStatus) excludedStatus.textContent = `${excluded.length} segment${excluded.length === 1 ? '' : 's'} excluded — verify before proceeding.`;
       const cards = excluded.slice(0, 80).map(seg => {
         const tsLabel = seg.timestamp ? `<span style="color:#888;font-size:10px;margin-right:6px;">${escapeHTML(seg.timestamp)}</span>` : '';
-        const reasonColor = seg.reason.startsWith('Promotional') ? '#dc2626' : '#6b7280';
+        const isPromo = /promo|promotional|outro/i.test(seg.reason);
+        const reasonColor = isPromo ? '#dc2626' : '#6b7280';
         return `<div style="border:1px solid #e2e8f0;border-left:3px solid ${reasonColor};border-radius:4px;padding:6px 8px;margin-bottom:5px;font-size:12px;">
           <div style="display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;">
             <span style="color:#94a3b8;font-size:10px;">Line ${escapeHTML(String(seg.originalLine))}</span>
@@ -11665,9 +11857,9 @@ const App = (() => {
       if (excludedPreview) excludedPreview.innerHTML = cards + truncMsg;
     }
 
-    // Reveal segment button now that a clean result is available
+    // Reveal segment button only when cleaned content actually exists.
     const segmentBtn = document.getElementById('divine-segment-btn');
-    if (segmentBtn) segmentBtn.style.display = '';
+    if (segmentBtn) segmentBtn.style.display = result.cleanedWordCount > 0 ? '' : 'none';
   }
 
   function cleanAndPreviewDivineTranscript() {
@@ -11937,6 +12129,12 @@ const App = (() => {
       ? `<div class="notes-import-empty" style="margin-top:6px;">…and ${segments.length - PREVIEW_CAP} more segments (all stored, first ${PREVIEW_CAP} shown)</div>`
       : '';
     if (segPreview) segPreview.innerHTML = cards + truncMsg;
+
+    // Reveal concept extraction button now that segments exist.
+    if (segments.length > 0) {
+      const conceptBtn = document.getElementById('divine-concept-btn');
+      if (conceptBtn) conceptBtn.style.display = '';
+    }
   }
 
   function segmentAndPreviewDivineTranscript() {
@@ -11964,6 +12162,401 @@ const App = (() => {
       const segments = segmentDivineTranscript(cleanedLines);
       _divineImportPreview.segments = segments;
       renderDivineSegmentPreview(segments);
+    }, 0);
+  }
+
+  // ── Divine concept extraction pipeline (v3) ───────────────────────────────
+  // Deterministic keyword-trigger extraction only. No AI, no medical inference.
+  // Reads _divineImportPreview.segments. Writes _divineImportPreview.concepts.
+
+  const DIVINE_CONCEPT_TYPES = [
+    'high-yield-fact',
+    'mechanism',
+    'risk-factor',
+    'diagnostic-distinction',
+    'management-rule',
+    'contraindication-adverse-effect',
+    'exam-trap',
+    'clinical-reasoning-framework',
+    'differential-diagnosis',
+    'unknown'
+  ];
+
+  // Concept type → palette color for UI badges.
+  const DIVINE_CONCEPT_TYPE_COLORS = {
+    'high-yield-fact':                '#2563eb',
+    'mechanism':                      '#b45309',
+    'risk-factor':                    '#db2777',
+    'diagnostic-distinction':         '#7c3aed',
+    'management-rule':                '#059669',
+    'contraindication-adverse-effect':'#dc2626',
+    'exam-trap':                      '#b91c1c',
+    'clinical-reasoning-framework':   '#0891b2',
+    'differential-diagnosis':         '#6d28d9',
+    'unknown':                        '#94a3b8'
+  };
+
+  // Trigger-pattern table. Each entry: { type, patterns: [{ re, weight }] }.
+  // Weight = base confidence awarded when this pattern fires.
+  // Checked independently per type — multiple types can fire on one segment.
+  const DIVINE_CONCEPT_TRIGGERS = [
+    {
+      type: 'high-yield-fact',
+      patterns: [
+        { re: /\bmost\s+common\b/i,            weight: 0.85 },
+        { re: /\bclassic(?:ally)?\b/i,         weight: 0.75 },
+        { re: /\bhallmark\b/i,                 weight: 0.90 },
+        { re: /\bhigh[\s-]yield\b/i,           weight: 0.90 },
+        { re: /\bpathognomonic\b/i,            weight: 0.92 },
+        { re: /\bpresents?\s+(?:with|as)\b/i,  weight: 0.60 },
+        { re: /\bkey\s+(?:fact|point|finding)\b/i, weight: 0.85 },
+        { re: /\bremember\s+that\b/i,          weight: 0.70 },
+        { re: /\bmust\s+know\b/i,              weight: 0.85 },
+        { re: /\bpearl\b/i,                   weight: 0.80 },
+        { re: /\btake\s*away\b/i,             weight: 0.80 },
+        { re: /\bboards?\b/i,                 weight: 0.65 }
+      ]
+    },
+    {
+      type: 'mechanism',
+      patterns: [
+        { re: /\bcaused?\s+by\b/i,             weight: 0.75 },
+        { re: /\bdue\s+to\b/i,                 weight: 0.65 },
+        { re: /\bresults?\s+in\b/i,            weight: 0.75 },
+        { re: /\bleads?\s+to\b/i,             weight: 0.70 },
+        { re: /\binhibits?\b/i,                weight: 0.80 },
+        { re: /\bactivates?\b/i,               weight: 0.75 },
+        { re: /\bblocks?\b/i,                 weight: 0.65 },
+        { re: /\bpathogenesis\b/i,             weight: 0.90 },
+        { re: /\bmechanism\s+of\b/i,           weight: 0.90 },
+        { re: /\bpathophysiology\b/i,          weight: 0.90 },
+        { re: /\bsignaling\s+pathway\b/i,      weight: 0.85 },
+        { re: /\bdownstream\b/i,               weight: 0.70 },
+        { re: /\bupstream\b/i,                weight: 0.70 }
+      ]
+    },
+    {
+      type: 'risk-factor',
+      patterns: [
+        { re: /\brisk\s+factor\b/i,                       weight: 0.90 },
+        { re: /\bpredisposes?\b/i,                        weight: 0.85 },
+        { re: /\bassociated\s+with\b/i,                   weight: 0.65 },
+        { re: /\bmore\s+common\s+in\b/i,                  weight: 0.80 },
+        { re: /\bincreases?\s+(?:the\s+)?risk\b/i,        weight: 0.85 },
+        { re: /\bdecreases?\s+(?:the\s+)?risk\b/i,        weight: 0.80 },
+        { re: /\bprevalence\b/i,                          weight: 0.70 },
+        { re: /\bepidemiolog(?:y|ical)\b/i,               weight: 0.75 }
+      ]
+    },
+    {
+      type: 'diagnostic-distinction',
+      patterns: [
+        { re: /\bvs\.?\s/i,                               weight: 0.80 },
+        { re: /\bversus\b/i,                              weight: 0.80 },
+        { re: /\bunlike\b/i,                              weight: 0.85 },
+        { re: /\bdistinguish(?:ing|es)?\b/i,              weight: 0.90 },
+        { re: /\bdifferentiat(?:e|ing|ion)\b/i,           weight: 0.85 },
+        { re: /\bkey\s+difference\b/i,                    weight: 0.90 },
+        { re: /\bas\s+opposed\s+to\b/i,                   weight: 0.80 },
+        { re: /\bcompared\s+to\b/i,                       weight: 0.70 },
+        { re: /\bcontrast(?:ing)?\b/i,                    weight: 0.75 }
+      ]
+    },
+    {
+      type: 'management-rule',
+      patterns: [
+        { re: /\bnext\s+best\s+step\b/i,                  weight: 0.95 },
+        { re: /\btreatment\s+of\s+choice\b/i,             weight: 0.95 },
+        { re: /\bfirst[\s-]line\b/i,                      weight: 0.90 },
+        { re: /\bmanagement\s+(?:of|is)\b/i,              weight: 0.85 },
+        { re: /\bgive\s+(?:them\s+|the\s+patient\s+)?\w/i,weight: 0.80 },
+        { re: /\btreat\s+with\b/i,                        weight: 0.85 },
+        { re: /\byou\s+want\s+to\s+(?:give|use|start|treat)\b/i, weight: 0.80 }
+      ]
+    },
+    {
+      type: 'contraindication-adverse-effect',
+      patterns: [
+        { re: /\bcontraindicated?\b/i,                    weight: 0.95 },
+        { re: /\bavoid\b/i,                               weight: 0.75 },
+        { re: /\bdo\s+not\s+(?:give|use|start)\b/i,       weight: 0.85 },
+        { re: /\bside\s+effect\b/i,                       weight: 0.90 },
+        { re: /\badverse\s+(?:effect|reaction|event)\b/i, weight: 0.90 },
+        { re: /\btoxicity\b/i,                            weight: 0.90 },
+        { re: /\b(?:nephro|hepato|neuro|cardio)toxic\b/i, weight: 0.90 },
+        { re: /\bnever\s+(?:give|use|start)\b/i,          weight: 0.90 }
+      ]
+    },
+    {
+      type: 'exam-trap',
+      patterns: [
+        { re: /\bpitfall\b/i,                             weight: 0.95 },
+        { re: /\bdon'?t\s+confuse\b/i,                    weight: 0.95 },
+        { re: /\bboards?\s+trap\b/i,                      weight: 0.95 },
+        { re: /\bcommonly\s+(?:mistaken|confused|missed)\b/i, weight: 0.90 },
+        { re: /\beasy\s+to\s+(?:miss|confuse|mistake)\b/i,weight: 0.85 },
+        { re: /\bdon'?t\s+(?:forget|miss|fall\s+for)\b/i, weight: 0.80 },
+        { re: /\bwatch\s+out\b/i,                         weight: 0.70 },
+        { re: /\btricky\b/i,                              weight: 0.65 }
+      ]
+    },
+    {
+      type: 'clinical-reasoning-framework',
+      patterns: [
+        { re: /\bapproach\s+to\b/i,                       weight: 0.90 },
+        { re: /\bframework\b/i,                           weight: 0.90 },
+        { re: /\balgorithm\b/i,                           weight: 0.85 },
+        { re: /\bhow\s+(?:do\s+you\s+)?(?:think\s+about|approach)\b/i, weight: 0.85 },
+        { re: /\bstep[\s-]by[\s-]step\b/i,               weight: 0.80 },
+        { re: /\bwork\s*up\b/i,                           weight: 0.75 },
+        { re: /\bwhen\s+(?:you\s+)?see\b/i,               weight: 0.60 },
+        { re: /\bthink\s+about\b/i,                       weight: 0.60 }
+      ]
+    },
+    {
+      type: 'differential-diagnosis',
+      patterns: [
+        { re: /\bdifferential\b/i,                        weight: 0.90 },
+        { re: /\brule\s+out\b/i,                          weight: 0.90 },
+        { re: /\bddx\b/i,                                 weight: 0.90 },
+        { re: /\bon\s+(?:your\s+)?differential\b/i,       weight: 0.90 },
+        { re: /\bconsider\b/i,                            weight: 0.55 },
+        { re: /\bwhat\s+else\s+(?:could|can|would)\b/i,   weight: 0.65 }
+      ]
+    }
+  ];
+
+  // Segment types that align with concept types — used for a small confidence boost.
+  const DIVINE_SEGMENT_TO_CONCEPT_ALIGNMENT = {
+    'teaching-point':        'high-yield-fact',
+    'management-rule':       'management-rule',
+    'diagnostic-distinction':'diagnostic-distinction',
+    'mechanism':             'mechanism',
+    'risk-factor':           'risk-factor',
+    'exam-trap':             'exam-trap'
+  };
+
+  // Extract a short, readable source snippet centred on the first trigger match.
+  // Tries to return a full sentence; falls back to a ±140-char window.
+  function _divineExtractConceptSnippet(text, re) {
+    const m = re.exec(text);
+    if (!m) return text.slice(0, 300);
+    const matchIdx = m.index;
+
+    // Try to find sentence boundaries by splitting on sentence-ending punctuation.
+    const sentenceRe = /[^.!?]*[.!?](?:\s|$)/g;
+    let sent;
+    while ((sent = sentenceRe.exec(text)) !== null) {
+      const sentStart = sent.index;
+      const sentEnd = sentStart + sent[0].length;
+      if (matchIdx >= sentStart && matchIdx < sentEnd) {
+        return sent[0].trim().slice(0, 300);
+      }
+    }
+
+    // Fallback: ±140-char window around match.
+    const start = Math.max(0, matchIdx - 140);
+    const end = Math.min(text.length, matchIdx + 160);
+    const window = text.slice(start, end);
+    return (start > 0 ? '…' : '') + window.trim() + (end < text.length ? '…' : '');
+  }
+
+  // Extract all deterministic concepts from a single segment.
+  // Returns an array (0..N) of concept objects. Never mutates the segment.
+  function _divineExtractConceptsFromSegment(segment, globalIdxRef) {
+    const results = [];
+    const text = segment.textClean || '';
+    if (!text.trim()) return results;
+
+    const alignedType = DIVINE_SEGMENT_TO_CONCEPT_ALIGNMENT[segment.segmentType] || null;
+
+    for (const { type, patterns } of DIVINE_CONCEPT_TRIGGERS) {
+      // Find all matching patterns for this type.
+      const matched = patterns.filter(p => p.re.test(text));
+      if (matched.length === 0) continue;
+
+      // Confidence = max weight, boosted by extra matches and segment-type alignment.
+      const baseConf = Math.max(...matched.map(p => p.weight));
+      const extraBonus = Math.min(0.06, (matched.length - 1) * 0.02);
+      const alignBonus = alignedType === type ? 0.05 : 0;
+      const confidence = Math.round(
+        Math.min(0.95, Math.max(0.15, baseConf + extraBonus + alignBonus)) * 100
+      ) / 100;
+
+      // Source snippet anchored on the first matching pattern.
+      const firstPattern = matched[0].re;
+      const sourceSnippet = _divineExtractConceptSnippet(text, firstPattern);
+
+      const warnings = [];
+      if (confidence < 0.60) warnings.push('Low confidence — manual review recommended before promoting to draft');
+      if (matched.length === 1 && matched[0].weight < 0.70) {
+        warnings.push('Triggered by a weak single pattern — verify relevance');
+      }
+
+      globalIdxRef.value++;
+      results.push({
+        conceptId: `divine-concept-${String(globalIdxRef.value).padStart(5, '0')}`,
+        conceptType: type,
+        sourceSegmentId: segment.segmentId,
+        originalLineRange: segment.originalLineRange.slice(),
+        cleanedLineRange: segment.cleanedLineRange.slice(),
+        timestampRange: segment.timestampRange
+          ? { start: segment.timestampRange.start, end: segment.timestampRange.end }
+          : null,
+        sourceSnippet,
+        segmentType: segment.segmentType,
+        confidence,
+        warnings
+      });
+    }
+
+    // If no typed concept fired, emit one unknown concept to preserve segment visibility.
+    if (results.length === 0) {
+      globalIdxRef.value++;
+      results.push({
+        conceptId: `divine-concept-${String(globalIdxRef.value).padStart(5, '0')}`,
+        conceptType: 'unknown',
+        sourceSegmentId: segment.segmentId,
+        originalLineRange: segment.originalLineRange.slice(),
+        cleanedLineRange: segment.cleanedLineRange.slice(),
+        timestampRange: segment.timestampRange
+          ? { start: segment.timestampRange.start, end: segment.timestampRange.end }
+          : null,
+        sourceSnippet: text.slice(0, 300),
+        segmentType: segment.segmentType,
+        confidence: 0.20,
+        warnings: ['No classification trigger matched — will not be promoted to draft without manual review']
+      });
+    }
+
+    return results;
+  }
+
+  // Extract concepts from all segments. Returns flat array of concept objects.
+  function extractDivineConceptsFromSegments(segments) {
+    if (!Array.isArray(segments) || segments.length === 0) return [];
+    const globalIdxRef = { value: 0 };
+    const all = [];
+    for (const seg of segments) {
+      const concepts = _divineExtractConceptsFromSegment(seg, globalIdxRef);
+      for (const c of concepts) all.push(c);
+    }
+    return all;
+  }
+
+  function renderDivineConceptPreview(concepts) {
+    const conceptSection = document.getElementById('divine-concept-section');
+    const conceptStatus  = document.getElementById('divine-concept-status');
+    const conceptSummary = document.getElementById('divine-concept-summary');
+    const conceptPreview = document.getElementById('divine-concept-preview');
+    const unknownWrap    = document.getElementById('divine-unknown-concept-wrap');
+    const unknownPreview = document.getElementById('divine-unknown-concept-preview');
+    if (!conceptSection) return;
+
+    conceptSection.style.display = '';
+
+    if (!concepts || concepts.length === 0) {
+      if (conceptStatus) conceptStatus.textContent = 'No concepts extracted.';
+      if (conceptSummary) conceptSummary.innerHTML = '';
+      if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concepts to show.</div>';
+      if (unknownWrap) unknownWrap.style.display = 'none';
+      return;
+    }
+
+    const typed    = concepts.filter(c => c.conceptType !== 'unknown');
+    const unknown  = concepts.filter(c => c.conceptType === 'unknown');
+    const lowConf  = concepts.filter(c => c.confidence < 0.60).length;
+
+    // Status line
+    const parts = [`${concepts.length} concept${concepts.length === 1 ? '' : 's'} extracted`];
+    if (lowConf > 0) parts.push(`${lowConf} low-confidence`);
+    if (unknown.length > 0) parts.push(`${unknown.length} unclassified`);
+    if (conceptStatus) conceptStatus.textContent = parts.join(' · ') + '.';
+
+    // Type breakdown table (typed only)
+    const typeCounts = {};
+    for (const t of DIVINE_CONCEPT_TYPES) typeCounts[t] = 0;
+    for (const c of concepts) typeCounts[c.conceptType] = (typeCounts[c.conceptType] || 0) + 1;
+    const typeRows = DIVINE_CONCEPT_TYPES
+      .filter(t => t !== 'unknown' && typeCounts[t] > 0)
+      .map(t => {
+        const color = DIVINE_CONCEPT_TYPE_COLORS[t] || '#94a3b8';
+        return `<tr>
+          <td style="padding:2px 14px 2px 0;font-size:12px;">
+            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:5px;vertical-align:middle;"></span>${escapeHTML(t)}
+          </td>
+          <td style="font-size:12px;font-weight:600;">${typeCounts[t]}</td>
+        </tr>`;
+      }).join('');
+    if (conceptSummary) conceptSummary.innerHTML = `<table style="border-collapse:collapse;margin-bottom:6px;">${typeRows}</table>`;
+
+    // Concept card renderer (shared for typed and unknown)
+    function renderConceptCard(c) {
+      const color = DIVINE_CONCEPT_TYPE_COLORS[c.conceptType] || '#94a3b8';
+      const lineRange = `Lines ${c.originalLineRange[0]}–${c.originalLineRange[1]}`;
+      const tsLabel = c.timestampRange
+        ? ` · ${escapeHTML(c.timestampRange.start)}${c.timestampRange.end !== c.timestampRange.start ? ' → ' + escapeHTML(c.timestampRange.end) : ''}`
+        : '';
+      const conf = `${Math.round(c.confidence * 100)}%`;
+      const confColor = c.confidence < 0.60 ? '#b45309' : '#6b7280';
+      const warnHtml = c.warnings.map(w =>
+        `<div style="color:#92400e;font-size:10px;margin-top:2px;">⚠ ${escapeHTML(w)}</div>`
+      ).join('');
+      return `<div style="border:1px solid #e2e8f0;border-left:3px solid ${color};border-radius:4px;padding:7px 9px;margin-bottom:5px;font-size:12px;">
+        <div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin-bottom:3px;">
+          <span style="color:#94a3b8;font-size:10px;">${escapeHTML(c.conceptId)}</span>
+          <span style="color:#94a3b8;font-size:10px;">${escapeHTML(lineRange)}${tsLabel}</span>
+          <span style="background:${color};color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;">${escapeHTML(c.conceptType)}</span>
+          <span style="color:${confColor};font-size:10px;">confidence ${conf}</span>
+        </div>
+        <div style="color:#374151;font-style:italic;margin-bottom:2px;">${escapeHTML(c.sourceSnippet.slice(0, 240))}${c.sourceSnippet.length > 240 ? '…' : ''}</div>
+        ${warnHtml}
+      </div>`;
+    }
+
+    // Render typed concepts (cap at 80)
+    const TYPED_CAP = 80;
+    const typedCards = typed.slice(0, TYPED_CAP).map(renderConceptCard).join('');
+    const typedTrunc = typed.length > TYPED_CAP
+      ? `<div class="notes-import-empty" style="margin-top:6px;">…and ${typed.length - TYPED_CAP} more concepts (all stored, first ${TYPED_CAP} shown)</div>`
+      : '';
+    if (conceptPreview) {
+      conceptPreview.innerHTML = typed.length
+        ? typedCards + typedTrunc
+        : '<div class="notes-import-empty">No typed concepts — all segments produced unknown concepts only.</div>';
+    }
+
+    // Render unknown concepts in collapsible section
+    if (unknown.length > 0) {
+      if (unknownWrap) unknownWrap.style.display = '';
+      const unknownCards = unknown.slice(0, 40).map(renderConceptCard).join('');
+      const unknownTrunc = unknown.length > 40
+        ? `<div class="notes-import-empty" style="margin-top:6px;">…and ${unknown.length - 40} more (all stored)</div>`
+        : '';
+      if (unknownPreview) unknownPreview.innerHTML = unknownCards + unknownTrunc;
+    } else {
+      if (unknownWrap) unknownWrap.style.display = 'none';
+    }
+  }
+
+  function extractAndPreviewDivineConcepts() {
+    const conceptStatus  = document.getElementById('divine-concept-status');
+    const conceptSection = document.getElementById('divine-concept-section');
+
+    if (!_divineImportPreview || !Array.isArray(_divineImportPreview.segments) || _divineImportPreview.segments.length === 0) {
+      if (conceptSection) conceptSection.style.display = '';
+      if (conceptStatus) conceptStatus.textContent = 'Segment the transcript first before extracting concepts.';
+      return;
+    }
+
+    if (conceptSection) conceptSection.style.display = '';
+    if (conceptStatus) conceptStatus.textContent = 'Extracting concepts…';
+
+    // Yield one frame so the status label renders before the synchronous loop.
+    setTimeout(() => {
+      const concepts = extractDivineConceptsFromSegments(_divineImportPreview.segments);
+      _divineImportPreview.concepts = concepts;
+      renderDivineConceptPreview(concepts);
     }, 0);
   }
 
@@ -18125,6 +18718,7 @@ const App = (() => {
     loadDivineTranscriptPaste,
     cleanAndPreviewDivineTranscript,
     segmentAndPreviewDivineTranscript,
+    extractAndPreviewDivineConcepts,
     updateApprovedOmeDraftCreateTestButton,
     createTestFromApprovedOmeDrafts,
     exportApprovedOmeDraftsJson,
