@@ -99,12 +99,41 @@ function extractGeminiJson(data) {
     ?.map(part => part.text || '')
     .join('')
     .trim();
-  if (!text) throw new Error('empty model response');
-  const cleaned = text
+  if (!text) throw new SyntaxError('empty model response');
+
+  // Attempt 1: strip leading/trailing markdown fences and parse directly.
+  const fenceStripped = text
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/\s*```$/i, '')
     .trim();
-  return JSON.parse(cleaned);
+  try {
+    return JSON.parse(fenceStripped);
+  } catch (_) {}
+
+  // Attempt 2: locate the first top-level JSON object by brace scanning.
+  // Tracks string/escape state so inner braces inside string values are ignored.
+  const start = text.indexOf('{');
+  if (start !== -1) {
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+    for (let i = start; i < text.length; i++) {
+      const ch = text[i];
+      if (escape) { escape = false; continue; }
+      if (ch === '\\' && inString) { escape = true; continue; }
+      if (ch === '"') { inString = !inString; continue; }
+      if (inString) continue;
+      if (ch === '{') depth++;
+      else if (ch === '}') {
+        depth--;
+        if (depth === 0) {
+          return JSON.parse(text.slice(start, i + 1));
+        }
+      }
+    }
+  }
+
+  throw new SyntaxError('no valid JSON object found in model response');
 }
 
 function validateRefinedDraft(raw, input) {
@@ -194,14 +223,26 @@ ipcMain.handle('nbme:ai:refine-uworld-draft', async (_event, payload) => {
     if (!response.ok) return safeError('NETWORK_ERROR', 'Gemini request failed before a valid response was returned.');
 
     const data = await response.json();
-    const parsed = extractGeminiJson(data);
-    const refinedDraft = validateRefinedDraft(parsed, input);
+
+    let parsed;
+    try {
+      parsed = extractGeminiJson(data);
+    } catch (parseErr) {
+      return safeError('MODEL_RESPONSE_INVALID', `Gemini response could not be parsed as JSON: ${parseErr.message}`);
+    }
+
+    let refinedDraft;
+    try {
+      refinedDraft = validateRefinedDraft(parsed, input);
+    } catch (schemaErr) {
+      return safeError('MODEL_RESPONSE_INVALID', `Gemini response failed schema validation: ${schemaErr.message}`);
+    }
+
     return { ok: true, refinedDraft };
   } catch (err) {
     if (err?.name === 'AbortError') return safeError('TIMEOUT', 'Gemini request timed out.');
-    if (err instanceof SyntaxError) return safeError('MODEL_RESPONSE_INVALID', 'Gemini returned malformed JSON.');
     if (err instanceof TypeError) return safeError('NETWORK_ERROR', 'Gemini request failed because the network request could not be completed.');
-    return safeError('MODEL_RESPONSE_INVALID', 'Gemini response did not match the expected draft schema.');
+    return safeError('MODEL_RESPONSE_INVALID', 'Gemini response handling failed unexpectedly.');
   } finally {
     clearTimeout(timeout);
   }
