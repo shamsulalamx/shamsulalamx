@@ -2030,6 +2030,8 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
       <button type="button" class="btn-card" id="divine-clean-btn" style="display:none;" onclick="App.cleanAndPreviewDivineTranscript()">Clean Transcript</button>
       <button type="button" class="btn-card" id="divine-segment-btn" style="display:none;" onclick="App.segmentAndPreviewDivineTranscript()">Segment Transcript</button>
       <button type="button" class="btn-card" id="divine-concept-btn" style="display:none;" onclick="App.extractAndPreviewDivineConcepts()">Extract Concepts</button>
+      <button type="button" class="btn-card" id="divine-cluster-btn" style="display:none;" onclick="App.clusterAndPreviewDivineConcepts()">Cluster Concepts</button>
+      <button type="button" class="btn-card" id="divine-draft-btn" style="display:none;" onclick="App.generateAndPreviewDivineDrafts()">Generate Draft Preview</button>
       <button type="button" class="btn-card" onclick="App.closeDivineTranscriptImportPreview()">Close</button>
     </div>
     <div class="notes-import-section-title">Raw Transcript Preview</div>
@@ -2070,6 +2072,26 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
           <summary style="cursor:pointer;font-size:12px;color:#6b7280;padding:4px 0;user-select:none;">Unknown / unclassified concepts</summary>
           <div id="divine-unknown-concept-preview" class="notes-draft-preview" style="margin-top:4px;"></div>
         </details>
+      </div>
+    </div>
+    <div id="divine-cluster-section" style="display:none;">
+      <div class="notes-import-section-title" style="margin-top:12px;">Cluster Preview</div>
+      <div id="divine-cluster-status" class="notes-import-summary" style="margin-bottom:6px;"></div>
+      <div id="divine-cluster-summary" style="margin-bottom:6px;"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
+        <button type="button" class="btn-card" style="font-size:11px;padding:3px 8px;" onclick="App.selectAllDivineClusters()">Select All</button>
+        <button type="button" class="btn-card" style="font-size:11px;padding:3px 8px;" onclick="App.deselectAllDivineClusters()">Deselect All</button>
+        <span id="divine-cluster-selected-count" style="font-size:11px;color:#6b7280;">0 clusters selected</span>
+      </div>
+      <div id="divine-cluster-preview" class="notes-draft-preview">
+        <div class="notes-import-empty">No clusters yet. Run "Cluster Concepts" after extracting concepts.</div>
+      </div>
+    </div>
+    <div id="divine-draft-section" style="display:none;">
+      <div class="notes-import-section-title" style="margin-top:12px;">Draft Scaffold Preview</div>
+      <div id="divine-draft-status" class="notes-import-summary" style="margin-bottom:6px;"></div>
+      <div id="divine-draft-preview" class="notes-draft-preview">
+        <div class="notes-import-empty">No drafts yet. Select clusters and run "Generate Draft Preview".</div>
       </div>
     </div>
   </div>
@@ -11328,6 +11350,16 @@ const App = (() => {
     const conceptPreview = document.getElementById('divine-concept-preview');
     const unknownWrap = document.getElementById('divine-unknown-concept-wrap');
     const unknownPreview = document.getElementById('divine-unknown-concept-preview');
+    const clusterBtn = document.getElementById('divine-cluster-btn');
+    const clusterSection = document.getElementById('divine-cluster-section');
+    const clusterStatus = document.getElementById('divine-cluster-status');
+    const clusterSummary = document.getElementById('divine-cluster-summary');
+    const clusterSelectedCount = document.getElementById('divine-cluster-selected-count');
+    const clusterPreview = document.getElementById('divine-cluster-preview');
+    const draftBtn = document.getElementById('divine-draft-btn');
+    const draftSection = document.getElementById('divine-draft-section');
+    const draftStatus = document.getElementById('divine-draft-status');
+    const draftPreview = document.getElementById('divine-draft-preview');
     if (fileInput) fileInput.value = '';
     if (pasteArea) pasteArea.value = '';
     if (episodeTitle) episodeTitle.value = '';
@@ -11337,6 +11369,8 @@ const App = (() => {
     if (cleanBtn) cleanBtn.style.display = 'none';
     if (segmentBtn) segmentBtn.style.display = 'none';
     if (conceptBtn) conceptBtn.style.display = 'none';
+    if (clusterBtn) clusterBtn.style.display = 'none';
+    if (draftBtn) draftBtn.style.display = 'none';
     if (cleanSection) cleanSection.style.display = 'none';
     if (cleanStatus) cleanStatus.textContent = '';
     if (cleanSummary) cleanSummary.innerHTML = '';
@@ -11353,6 +11387,14 @@ const App = (() => {
     if (conceptPreview) conceptPreview.innerHTML = '<div class="notes-import-empty">No concepts yet. Run "Extract Concepts" after segmenting.</div>';
     if (unknownWrap) unknownWrap.style.display = 'none';
     if (unknownPreview) unknownPreview.innerHTML = '';
+    if (clusterSection) clusterSection.style.display = 'none';
+    if (clusterStatus) clusterStatus.textContent = '';
+    if (clusterSummary) clusterSummary.innerHTML = '';
+    if (clusterSelectedCount) clusterSelectedCount.textContent = '0 clusters selected';
+    if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No clusters yet. Run "Cluster Concepts" after extracting concepts.</div>';
+    if (draftSection) draftSection.style.display = 'none';
+    if (draftStatus) draftStatus.textContent = '';
+    if (draftPreview) draftPreview.innerHTML = '<div class="notes-import-empty">No drafts yet. Select clusters and run "Generate Draft Preview".</div>';
   }
 
   function _divineRenderRawPreview(text, sourceName) {
@@ -12537,6 +12579,12 @@ const App = (() => {
     } else {
       if (unknownWrap) unknownWrap.style.display = 'none';
     }
+
+    // Reveal cluster button when typed concepts exist.
+    if (typed.length > 0) {
+      const clusterBtn = document.getElementById('divine-cluster-btn');
+      if (clusterBtn) clusterBtn.style.display = '';
+    }
   }
 
   function extractAndPreviewDivineConcepts() {
@@ -12557,6 +12605,541 @@ const App = (() => {
       const concepts = extractDivineConceptsFromSegments(_divineImportPreview.segments);
       _divineImportPreview.concepts = concepts;
       renderDivineConceptPreview(concepts);
+    }, 0);
+  }
+
+  // ── Divine v4: Clustering and Deterministic Draft Scaffold Preview ─────────
+  // Groups typed concepts by concept type + text similarity, then generates
+  // placeholder scaffold drafts from selected clusters.
+  // No AI, no medical inference, no save/export.
+
+  // Jaccard similarity on ≥3-char lowercase word tokens.
+  function _divineJaccard(textA, textB) {
+    const tok = t => new Set((t.toLowerCase().match(/\b[a-z]{3,}\b/g) || []));
+    const A = tok(textA);
+    const B = tok(textB);
+    if (!A.size && !B.size) return 1;
+    if (!A.size || !B.size) return 0;
+    let inter = 0;
+    for (const t of A) if (B.has(t)) inter++;
+    return inter / (A.size + B.size - inter);
+  }
+
+  // Concept type → allowed draft variant types.
+  const DIVINE_DRAFT_VARIANT_MAP = {
+    'high-yield-fact':                ['recognition/application'],
+    'mechanism':                      ['mechanism/risk-factor'],
+    'risk-factor':                    ['mechanism/risk-factor', 'recognition/application'],
+    'diagnostic-distinction':         ['diagnostic-distinction'],
+    'management-rule':                ['next-best-step', 'management-exception'],
+    'contraindication-adverse-effect':['management-exception'],
+    'exam-trap':                      ['recognition/application'],
+    'clinical-reasoning-framework':   ['clinical-reasoning-framework'],
+    'differential-diagnosis':         ['diagnostic-distinction']
+  };
+
+  // Cluster typed concepts by concept type + Jaccard similarity on source snippets.
+  // Union-Find: similarity >= 0.65 → link (cluster together).
+  // >= 0.85 → also flag as duplicate.
+  // Timestamp penalty: concepts >10 min apart have similarity reduced by 0.20.
+  // Does not mutate input concepts.
+  function clusterDivineConcepts(concepts) {
+    const typed = concepts.filter(c => c.conceptType !== 'unknown');
+    if (!typed.length) return [];
+
+    // Group by conceptType — never merge different types.
+    const byType = {};
+    for (const c of typed) {
+      if (!byType[c.conceptType]) byType[c.conceptType] = [];
+      byType[c.conceptType].push(c);
+    }
+
+    const clusters = [];
+    let clusterIdx = 0;
+
+    for (const [type, group] of Object.entries(byType)) {
+      const n = group.length;
+      const parent = Array.from({ length: n }, (_, i) => i);
+      function find(i) {
+        if (parent[i] !== i) parent[i] = find(parent[i]);
+        return parent[i];
+      }
+      function union(i, j) { parent[find(i)] = find(j); }
+
+      const dupPairs = [];
+      const nearDupPairs = [];
+
+      for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j < n; j++) {
+          let sim = _divineJaccard(group[i].sourceSnippet, group[j].sourceSnippet);
+
+          // Timestamp penalty: >10 min apart → reduce similarity.
+          const tsA = group[i].timestampRange;
+          const tsB = group[j].timestampRange;
+          if (tsA && tsB) {
+            const secA = _divineParseTimestampSeconds(tsA.start);
+            const secB = _divineParseTimestampSeconds(tsB.start);
+            if (secA !== null && secB !== null && Math.abs(secA - secB) > 600) {
+              sim = Math.max(0, sim - 0.20);
+            }
+          }
+
+          if (sim >= 0.85) {
+            union(i, j);
+            dupPairs.push({ i, j, sim: Math.round(sim * 100) });
+          } else if (sim >= 0.65) {
+            union(i, j);
+            nearDupPairs.push({ i, j, sim: Math.round(sim * 100) });
+          }
+        }
+      }
+
+      // Collect members per root.
+      const clusterMap = {};
+      for (let i = 0; i < n; i++) {
+        const root = find(i);
+        if (!clusterMap[root]) clusterMap[root] = [];
+        clusterMap[root].push(i);
+      }
+
+      for (const memberIndices of Object.values(clusterMap)) {
+        const members = memberIndices.map(i => group[i]);
+        const rep = members.reduce((best, c) => c.confidence > best.confidence ? c : best, members[0]);
+
+        const memberSet = new Set(memberIndices);
+        const clusterDups     = dupPairs.filter(p => memberSet.has(p.i) && memberSet.has(p.j));
+        const clusterNearDups = nearDupPairs.filter(p => memberSet.has(p.i) && memberSet.has(p.j));
+
+        const warnings = [];
+        if (clusterDups.length > 0)
+          warnings.push(`${clusterDups.length} near-identical concept(s) collapsed into representative`);
+        if (clusterNearDups.length > 0)
+          warnings.push(`${clusterNearDups.length} near-duplicate concept(s) — verify distinctions before drafting`);
+        if (rep.confidence < 0.60)
+          warnings.push('Low-confidence cluster — review source snippet before generating draft');
+
+        const tsRanges  = members.map(c => c.timestampRange).filter(Boolean);
+        const tsSpan    = tsRanges.length
+          ? { start: tsRanges[0].start, end: tsRanges[tsRanges.length - 1].end }
+          : null;
+
+        clusterIdx++;
+        clusters.push({
+          clusterId:      `divine-cluster-${String(clusterIdx).padStart(5, '0')}`,
+          conceptType:    type,
+          concepts:       members.map(c => c.conceptId),
+          representativeConcept: rep,
+          sourceSegmentIds:   [...new Set(members.map(c => c.sourceSegmentId))],
+          originalLineRanges: members.map(c => c.originalLineRange.slice()),
+          cleanedLineRanges:  members.map(c => c.cleanedLineRange.slice()),
+          timestampRanges:    tsRanges,
+          timestampSpan:      tsSpan,
+          sourceSnippet:      rep.sourceSnippet,
+          confidence:         rep.confidence,
+          duplicateWarnings:  clusterDups,
+          nearDupWarnings:    clusterNearDups,
+          warnings
+        });
+      }
+    }
+
+    return clusters;
+  }
+
+  // Deterministic scaffold templates — insert sourceSnippet verbatim.
+  // Choices are labeled placeholders. No medical facts invented.
+  const DIVINE_SCAFFOLD_TEMPLATES = {
+    'recognition/application': snippet => ({
+      stem: `A patient presents with findings consistent with: "${snippet.slice(0, 160)}${snippet.length > 160 ? '…' : ''}". Which of the following is the most likely [diagnosis / finding / clinical association]?`,
+      choices: [
+        { label: 'A', text: '[PLACEHOLDER — Correct: answer derived from source snippet above]' },
+        { label: 'B', text: '[PLACEHOLDER — Distractor: related condition, often confused]' },
+        { label: 'C', text: '[PLACEHOLDER — Distractor: plausible alternative]' },
+        { label: 'D', text: '[PLACEHOLDER — Distractor: associated condition or complication]' },
+        { label: 'E', text: '[PLACEHOLDER — Distractor: less likely mechanism or variant]' }
+      ],
+      correctAnswer: 'A',
+      teachingPoint: `Key teaching point from source: "${snippet.slice(0, 200)}${snippet.length > 200 ? '…' : ''}"`,
+      distractorRationales: {
+        B: '[PLACEHOLDER — Why B is wrong: explain key differentiator]',
+        C: '[PLACEHOLDER — Why C is wrong: note distinguishing feature]',
+        D: '[PLACEHOLDER — Why D is wrong: describe when D would be correct]',
+        E: '[PLACEHOLDER — Why E is wrong: clarify mechanism or timing]'
+      }
+    }),
+    'mechanism/risk-factor': snippet => ({
+      stem: `Which of the following mechanisms or risk factors best explains the relationship described here: "${snippet.slice(0, 160)}${snippet.length > 160 ? '…' : ''}"?`,
+      choices: [
+        { label: 'A', text: '[PLACEHOLDER — Correct: mechanism/risk factor from source snippet]' },
+        { label: 'B', text: '[PLACEHOLDER — Distractor: incorrect mechanism, commonly confused]' },
+        { label: 'C', text: '[PLACEHOLDER — Distractor: unrelated pathway or risk factor]' },
+        { label: 'D', text: '[PLACEHOLDER — Distractor: partially correct but incomplete]' },
+        { label: 'E', text: '[PLACEHOLDER — Distractor: wrong direction or wrong organ system]' }
+      ],
+      correctAnswer: 'A',
+      teachingPoint: `Mechanism/risk-factor from source: "${snippet.slice(0, 200)}${snippet.length > 200 ? '…' : ''}"`,
+      distractorRationales: {
+        B: '[PLACEHOLDER — Why B is wrong: clarify actual pathway]',
+        C: '[PLACEHOLDER — Why C is wrong: note correct organ or system]',
+        D: '[PLACEHOLDER — Why D is wrong: explain what is missing]',
+        E: '[PLACEHOLDER — Why E is wrong: correct the direction or target]'
+      }
+    }),
+    'diagnostic-distinction': snippet => ({
+      stem: `Given the following clinical distinction: "${snippet.slice(0, 160)}${snippet.length > 160 ? '…' : ''}". Which feature best distinguishes one condition from the other?`,
+      choices: [
+        { label: 'A', text: '[PLACEHOLDER — Correct: key distinguishing feature from source snippet]' },
+        { label: 'B', text: '[PLACEHOLDER — Distractor: feature shared by both conditions]' },
+        { label: 'C', text: '[PLACEHOLDER — Distractor: feature of the wrong condition]' },
+        { label: 'D', text: '[PLACEHOLDER — Distractor: common confounder]' },
+        { label: 'E', text: '[PLACEHOLDER — Distractor: opposite of correct finding]' }
+      ],
+      correctAnswer: 'A',
+      teachingPoint: `Distinguishing feature from source: "${snippet.slice(0, 200)}${snippet.length > 200 ? '…' : ''}"`,
+      distractorRationales: {
+        B: '[PLACEHOLDER — Why B is wrong: both conditions share this]',
+        C: '[PLACEHOLDER — Why C is wrong: this applies to the other condition]',
+        D: '[PLACEHOLDER — Why D is wrong: common pitfall, explain]',
+        E: '[PLACEHOLDER — Why E is wrong: clarify the actual direction]'
+      }
+    }),
+    'next-best-step': snippet => ({
+      stem: `A patient has findings consistent with: "${snippet.slice(0, 160)}${snippet.length > 160 ? '…' : ''}". What is the next best step in management?`,
+      choices: [
+        { label: 'A', text: '[PLACEHOLDER — Correct: next best step from source snippet]' },
+        { label: 'B', text: '[PLACEHOLDER — Distractor: premature escalation of care]' },
+        { label: 'C', text: '[PLACEHOLDER — Distractor: appropriate later step done too early]' },
+        { label: 'D', text: '[PLACEHOLDER — Distractor: treatment for a different condition]' },
+        { label: 'E', text: '[PLACEHOLDER — Distractor: contraindicated or incorrect option]' }
+      ],
+      correctAnswer: 'A',
+      teachingPoint: `Management approach from source: "${snippet.slice(0, 200)}${snippet.length > 200 ? '…' : ''}"`,
+      distractorRationales: {
+        B: '[PLACEHOLDER — Why B is wrong: this step comes later]',
+        C: '[PLACEHOLDER — Why C is wrong: explain timing or indication]',
+        D: '[PLACEHOLDER — Why D is wrong: applies to different diagnosis]',
+        E: '[PLACEHOLDER — Why E is wrong: note contraindication or risk]'
+      }
+    }),
+    'management-exception': snippet => ({
+      stem: `Regarding the following clinical situation: "${snippet.slice(0, 160)}${snippet.length > 160 ? '…' : ''}". Which of the following is contraindicated or represents an adverse effect to monitor?`,
+      choices: [
+        { label: 'A', text: '[PLACEHOLDER — Correct: contraindication or adverse effect from source]' },
+        { label: 'B', text: '[PLACEHOLDER — Distractor: safe option in this setting]' },
+        { label: 'C', text: '[PLACEHOLDER — Distractor: different concern, not the primary risk]' },
+        { label: 'D', text: '[PLACEHOLDER — Distractor: unrelated adverse effect]' },
+        { label: 'E', text: '[PLACEHOLDER — Distractor: actually indicated, not contraindicated]' }
+      ],
+      correctAnswer: 'A',
+      teachingPoint: `Contraindication/adverse effect from source: "${snippet.slice(0, 200)}${snippet.length > 200 ? '…' : ''}"`,
+      distractorRationales: {
+        B: '[PLACEHOLDER — Why B is wrong: explain why it is safe here]',
+        C: '[PLACEHOLDER — Why C is wrong: specify when this concern applies]',
+        D: '[PLACEHOLDER — Why D is wrong: name the correct drug or class]',
+        E: '[PLACEHOLDER — Why E is wrong: clarify indication vs. contraindication]'
+      }
+    }),
+    'clinical-reasoning-framework': snippet => ({
+      stem: `When approaching the following clinical scenario: "${snippet.slice(0, 160)}${snippet.length > 160 ? '…' : ''}". What is the most appropriate first step in the reasoning framework?`,
+      choices: [
+        { label: 'A', text: '[PLACEHOLDER — Correct: first reasoning step from source snippet]' },
+        { label: 'B', text: '[PLACEHOLDER — Distractor: appropriate later step performed too early]' },
+        { label: 'C', text: '[PLACEHOLDER — Distractor: skips key initial workup]' },
+        { label: 'D', text: '[PLACEHOLDER — Distractor: applies to different clinical context]' },
+        { label: 'E', text: '[PLACEHOLDER — Distractor: reasonable but not the immediate first step]' }
+      ],
+      correctAnswer: 'A',
+      teachingPoint: `Reasoning framework from source: "${snippet.slice(0, 200)}${snippet.length > 200 ? '…' : ''}"`,
+      distractorRationales: {
+        B: '[PLACEHOLDER — Why B is wrong: explain why timing matters]',
+        C: '[PLACEHOLDER — Why C is wrong: what workup is skipped]',
+        D: '[PLACEHOLDER — Why D is wrong: specify the correct context]',
+        E: '[PLACEHOLDER — Why E is wrong: explain what comes first]'
+      }
+    })
+  };
+
+  // Generate one draft scaffold from a cluster + variant type.
+  function _divineGenerateDraftScaffold(cluster, variantType, draftIdxRef) {
+    const template = DIVINE_SCAFFOLD_TEMPLATES[variantType];
+    if (!template) return null;
+    const snippet = (cluster.sourceSnippet || '').trim();
+    if (snippet.length < 20) return null;
+
+    const scaffolded = template(snippet);
+    draftIdxRef.value++;
+    const warnings = cluster.warnings.slice();
+    if (cluster.confidence < 0.60)
+      warnings.push('Based on low-confidence cluster — review source snippet carefully');
+    warnings.push('Scaffold only — all placeholder choices require expert review before use');
+
+    return {
+      draftId:             `divine-draft-${String(draftIdxRef.value).padStart(5, '0')}`,
+      clusterId:           cluster.clusterId,
+      variantType,
+      stem:                scaffolded.stem,
+      choices:             scaffolded.choices,
+      correctAnswer:       scaffolded.correctAnswer,
+      teachingPoint:       scaffolded.teachingPoint,
+      distractorRationales:scaffolded.distractorRationales,
+      sourceSnippet:       snippet,
+      timestampRange:      cluster.timestampSpan,
+      provenance: {
+        sourceType:      'divine-podcast',
+        draftMethod:     'divine-deterministic-scaffold-v1',
+        clusterId:       cluster.clusterId,
+        conceptType:     cluster.conceptType,
+        sourceSegmentIds:cluster.sourceSegmentIds.slice(),
+        originalLineRanges:cluster.originalLineRanges.slice(),
+        cleanedLineRanges: cluster.cleanedLineRanges.slice(),
+        timestampRanges: cluster.timestampRanges.slice(),
+        conceptIds:      cluster.concepts.slice(),
+        createdAt:       new Date().toISOString()
+      },
+      warnings
+    };
+  }
+
+  // Generate draft scaffolds for all selected clusters.
+  // Skips clusters with confidence < 0.25 or snippet < 20 chars.
+  // Generates at most 2 variants per cluster to avoid bloat.
+  function generateDivineDraftScaffolds(clusters, selection) {
+    const drafts = [];
+    const draftIdxRef = { value: 0 };
+    for (const cluster of clusters) {
+      if (!selection[cluster.clusterId]) continue;
+      const variants = DIVINE_DRAFT_VARIANT_MAP[cluster.conceptType];
+      if (!variants || variants.length === 0) continue;
+      if (cluster.confidence < 0.25 || (cluster.sourceSnippet || '').trim().length < 20) continue;
+      for (const variant of variants.slice(0, 2)) {
+        const draft = _divineGenerateDraftScaffold(cluster, variant, draftIdxRef);
+        if (draft) drafts.push(draft);
+      }
+    }
+    return drafts;
+  }
+
+  function _divineUpdateClusterSelectedCount() {
+    const counter  = document.getElementById('divine-cluster-selected-count');
+    const draftBtn = document.getElementById('divine-draft-btn');
+    if (!_divineImportPreview || !_divineImportPreview.clusterSelection) {
+      if (counter) counter.textContent = '0 clusters selected';
+      if (draftBtn) draftBtn.style.display = 'none';
+      return;
+    }
+    const n = Object.values(_divineImportPreview.clusterSelection).filter(Boolean).length;
+    if (counter) counter.textContent = `${n} cluster${n === 1 ? '' : 's'} selected`;
+    if (draftBtn) draftBtn.style.display = n > 0 ? '' : 'none';
+  }
+
+  function renderDivineClusterPreview(clusters) {
+    const clusterSection  = document.getElementById('divine-cluster-section');
+    const clusterStatus   = document.getElementById('divine-cluster-status');
+    const clusterSummary  = document.getElementById('divine-cluster-summary');
+    const clusterPreview  = document.getElementById('divine-cluster-preview');
+    if (!clusterSection) return;
+
+    clusterSection.style.display = '';
+
+    if (!clusters || clusters.length === 0) {
+      if (clusterStatus) clusterStatus.textContent = 'No clusters produced. Extract typed concepts first.';
+      if (clusterSummary) clusterSummary.innerHTML = '';
+      if (clusterPreview) clusterPreview.innerHTML = '<div class="notes-import-empty">No clusters to show.</div>';
+      _divineUpdateClusterSelectedCount();
+      return;
+    }
+
+    const totalConcepts  = clusters.reduce((s, c) => s + c.concepts.length, 0);
+    const dupWarnCount   = clusters.reduce((s, c) => s + c.duplicateWarnings.length, 0);
+    const nearDupWarnCount = clusters.reduce((s, c) => s + c.nearDupWarnings.length, 0);
+    const parts = [`${clusters.length} cluster${clusters.length === 1 ? '' : 's'} from ${totalConcepts} concept${totalConcepts === 1 ? '' : 's'}`];
+    if (dupWarnCount > 0) parts.push(`${dupWarnCount} duplicate warning${dupWarnCount === 1 ? '' : 's'}`);
+    if (nearDupWarnCount > 0) parts.push(`${nearDupWarnCount} near-duplicate warning${nearDupWarnCount === 1 ? '' : 's'}`);
+    if (clusterStatus) clusterStatus.textContent = parts.join(' · ') + '.';
+
+    // Type breakdown table.
+    const typeCount = {};
+    for (const c of clusters) typeCount[c.conceptType] = (typeCount[c.conceptType] || 0) + 1;
+    const typeRows = Object.entries(typeCount).map(([t, n]) => {
+      const color = DIVINE_CONCEPT_TYPE_COLORS[t] || '#94a3b8';
+      return `<tr><td style="padding:2px 14px 2px 0;font-size:12px;">
+        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:5px;vertical-align:middle;"></span>${escapeHTML(t)}
+      </td><td style="font-size:12px;font-weight:600;">${n}</td></tr>`;
+    }).join('');
+    if (clusterSummary) clusterSummary.innerHTML = `<table style="border-collapse:collapse;margin-bottom:6px;">${typeRows}</table>`;
+
+    // Cluster cards with checkboxes.
+    const CLUSTER_CAP = 60;
+    const sel = (_divineImportPreview && _divineImportPreview.clusterSelection) || {};
+    const cards = clusters.slice(0, CLUSTER_CAP).map(cluster => {
+      const color      = DIVINE_CONCEPT_TYPE_COLORS[cluster.conceptType] || '#94a3b8';
+      const isSelected = !!sel[cluster.clusterId];
+      const tsLabel    = cluster.timestampSpan
+        ? escapeHTML(`${cluster.timestampSpan.start}${cluster.timestampSpan.end !== cluster.timestampSpan.start ? ' → ' + cluster.timestampSpan.end : ''}`)
+        : '';
+      const lineRanges = cluster.originalLineRanges;
+      const lineLabel  = lineRanges.length === 1
+        ? `Lines ${lineRanges[0][0]}–${lineRanges[0][1]}`
+        : `Lines ${lineRanges[0][0]}–${lineRanges[lineRanges.length - 1][1]}`;
+      const conf       = `${Math.round(cluster.confidence * 100)}%`;
+      const warnHtml   = cluster.warnings.map(w =>
+        `<div style="color:#92400e;font-size:10px;margin-top:2px;">⚠ ${escapeHTML(w)}</div>`
+      ).join('');
+      return `<div style="border:1px solid ${isSelected ? color : '#e2e8f0'};border-left:3px solid ${color};border-radius:4px;padding:7px 9px;margin-bottom:5px;font-size:12px;background:${isSelected ? '#f8faff' : '#fff'};">
+        <div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin-bottom:3px;">
+          <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="App.toggleDivineClusterSelection('${escapeHTML(cluster.clusterId)}')" style="cursor:pointer;">
+          <span style="color:#94a3b8;font-size:10px;">${escapeHTML(cluster.clusterId)}</span>
+          <span style="background:${color};color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;">${escapeHTML(cluster.conceptType)}</span>
+          <span style="color:#6b7280;font-size:10px;">${cluster.concepts.length} concept${cluster.concepts.length === 1 ? '' : 's'}</span>
+          <span style="color:#6b7280;font-size:10px;">confidence ${conf}</span>
+          ${tsLabel ? `<span style="color:#94a3b8;font-size:10px;">${tsLabel}</span>` : ''}
+          <span style="color:#94a3b8;font-size:10px;">${escapeHTML(lineLabel)}</span>
+        </div>
+        <div style="color:#374151;font-style:italic;margin-bottom:2px;">${escapeHTML(cluster.sourceSnippet.slice(0, 220))}${cluster.sourceSnippet.length > 220 ? '…' : ''}</div>
+        ${warnHtml}
+      </div>`;
+    }).join('');
+    const truncMsg = clusters.length > CLUSTER_CAP
+      ? `<div class="notes-import-empty" style="margin-top:6px;">…and ${clusters.length - CLUSTER_CAP} more clusters (all stored, first ${CLUSTER_CAP} shown)</div>`
+      : '';
+    if (clusterPreview) clusterPreview.innerHTML = cards + truncMsg;
+
+    _divineUpdateClusterSelectedCount();
+  }
+
+  function selectAllDivineClusters() {
+    if (!_divineImportPreview || !Array.isArray(_divineImportPreview.clusters)) return;
+    if (!_divineImportPreview.clusterSelection) _divineImportPreview.clusterSelection = {};
+    for (const c of _divineImportPreview.clusters) _divineImportPreview.clusterSelection[c.clusterId] = true;
+    renderDivineClusterPreview(_divineImportPreview.clusters);
+  }
+
+  function deselectAllDivineClusters() {
+    if (!_divineImportPreview || !Array.isArray(_divineImportPreview.clusters)) return;
+    _divineImportPreview.clusterSelection = {};
+    renderDivineClusterPreview(_divineImportPreview.clusters);
+  }
+
+  function toggleDivineClusterSelection(clusterId) {
+    if (!_divineImportPreview) return;
+    if (!_divineImportPreview.clusterSelection) _divineImportPreview.clusterSelection = {};
+    _divineImportPreview.clusterSelection[clusterId] = !_divineImportPreview.clusterSelection[clusterId];
+    _divineUpdateClusterSelectedCount();
+  }
+
+  function renderDivineDraftPreview(drafts) {
+    const draftSection = document.getElementById('divine-draft-section');
+    const draftStatus  = document.getElementById('divine-draft-status');
+    const draftPreview = document.getElementById('divine-draft-preview');
+    if (!draftSection) return;
+
+    draftSection.style.display = '';
+
+    if (!drafts || drafts.length === 0) {
+      if (draftStatus) draftStatus.textContent = 'No drafts generated. Select clusters and try again, or check that selected clusters have sufficient confidence.';
+      if (draftPreview) draftPreview.innerHTML = '<div class="notes-import-empty">No drafts to show.</div>';
+      return;
+    }
+
+    if (draftStatus) draftStatus.textContent = `${drafts.length} draft scaffold${drafts.length === 1 ? '' : 's'} generated. All choices are placeholders — expert review required before use.`;
+
+    const VARIANT_COLORS = {
+      'recognition/application':      '#2563eb',
+      'mechanism/risk-factor':         '#b45309',
+      'diagnostic-distinction':        '#7c3aed',
+      'next-best-step':                '#059669',
+      'management-exception':          '#dc2626',
+      'clinical-reasoning-framework':  '#0891b2'
+    };
+
+    // Group by variantType.
+    const byVariant = {};
+    for (const d of drafts) {
+      if (!byVariant[d.variantType]) byVariant[d.variantType] = [];
+      byVariant[d.variantType].push(d);
+    }
+
+    let html = '';
+    for (const [variant, variantDrafts] of Object.entries(byVariant)) {
+      const vColor = VARIANT_COLORS[variant] || '#6b7280';
+      html += `<div style="margin-bottom:10px;">
+        <div style="font-size:11px;font-weight:700;color:${vColor};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;border-bottom:1px solid #e2e8f0;padding-bottom:3px;">${escapeHTML(variant)} — ${variantDrafts.length} draft${variantDrafts.length === 1 ? '' : 's'}</div>`;
+
+      for (const draft of variantDrafts) {
+        const clColor   = DIVINE_CONCEPT_TYPE_COLORS[draft.provenance.conceptType] || '#94a3b8';
+        const tsLabel   = draft.timestampRange
+          ? ` · ${escapeHTML(draft.timestampRange.start)}${draft.timestampRange.end !== draft.timestampRange.start ? ' → ' + escapeHTML(draft.timestampRange.end) : ''}`
+          : '';
+        const choicesHtml = draft.choices.map(ch =>
+          `<div style="margin:2px 0;font-size:11px;"><span style="font-weight:700;margin-right:4px;">${escapeHTML(ch.label)}.</span>${escapeHTML(ch.text)}</div>`
+        ).join('');
+        const warnHtml = draft.warnings
+          .filter(w => !w.startsWith('Scaffold only'))
+          .map(w => `<div style="color:#92400e;font-size:10px;margin-top:2px;">⚠ ${escapeHTML(w)}</div>`)
+          .join('');
+
+        html += `<div style="border:1px solid #e2e8f0;border-left:3px solid ${vColor};border-radius:4px;padding:8px 10px;margin-bottom:6px;font-size:12px;">
+          <div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin-bottom:4px;">
+            <span style="color:#94a3b8;font-size:10px;">${escapeHTML(draft.draftId)}</span>
+            <span style="color:#94a3b8;font-size:10px;">${escapeHTML(draft.clusterId)}</span>
+            <span style="background:${clColor};color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;">${escapeHTML(draft.provenance.conceptType)}</span>
+            ${tsLabel ? `<span style="color:#94a3b8;font-size:10px;">${tsLabel}</span>` : ''}
+          </div>
+          <div style="font-weight:600;color:#1e293b;margin-bottom:5px;line-height:1.4;">${escapeHTML(draft.stem)}</div>
+          <div style="margin-bottom:5px;line-height:1.5;">${choicesHtml}</div>
+          <div style="font-size:10px;color:#475569;margin-bottom:2px;"><strong>Correct:</strong> ${escapeHTML(draft.correctAnswer)}</div>
+          <div style="font-size:10px;color:#475569;margin-bottom:2px;"><strong>Teaching point:</strong> ${escapeHTML(draft.teachingPoint.slice(0, 200))}${draft.teachingPoint.length > 200 ? '…' : ''}</div>
+          <div style="font-size:10px;color:#64748b;font-style:italic;border-top:1px solid #f1f5f9;padding-top:3px;margin-top:2px;"><strong>Source:</strong> ${escapeHTML(draft.sourceSnippet.slice(0, 180))}${draft.sourceSnippet.length > 180 ? '…' : ''}</div>
+          ${warnHtml}
+        </div>`;
+      }
+      html += '</div>';
+    }
+
+    if (draftPreview) draftPreview.innerHTML = html;
+  }
+
+  function clusterAndPreviewDivineConcepts() {
+    const clusterStatus  = document.getElementById('divine-cluster-status');
+    const clusterSection = document.getElementById('divine-cluster-section');
+
+    if (!_divineImportPreview || !Array.isArray(_divineImportPreview.concepts) || !_divineImportPreview.concepts.filter(c => c.conceptType !== 'unknown').length) {
+      if (clusterSection) clusterSection.style.display = '';
+      if (clusterStatus) clusterStatus.textContent = 'Extract typed concepts first before clustering.';
+      return;
+    }
+
+    if (clusterSection) clusterSection.style.display = '';
+    if (clusterStatus) clusterStatus.textContent = 'Clustering…';
+
+    setTimeout(() => {
+      const clusters = clusterDivineConcepts(_divineImportPreview.concepts);
+      _divineImportPreview.clusters = clusters;
+      // Default: all clusters selected.
+      const selection = {};
+      for (const c of clusters) selection[c.clusterId] = true;
+      _divineImportPreview.clusterSelection = selection;
+      renderDivineClusterPreview(clusters);
+    }, 0);
+  }
+
+  function generateAndPreviewDivineDrafts() {
+    const draftStatus  = document.getElementById('divine-draft-status');
+    const draftSection = document.getElementById('divine-draft-section');
+
+    if (!_divineImportPreview || !Array.isArray(_divineImportPreview.clusters) || !_divineImportPreview.clusterSelection) {
+      if (draftSection) draftSection.style.display = '';
+      if (draftStatus) draftStatus.textContent = 'Cluster concepts first before generating drafts.';
+      return;
+    }
+
+    if (draftSection) draftSection.style.display = '';
+    if (draftStatus) draftStatus.textContent = 'Generating draft scaffolds…';
+
+    setTimeout(() => {
+      const drafts = generateDivineDraftScaffolds(_divineImportPreview.clusters, _divineImportPreview.clusterSelection);
+      _divineImportPreview.drafts = drafts;
+      renderDivineDraftPreview(drafts);
     }, 0);
   }
 
@@ -18719,6 +19302,11 @@ const App = (() => {
     cleanAndPreviewDivineTranscript,
     segmentAndPreviewDivineTranscript,
     extractAndPreviewDivineConcepts,
+    clusterAndPreviewDivineConcepts,
+    selectAllDivineClusters,
+    deselectAllDivineClusters,
+    toggleDivineClusterSelection,
+    generateAndPreviewDivineDrafts,
     updateApprovedOmeDraftCreateTestButton,
     createTestFromApprovedOmeDrafts,
     exportApprovedOmeDraftsJson,
