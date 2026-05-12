@@ -1,203 +1,144 @@
 # NBME Self-Assessment Suite
 
-Static HTML/CSS/JavaScript app for generating and reviewing NBME-style self-assessment tests.
+A local Electron desktop app for generating and reviewing NBME-style self-assessment questions from personal study materials.
 
-The app is designed for Netlify hosting. Netlify serves the frontend and runs the secure Gemini backend functions. User PDFs, generated tests, images, and metadata are stored in the user's Google Drive, not in Netlify.
+> **This app is review-assisted, not autonomous.** All generated question drafts require human review and approval before being saved. No content is published or exported without an explicit user action. This tool is for personal study use only.
 
-## What Gets Deployed
+---
 
-- Frontend entry point: `index.html`
-- Publish directory: repo root
-- Build command: none
-- Netlify Functions directory: `netlify/functions`
+## What the App Does
 
-Netlify hosts only the app shell and backend functions. Google Drive remains the durable cross-device data store.
+- Import study materials from multiple source types and generate NBME-style question drafts.
+- Review, edit, approve, or discard each draft before saving.
+- Optionally refine drafts with Gemini AI (local Electron path — your API key, your machine, no third-party server).
+- Organize saved tests into a study library with folders, subfolders, notes, marks, and history.
+- Take timed or untimed self-assessments with hints, answer review, and score reports.
+- Back up and restore your library across devices via Google Drive.
 
-## Required Accounts
+---
 
-- GitHub account
-- Netlify account
-- Google account
-- Google Cloud project with Google Drive API enabled
-- Gemini API key from Google AI Studio or Google Cloud
+## Supported Content Sources
 
-## Upload To GitHub
+| Source | Format | Gemini Refinement |
+|---|---|---|
+| NBME | PDF (screenshot/OCR) | No |
+| UWorld | DOCX export | Yes (Electron IPC) |
+| OME | Short high-quality PDF | No (v1) |
+| Anki | Plain-text `.txt` export | No (v1) |
+| Mehlman | Structured text notes | No (v1) |
+| Divine Podcasts | Transcript `.txt` / `.md` | Yes (Electron IPC) |
 
-1. Create a new GitHub repository.
-2. Upload this project folder to the repository.
-3. Make sure these files are included:
-   - `index.html`
-   - `netlify.toml`
-   - `netlify/functions/_gemini.js`
-   - `netlify/functions/gemini-tagging.js`
-   - `netlify/functions/gemini-hint.js`
-   - `netlify/functions/gemini-analysis.js`
-   - `README.md`
+Each source pipeline is isolated. Changes to one pipeline do not affect others.
 
-Do not upload private API keys.
+---
 
-## Deploy On Netlify
+## Divine Podcast Support
 
-1. Open Netlify.
-2. Choose Add new site.
-3. Choose Import an existing project.
-4. Connect the GitHub repository.
-5. Use these build settings:
-   - Build command: leave blank
-   - Publish directory: `.`
-   - Functions directory: `netlify/functions`
-6. Deploy the site.
-7. Copy the deployed URL, for example:
+The Divine pipeline imports podcast transcript text files and converts teaching content into NBME-style question drafts.
 
-```text
-https://MY-NETLIFY-SITE.netlify.app
-```
+**Pipeline summary:**
 
-## Netlify Environment Variables
+1. Import a transcript (`.txt` or `.md`).
+2. The app cleans the transcript — removing promotional content, filler phrases, and duplicate segments.
+3. Cleaned segments are grouped into teaching clusters by medical concept.
+4. Each cluster receives a concise medical summary (voice-stripped, ≤400 characters).
+5. A deterministic draft scaffold is generated from the cluster — usable without Gemini.
+6. Optionally, Gemini refines the draft: it reads the cluster summary, identifies the testable medical fact, and generates a clinical vignette and five answer choices.
+7. You review the draft (scaffold or refined), approve or discard, then save to your library.
 
-In Netlify, open:
+Raw transcript text is never sent to Gemini. The cluster summary is the sole medical input. Podcast voice, coaching language, and promotional content are stripped before any AI refinement step.
 
-```text
-Site configuration -> Environment variables
-```
+---
 
-Add:
+## Gemini-Assisted Refinement
 
-```text
-GEMINI_API_KEY=your Gemini API key
-```
+Gemini refinement is available for the **UWorld** and **Divine Podcasts** pipelines. All Gemini calls run through the local Electron main process — your API key never leaves your machine.
 
-Redeploy after adding or changing this value.
+**How it works:**
 
-The Gemini key must never be typed into the app, committed to GitHub, or placed in frontend JavaScript.
+- You provide your own Gemini API key in the app's Settings panel.
+- The app sends a sanitized, clamped summary to Gemini (never raw source text).
+- Gemini returns a clinical vignette draft with five answer choices.
+- The app validates the response: anti-copy checks, voice-marker rejection, schema validation, and provenance assembly all run locally before the draft is shown to you.
+- If Gemini is unavailable or you skip refinement, the deterministic scaffold remains available.
+- You must review and approve every draft — Gemini output is never auto-saved.
 
-## Google Cloud Console Setup
+---
 
-Open Google Cloud Console and select the project used for this app.
+## Local Persistence
 
-### Enable Google Drive API
+| Storage | Contents |
+|---|---|
+| `localStorage` | Test metadata, folders, marks, flags, notes, settings |
+| IndexedDB (`FigureStore`) | Question stem images, figures, exhibits |
+| Google Drive (optional) | Full backup and cross-device restore |
 
-1. Go to APIs & Services.
-2. Open Library.
-3. Search for Google Drive API.
-4. Enable it.
+Google Drive backup is optional. If connected, you can back up and restore your full library — tests, images, notes, and history — across devices. Drive is not required to use the app.
 
-### OAuth Consent Screen
+---
 
-1. Go to APIs & Services -> OAuth consent screen.
-2. Choose External unless this is restricted to a Google Workspace organization.
-3. Add the required app name, support email, and developer contact email.
-4. Add the Google account you will use under Test users if the app is still in testing mode.
-5. Save.
+## Build and Run
 
-### OAuth Client
+### Prerequisites
 
-1. Go to APIs & Services -> Credentials.
-2. Create or edit an OAuth client ID.
-3. Application type: Web application.
-4. Add this Authorized JavaScript origin:
+- [Node.js](https://nodejs.org) (for Electron)
+- A Gemini API key from [Google AI Studio](https://aistudio.google.com) (only required for AI refinement)
 
-```text
-https://MY-NETLIFY-SITE.netlify.app
-```
-
-5. Optional local development origins:
-
-```text
-http://localhost:8888
-http://localhost:8080
-```
-
-6. Authorized redirect URI:
-
-```text
-Not required for the current Google Identity Services token flow.
-```
-
-The app uses the browser token client for Google Drive access. That flow requires Authorized JavaScript origins, not a redirect URI.
-
-## Gemini Setup
-
-1. Create a Gemini API key.
-2. Add it to Netlify as `GEMINI_API_KEY`.
-3. Redeploy the site.
-4. Open the deployed app.
-5. Open Settings.
-6. Confirm the Gemini status says the backend is configured.
-
-Gemini requests go only through:
-
-```text
-/.netlify/functions/gemini-tagging
-/.netlify/functions/gemini-hint
-/.netlify/functions/gemini-analysis
-```
-
-The browser does not send or store the Gemini API key.
-
-## Google Drive Sync Across Devices
-
-On the first device:
-
-1. Open the deployed Netlify URL.
-2. Open Settings.
-3. Click Connect Drive.
-4. Sign into the Google account that should own the app data.
-5. Click Backup Now after generating or importing tests.
-
-On another device:
-
-1. Open the same deployed Netlify URL.
-2. Open Settings.
-3. Click Connect Drive.
-4. Sign into the same Google account.
-5. Click Restore Drive.
-
-The app restores tests, folders, notes, history, metadata, and image references from Google Drive. Images are downloaded back into the browser's IndexedDB cache as needed.
-
-## Local Development
-
-Use Netlify local development when testing Gemini functions:
+### Run in development
 
 ```bash
-netlify dev
+npm install
+npm run electron:dev
 ```
 
-Netlify usually serves the app at:
+### Build for macOS (Apple Silicon)
 
-```text
-http://localhost:8888
+```bash
+npm run electron:build:mac
 ```
 
-For Drive testing from local development, add `http://localhost:8888` as an Authorized JavaScript origin in Google Cloud Console.
+The built app appears in `dist/`.
 
-Opening `index.html` with `file://` is not supported for Drive or Gemini. Use the deployed HTTPS site or Netlify local dev.
+### Gemini API key setup
 
-## Redeploy Updates
+1. Open the app.
+2. Go to **Settings**.
+3. Enter your Gemini API key.
+4. The key is stored locally and used only by the Electron main process. It is never sent to any third-party server, stored in Google Drive, or committed to the repository.
 
-1. Edit files locally.
-2. Commit and push to GitHub.
-3. Netlify automatically deploys the new commit.
-4. If you changed environment variables, trigger a redeploy from Netlify.
+---
 
-## Required Settings Summary
+## Stable Tagged Milestones
 
-Netlify:
+| Tag | Pipeline | What it marks |
+|---|---|---|
+| `mehlman-v1-stable` | Mehlman | Deterministic notes pipeline complete |
+| `divine-v1-stable` | Divine Podcasts | Deterministic draft layer complete |
+| `divine-gemini-v1-stable` | Divine Podcasts | Electron IPC Gemini refinement complete |
+| `uworld-gemini-v1-stable` | UWorld | Electron IPC Gemini refinement, JSON extraction hardened |
+| `ome-v1-stable` | OME | Cluster index provenance fix, pipeline complete |
+| `anki-v1-stable` | Anki | Approval-state and save-path fixes, pipeline complete |
 
-- Publish directory: `.`
-- Build command: blank
-- Functions directory: `netlify/functions`
-- Environment variable: `GEMINI_API_KEY`
+---
 
-Google Cloud:
+## Current Limitations
 
-- Enable Google Drive API.
-- Create OAuth Web application client.
-- Authorized JavaScript origin: `https://MY-NETLIFY-SITE.netlify.app`
-- Optional local origins: `http://localhost:8888`, `http://localhost:8080`
-- Authorized redirect URI: not required for the current token flow.
+- **NBME:** PDF import uses OCR. Accuracy depends on screenshot or scan quality. Grouped/shared-stem questions are supported but may require review.
+- **UWorld:** DOCX export only. Gemini refinement is one-at-a-time; batch queue can be paused or cancelled.
+- **OME:** Short, high-quality PDFs only. No OCR fallback in v1.
+- **Anki:** Plain-text `.txt` export only. `.apkg` files are not supported.
+- **Mehlman:** No Gemini refinement in v1.
+- **Divine:** Transcript quality affects clustering. Low-testability clusters are filtered out and not shown for review.
+- **All pipelines:** Pending broader real-world validation beyond local testing.
+- **Netlify Functions** exist in the codebase as a legacy rollback path. They are not the active path for Gemini refinement.
+- The app is currently personal/private use. Security and distribution assumptions have not been reviewed for public release.
 
-Gemini:
+---
 
-- Keep the API key only in Netlify as `GEMINI_API_KEY`.
-- Do not place the key in `index.html`, localStorage, or Google Drive backups.
+## Disclaimers
+
+- All question drafts are AI-assisted starting points, not verified exam content.
+- You are responsible for reviewing every draft before saving it to your library.
+- The app does not publish, share, or submit content anywhere without your explicit action.
+- Generated questions may contain errors. Do not rely on them as authoritative medical references.
+- Do not commit your Gemini API key to this repository or store it in Google Drive backups.
