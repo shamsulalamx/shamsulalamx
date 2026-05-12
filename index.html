@@ -12913,266 +12913,137 @@ const App = (() => {
     return clusters;
   }
 
-  // ── Divine v6a: Deterministic distilled-objective extraction ────────────────
+  // ── Divine v7: Teaching cluster summary (replaces v6a distilled-objective) ──
   // Takes a fully-built cluster object. Returns a distilledObjective record.
-  // All parsing is deterministic — no AI calls, no blocking.
+  // No longer extracts condition/criterion — Gemini is responsible for that.
+  // App role: strip voice register, detect meta-commentary, compute substance score.
   function distillDivineClusterToObjective(cluster) {
-    const snippet  = (cluster.sourceSnippet || '').trim();
-    const warnings = [];
-
-    // ── 1. Condition extraction ─────────────────────────────────────────────
-    let condition = '';
-    for (const re of DIVINE_CONDITION_PATTERNS) {
-      const m = snippet.match(re);
-      if (m) { condition = m[0]; break; }
-    }
-    // Fallback: first noun phrase from the representative concept's testedFact.
-    if (!condition && cluster.representativeConcept) {
-      const tf = (cluster.representativeConcept.testedFact || '').split(/[.,;]/)[0].trim();
-      if (tf.length >= 4 && tf.length <= 80) condition = tf;
-    }
-
-    // ── 2. Criterion extraction ─────────────────────────────────────────────
-    let criterion       = '';
-    let criterionType   = 'other';
-    let criterionPolarity = 'exact';
-
-    // Duration first (most common for psychiatric timelines).
-    for (const { re, polarity } of DIVINE_DURATION_PATTERNS) {
-      const m = snippet.match(re);
-      if (m) {
-        criterion        = m[0].trim();
-        criterionType    = 'duration';
-        criterionPolarity = polarity;
-        break;
-      }
-    }
-
-    // Age threshold if no duration found.
-    if (!criterion) {
-      for (const { re, polarity } of DIVINE_AGE_PATTERNS) {
-        const m = snippet.match(re);
-        if (m) {
-          criterion        = m[0].trim();
-          criterionType    = 'age-threshold';
-          criterionPolarity = polarity;
-          break;
-        }
-      }
-    }
-
-    // Count / setting threshold if still nothing.
-    if (!criterion) {
-      for (const { re, polarity } of DIVINE_COUNT_PATTERNS) {
-        const m = snippet.match(re);
-        if (m) {
-          criterion        = m[0].trim();
-          criterionType    = 'count-threshold';
-          criterionPolarity = polarity;
-          break;
-        }
-      }
-    }
-
-    // ── 3. coreRule construction ────────────────────────────────────────────
-    let coreRule = '';
-    if (condition && criterion) {
-      // Build a clean declarative statement using criterion type for natural phrasing.
-      if (criterionType === 'age-threshold') {
-        coreRule = `${condition}: must be diagnosed ${criterion}`;
-      } else if (criterionType === 'duration') {
-        coreRule = `${condition}: symptoms persist ${criterion}`;
-      } else if (criterionType === 'count-threshold') {
-        coreRule = `${condition}: requires ${criterion}`;
-      } else {
-        coreRule = `${condition}: criterion is ${criterion}`;
-      }
-    } else {
-      // Find the first sentence that is not dominated by podcast-voice markers.
-      const sentences = snippet.split(/[.!?]+\s+/).filter(s => s.trim().length > 10);
-      const cleanSentence = sentences.find(s =>
-        !DIVINE_VOICE_MARKERS.some(vm => vm.test(s))
-      ) || sentences[0] || snippet;
-      coreRule = cleanSentence
-        .replace(/^(so|and|but|also|then|well|okay|right|now),?\s+/i, '')
-        .trim()
-        .slice(0, 120);
-    }
-    if (coreRule.length < 15) {
-      warnings.push('coreRule is very short — source snippet may lack clinical content');
-    }
-
-    // ── 4. suggestedStemType ────────────────────────────────────────────────
+    const snippet     = (cluster.sourceSnippet || '').trim();
     const conceptType = cluster.conceptType;
-    let suggestedStemType = 'most-likely-diagnosis';
-    if (criterionType === 'duration') {
-      suggestedStemType = 'duration-determines-dx';
-    } else if (criterionType === 'age-threshold') {
-      suggestedStemType = 'age-threshold-determines-dx';
-    } else if (conceptType === 'management-rule') {
-      suggestedStemType = 'next-best-step';
-    } else if (conceptType === 'contraindication-adverse-effect') {
-      suggestedStemType = 'contraindication-or-adverse-effect';
-    } else if (conceptType === 'mechanism') {
-      suggestedStemType = 'mechanism-explains-finding';
-    } else if (conceptType === 'diagnostic-distinction' || conceptType === 'differential-diagnosis') {
-      suggestedStemType = 'diagnosis-requires-distinction';
-    } else if (conceptType === 'exam-trap') {
-      suggestedStemType = 'exception-or-caveat';
-    } else if (conceptType === 'clinical-reasoning-framework') {
-      suggestedStemType = 'clinical-reasoning-framework';
-    }
+    const warnings    = [];
 
-    // ── 5. naturalDistracters ───────────────────────────────────────────────
-    // Pull additional conditions mentioned in the snippet (not the primary condition).
-    const naturalDistracters = [];
-    const condLower = condition.toLowerCase();
-    for (const re of DIVINE_CONDITION_PATTERNS) {
-      // Use a fresh RegExp (without sticky) to scan the whole snippet.
-      const globalRe = new RegExp(re.source, 'gi');
-      let m;
-      while ((m = globalRe.exec(snippet)) !== null) {
-        const cand = m[0];
-        if (cand.toLowerCase() !== condLower && !naturalDistracters.some(d => d.toLowerCase() === cand.toLowerCase())) {
-          naturalDistracters.push(cand);
-        }
-        if (naturalDistracters.length >= 4) break;
-      }
-      if (naturalDistracters.length >= 4) break;
+    // ── 1. clusterSummary — voice-stripped version of the snippet ───────────
+    // Strip known podcast-coaching phrases to surface the medical content.
+    // Only phrase-level strips; never strips medical terminology.
+    const VOICE_STRIP_PHRASES = [
+      /\bremember,?\s*/gi,
+      /\bdon'?t\s+forget,?\s*/gi,
+      /\bI\s+think,?\s*/gi,
+      /\bI\s+want\s+you\s+to\s*/gi,
+      /\blet\s+me\s+tell\s+you\s*/gi,
+      /\bthe\s+thing\s+is,?\s*/gi,
+      /\bthe\s+easy\s+way(?:\s+I\s+think\s+about\s+it)?,?\s*/gi,
+      /\bthe\s+way\s+I\s+think(?:\s+of\s+it)?,?\s*/gi,
+      /\bthink\s+of\s+it\s+(?:this\s+way|as),?\s*/gi,
+      // Long phrase before standalone "high-yield" so the full phrase is consumed first.
+      /\bpretty\s+(?:high[\s-]yield|important)\s*/gi,
+      /\bthat(?:'s|\s+is)\s+(?:really\s+)?(?:high[\s-]yield|important)\s*/gi,
+      /\bhigh[\s-]yield\s*/gi,
+      /\byou'?re\s+going\s+to\s+see\s*/gi,
+      /\bthey\s+give\s+you\s+(?:a\s+)?question\s+about\s*/gi,
+      /\bto\s+be\s+completely\s+honest(?:\s+with\s+you)?,?\s*/gi,
+      /\bobviously,?\s*/gi
+    ];
+    let clusterSummary = snippet;
+    for (const re of VOICE_STRIP_PHRASES) {
+      clusterSummary = clusterSummary.replace(re, ' ');
     }
+    // Collapse any whitespace gaps left by stripping.
+    clusterSummary = clusterSummary
+      .replace(/^\s*(?:so|and|but|also|then|well|okay|right|now),?\s*/i, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim()
+      .slice(0, 400);
 
-    // ── 6. contentType ──────────────────────────────────────────────────────
-    // Priority order:
-    //  1. meta-commentary — promo/admin language present
-    //  2. medical-rule   — both condition AND criterion extracted (voice language is incidental)
-    //  3. voice-fraction heuristic — for snippets lacking a testable condition+criterion pair
-    const metaRe = /\b(podcast|website|course|tutoring|email me|sign up|subscribe|next week|review course|one-on-one|Apple Podcast)\b/i;
-    let contentType = 'medical-rule';
-    if (metaRe.test(snippet)) {
-      contentType = 'meta-commentary';
-    } else if (condition && criterion) {
-      // Both a named condition and a testable criterion were extracted — this IS a medical rule
-      // being communicated, even if coaching/repetition language appears alongside it.
-      contentType = 'medical-rule';
-    } else {
-      // No condition+criterion pair — fall back to voice-fraction analysis.
-      const sentenceList = snippet.split(/[.!?]+\s+/).filter(s => s.trim().length > 10);
-      const totalSentences = sentenceList.length || 1;
-      const voiceSentenceCount = sentenceList.filter(s =>
-        DIVINE_VOICE_MARKERS.some(vm => vm.test(s))
-      ).length;
-      const voiceFraction = voiceSentenceCount / totalSentences;
-      if (voiceFraction >= 0.70) {
-        contentType = 'conversational-explanation';
-      } else if (voiceFraction >= 0.45) {
-        contentType = 'repetition-emphasis';
-      } else if (!condition && !criterion) {
-        contentType = 'ambiguous';
-      }
-    }
+    // ── 2. Meta-commentary detection ─────────────────────────────────────────
+    // Matches promotional/administrative phrases that indicate non-medical content.
+    // Conservative: avoids common medical words (e.g. "course of treatment" is NOT matched).
+    const META_RE = /\b(?:my\s+website|review\s+course|one-on-one\s+tutoring|Apple\s+Podcast|Spotify\b|Google\s+Podcast|divineintervention|shoot\s+me\s+an\s+email|sign\s+up|tutoring\s+for|I\s+offer\s+(?:one-on-one|review)|this\s+is\s+a\s+(?:short\s+)?podcast|this\s+(?:short\s+)?podcast\b|this\s+podcast\s+(?:is|really)|podcast\s+for|on\s+(?:Apple\s+Podcasts?|Spotify|Google\s+Podcasts?))\b/i;
+    const contentType = META_RE.test(snippet) ? 'meta-commentary' : 'medical-content';
 
-    // ── 7. podcastVoiceScore ────────────────────────────────────────────────
-    // Sum marker hits, normalize by (totalWords / 5) so a 50-word snippet with 3 hits ≈ 0.30.
+    // ── 3. podcastVoiceScore ─────────────────────────────────────────────────
+    // Hit count normalized by (wordCount / 5). A 50-word snippet with 3 hits ≈ 0.30.
     const totalWords = (snippet.split(/\s+/).filter(Boolean).length) || 1;
     let voiceHits = 0;
     for (const vm of DIVINE_VOICE_MARKERS) {
-      const globalVm = new RegExp(vm.source, 'gi');
-      const ms = snippet.match(globalVm);
+      const gvm = new RegExp(vm.source, 'gi');
+      const ms  = snippet.match(gvm);
       if (ms) voiceHits += ms.length;
     }
     const podcastVoiceScore = Math.min(1.0, voiceHits / Math.max(1, totalWords / 5));
 
-    // ── 8. testabilityScore ─────────────────────────────────────────────────
-    const hasMedCondition   = condition  ? 0.25 : 0;
-    const hasCriterion      = criterion  ? 0.30 : 0;
-    const hasLongCoreRule   = coreRule.length >= 30 ? 0.15 : 0;
-    const lowVoiceBonus     = podcastVoiceScore <= 0.40 ? 0.15 : 0;
-    const conceptTypeBonus  = ['high-yield-fact', 'diagnostic-distinction', 'management-rule', 'differential-diagnosis'].includes(conceptType)
-      ? 0.15 : 0.05;
-    const testabilityScore  = Math.min(1.0,
-      hasMedCondition + hasCriterion + hasLongCoreRule + lowVoiceBonus + conceptTypeBonus
-    );
+    // ── 4. testabilityScore ───────────────────────────────────────────────────
+    // Does NOT require condition or criterion — Gemini handles that interpretation.
+    // Signal components:
+    //   medicalSignal   — bonus when a known medical concept type was triggered
+    //   substanceScore  — proportional to cleaned text length (caps at 0.40)
+    //   voicePenalty    — gradual deduction when voice score exceeds 0.40
+    //   metaPenalty     — hard deduction for promo/admin content
+    const MEDICAL_CONCEPT_TYPES = new Set([
+      'high-yield-fact', 'mechanism', 'risk-factor', 'diagnostic-distinction',
+      'management-rule', 'contraindication-adverse-effect', 'exam-trap',
+      'clinical-reasoning-framework', 'differential-diagnosis'
+    ]);
+    const medicalSignal  = MEDICAL_CONCEPT_TYPES.has(conceptType) ? 0.40 : 0;
+    const substanceScore = Math.min(0.40, clusterSummary.length / 250);
+    const voicePenalty   = Math.max(0, (podcastVoiceScore - 0.40) * 0.50);
+    const metaPenalty    = contentType === 'meta-commentary' ? 1.0 : 0;
+    const testabilityScore = Math.min(1.0, Math.max(0,
+      medicalSignal + substanceScore - voicePenalty - metaPenalty
+    ));
 
-    // ── 9. Quality gates (computed, not enforced) ───────────────────────────
+    // ── 5. Quality gates (computed and enforced by _divineCheckObjectiveGates) ─
     const gateResults = {
-      'contentType=medical-rule': contentType === 'medical-rule',
-      'podcastVoiceScore<=0.40':  podcastVoiceScore <= 0.40,
-      'testabilityScore>=0.50':   testabilityScore >= 0.50,
-      'criterion-present':        !!criterion,
-      'coreRule>=30chars':        coreRule.length >= 30
+      'meta-blocked':           contentType !== 'meta-commentary',
+      'low-testability':        testabilityScore >= 0.25,
+      'insufficient-substance': clusterSummary.length >= 20
     };
     const failedGates = Object.entries(gateResults).filter(([, v]) => !v).map(([k]) => k);
     if (failedGates.length > 0) {
       warnings.push(`Gate${failedGates.length === 1 ? '' : 's'} not met: ${failedGates.join(', ')}`);
     }
+    if (clusterSummary.length < 50) {
+      warnings.push('Short cluster summary — source snippet may lack sufficient clinical context');
+    }
 
     return {
-      coreRule,
-      condition,
-      criterion,
-      criterionType,
-      criterionPolarity,
-      suggestedStemType,
-      naturalDistracters,
-      contentType,
+      clusterSummary,
+      conceptType,
       podcastVoiceScore: Math.round(podcastVoiceScore * 100) / 100,
+      contentType,
       testabilityScore:  Math.round(testabilityScore  * 100) / 100,
       derivedFrom:       'sourceSnippet',
-      derivationMethod:  'divine-deterministic-distillation-v1',
+      derivationMethod:  'divine-teaching-cluster-summary-v1',
       warnings,
       gateResults
     };
   }
 
-  // ── Divine v6b: Hard gate enforcement ──────────────────────────────────────
-  // Checks all hard gates on a cluster's distilledObjective.
+  // ── Divine v7: Simplified hard gate enforcement ────────────────────────────
+  // Three gates only — medical-fact extraction is delegated to Gemini.
   // Returns { blocked: bool, reasons: string[] }.
   // Does NOT block clusters that have no distilledObjective (backwards compat).
   function _divineCheckObjectiveGates(cluster) {
     const obj = cluster.distilledObjective;
     if (!obj) return { blocked: false, reasons: [] };
 
-    // Words that should never appear in a medically testable coreRule.
-    const CORE_RULE_VOICE_PATTERNS = [
-      { re: /\bpodcast\b/i,                 label: 'podcast' },
-      { re: /\bhigh[\s-]yield\b/i,          label: 'high yield' },
-      { re: /\bremember\b/i,                label: 'remember' },
-      { re: /\byou\s+need\s+to\s+know\b/i,  label: 'you need to know' },
-      { re: /\bboards?\b/i,                 label: 'boards' },
-      { re: /\bexam\b/i,                    label: 'exam' },
-      { re: /\bquestion\b/i,               label: 'question' },
-      { re: /\bthey\s+give\s+you\b/i,       label: 'they give you' },
-      { re: /\bI\b/,                        label: 'first-person I' },
-      { re: /\bwe\b/i,                      label: 'we' },
-      { re: /\byou\b/i,                     label: 'you' }
-    ];
-
     const reasons = [];
 
-    if (obj.contentType !== 'medical-rule') {
-      reasons.push(`contentType is "${obj.contentType}" (not medical-rule)`);
+    // Gate 1: meta-commentary — promo/admin/intro content that is not medical.
+    if (obj.contentType === 'meta-commentary') {
+      reasons.push('cluster is promotional or administrative (meta-commentary) — not medical content');
     }
-    // voiceScore gate applies only when contentType is NOT 'medical-rule'.
-    // When both condition AND criterion were extracted (making contentType='medical-rule'),
-    // podcast-register language is incidental to the medical content and the gate is redundant.
-    if (obj.contentType !== 'medical-rule' && obj.podcastVoiceScore > 0.40) {
-      reasons.push(`podcastVoiceScore ${obj.podcastVoiceScore.toFixed(2)} > 0.40`);
+
+    // Gate 2: testabilityScore — filters pure-voice or empty clusters.
+    // Threshold is low (0.25) because Gemini performs semantic interpretation.
+    if (obj.testabilityScore < 0.25) {
+      reasons.push(`testabilityScore ${obj.testabilityScore.toFixed(2)} < 0.25 — insufficient medical substance`);
     }
-    if (obj.testabilityScore < 0.50) {
-      reasons.push(`testabilityScore ${obj.testabilityScore.toFixed(2)} < 0.50`);
-    }
-    if (!obj.criterion) {
-      reasons.push('no criterion extracted');
-    }
-    if (obj.coreRule.length < 30) {
-      reasons.push(`coreRule too short (${obj.coreRule.length} chars, need ≥ 30)`);
-    }
-    // Check coreRule for podcast/meta phrasing — only report the first match.
-    for (const { re, label } of CORE_RULE_VOICE_PATTERNS) {
-      if (re.test(obj.coreRule)) {
-        reasons.push(`coreRule contains podcast/meta phrasing: "${label}"`);
-        break;
-      }
+
+    // Gate 3: minimum cleaned-text length — blocks pure coaching phrases
+    // ("that's pretty high yield", "when you see that think...") with no medical content.
+    if (obj.clusterSummary.length < 20) {
+      reasons.push(`clusterSummary only ${obj.clusterSummary.length} chars after voice stripping (need ≥ 20)`);
     }
 
     return { blocked: reasons.length > 0, reasons };
@@ -13429,50 +13300,42 @@ const App = (() => {
         `<div style="color:#92400e;font-size:10px;margin-top:2px;">⚠ ${escapeHTML(w)}</div>`
       ).join('');
 
-      // ── Distilled Objective panel (v6a) ──────────────────────────────────
+      // ── Teaching Cluster Summary panel (v7) ─────────────────────────────────
       const obj = cluster.distilledObjective;
       let objHtml = '';
       if (obj) {
-        // Gate badges
+        // Gate badges — 3 gates now (meta / testability / substance).
         const gateBadges = Object.entries(obj.gateResults).map(([gate, pass]) => {
-          const bg = pass ? '#d1fae5' : '#fee2e2';
-          const fg = pass ? '#065f46' : '#991b1b';
+          const bg   = pass ? '#d1fae5' : '#fee2e2';
+          const fg   = pass ? '#065f46' : '#991b1b';
           const icon = pass ? '✓' : '✗';
           return `<span style="background:${bg};color:${fg};font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;white-space:nowrap;">${icon} ${escapeHTML(gate)}</span>`;
         }).join(' ');
 
-        // Testability score bar color
-        const tscore = obj.testabilityScore;
-        const tsColor = tscore >= 0.70 ? '#059669' : tscore >= 0.50 ? '#d97706' : '#dc2626';
+        // Testability colour thresholds adjusted for new 0.25 gate.
+        const tscore  = obj.testabilityScore;
+        const tsBg    = tscore >= 0.50 ? '#d1fae5' : tscore >= 0.25 ? '#fef9c3' : '#fee2e2';
+        const tsFg    = tscore >= 0.50 ? '#065f46' : tscore >= 0.25 ? '#713f12' : '#991b1b';
+        const vsColor = obj.podcastVoiceScore > 0.55 ? '#dc2626' : obj.podcastVoiceScore > 0.40 ? '#d97706' : '#374151';
 
-        // Distracted list
-        const distractersHtml = obj.naturalDistracters.length
-          ? `<div style="margin-top:4px;"><span style="color:#6b7280;font-size:10px;">Distracters: </span>${obj.naturalDistracters.map(d => `<span style="font-size:10px;color:#374151;font-style:italic;">${escapeHTML(d)}</span>`).join(', ')}</div>`
-          : '';
-
-        // Objective warnings (separate from cluster warnings — these are distillation-specific)
+        // Distillation warnings
         const objWarnHtml = obj.warnings.map(w =>
           `<div style="color:#b45309;font-size:10px;margin-top:2px;">⚠ ${escapeHTML(w)}</div>`
         ).join('');
 
         objHtml = `<details style="margin-top:5px;">
           <summary style="cursor:pointer;font-size:10px;color:#4b5563;font-weight:600;user-select:none;list-style:none;display:flex;align-items:center;gap:4px;">
-            <span style="font-size:9px;">▶</span> Distilled Objective
-            <span style="margin-left:4px;background:${tscore >= 0.50 ? '#d1fae5' : '#fee2e2'};color:${tscore >= 0.50 ? '#065f46' : '#991b1b'};font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;">testability ${Math.round(tscore * 100)}%</span>
+            <span style="font-size:9px;">▶</span> Cluster Summary
+            <span style="margin-left:4px;background:${tsBg};color:${tsFg};font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;">testability ${Math.round(tscore * 100)}%</span>
+            <span style="background:${obj.contentType === 'meta-commentary' ? '#fee2e2' : '#f0fdf4'};color:${obj.contentType === 'meta-commentary' ? '#991b1b' : '#166534'};font-size:9px;font-weight:600;padding:1px 5px;border-radius:8px;">${escapeHTML(obj.contentType)}</span>
           </summary>
           <div style="margin-top:5px;padding:7px 9px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;font-size:11px;">
-            <div style="font-weight:600;color:#1e293b;margin-bottom:4px;">${escapeHTML(obj.coreRule || '—')}</div>
-            <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:5px;">
-              ${obj.condition ? `<span><span style="color:#6b7280;">Condition:</span> <span style="color:#374151;font-weight:600;">${escapeHTML(obj.condition)}</span></span>` : ''}
-              ${obj.criterion ? `<span><span style="color:#6b7280;">Criterion:</span> <span style="color:#374151;font-weight:600;">${escapeHTML(obj.criterion)}</span> <span style="color:#94a3b8;font-size:10px;">(${escapeHTML(obj.criterionType)} · ${escapeHTML(obj.criterionPolarity)})</span></span>` : '<span style="color:#94a3b8;">No criterion extracted</span>'}
-            </div>
+            <div style="color:#374151;margin-bottom:6px;font-style:italic;line-height:1.4;">${escapeHTML(obj.clusterSummary || '—')}</div>
             <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:5px;align-items:center;">
-              <span><span style="color:#6b7280;">Content type:</span> <span style="color:#374151;">${escapeHTML(obj.contentType)}</span></span>
-              <span><span style="color:#6b7280;">Voice score:</span> <span style="color:${obj.podcastVoiceScore > 0.40 ? '#dc2626' : '#374151'};">${Math.round(obj.podcastVoiceScore * 100)}%</span></span>
-              <span><span style="color:#6b7280;">Stem type:</span> <span style="color:#374151;">${escapeHTML(obj.suggestedStemType)}</span></span>
+              <span><span style="color:#6b7280;">Voice score:</span> <span style="color:${vsColor};">${Math.round(obj.podcastVoiceScore * 100)}%</span></span>
+              <span><span style="color:#6b7280;">Method:</span> <span style="color:#374151;">${escapeHTML(obj.derivationMethod || '')}</span></span>
             </div>
             <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px;">${gateBadges}</div>
-            ${distractersHtml}
             ${objWarnHtml}
           </div>
         </details>`;
@@ -13610,6 +13473,7 @@ const App = (() => {
     };
 
     const rs = (_divineImportPreview && _divineImportPreview.reviewStatus) || {};
+    const am = (_divineImportPreview && _divineImportPreview.approvalMode)  || {};  // v7
 
     // Group by variantType.
     const byVariant = {};
@@ -13625,9 +13489,14 @@ const App = (() => {
         <div style="font-size:11px;font-weight:700;color:${vColor};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;border-bottom:1px solid #e2e8f0;padding-bottom:3px;">${escapeHTML(variant)} — ${variantDrafts.length} draft${variantDrafts.length === 1 ? '' : 's'}</div>`;
 
       for (const draft of variantDrafts) {
-        const reviewStatus  = rs[draft.draftId] || 'pending';
-        const clColor       = DIVINE_CONCEPT_TYPE_COLORS[draft.provenance.conceptType] || '#94a3b8';
-        const tsLabel       = draft.timestampRange
+        const reviewStatus    = rs[draft.draftId] || 'pending';
+        const approvalMode    = am[draft.draftId] || 'original';  // 'original' | 'refined'
+        const refinementStatus= draft.refinementStatus || 'idle';
+        const hasRefined      = refinementStatus === 'success' && !!draft.refinedDraft;
+        const useRefined      = reviewStatus === 'approved' && approvalMode === 'refined' && hasRefined;
+
+        const clColor = DIVINE_CONCEPT_TYPE_COLORS[draft.provenance.conceptType] || '#94a3b8';
+        const tsLabel = draft.timestampRange
           ? ` · ${escapeHTML(draft.timestampRange.start)}${draft.timestampRange.end !== draft.timestampRange.start ? ' → ' + escapeHTML(draft.timestampRange.end) : ''}`
           : '';
         const choicesHtml = draft.choices.map(ch =>
@@ -13638,20 +13507,80 @@ const App = (() => {
           .map(w => `<div style="color:#92400e;font-size:10px;margin-top:2px;">⚠ ${escapeHTML(w)}</div>`)
           .join('');
 
-        const borderColor = reviewStatus === 'approved' ? '#059669' : reviewStatus === 'rejected' ? '#dc2626' : vColor;
-        const cardBg      = reviewStatus === 'approved' ? '#f0fdf4' : reviewStatus === 'rejected' ? '#fef2f2' : '#fff';
+        // Border/background — purple when approved+refined, green when approved+original.
+        const borderColor = reviewStatus === 'approved'
+          ? (useRefined ? '#7c3aed' : '#059669')
+          : reviewStatus === 'rejected' ? '#dc2626' : vColor;
+        const cardBg = reviewStatus === 'approved'
+          ? (useRefined ? '#faf5ff' : '#f0fdf4')
+          : reviewStatus === 'rejected' ? '#fef2f2' : '#fff';
+
+        // Status badge — show "(refined)" or "(original)" qualifier when approved.
+        const modeLabel = reviewStatus === 'approved'
+          ? (useRefined ? ' (refined)' : ' (original)')
+          : '';
         const statusBadge = reviewStatus === 'approved'
-          ? `<span style="background:#059669;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;">✓ approved</span>`
+          ? `<span style="background:${useRefined ? '#7c3aed' : '#059669'};color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;">✓ approved${escapeHTML(modeLabel)}</span>`
           : reviewStatus === 'rejected'
           ? `<span style="background:#dc2626;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;">✗ rejected</span>`
           : `<span style="background:#e2e8f0;color:#475569;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;">pending</span>`;
 
         const eid = escapeHTML(draft.draftId);
+
+        // v7: AI Refine button — Electron-only, shows loading/error states.
+        const canRefine = typeof window.nbmeDesktop?.ai?.refineDivineDraft === 'function';
+        let refineSection = '';
+        if (canRefine) {
+          if (refinementStatus === 'loading') {
+            refineSection = `<button type="button" disabled style="font-size:10px;padding:2px 8px;background:#ede9fe;color:#7c3aed;border:1px solid #7c3aed;border-radius:4px;cursor:not-allowed;opacity:0.7;">⟳ Refining…</button>`;
+          } else if (refinementStatus === 'error') {
+            const errMsg = escapeHTML(draft.refinementError || 'Refinement failed.');
+            refineSection = `<div style="margin-top:4px;">
+              <div style="color:#b91c1c;font-size:10px;margin-bottom:3px;">✗ ${errMsg}</div>
+              <button type="button" onclick="App.refineDivineDraft('${eid}')" style="font-size:10px;padding:2px 8px;background:#fef2f2;color:#b91c1c;border:1px solid #b91c1c;border-radius:4px;cursor:pointer;">↻ Retry Refinement</button>
+            </div>`;
+          } else {
+            refineSection = `<button type="button" onclick="App.refineDivineDraft('${eid}')" style="font-size:10px;padding:2px 8px;background:#ede9fe;color:#7c3aed;border:1px solid #7c3aed;border-radius:4px;cursor:pointer;">✦ Refine with AI</button>`;
+          }
+        }
+
+        // v7: Approval buttons — split into Approve Original / Approve Refined / Reject / Reset.
+        const approveOriginalBg = (reviewStatus === 'approved' && approvalMode === 'original') ? '#059669' : '#f0fdf4';
+        const approveOriginalCo = (reviewStatus === 'approved' && approvalMode === 'original') ? '#fff' : '#059669';
+        const approveRefinedBg  = (reviewStatus === 'approved' && approvalMode === 'refined')  ? '#7c3aed' : '#faf5ff';
+        const approveRefinedCo  = (reviewStatus === 'approved' && approvalMode === 'refined')  ? '#fff' : '#7c3aed';
+        const rejectBg  = reviewStatus === 'rejected' ? '#dc2626' : '#fef2f2';
+        const rejectCo  = reviewStatus === 'rejected' ? '#fff' : '#dc2626';
+        const approveRefinedBtn = hasRefined
+          ? `<button type="button" onclick="App.approveDivineRefined('${eid}')" style="font-size:10px;padding:2px 8px;background:${approveRefinedBg};color:${approveRefinedCo};border:1px solid #7c3aed;border-radius:4px;cursor:pointer;">★ Approve Refined</button>`
+          : '';
+
         const reviewBtns = `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:5px;">
-          <button type="button" onclick="App.setDivineReviewStatus('${eid}','approved')" style="font-size:10px;padding:2px 8px;background:${reviewStatus==='approved'?'#059669':'#f0fdf4'};color:${reviewStatus==='approved'?'#fff':'#059669'};border:1px solid #059669;border-radius:4px;cursor:pointer;">✓ Approve</button>
-          <button type="button" onclick="App.setDivineReviewStatus('${eid}','rejected')" style="font-size:10px;padding:2px 8px;background:${reviewStatus==='rejected'?'#dc2626':'#fef2f2'};color:${reviewStatus==='rejected'?'#fff':'#dc2626'};border:1px solid #dc2626;border-radius:4px;cursor:pointer;">✗ Reject</button>
+          <button type="button" onclick="App.approveDivineOriginal('${eid}')" style="font-size:10px;padding:2px 8px;background:${approveOriginalBg};color:${approveOriginalCo};border:1px solid #059669;border-radius:4px;cursor:pointer;">✓ Approve Original</button>
+          ${approveRefinedBtn}
+          <button type="button" onclick="App.setDivineReviewStatus('${eid}','rejected')" style="font-size:10px;padding:2px 8px;background:${rejectBg};color:${rejectCo};border:1px solid #dc2626;border-radius:4px;cursor:pointer;">✗ Reject</button>
           <button type="button" onclick="App.setDivineReviewStatus('${eid}','pending')" style="font-size:10px;padding:2px 8px;background:#f8fafc;color:#6b7280;border:1px solid #cbd5e1;border-radius:4px;cursor:pointer;">↺ Reset</button>
+          ${refineSection}
         </div>`;
+
+        // v7: Inline refined preview panel (shown when refinement succeeded).
+        let refinedPreviewHtml = '';
+        if (hasRefined) {
+          const rd = draft.refinedDraft;
+          const rdChoicesHtml = Array.isArray(rd.choices)
+            ? rd.choices.map(ch => `<div style="margin:2px 0;font-size:11px;"><span style="font-weight:700;margin-right:4px;">${escapeHTML(ch.label)}.</span>${escapeHTML(ch.text)}</div>`).join('')
+            : '';
+          const rdTeachingPoint = rd.teachingPoint || '';
+          refinedPreviewHtml = `<details style="margin-top:8px;">
+            <summary style="font-size:10px;font-weight:700;color:#7c3aed;cursor:pointer;user-select:none;padding:3px 0;">✦ Refined (gemini-2.5-flash) — click to expand</summary>
+            <div style="margin-top:6px;padding:8px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:4px;">
+              <div style="font-weight:600;color:#1e293b;margin-bottom:5px;line-height:1.4;font-size:12px;">${escapeHTML(rd.stem || '')}</div>
+              <div style="margin-bottom:5px;line-height:1.5;">${rdChoicesHtml}</div>
+              <div style="font-size:10px;color:#475569;margin-bottom:2px;"><strong>Correct:</strong> ${escapeHTML(rd.correctAnswer || '')}</div>
+              <div style="font-size:10px;color:#475569;"><strong>Teaching point:</strong> ${escapeHTML(rdTeachingPoint.slice(0, 250))}${rdTeachingPoint.length > 250 ? '…' : ''}</div>
+            </div>
+          </details>`;
+        }
 
         html += `<div style="border:1px solid #e2e8f0;border-left:3px solid ${borderColor};border-radius:4px;padding:8px 10px;margin-bottom:6px;font-size:12px;background:${cardBg};">
           <div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin-bottom:4px;">
@@ -13668,6 +13597,7 @@ const App = (() => {
           <div style="font-size:10px;color:#64748b;font-style:italic;border-top:1px solid #f1f5f9;padding-top:3px;margin-top:2px;"><strong>Source:</strong> ${escapeHTML(draft.sourceSnippet.slice(0, 180))}${draft.sourceSnippet.length > 180 ? '…' : ''}</div>
           ${warnHtml}
           ${reviewBtns}
+          ${refinedPreviewHtml}
         </div>`;
       }
       html += '</div>';
@@ -13730,9 +13660,17 @@ const App = (() => {
         ? _divineImportPreview.reviewStatus : {};
       const reviewStatus = {};
       for (const d of drafts) reviewStatus[d.draftId] = existingStatus[d.draftId] || 'pending';
+      // v7: initialize per-draft runtime refinement state (never persisted).
+      for (const d of drafts) {
+        d.refinementStatus = d.refinementStatus || 'idle';
+        d.refinedDraft     = d.refinedDraft     || null;
+        d.refinementError  = d.refinementError  || null;
+      }
       _divineImportPreview.drafts = drafts;
       _divineImportPreview.skippedClusters = skipped;
       _divineImportPreview.reviewStatus = reviewStatus;
+      // approvalMode: draftId → 'original'|'refined'. Reset on every regenerate.
+      _divineImportPreview.approvalMode = {};
       renderDivineDraftPreview(drafts);
       renderDivineDraftSaveTargetSelector(false);
     }, 0);
@@ -13760,6 +13698,17 @@ const App = (() => {
       _divineImportPreview.reviewStatus = {};
     }
     _divineImportPreview.reviewStatus[draftId] = status;
+    // v7: sync approvalMode — clear when pending/rejected, default to 'original' when approved.
+    if (!_divineImportPreview.approvalMode || typeof _divineImportPreview.approvalMode !== 'object') {
+      _divineImportPreview.approvalMode = {};
+    }
+    if (status === 'pending' || status === 'rejected') {
+      delete _divineImportPreview.approvalMode[draftId];
+    } else if (status === 'approved') {
+      if (!_divineImportPreview.approvalMode[draftId]) {
+        _divineImportPreview.approvalMode[draftId] = 'original';
+      }
+    }
     renderDivineDraftPreview(_divineImportPreview.drafts || []);
   }
 
@@ -13769,7 +13718,16 @@ const App = (() => {
     if (!_divineImportPreview.reviewStatus || typeof _divineImportPreview.reviewStatus !== 'object') {
       _divineImportPreview.reviewStatus = {};
     }
-    for (const d of drafts) _divineImportPreview.reviewStatus[d.draftId] = 'approved';
+    // v7: initialize approvalMode for each draft — preserve existing choice, default to 'original'.
+    if (!_divineImportPreview.approvalMode || typeof _divineImportPreview.approvalMode !== 'object') {
+      _divineImportPreview.approvalMode = {};
+    }
+    for (const d of drafts) {
+      _divineImportPreview.reviewStatus[d.draftId] = 'approved';
+      if (!_divineImportPreview.approvalMode[d.draftId]) {
+        _divineImportPreview.approvalMode[d.draftId] = 'original';
+      }
+    }
     renderDivineDraftPreview(drafts);
   }
 
@@ -13788,6 +13746,123 @@ const App = (() => {
     const rs     = _divineImportPreview?.reviewStatus;
     if (!Array.isArray(drafts) || !rs || typeof rs !== 'object') return [];
     return drafts.filter(d => rs[d.draftId] === 'approved');
+  }
+
+  // v7 — human-readable error messages for Gemini refinement failures.
+  function _divineRefinementErrorMessage(errorCode, message) {
+    const MAP = {
+      'no-api-key':         'Gemini API key not configured. Open Settings to add it.',
+      'timeout':            'Request timed out (30 s). Check your connection and try again.',
+      'network':            'Network error — no response from Gemini.',
+      'invalid-json':       'Gemini returned malformed JSON.',
+      'validation-failed':  'Gemini response failed quality checks.',
+      'copy-detected':      'Gemini response too similar to source transcript.',
+      'voice-detected':     'Gemini response contained podcast coaching language.',
+      'missing-fields':     'Gemini response was missing required fields.',
+      'http-error':         `Gemini API error${message ? ': ' + message : ''}.`,
+    };
+    return MAP[errorCode] || (message ? `Refinement failed: ${message}` : 'Refinement failed — unknown error.');
+  }
+
+  // v7 — call Electron IPC to refine a single draft via Gemini.
+  async function refineDivineDraft(draftId) {
+    if (!_divineImportPreview) return;
+    const drafts = _divineImportPreview.drafts;
+    if (!Array.isArray(drafts)) return;
+    const draft = drafts.find(d => d.draftId === draftId);
+    if (!draft) return;
+
+    // Guard: only available in Electron.
+    const refine = window.nbmeDesktop?.ai?.refineDivineDraft;
+    if (typeof refine !== 'function') return;
+
+    // Mark loading.
+    draft.refinementStatus = 'loading';
+    draft.refinementError  = null;
+    renderDivineDraftPreview(drafts);
+
+    // Build payload — mirrors what electron/main.js expects.
+    const cluster = (_divineImportPreview.clusters || []).find(c => c.clusterId === draft.clusterId);
+    const payload = {
+      distilledObjective: cluster?.distilledObjective || null,
+      variantType:        draft.variantType,
+      scaffold: {
+        stem:            draft.stem,
+        choices:         draft.choices,
+        correctAnswer:   draft.correctAnswer,
+        teachingPoint:   draft.teachingPoint,
+      },
+      provenance: {
+        sourceContext: draft.sourceSnippet || '',
+        conceptType:   draft.provenance?.conceptType || '',
+      },
+      sourceMeta: {
+        draftId:   draft.draftId,
+        clusterId: draft.clusterId,
+      },
+    };
+
+    try {
+      const result = await refine(payload);
+      if (result && result.ok && result.refinedDraft) {
+        draft.refinementStatus = 'success';
+        draft.refinedDraft     = result.refinedDraft;
+        draft.refinementError  = null;
+      } else {
+        draft.refinementStatus = 'error';
+        draft.refinedDraft     = null;
+        draft.refinementError  = _divineRefinementErrorMessage(
+          result?.errorCode, result?.message
+        );
+      }
+    } catch (err) {
+      draft.refinementStatus = 'error';
+      draft.refinedDraft     = null;
+      draft.refinementError  = _divineRefinementErrorMessage('network', err?.message);
+    }
+
+    renderDivineDraftPreview(drafts);
+  }
+
+  // v7 — approve the refined Gemini version of a draft.
+  function approveDivineRefined(draftId) {
+    if (!_divineImportPreview) return;
+    if (!_divineImportPreview.reviewStatus || typeof _divineImportPreview.reviewStatus !== 'object') {
+      _divineImportPreview.reviewStatus = {};
+    }
+    if (!_divineImportPreview.approvalMode || typeof _divineImportPreview.approvalMode !== 'object') {
+      _divineImportPreview.approvalMode = {};
+    }
+    _divineImportPreview.reviewStatus[draftId]  = 'approved';
+    _divineImportPreview.approvalMode[draftId]  = 'refined';
+    renderDivineDraftPreview(_divineImportPreview.drafts || []);
+  }
+
+  // v7 — approve the original deterministic version of a draft.
+  function approveDivineOriginal(draftId) {
+    if (!_divineImportPreview) return;
+    if (!_divineImportPreview.reviewStatus || typeof _divineImportPreview.reviewStatus !== 'object') {
+      _divineImportPreview.reviewStatus = {};
+    }
+    if (!_divineImportPreview.approvalMode || typeof _divineImportPreview.approvalMode !== 'object') {
+      _divineImportPreview.approvalMode = {};
+    }
+    _divineImportPreview.reviewStatus[draftId]  = 'approved';
+    _divineImportPreview.approvalMode[draftId]  = 'original';
+    renderDivineDraftPreview(_divineImportPreview.drafts || []);
+  }
+
+  // v7 — build quiz explanation text, works for both deterministic and refined drafts.
+  function _buildDivineQuizExplanationFromParts(teachingPoint, rationaleMap) {
+    const labels        = ['A', 'B', 'C', 'D', 'E'];
+    const rationaleText = labels
+      .map(label => (rationaleMap && rationaleMap[label] ? `${label}: ${rationaleMap[label]}` : ''))
+      .filter(Boolean)
+      .join('\n');
+    return [
+      teachingPoint || '',
+      rationaleText ? `Choice rationales:\n${rationaleText}` : ''
+    ].filter(Boolean).join('\n\n').trim();
   }
 
   function _buildDivineQuizExplanation(draft) {
@@ -13810,19 +13885,35 @@ const App = (() => {
     const sourceMeta   = (document.getElementById('divine-source-meta')?.value || '').trim();
     const sourceName   = _divineImportPreview?.sourceName || '';
 
+    // v7: choose refined vs original content based on approvalMode.
+    const am = _divineImportPreview?.approvalMode || {};
+    const useRefined = am[draft.draftId] === 'refined' && draft.refinedDraft && draft.refinementStatus === 'success';
+    const rd = useRefined ? draft.refinedDraft : null;
+
+    const stem         = rd ? (rd.stem || draft.stem)         : draft.stem;
+    const choices      = rd ? (Array.isArray(rd.choices) ? rd.choices : draft.choices) : draft.choices;
+    const correctAnswer= rd ? (rd.correctAnswer || draft.correctAnswer) : draft.correctAnswer;
+    const teachingPoint= rd ? (rd.teachingPoint || draft.teachingPoint) : draft.teachingPoint;
+    // Refined drafts use `rationales` map; deterministic drafts use `distractorRationales`.
+    const rationaleMap = rd ? (rd.rationales || {}) : (draft.distractorRationales || {});
+
+    const draftMethod = useRefined
+      ? (rd.provenance?.generationMethod || 'electron-gemini-divine-distilled-objective-v1')
+      : (draft.provenance.draftMethod   || 'divine-deterministic-scaffold-v1');
+
     const quizQuestion = {
       n: idx + 1,
       sourceQuestionNumber: idx + 1,
       generatedQuizQuestionNumber: idx + 1,
-      t: draft.stem,
-      o: Array.isArray(draft.choices)
-        ? draft.choices.map(ch => ({ l: ch.label, t: ch.text }))
+      t: stem,
+      o: Array.isArray(choices)
+        ? choices.map(ch => ({ l: ch.label, t: ch.text }))
         : [],
-      c: draft.correctAnswer,
-      explanation: _buildDivineQuizExplanation(draft),
-      tags: ['Divine', 'Podcast', draft.variantType, draft.provenance.conceptType].filter(Boolean),
+      c: correctAnswer,
+      explanation: _buildDivineQuizExplanationFromParts(teachingPoint, rationaleMap),
+      tags: ['Divine', 'Podcast', draft.variantType, draft.provenance.conceptType, useRefined ? 'AI-Refined' : null].filter(Boolean),
       images: [],
-      parseConfidence: 'low',
+      parseConfidence: useRefined ? 'medium' : 'low',
       parseWarnings:   Array.isArray(draft.warnings) ? draft.warnings.slice() : []
     };
 
@@ -13835,7 +13926,8 @@ const App = (() => {
       clusterId:        draft.clusterId,
       clusterIndex,
       variantType:      draft.variantType,
-      draftMethod:      draft.provenance.draftMethod || 'divine-deterministic-scaffold-v1',
+      draftMethod,
+      approvalMode:     am[draft.draftId] || 'original',
       conceptType:      draft.provenance.conceptType,
       sourceSegmentIds: Array.isArray(draft.provenance.sourceSegmentIds) ? draft.provenance.sourceSegmentIds.slice() : [],
       originalLineRanges: Array.isArray(draft.provenance.originalLineRanges) ? draft.provenance.originalLineRanges.slice() : [],
@@ -20324,6 +20416,9 @@ const App = (() => {
     setDivineReviewStatus,
     approveDivineAllDrafts,
     rejectDivineAllDrafts,
+    refineDivineDraft,
+    approveDivineRefined,
+    approveDivineOriginal,
     updateDivineDraftCreateTestButton,
     createTestFromApprovedDivineDrafts,
     updateApprovedOmeDraftCreateTestButton,
