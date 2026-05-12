@@ -20579,6 +20579,18 @@ const App = (() => {
     }
 
     // Top-level checks
+    const _ngjKnownTopLevel = new Set(['testTitle','sourceFormat','questions',
+      'extractionWarnings','expectedQuestionCount','actualExtractedQuestionCount']);
+    const _ngjUnknownTop = Object.keys(payload).filter(k => !_ngjKnownTopLevel.has(k));
+    if (_ngjUnknownTop.length) {
+      warnings.push(`Unknown top-level fields will be discarded: ${_ngjUnknownTop.join(', ')}.`);
+    }
+    if (Array.isArray(payload.extractionWarnings) && payload.extractionWarnings.length > 0) {
+      warnings.push(`Top-level extractionWarnings (${payload.extractionWarnings.length} item(s)) will be preserved in test-level metadata.`);
+    }
+    if (payload.expectedQuestionCount != null || payload.actualExtractedQuestionCount != null) {
+      warnings.push(`expectedQuestionCount/actualExtractedQuestionCount present — will be preserved in test-level metadata.`);
+    }
     if (payload.testTitle !== undefined && payload.testTitle !== null && typeof payload.testTitle !== 'string') {
       warnings.push('testTitle is not a string; it will be treated as null.');
     }
@@ -20795,17 +20807,29 @@ const App = (() => {
   }
 
   function _ngjBuildPerChoiceExplanations(sections, answerChoices) {
-    // Try to extract per-choice explanations from "Incorrect Answers" sections
+    // Try to extract per-choice explanations from "Incorrect Answers" sections.
+    // Handles both "Choice B: ..." (single) and "Choices A, C, and D: ..." (multi-letter).
     const e = {};
     const labels = (answerChoices || []).map(c => c.label || '');
     const incorrectSec = (sections || []).find(s => /incorrect/i.test(s.heading || ''));
     if (!incorrectSec) return e;
-    const bodyLines = Array.isArray(incorrectSec.body) ? incorrectSec.body : (typeof incorrectSec.body === 'string' ? [incorrectSec.body] : []);
+    const bodyLines = Array.isArray(incorrectSec.body) ? incorrectSec.body
+      : (typeof incorrectSec.body === 'string' ? [incorrectSec.body] : []);
     bodyLines.forEach(line => {
-      const singleMatch = line.match(/^Choice ([A-Z]):\s+(.+)/i);
+      // Single: "Choice B: text..."
+      const singleMatch = line.match(/^Choice\s+([A-Z]):\s+(.+)/i);
       if (singleMatch) {
         const ltr = singleMatch[1].toUpperCase();
         if (labels.includes(ltr)) e[ltr] = _ngjEsc(singleMatch[2]);
+        return;
+      }
+      // Multi: "Choices A, C, and D: text..." — assign same text to every extracted letter
+      const multiMatch = line.match(/^Choices?\s+([A-Z][A-Z,\s]*(?:and\s+[A-Z])?):\s+(.+)/i);
+      if (multiMatch) {
+        const lettersPart = multiMatch[1];
+        const text = _ngjEsc(multiMatch[2]);
+        const letters = [...lettersPart.matchAll(/[A-Z]/gi)].map(m => m[0].toUpperCase());
+        letters.forEach(ltr => { if (labels.includes(ltr) && !e[ltr]) e[ltr] = text; });
       }
     });
     return e;
@@ -20848,6 +20872,7 @@ const App = (() => {
         metadata: {
           sourceType: 'nbme-gemini-json',
           sourceQuestionNumber: q.sourceQuestionNumber ?? null,
+          sourceId: q.id || null,
           retrievalTag,
           hasEmbeddedFigure,
           figureRefs,
@@ -21134,6 +21159,24 @@ const App = (() => {
       toast(msg, 6000);
       return;
     }
+
+    // Attach test-level metadata that can't go on individual questions
+    DB.updateTest(test.id, {
+      sourceType: 'nbme-gemini-json',
+      importMetadata: {
+        sourceType: 'nbme-gemini-json',
+        sourceFormat: payload.sourceFormat || null,
+        importedAt,
+        originalTestTitle: payload.testTitle || null,
+        questionCount: questions.length,
+        warningCount: st.validation.counts.warningCount,
+        unresolvedFigureCount: st.validation.counts.unresolvedFigureCount,
+        schemaVersion: 'nbme-gemini-json-v1',
+        topLevelExtractionWarnings: Array.isArray(payload.extractionWarnings) ? payload.extractionWarnings : [],
+        expectedQuestionCount: payload.expectedQuestionCount ?? null,
+        actualExtractedQuestionCount: payload.actualExtractedQuestionCount ?? null
+      }
+    });
 
     st.lastSaveResult = test;
     st.lastSaveError = null;
