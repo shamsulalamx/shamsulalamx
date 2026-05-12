@@ -543,7 +543,7 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 #btn-flag { }
 #btn-flag.flagged { color: #ffd54f; border-color: rgba(255,213,79,.5); }
 
-.quiz-content-area { flex: 1; padding: 16px 40px 80px; max-width: 1000px; width: 100%; margin: 0 auto; }
+.quiz-content-area { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 16px 40px 80px; max-width: 1000px; width: 100%; margin: 0 auto; }
 .quiz-content-area.image-stem-active { max-width: 1280px; padding-left: 18px; padding-right: 18px; }
 
 /* Question card */
@@ -1698,6 +1698,16 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 .ngj-save-row .form-group { margin: 0; flex: 1; min-width: 180px; }
 .ngj-confirm-row { margin: 10px 0 4px; }
 .ngj-readiness { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+.ngj-figure-item { border: 1px solid #e2e8f0; border-radius: 4px; padding: 10px 12px; margin-bottom: 8px; background: #fafbfc; }
+.ngj-figure-item.attached { border-color: #27ae60; background: #f0fdf4; }
+.ngj-figure-item-header { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.ngj-figure-item-meta { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+.ngj-figure-visible-text { font-size: 11px; color: #2c5282; background: #ebf8ff; border-radius: 3px; padding: 4px 8px; margin-bottom: 6px; line-height: 1.6; }
+.ngj-figure-upload-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ngj-figure-thumb { max-height: 48px; max-width: 96px; border-radius: 2px; border: 1px solid #cdd5e0; object-fit: contain; display: none; }
+.ngj-figure-status { font-size: 11px; color: var(--muted); }
+.ngj-figure-status.ok { color: #27ae60; font-weight: 600; }
+.ngj-figure-status.auto { color: #2563eb; font-weight: 600; }
 </style>
 <div id="modal-nbme-gemini-json" class="modal-overlay">
   <div class="modal-box ngj-modal-box">
@@ -1733,6 +1743,11 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
         <div style="padding:12px;color:#5a6a7a;font-size:12px;">No preview available.</div>
       </div>
 
+      <div id="ngj-figure-attach-section" style="display:none;">
+        <div class="ngj-section-title">&#128247; Figure Attachment</div>
+        <div id="ngj-figure-attach-list"></div>
+      </div>
+
       <div class="ngj-section-title">Save Test</div>
       <div class="ngj-save-row">
         <div class="form-group">
@@ -1758,6 +1773,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 
     <div class="modal-actions" style="margin-top:12px;">
       <button type="button" class="btn-modal primary" id="ngj-save-btn" onclick="App.createTestFromNbmeGeminiJsonImport()" disabled>Save Test</button>
+      <button type="button" class="btn-modal" id="ngj-save-valid-btn" onclick="App.saveValidNbmeGeminiJsonQuestionsOnly()" disabled style="display:none;border-color:#c0392b;color:#c0392b;" title="Testing only: saves valid questions, excludes questions with blocking errors">Save valid questions only</button>
       <button type="button" class="btn-modal" onclick="App.closeNbmeGeminiJsonImportModal()">Close</button>
     </div>
   </div>
@@ -5151,11 +5167,64 @@ function renderImages(q, topElId, bottomElId) {
 
 	  window.buildQuestionStemHTML = function(q, highlightedStemHtml) {
 	    const group = q?.sharedGroup;
-	    if (!group) return highlightedStemHtml || window.buildStemHTML(q?.t || '');
-	    const sharedHtml = window.buildSharedGroupHTML(q);
-	    const individualHtml = buildGroupedIndividualStemHTML(q);
-	    return `${sharedHtml}<div class="question-individual-stem">${individualHtml}</div>`;
+	    let html;
+	    if (!group) {
+	      html = highlightedStemHtml || window.buildStemHTML(q?.t || '');
+	    } else {
+	      const sharedHtml = window.buildSharedGroupHTML(q);
+	      const individualHtml = buildGroupedIndividualStemHTML(q);
+	      html = `${sharedHtml}<div class="question-individual-stem">${individualHtml}</div>`;
+	    }
+	    return window._replaceFigureMarkersInStemHtml(html, q);
 	  };
+
+  // ── Figure rendering helpers (nbme-gemini-json / chatgpt-pro-json) ──────────
+
+  window._ngjFigureToHTML = function(figureId, q) {
+    const refs = q?.metadata?.figureRefs || [];
+    const ref = refs.find(function(r) { return r.figureId === figureId; });
+    const attachments = q?.metadata?.figureAttachments || {};
+    const dataUrl = attachments[figureId];
+
+    if (dataUrl) {
+      return '<div class="nbme-figure-attached">' +
+        '<img src="' + dataUrl + '" alt="' + figureId + '" ' +
+        'style="max-width:100%;display:block;margin:8px 0;border:1px solid #dde3ea;border-radius:3px;">' +
+        '</div>';
+    }
+
+    // Render visibleText as a lab-values table if available
+    const visibleText = ref && Array.isArray(ref.visibleText) && ref.visibleText.length ? ref.visibleText : null;
+    if (visibleText) {
+      const rows = visibleText.map(function(line) {
+        const colon = line.indexOf(':');
+        if (colon < 0) return '<tr><td colspan="2" style="padding:3px 8px;">' + line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</td></tr>';
+        const name = line.slice(0, colon).trim().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        const val  = line.slice(colon + 1).trim().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        return '<tr><td style="padding:3px 16px 3px 8px;white-space:nowrap;font-weight:500;">' + name + '</td>' +
+               '<td style="padding:3px 8px;">' + val + '</td></tr>';
+      }).join('');
+      const caption = ref.description ? '<caption style="caption-side:top;font-size:11px;color:#5a6a7a;text-align:left;padding:4px 8px 2px;font-style:italic;">' + ref.description.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</caption>' : '';
+      return '<div class="nbme-figure-table" style="margin:8px 0;">' +
+        '<table class="lab-values-table" style="width:auto;min-width:260px;">' + caption + '<tbody>' + rows + '</tbody></table>' +
+        '</div>';
+    }
+
+    // No attachment, no visibleText — show placeholder notice
+    const label = (ref && ref.placeholder) || ('[FIGURE: ' + figureId + ']');
+    const loc   = (ref && ref.sourceLocation) ? ' (' + ref.sourceLocation + ')' : '';
+    return '<div class="nbme-figure-placeholder" style="margin:8px 0;padding:8px 12px;background:#fff8e1;border:1px dashed #f9a825;border-radius:3px;font-size:12px;color:#7a5c00;">' +
+      '&#128247; Figure not attached: <code>' + label.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</code>' + loc.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') +
+      '</div>';
+  };
+
+  window._replaceFigureMarkersInStemHtml = function(html, q) {
+    if (!html || !q || !/\[FIGURE:/i.test(html)) return html;
+    return html.replace(/\[FIGURE:\s*([^\]]+)\]/gi, function(match, figId) {
+      return window._ngjFigureToHTML(figId.trim(), q);
+    });
+  };
+
 })();
 
 /* ============================================================
@@ -5641,7 +5710,30 @@ const Quiz = (() => {
       '</div>';
     container.appendChild(correctDiv);
 
-    // Explanation block — only split on \n\n (paragraph breaks), never \n
+    // Educational objective (nbme-gemini-json / chatgpt-pro-json)
+    if (q.educationalObjective) {
+      const eoDiv = document.createElement('div');
+      eoDiv.className = 'exp-explanation-block';
+      eoDiv.style.cssText = 'margin:10px 0;padding:10px 12px;background:#f0f7ff;border-left:3px solid #2563eb;border-radius:3px;';
+      const eoLabel = document.createElement('div');
+      eoLabel.style.cssText = 'font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#2563eb;margin-bottom:4px;';
+      eoLabel.textContent = 'Educational Objective';
+      const eoText = document.createElement('div');
+      eoText.textContent = q.educationalObjective;
+      eoDiv.appendChild(eoLabel);
+      eoDiv.appendChild(eoText);
+      container.appendChild(eoDiv);
+    }
+
+    // Structured explanation (nbme-gemini-json / chatgpt-pro-json) — pre-escaped HTML
+    if (q.correctBlurb) {
+      const blurbDiv = document.createElement('div');
+      blurbDiv.className = 'exp-explanation-block exp-blurb';
+      blurbDiv.innerHTML = q.correctBlurb;
+      container.appendChild(blurbDiv);
+    }
+
+    // Legacy plain-text explanation (pdf import) — only split on \n\n, never \n
     if (q.explanation) {
       const expDiv = document.createElement('div');
       expDiv.className = 'exp-explanation-block';
@@ -5791,6 +5883,27 @@ window.buildExplanationHTML = function(q, r, container) {
       (chosenCorrect ? '<span class="exp-badge-chosen">&#8592; Your Answer</span>' : '') +
     '</div>';
   container.appendChild(correctDiv);
+
+  if (q.educationalObjective) {
+    var eoDiv = document.createElement('div');
+    eoDiv.className = 'exp-explanation-block';
+    eoDiv.style.cssText = 'margin:10px 0;padding:10px 12px;background:#f0f7ff;border-left:3px solid #2563eb;border-radius:3px;';
+    var eoLabel = document.createElement('div');
+    eoLabel.style.cssText = 'font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#2563eb;margin-bottom:4px;';
+    eoLabel.textContent = 'Educational Objective';
+    var eoText = document.createElement('div');
+    eoText.textContent = q.educationalObjective;
+    eoDiv.appendChild(eoLabel);
+    eoDiv.appendChild(eoText);
+    container.appendChild(eoDiv);
+  }
+
+  if (q.correctBlurb) {
+    var blurbDiv = document.createElement('div');
+    blurbDiv.className = 'exp-explanation-block exp-blurb';
+    blurbDiv.innerHTML = q.correctBlurb;
+    container.appendChild(blurbDiv);
+  }
 
   if (q.explanation) {
     var expDiv = document.createElement('div');
@@ -20508,6 +20621,7 @@ const App = (() => {
       rawText: '', parsed: null, validation: null,
       normalizedItems: [], fileName: '', testName: '',
       targetFolder: '', confirmed: false,
+      figureAttachments: {},
       lastSaveResult: null, lastSaveError: null
     };
     const ta = document.getElementById('ngj-raw-text');
@@ -20880,7 +20994,8 @@ const App = (() => {
           sharedGroup: q.sharedGroup || null,
           extractionWarnings,
           explanationSections: normalizedSections,
-          schemaVersion: 'nbme-gemini-json-v1'
+          schemaVersion: 'nbme-gemini-json-v1',
+          figureAttachments: {}
         }
       };
       items.push(quizQuestion);
@@ -20957,6 +21072,7 @@ const App = (() => {
 
     renderNbmeGeminiJsonValidationSummary(validation);
     renderNbmeGeminiJsonPreview(parsed, validation);
+    renderNbmeGeminiJsonFigureAttachSection();
     updateNbmeGeminiJsonSaveReadiness();
   }
 
@@ -21032,7 +21148,7 @@ const App = (() => {
     qs.forEach((q, idx) => {
       const qNum = q.questionNumber != null ? q.questionNumber : (idx + 1);
       const qr = qrMap[qNum] || {};
-      const stemPreview = String(q.stem || '').slice(0, 240) + (String(q.stem || '').length > 240 ? '…' : '');
+      const stemPreview = String(q.stem || '');
       const choices = Array.isArray(q.answerChoices) ? q.answerChoices : [];
       const tag = (q.retrievalTag || '').trim();
       const sections = Array.isArray(q.explanationSections) ? q.explanationSections : [];
@@ -21085,16 +21201,26 @@ const App = (() => {
   function updateNbmeGeminiJsonSaveReadiness() {
     const st = _nbmeGeminiJsonImport;
     const btn = document.getElementById('ngj-save-btn');
+    const validBtn = document.getElementById('ngj-save-valid-btn');
     const noteEl = document.getElementById('ngj-readiness-note');
     if (!btn || !noteEl) return;
 
-    if (!st || !st.validation) { btn.disabled = true; noteEl.textContent = ''; return; }
+    if (!st || !st.validation) {
+      btn.disabled = true;
+      if (validBtn) { validBtn.style.display = 'none'; validBtn.disabled = true; }
+      noteEl.textContent = '';
+      return;
+    }
 
     const testName = (document.getElementById('ngj-test-name')?.value || '').trim();
     const folderId = document.getElementById('ngj-folder-select')?.value || '';
     const confirmed = document.getElementById('ngj-confirm-check')?.checked || false;
     const hasBlockingErrors = !st.validation.isValid;
+    const validCount = st.validation.counts.validQuestions || 0;
+    const totalCount = st.validation.counts.totalQuestions || 0;
+    const errorCount = st.validation.counts.blockingErrorCount || 0;
 
+    // ── Normal save button ────────────────────────────────────
     const reasons = [];
     if (hasBlockingErrors) reasons.push('fix blocking errors');
     if (!testName) reasons.push('enter a test name');
@@ -21111,10 +21237,129 @@ const App = (() => {
       noteEl.style.color = '#5a6a7a';
     }
 
+    // ── "Save valid questions only" button ────────────────────
+    // Visible only when there ARE blocking errors AND at least one valid question exists.
+    if (validBtn) {
+      const partialReasons = [];
+      if (!testName) partialReasons.push('enter a test name');
+      if (!folderId) partialReasons.push('select a target folder');
+      if (!confirmed) partialReasons.push('check the confirmation checkbox');
+
+      if (hasBlockingErrors && validCount > 0) {
+        validBtn.style.display = 'inline-flex';
+        if (partialReasons.length === 0) {
+          validBtn.disabled = false;
+          validBtn.textContent = `Save ${validCount} valid / ${totalCount} total`;
+          validBtn.title = `Testing only: ${errorCount} question(s) with blocking errors will be excluded. Saves ${validCount} valid question(s).`;
+        } else {
+          validBtn.disabled = true;
+          validBtn.textContent = `Save valid questions only`;
+          validBtn.title = `To enable: ${partialReasons.join(', ')}.`;
+        }
+      } else {
+        validBtn.style.display = 'none';
+        validBtn.disabled = true;
+      }
+    }
+
     if (st.lastSaveError) {
       const errEl = document.getElementById('ngj-save-error');
       if (errEl) { errEl.style.display = 'block'; errEl.textContent = st.lastSaveError; }
     }
+  }
+
+  // ── Figure attachment helpers (ngj) ─────────────────────────────────────────
+
+  function _ngjAllFigureRefs(parsed) {
+    const result = [];
+    (parsed.questions || []).forEach(function(q) {
+      const qNum = q.questionNumber || 0;
+      (q.figureRefs || []).forEach(function(fr) {
+        result.push({ qNum: qNum, ref: fr, hasVisibleText: Array.isArray(fr.visibleText) && fr.visibleText.length > 0 });
+      });
+    });
+    return result;
+  }
+
+  function renderNbmeGeminiJsonFigureAttachSection() {
+    const st = _nbmeGeminiJsonImport;
+    const section = document.getElementById('ngj-figure-attach-section');
+    const list    = document.getElementById('ngj-figure-attach-list');
+    if (!section || !list) return;
+
+    if (!st || !st.parsed) { section.style.display = 'none'; return; }
+
+    const allRefs = _ngjAllFigureRefs(st.parsed);
+    if (!allRefs.length) { section.style.display = 'none'; return; }
+
+    section.style.display = '';
+    const attachments = st.figureAttachments || {};
+    let html = '';
+    allRefs.forEach(function(item) {
+      const fr = item.ref;
+      const fid = fr.figureId || '';
+      const attached = !!attachments[fid];
+      const hasVT = item.hasVisibleText;
+      const escapedFid = fid.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      const escapedPH  = (fr.placeholder||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      const escapedDesc = (fr.description||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      const escapedLoc  = (fr.sourceLocation||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+      html += '<div class="ngj-figure-item' + (attached ? ' attached' : '') + '" id="ngj-fig-item-' + escapedFid + '">';
+      html += '<div class="ngj-figure-item-header">Q' + item.qNum + ' — ' + escapedFid + '</div>';
+      html += '<div class="ngj-figure-item-meta">Placeholder: <code>' + escapedPH + '</code>';
+      if (escapedLoc) html += '  &middot;  Location: ' + escapedLoc;
+      if (escapedDesc) html += '<br>' + escapedDesc;
+      html += '</div>';
+
+      if (hasVT) {
+        const vt = fr.visibleText.map(function(l) { return l.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }).join('<br>');
+        html += '<div class="ngj-figure-visible-text"><strong>Lab values (auto-render):</strong><br>' + vt + '</div>';
+        html += '<div class="ngj-figure-status auto">&#10003; Will render as lab table automatically — no upload required.</div>';
+      }
+
+      html += '<div class="ngj-figure-upload-row" style="margin-top:6px;">';
+      html += '<label class="btn-modal" style="cursor:pointer;font-size:11px;padding:4px 10px;" title="Upload image for this figure">';
+      html += '&#128228; ' + (attached ? 'Replace image' : 'Upload image (optional)');
+      html += '<input type="file" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="App.ngjHandleFigureUpload(this,\'' + escapedFid + '\')">';
+      html += '</label>';
+      if (attached) {
+        html += '<img id="ngj-fig-thumb-' + escapedFid + '" class="ngj-figure-thumb" src="' + attachments[fid] + '" style="display:inline-block;">';
+        html += '<span class="ngj-figure-status ok" id="ngj-fig-status-' + escapedFid + '">&#10003; Image attached</span>';
+        html += '<button type="button" class="btn-modal" style="font-size:11px;padding:3px 8px;color:#c0392b;border-color:#c0392b;" onclick="App.ngjRemoveFigureAttachment(\'' + escapedFid + '\')">&#10005; Remove</button>';
+      } else {
+        html += '<span class="ngj-figure-status" id="ngj-fig-status-' + escapedFid + '">' + (hasVT ? '' : 'No image attached') + '</span>';
+      }
+      html += '</div>';
+      html += '</div>';
+    });
+
+    list.innerHTML = html;
+  }
+
+  function ngjHandleFigureUpload(input, figureId) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const MAX_BYTES = 2.5 * 1024 * 1024; // 2.5 MB per image
+    if (file.size > MAX_BYTES) {
+      toast('Image too large (' + (file.size / 1024 / 1024).toFixed(1) + ' MB). Please crop or resize to under 2.5 MB.', 6000);
+      input.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      if (!_nbmeGeminiJsonImport) return;
+      if (!_nbmeGeminiJsonImport.figureAttachments) _nbmeGeminiJsonImport.figureAttachments = {};
+      _nbmeGeminiJsonImport.figureAttachments[figureId] = e.target.result;
+      renderNbmeGeminiJsonFigureAttachSection();
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function ngjRemoveFigureAttachment(figureId) {
+    if (!_nbmeGeminiJsonImport || !_nbmeGeminiJsonImport.figureAttachments) return;
+    delete _nbmeGeminiJsonImport.figureAttachments[figureId];
+    renderNbmeGeminiJsonFigureAttachSection();
   }
 
   function createTestFromNbmeGeminiJsonImport() {
@@ -21133,17 +21378,35 @@ const App = (() => {
     const items = st.normalizedItems || [];
     if (!items.length) { toast('No normalized questions to save.'); return; }
 
-    // Attach test-level metadata to each question
+    // Warn if figure attachments are large (risk of localStorage quota exceeded)
+    const figAttachGlobal = st.figureAttachments || {};
+    const figAttachKeys = Object.keys(figAttachGlobal);
+    if (figAttachKeys.length) {
+      const totalBytes = figAttachKeys.reduce((sum, k) => sum + (figAttachGlobal[k] || '').length, 0);
+      const totalMB = (totalBytes / 1024 / 1024).toFixed(1);
+      if (totalBytes > 3 * 1024 * 1024) {
+        if (!confirm(`Attached figure images total ${totalMB} MB. This may approach localStorage limits (typically ~5 MB). Continue saving?`)) return;
+      }
+    }
+
+    // Attach test-level metadata and figure attachments to each question
     const payload = st.parsed || {};
     const importedAt = new Date().toISOString();
     const questions = items.map(q => {
       const out = Object.assign({}, q);
+      // Collect figureAttachments for this question's figureRefs
+      const qFigureAttachments = {};
+      ((out.metadata && out.metadata.figureRefs) || []).forEach(fr => {
+        const fid = fr.figureId;
+        if (fid && figAttachGlobal[fid]) qFigureAttachments[fid] = figAttachGlobal[fid];
+      });
       out.metadata = Object.assign({}, out.metadata || {}, {
         sourceType: 'nbme-gemini-json',
         sourceFormat: payload.sourceFormat || null,
         importedAt,
         originalTestTitle: payload.testTitle || null,
-        schemaVersion: 'nbme-gemini-json-v1'
+        schemaVersion: 'nbme-gemini-json-v1',
+        figureAttachments: qFigureAttachments
       });
       return out;
     });
@@ -21325,7 +21588,9 @@ const App = (() => {
     handleNbmeGeminiJsonFileUpload,
     parseNbmeGeminiJson,
     updateNbmeGeminiJsonSaveReadiness,
-    createTestFromNbmeGeminiJsonImport
+    createTestFromNbmeGeminiJsonImport,
+    ngjHandleFigureUpload,
+    ngjRemoveFigureAttachment
   };
 })();
 

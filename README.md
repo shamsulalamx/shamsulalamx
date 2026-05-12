@@ -22,6 +22,7 @@ A local Electron desktop app for generating and reviewing NBME-style self-assess
 | Source | Format | Gemini Refinement |
 |---|---|---|
 | NBME | PDF (screenshot/OCR) | No |
+| NBME Gemini JSON | Pre-structured `.json` (external AI extraction) | No (JSON is already AI output) |
 | UWorld | DOCX export | Yes (Electron IPC) |
 | OME | Short high-quality PDF | No (v1) |
 | Anki | Plain-text `.txt` export | No (v1) |
@@ -29,6 +30,27 @@ A local Electron desktop app for generating and reviewing NBME-style self-assess
 | Divine Podcasts | Transcript `.txt` / `.md` | Yes (Electron IPC) |
 
 Each source pipeline is isolated. Changes to one pipeline do not affect others.
+
+---
+
+## NBME Gemini JSON Import
+
+The NBME Gemini JSON importer accepts a pre-structured JSON file created by running a full NBME exam through Gemini with an extraction prompt. This bypasses OCR entirely.
+
+**Pipeline summary:**
+
+1. Run your NBME exam through Gemini externally (outside this app) using a structured extraction prompt. Gemini returns a JSON file with all stems, choices, answer keys, educational objectives, explanation sections, and figure references.
+2. In the app, open the NBME JSON Import modal.
+3. Upload the JSON file. The app validates every question and shows a summary (errors, warnings, ok count).
+4. Preview all questions with full stems (no truncation) before saving.
+5. If any questions reference figures (`[FIGURE: figureId]` markers in the stem), a Figure Attachment panel appears. You can optionally upload an image per figure. If `visibleText` (lab values) is present in the JSON, a lab-values table renders automatically without uploading.
+6. Set a test name and target folder, then save.
+
+Questions with blocking validation errors are not saved. Questions with warnings are saved but flagged.
+
+**Known limitation:** Long-stem questions (Q1, Q9, Q11, Q24 in `Psych_Shelf_8_full_app_ready.json`) show only 1–2 lines in quiz view. This is an **unresolved bug**. See `BUGS_AND_NEXT_STEPS.md` for debugging instructions.
+
+Full technical spec: `NBME_JSON_IMPORT.md`.
 
 ---
 
@@ -91,6 +113,8 @@ npm install
 npm run electron:dev
 ```
 
+> ⚠️ **Always use `npm run electron:dev` for development.** Do not test against the packaged `.app` in `dist/` — it contains its own bundled copy of `index.html` that is not updated when you edit the project source. The packaged app will silently run stale code.
+
 ### Build for macOS (Apple Silicon)
 
 ```bash
@@ -98,6 +122,11 @@ npm run electron:build:mac
 ```
 
 The built app appears in `dist/`.
+
+If you need to manually sync a fix to the packaged app without a full rebuild:
+```bash
+cp index.html "dist/mac-arm64/NBME Self-Assessment Suite.app/Contents/Resources/app/index.html"
+```
 
 ### Gemini API key setup
 
@@ -123,7 +152,8 @@ The built app appears in `dist/`.
 
 ## Current Limitations
 
-- **NBME:** PDF import uses OCR. Accuracy depends on screenshot or scan quality. Grouped/shared-stem questions are supported but may require review.
+- **NBME PDF:** PDF import uses OCR. Accuracy depends on screenshot or scan quality. Grouped/shared-stem questions are supported but may require review.
+- **NBME Gemini JSON:** ⚠️ **Unresolved bug:** Long-stem questions show only 1–2 lines in quiz view. Explanation rendering and figure rendering have not been end-to-end validated. See `BUGS_AND_NEXT_STEPS.md`.
 - **UWorld:** DOCX export only. Gemini refinement is one-at-a-time; batch queue can be paused or cancelled.
 - **OME:** Short, high-quality PDFs only. No OCR fallback in v1.
 - **Anki:** Plain-text `.txt` export only. `.apkg` files are not supported.

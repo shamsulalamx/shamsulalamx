@@ -392,7 +392,110 @@ Parse failures and schema validation failures return separate `MODEL_RESPONSE_IN
 
 ---
 
-## 10. Provenance Handling
+## 10. NBME Gemini JSON Importer Pipeline (nbme-gemini-json)
+
+**Added:** 2026-05-12. This is a new sixth pipeline distinct from all others.
+
+Unlike every other pipeline (OCR-based PDF, DOCX, transcript), this pipeline receives a pre-structured JSON file produced by an external AI step (running the full exam through Gemini with a structured extraction prompt). The app does not call Gemini — it imports, validates, normalizes, and saves.
+
+### Pipeline flow
+
+```
+External AI step (outside this app)
+│
+│  User runs NBME exam through Gemini with extraction prompt
+│  Gemini returns a JSON file:
+│    { questions: [{ questionNumber, stem, answerChoices, correctAnswer,
+│                    educationalObjective, explanationSections, figureRefs }] }
+│
+▼  USER UPLOADS JSON FILE
+│  Opens #modal-nbme-gemini-json-import via App.openNbmeGeminiJsonImportModal()
+│  File input reads JSON text
+│
+▼  PARSE + VALIDATE  (validateNbmeGeminiJsonImport)
+│  Checks each question for required fields
+│  Returns: { isValid, blockingErrors[], warnings[], questionResults[], counts{} }
+│  Blocking errors: missing stem, choices, correctAnswer, or letter mismatch
+│  Warnings: missing educationalObjective, explanationSections, or empty figureRefs.visibleText
+│
+▼  NORMALIZE  (normalizeNbmeGeminiJsonImport)
+│  Maps input schema → internal quiz schema
+│  q.t          ← question.stem  (FULL TEXT, no truncation)
+│  q.c          ← question.correctAnswer
+│  q.o          ← question.answerChoices (letter + text)
+│  q.correctBlurb        ← _ngjBuildCorrectBlurb(explanationSections)
+│  q.educationalObjective ← question.educationalObjective
+│  q.e          ← _ngjBuildPerChoiceExplanations(explanationSections, answerChoices)
+│  q.metadata.figureRefs ← question.figureRefs
+│  q.metadata.figureAttachments ← {} (populated later by user upload)
+│  q.metadata.sourceType = 'nbme-gemini-json'
+│
+▼  PREVIEW RENDER  (renderNbmeGeminiJsonPreview)
+│  Shows table of all questions: number, stem (full, no truncation), choices, answer
+│  Validation summary: counts of ok / warning / error questions
+│
+▼  FIGURE ATTACHMENT  (renderNbmeGeminiJsonFigureAttachSection)
+│  If any figureRefs exist across any question: shows figure attachment panel
+│  Each figureRef row: figureId, location, optional visibleText preview
+│  User can upload an image file per figureId (max 2.5 MB, read as base64 DataURL)
+│  _nbmeGeminiJsonImport.figureAttachments[figureId] = dataUrl
+│  Attachment is optional — questions save without it (using placeholder or visibleText table)
+│
+▼  SAVE  (createTestFromNbmeGeminiJsonImport)
+│  Validates test name and target folder are set
+│  Warns if total figure attachment data > 3 MB (localStorage quota risk)
+│  Creates test via DB.createTest(folderId, testName, normalizedQuestions)
+│  Per question: copies relevant figureAttachments from global state into q.metadata.figureAttachments
+│  Updates test with final questions via DB.updateTest(testId, { questions })
+│
+▼  QUIZ / REVIEW
+│  renderQuestion() shows q.t as the stem
+│  buildQuestionStemHTML() → buildStemHTML(q.t) → _replaceFigureMarkersInStemHtml(html, q)
+│  _replaceFigureMarkersInStemHtml replaces [FIGURE: figureId] with _ngjFigureToHTML(figureId, q)
+│  _ngjFigureToHTML renders: attached image | visibleText table | placeholder
+│  buildExplanationHTML() renders: educationalObjective | correctBlurb | q.e per-choice
+```
+
+### Figure rendering chain
+
+```
+window.buildQuestionStemHTML(q, highlightedStemHtml)     ~line 5168
+  └─ window.buildStemHTML(q.t)                           ~line 5140
+  └─ window._replaceFigureMarkersInStemHtml(html, q)     ~line 5228
+       └─ window._ngjFigureToHTML(figureId, q)           ~line 5183
+            ├─ if q.metadata.figureAttachments[figureId] → <img src="data:...">
+            ├─ if figureRef.visibleText.length > 0       → lab-values <table>
+            └─ else                                       → placeholder <div>
+```
+
+### Explanation rendering chain
+
+Both `buildExplanationHTML` functions render in this order:
+1. `q.educationalObjective` → blue bordered block, `textContent` (safe, plain text)
+2. `q.correctBlurb` → `innerHTML` (pre-escaped HTML from `_ngjBuildCorrectBlurb`)
+3. `q.explanation` → legacy plain-text fallback (PDF-OCR questions)
+4. `q.e` → per-choice explanations, one block per letter
+
+### Key state object
+
+```javascript
+let _nbmeGeminiJsonImport = {
+  rawText: '', parsed: null, validation: null,
+  normalizedItems: [], fileName: '', testName: '',
+  targetFolder: '', confirmed: false,
+  figureAttachments: {},    // { figureId: base64DataUrl }
+  lastSaveResult: null, lastSaveError: null
+};
+```
+
+### Outstanding issues as of 2026-05-12
+
+- **UNRESOLVED:** Quiz stem truncation (Q1/Q9/Q11/Q24 show 1–2 lines). See `BUGS_AND_NEXT_STEPS.md` BUG-001.
+- **Not yet end-to-end validated:** Explanation rendering (VAL-001), figure rendering (VAL-002), "save valid only" button (VAL-003).
+
+---
+
+## 12. Provenance Handling
 
 Provenance is the chain of evidence linking a generated question back to its source material.
 
@@ -427,7 +530,7 @@ All provenance fields in the result object are built from the sanitized input th
 
 ---
 
-## 11. Error Handling Philosophy
+## 11. Error Handling Philosophy (Divine/UWorld Gemini)
 
 ### Principle: fail closed, fail silently toward the user, never expose internals
 
@@ -449,11 +552,12 @@ All provenance fields in the result object are built from the sanitized input th
 
 ---
 
-## 12. Source Pipeline Summary
+## 13. Source Pipeline Summary
 
 | Pipeline | Input | Gemini | Stable tag |
 |---|---|---|---|
 | NBME | PDF (OCR + crop) | hints + tags via Netlify/browser | — |
+| NBME Gemini JSON | Pre-structured JSON (external AI step) | none (JSON is already AI output) | — (added 2026-05-12) |
 | UWorld | DOCX | Electron IPC: `refine-uworld-draft` | `uworld-gemini-v1-stable` |
 | OME | PDF (PDF.js text-layer) | none in v1 | `ome-v1-stable` |
 | Anki | `.txt` export | none in v1 | `anki-v1-stable` |
@@ -468,7 +572,7 @@ All pipelines share these invariants:
 
 ---
 
-## 13. Key Files
+## 14. Key Files
 
 | File | Role |
 |---|---|
