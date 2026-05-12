@@ -251,19 +251,10 @@ ipcMain.handle('nbme:ai:refine-uworld-draft', async (_event, payload) => {
 });
 
 // ── Divine draft refinement — Gemini IPC ─────────────────────────────────────
-// Refines a deterministic Divine draft scaffold from its distilledObjective.
-// Uses distilledObjective as the PRIMARY medical input — not raw transcript text.
+// Refines a teaching cluster into a Step 2/NBME-style clinical vignette question.
+// Gemini identifies the testable medical fact from clusterSummary.
+// The app sends cleaned teaching clusters only; Gemini extracts the medical fact itself.
 // sourceContext is capped at 300 chars and used only for coherence/copy detection.
-
-// Allowed variant types — must match DIVINE_DRAFT_VARIANT_MAP in the renderer.
-const DIVINE_KNOWN_VARIANT_TYPES = new Set([
-  'recognition/application',
-  'mechanism/risk-factor',
-  'diagnostic-distinction',
-  'next-best-step',
-  'management-exception',
-  'clinical-reasoning-framework'
-]);
 
 // Podcast/coaching register patterns that must not appear in Gemini-generated stems.
 // Reproduced here (cannot import from renderer) — kept in sync with renderer DIVINE_VOICE_MARKERS.
@@ -279,126 +270,81 @@ const DIVINE_STEM_VOICE_MARKERS = [
   /\bthey give you\b/i
 ];
 
-// Per-variant guidance injected into the Gemini prompt.
-const DIVINE_STEM_TYPE_GUIDANCE = {
-  'duration-determines-dx':
-    'Write a vignette where the patient\'s symptom duration is the key differentiating detail. ' +
-    'The stem must state a duration that matches the criterion. ' +
-    'Wrong choices differ from the correct answer primarily by their required duration thresholds.',
-  'age-threshold-determines-dx':
-    'Write a vignette where the patient\'s age at presentation is the differentiating criterion. ' +
-    'Make the patient\'s age central to the stem. Wrong choices apply to different age groups.',
-  'next-best-step':
-    'Write a clinical vignette ending with "What is the next best step in management?" ' +
-    'The correct answer follows directly from the distilledObjective coreRule.',
-  'diagnosis-requires-distinction':
-    'Write a vignette where two clinically similar conditions are the top candidates. ' +
-    'The criterion from distilledObjective is the single differentiating feature.',
-  'most-likely-diagnosis':
-    'Write a vignette ending with "Which of the following is the most likely diagnosis?" ' +
-    'The correct answer is supported directly by the condition and criterion in distilledObjective.',
-  'mechanism-explains-finding':
-    'Write a vignette presenting a clinical finding that requires mechanistic explanation. ' +
-    'The correct answer is the mechanism described in distilledObjective.',
-  'contraindication-or-adverse-effect':
-    'Write a vignette asking about a contraindication or adverse effect to monitor. ' +
-    'The correct answer is directly supported by distilledObjective.',
-  'exception-or-caveat':
-    'Write a vignette where the key teaching point is an exception to a general clinical rule. ' +
-    'distilledObjective defines the exception.',
-  'clinical-reasoning-framework':
-    'Write a vignette where the correct reasoning framework determines management. ' +
-    'distilledObjective defines the framework to apply.',
-  default:
-    'Write a standard clinical vignette ending with "Which of the following is the most likely diagnosis?" ' +
-    'Use only distilledObjective as the medical source.'
-};
-
 // Sanitize and clamp all renderer-supplied fields before they enter the prompt.
 // Returns null on any structural failure — caller must treat null as invalid input.
 function sanitizeDivineDraftInput(payload) {
   if (!payload || typeof payload !== 'object') return null;
 
-  // distilledObjective is the primary medical source — required.
-  const obj = payload.distilledObjective;
-  if (!obj || typeof obj !== 'object') return null;
-  const coreRule = clampText(obj.coreRule, 160);
-  if (!coreRule) return null;
+  // clusterSummary is the primary medical source — required, trimmed, clamped ≤400 chars.
+  const clusterSummary = clampText(payload.clusterSummary, 400);
+  if (clusterSummary.length < 20) return null;
 
-  const distilledObjective = {
-    coreRule,
-    condition:          clampText(obj.condition,          80),
-    criterion:          clampText(obj.criterion,         100),
-    criterionType:      clampText(obj.criterionType,      40),
-    criterionPolarity:  clampText(obj.criterionPolarity,  20),
-    suggestedStemType:  clampText(obj.suggestedStemType,  60),
-    naturalDistracters: normalizeStringArray(obj.naturalDistracters, 4).map(d => clampText(d, 80))
-  };
+  const conceptType = clampText(payload.conceptType, 80);
 
-  // variantType must be a known value; fall back to safest default if unrecognised.
-  const rawVariant = clampText(payload.variantType, 60);
-  const variantType = DIVINE_KNOWN_VARIANT_TYPES.has(rawVariant)
-    ? rawVariant
-    : 'recognition/application';
+  // variantType is optional; accepted as-is if present.
+  const variantType = (payload.variantType != null) ? clampText(payload.variantType, 60) : null;
+
+  // sourceContext is optional, hard-capped at 300 chars (coherence/copy detection only).
+  const sourceContext = clampText(payload.sourceContext, 300);
 
   // sourceMeta — draftId and clusterId are required for provenance construction.
   const meta = (payload.sourceMeta && typeof payload.sourceMeta === 'object') ? payload.sourceMeta : {};
   const sourceMeta = {
+    draftId:    clampText(meta.draftId,    80),
+    clusterId:  clampText(meta.clusterId,  80),
     sourceName: clampText(meta.sourceName, 220),
-    sourceHash: clampText(meta.sourceHash,  96),
-    draftId:    clampText(meta.draftId || payload.draftId,     80),
-    clusterId:  clampText(meta.clusterId || payload.clusterId, 80)
+    sourceHash: clampText(meta.sourceHash,  96)
   };
   if (!sourceMeta.draftId || !sourceMeta.clusterId) return null;
 
-  // provenance — sourceContext is hard-capped at 300 chars (context/coherence only, not for copying).
+  // provenance — build from renderer-supplied fields; none are trusted blindly.
   const prov = (payload.provenance && typeof payload.provenance === 'object') ? payload.provenance : {};
   const tsRaw = prov.timestampRange;
-  const lrRaw = prov.originalLineRange;
   const provenance = {
-    sourceContext:    clampText(prov.sourceContext, 300),
-    timestampRange:   (tsRaw && typeof tsRaw === 'object')
-                      ? { start: clampText(tsRaw.start, 20), end: clampText(tsRaw.end, 20) }
-                      : null,
-    originalLineRange: (Array.isArray(lrRaw) && lrRaw.length >= 2)
-                      ? [Number(lrRaw[0]) || 0, Number(lrRaw[1]) || 0]
-                      : null,
-    sourceSegmentIds: normalizeStringArray(prov.sourceSegmentIds, 12)
+    sourceSegmentIds:   normalizeStringArray(prov.sourceSegmentIds, 12),
+    originalLineRanges: Array.isArray(prov.originalLineRanges) ? prov.originalLineRanges.slice(0, 12) : [],
+    cleanedLineRanges:  Array.isArray(prov.cleanedLineRanges)  ? prov.cleanedLineRanges.slice(0, 12)  : [],
+    timestampRanges:    Array.isArray(prov.timestampRanges)    ? prov.timestampRanges.slice(0, 12)    : [],
+    timestampRange:     (tsRaw && typeof tsRaw === 'object')
+                        ? { start: clampText(tsRaw.start, 20), end: clampText(tsRaw.end, 20) }
+                        : null
   };
 
-  return { distilledObjective, variantType, sourceMeta, provenance };
+  return { conceptType, clusterSummary, sourceContext, variantType, sourceMeta, provenance };
 }
 
-// Build the Gemini prompt. distilledObjective is the sole medical source.
-// sourceContext is appended last, labelled "do not copy", so Gemini can verify
-// coherence without lifting transcript phrasing.
+// Build the Gemini prompt. clusterSummary is the sole medical source.
+// Gemini extracts the testable fact itself — no hardcoded diagnostic criteria.
+// sourceContext is appended last, labelled "do not copy", for coherence verification only.
 function buildDivineRefinementPrompt(input) {
-  const obj      = input.distilledObjective;
-  const guidance = DIVINE_STEM_TYPE_GUIDANCE[input.variantType] || DIVINE_STEM_TYPE_GUIDANCE.default;
-
   const lines = [
-    'You refine structured medical learning objectives into Step 2/NBME-style clinical vignette questions.',
+    'You are a medical education question writer. Generate a Step 2/NBME-style clinical vignette multiple-choice question.',
     'Return strict JSON only. Do not include markdown fences or explanatory text outside JSON.',
     '',
     'CRITICAL RULES — follow exactly:',
-    '1. PRIMARY INPUT is distilledObjective below. Test ONLY the coreRule fact — do not invent other facts.',
-    '2. sourceContext is provenance only. Do NOT copy, paraphrase, or echo its wording.',
-    '3. Do NOT use podcast or coaching language in the stem: no "remember", "high yield", "boards",',
-    '   "you need to know", "they give you", "I think", "I want you to", "don\'t forget".',
-    '4. Write a clinical vignette: patient demographics, presenting symptoms, relevant history, then a question.',
-    '5. All five answer choices must be clinically plausible and mutually exclusive.',
-    '6. If naturalDistracters are provided, use them as seeds for wrong choices — do not copy verbatim.',
-    '7. The correct answer must be the ONLY one supported by distilledObjective.coreRule.',
-    '8. One best answer only. No "all of the above". No trick stems.',
-    '9. If source is insufficient, set needsReview true and explain in warnings. Still produce all five choices.',
-    '10. This output is preview-only and requires expert review before use.',
+    '1. PRIMARY INPUT is the clusterSummary below. First identify the single most testable medical fact it contains.',
+    '   Record that fact as extractedTestableFact in your response.',
+    '2. Choose the most accurate questionType from this exact list:',
+    '   timeline-criterion | diagnostic-distinction | mechanism | management |',
+    '   risk-factor | contraindication | clinical-application | other',
+    '3. sourceContext is provenance only — do NOT copy, paraphrase, or echo any of its wording into the question.',
+    '4. Forbidden podcast/coaching language in stem and choices:',
+    '   remember, high yield, boards, you need to know, they give you,',
+    '   I think, I want you to, don\'t forget, podcast voice.',
+    '5. Write a concise but realistic clinical vignette: patient demographics, presenting symptoms,',
+    '   relevant history, labs or imaging if needed, then the question.',
+    '6. Generate exactly five answer choices labeled A through E. One best answer only.',
+    '7. Choices must be clinically plausible, mutually exclusive, and not lifted from sourceContext.',
+    '8. No transcript phrasing reuse. No coaching language. No "all of the above".',
+    '9. If source material is insufficient, still produce all five choices, set needsReview true,',
+    '   lower confidence, and explain in warnings.',
+    '10. This output is preview-only and requires expert review before clinical use.',
     '',
-    `Stem type: ${input.variantType}`,
-    `Guidance: ${guidance}`,
-    '',
-    'Required JSON schema:',
+    'Required JSON schema (return exactly this structure):',
     JSON.stringify({
-      stem: 'string (≥40 chars, clinical vignette style, no podcast/coaching voice)',
+      extractedTestableFact: 'string — the specific medical fact identified as testable',
+      questionType: 'timeline-criterion | diagnostic-distinction | mechanism | management | risk-factor | contraindication | clinical-application | other',
+      stem: 'string',
       choices: [
         { label: 'A', text: 'string' },
         { label: 'B', text: 'string' },
@@ -407,19 +353,26 @@ function buildDivineRefinementPrompt(input) {
         { label: 'E', text: 'string' }
       ],
       correctAnswer: 'A',
-      teachingPoint: 'string (≥20 chars, clinical declarative statement)',
+      teachingPoint: 'string',
       rationales: { A: 'string', B: 'string', C: 'string', D: 'string', E: 'string' },
       confidence: 0.85,
       needsReview: false,
-      warnings: ['string']
+      warnings: []
     }),
-    '',
-    'Distilled Objective (primary medical input):',
-    JSON.stringify(obj),
-    '',
-    'Source provenance — context only, do NOT copy or echo phrasing:',
-    input.provenance.sourceContext || '(none)'
+    ''
   ];
+
+  if (input.conceptType) lines.push(`Concept type: ${input.conceptType}`);
+  if (input.variantType) lines.push(`Variant hint: ${input.variantType}`);
+
+  lines.push(
+    '',
+    'Teaching cluster (primary medical input — extract the testable fact from this):',
+    input.clusterSummary,
+    '',
+    'Source context — provenance only, do NOT copy or echo any phrasing:',
+    input.sourceContext || '(none)'
+  );
 
   return lines.join('\n');
 }
@@ -449,11 +402,21 @@ function validateDivineRefinedDraft(raw, input) {
 
   const labels = ['A', 'B', 'C', 'D', 'E'];
 
-  // 1. stem — clinical vignette; must be substantive.
-  const stem = clampText(raw.stem, 3000);
-  if (stem.length < 40) throw new Error(`stem too short (${stem.length} chars, need ≥ 40)`);
+  // 1. extractedTestableFact — Gemini-identified testable fact; must be substantive.
+  const extractedTestableFact = clampText(raw.extractedTestableFact, 600).trim();
+  if (extractedTestableFact.length < 10) {
+    throw new Error(`extractedTestableFact too short (${extractedTestableFact.length} chars, need ≥10)`);
+  }
 
-  // 2-3. choices — exactly 5, labels A through E in order.
+  // 2. questionType — must be nonempty; clamped to 80 chars.
+  const questionType = clampText(raw.questionType, 80);
+  if (!questionType) throw new Error('questionType is missing or empty');
+
+  // 3. stem — clinical vignette; must be substantive.
+  const stem = clampText(raw.stem, 3000);
+  if (stem.length < 40) throw new Error(`stem too short (${stem.length} chars, need ≥40)`);
+
+  // 4-5. choices — exactly 5, labels A through E in order.
   const rawChoices = Array.isArray(raw.choices) ? raw.choices : [];
   if (rawChoices.length !== 5) throw new Error(`expected exactly 5 choices, got ${rawChoices.length}`);
   const normalizedChoices = rawChoices.map((choice, idx) => {
@@ -464,15 +427,15 @@ function validateDivineRefinedDraft(raw, input) {
     return { label, text };
   });
 
-  // 4. correctAnswer — must be one of A–E.
+  // 6. correctAnswer — must be one of A–E.
   const correctAnswer = clampText(raw.correctAnswer, 2).toUpperCase();
   if (!labels.includes(correctAnswer)) throw new Error('correctAnswer must be A through E');
 
-  // 5. teachingPoint — must be a substantive clinical statement.
+  // 7. teachingPoint — must be a substantive clinical statement.
   const teachingPoint = clampText(raw.teachingPoint, 1200);
-  if (teachingPoint.length < 20) throw new Error(`teachingPoint too short (${teachingPoint.length} chars, need ≥ 20)`);
+  if (teachingPoint.length < 20) throw new Error(`teachingPoint too short (${teachingPoint.length} chars, need ≥20)`);
 
-  // 6. rationales — all five labels required and nonempty.
+  // 8. rationales — all five labels required and nonempty.
   const rawRationales = (raw.rationales && typeof raw.rationales === 'object') ? raw.rationales : {};
   const normalizedRationales = {};
   for (const label of labels) {
@@ -481,8 +444,8 @@ function validateDivineRefinedDraft(raw, input) {
     normalizedRationales[label] = rationale;
   }
 
-  // 7. anti-copy: no 8-word verbatim overlap between sourceContext and stem or any choice.
-  const sourceContext = input.provenance.sourceContext || '';
+  // 9. anti-copy: no 8-word verbatim overlap between sourceContext and stem or any choice.
+  const sourceContext = input.sourceContext || '';
   if (divineCopyOverlapDetected(stem, sourceContext)) {
     throw new Error('stem contains verbatim overlap with source context (≥8 consecutive words)');
   }
@@ -492,37 +455,38 @@ function validateDivineRefinedDraft(raw, input) {
     }
   }
 
-  // 8. no podcast/coaching voice in the stem.
+  // 10. no podcast/coaching voice in the stem.
   for (const marker of DIVINE_STEM_VOICE_MARKERS) {
     if (marker.test(stem)) {
       throw new Error(`stem contains podcast/coaching language matching /${marker.source}/`);
     }
   }
 
-  // 9. warnings — normalise; always append the review sentinel.
+  // 11. warnings — normalise; always append the review sentinel.
   const warnings = normalizeStringArray(raw.warnings, 12);
   if (!warnings.includes('requires review before use')) warnings.push('requires review before use');
 
-  // 10. Assemble result. All provenance comes from sanitized input — never from Gemini output.
+  // 12. Assemble result. All provenance comes from sanitized input — never from Gemini output.
   return {
-    refinedDraftId:       `divine-refined-${input.sourceMeta.draftId}-${Date.now().toString(36)}`,
-    deterministicDraftId: input.sourceMeta.draftId,
-    clusterId:            input.sourceMeta.clusterId,
-    sourceName:           input.sourceMeta.sourceName,
-    sourceHash:           input.sourceMeta.sourceHash,
-    distilledObjective:   input.distilledObjective,
-    provenance:           input.provenance,
+    extractedTestableFact,
+    questionType,
+    refinedDraftId: `divine-refined-${input.sourceMeta.draftId}-${Date.now().toString(36)}`,
+    draftId:        input.sourceMeta.draftId,
+    clusterId:      input.sourceMeta.clusterId,
+    sourceName:     input.sourceMeta.sourceName,
+    sourceHash:     input.sourceMeta.sourceHash,
+    provenance:     input.provenance,
     stem,
-    choices:              normalizedChoices,
+    choices:        normalizedChoices,
     correctAnswer,
     teachingPoint,
-    rationales:           normalizedRationales,
-    confidence:           Math.max(0, Math.min(1, Number.isFinite(raw.confidence) ? raw.confidence : 0.35)),
-    needsReview:          raw.needsReview !== false || warnings.length > 1,
+    rationales:     normalizedRationales,
+    confidence:     Math.max(0, Math.min(1, Number.isFinite(raw.confidence) ? raw.confidence : 0.35)),
+    needsReview:    raw.needsReview !== false || warnings.length > 1,
     warnings,
-    model:                GEMINI_MODEL,
-    generationMethod:     'electron-gemini-divine-distilled-objective-v1',
-    createdAt:            new Date().toISOString()
+    model:             GEMINI_MODEL,
+    generationMethod:  'electron-gemini-divine-cluster-v2',
+    createdAt:         new Date().toISOString()
   };
 }
 
