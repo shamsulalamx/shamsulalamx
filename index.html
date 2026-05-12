@@ -1112,6 +1112,9 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
             <button class="btn-generate" id="btn-home-generate" onclick="App.openGenerateModal()">
               ＋ Generate Test
             </button>
+            <button class="btn-generate" id="btn-nbme-gemini-json" onclick="App.openNbmeGeminiJsonImportModal()" style="background:#0d5c2b;" title="Import Gemini-extracted NBME JSON">
+              &#x2B07; NBME JSON Import
+            </button>
           </div>
         </div>
         <div id="home-content">
@@ -1657,6 +1660,105 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 	      <button class="btn-modal" id="btn-debug-export-review" onclick="App.downloadParserDebugExport()" style="display:none;">Export Debug JSON</button>
 	      <button class="btn-modal primary" onclick="App.saveOcrEdit()">Use Manual Edit</button>
       <button class="btn-modal danger" id="ocr-review-save-anyway" onclick="App.saveGeneratedTest(true)">Save Anyway</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ NBME GEMINI JSON IMPORT MODAL ═══ -->
+<style>
+.ngj-modal-box { max-width: 820px; width: 96vw; max-height: 90vh; overflow-y: auto; }
+.ngj-section-title { font-size: 12px; font-weight: 700; color: var(--navy); margin: 14px 0 6px; text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+.ngj-summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; margin-bottom: 10px; }
+.ngj-stat { background: #f5f7fa; border: 1px solid var(--border); border-radius: 4px; padding: 8px 10px; font-size: 12px; }
+.ngj-stat-label { color: var(--muted); font-size: 10px; }
+.ngj-stat-value { font-size: 16px; font-weight: 700; color: var(--navy); }
+.ngj-stat.warn .ngj-stat-value { color: #856404; }
+.ngj-stat.error .ngj-stat-value { color: #c0392b; }
+.ngj-stat.ok .ngj-stat-value { color: #27ae60; }
+.ngj-error-list { background: #fff5f5; border: 1px solid #f5c6cb; border-radius: 4px; padding: 8px 12px; margin: 6px 0; font-size: 12px; color: #721c24; }
+.ngj-warn-list  { background: #fff8e1; border: 1px solid #ffe082; border-radius: 4px; padding: 8px 12px; margin: 6px 0; font-size: 12px; color: #5d4037; }
+.ngj-ok-banner  { background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; padding: 8px 12px; margin: 6px 0; font-size: 12px; color: #155724; font-weight: 700; }
+.ngj-error-list li, .ngj-warn-list li { margin: 2px 0 2px 14px; }
+.ngj-preview-list { max-height: 320px; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; background: #fff; }
+.ngj-q-block { border-bottom: 1px solid #edf1f5; padding: 10px 12px; font-size: 12px; }
+.ngj-q-block:last-child { border-bottom: none; }
+.ngj-q-num { font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--blue); background: #e3f2fd; border-radius: 10px; padding: 2px 7px; display: inline-block; margin-bottom: 4px; }
+.ngj-q-tag  { font-size: 10px; color: var(--muted); background: #eef3f7; border-radius: 10px; padding: 2px 7px; display: inline-block; margin-left: 4px; }
+.ngj-q-warn { font-size: 10px; color: #856404; background: #fff8e1; border-radius: 10px; padding: 2px 7px; display: inline-block; margin-left: 4px; }
+.ngj-q-err  { font-size: 10px; color: #c0392b; background: #fff5f5; border-radius: 10px; padding: 2px 7px; display: inline-block; margin-left: 4px; }
+.ngj-q-stem { font-size: 12px; line-height: 1.55; color: var(--text); margin: 6px 0; white-space: pre-wrap; word-break: break-word; }
+.ngj-q-choices { margin: 4px 0; }
+.ngj-q-choice { font-size: 11px; color: var(--text); padding: 2px 0; }
+.ngj-q-choice.correct { font-weight: 700; color: #27ae60; }
+.ngj-q-eo { font-size: 11px; color: var(--muted); font-style: italic; margin-top: 4px; }
+.ngj-q-sections { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.ngj-figure-warn { font-size: 11px; color: #856404; background: #fff8e1; border-radius: 3px; padding: 2px 6px; margin-top: 3px; display: inline-block; }
+.ngj-table-note  { font-size: 11px; color: #5a6a7a; background: #eef3f7; border-radius: 3px; padding: 2px 6px; margin-top: 3px; display: inline-block; }
+.ngj-save-row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin-top: 10px; }
+.ngj-save-row .form-group { margin: 0; flex: 1; min-width: 180px; }
+.ngj-confirm-row { margin: 10px 0 4px; }
+.ngj-readiness { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+</style>
+<div id="modal-nbme-gemini-json" class="modal-overlay">
+  <div class="modal-box ngj-modal-box">
+    <h3>NBME Gemini JSON Import</h3>
+    <p style="font-size:12px;color:#5a6a7a;margin-bottom:12px;">Upload or paste a Gemini-extracted NBME JSON file. The importer will validate the schema, preview questions, and save it as a test.</p>
+
+    <!-- File upload -->
+    <div class="form-group">
+      <label class="form-label">Upload .json file</label>
+      <input type="file" class="form-input" id="ngj-file-input" accept=".json,.txt" onchange="App.handleNbmeGeminiJsonFileUpload(this)">
+      <div id="ngj-file-name" style="font-size:11px;color:#5a6a7a;margin-top:3px;"></div>
+    </div>
+
+    <!-- Textarea -->
+    <div class="form-group">
+      <label class="form-label">Or paste raw JSON</label>
+      <textarea id="ngj-raw-text" class="form-input" rows="9" style="font-family:monospace;font-size:11px;resize:vertical;" placeholder='{ "testTitle": "...", "questions": [...] }'></textarea>
+    </div>
+
+    <!-- Action buttons -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+      <button type="button" class="btn-modal primary" onclick="App.parseNbmeGeminiJson()">Validate JSON</button>
+      <button type="button" class="btn-modal" onclick="App.clearNbmeGeminiJsonImportState()">Clear</button>
+    </div>
+
+    <!-- Validation feedback -->
+    <div id="ngj-validation-area" style="display:none;">
+      <div class="ngj-section-title">Validation Summary</div>
+      <div id="ngj-validation-body"></div>
+
+      <div class="ngj-section-title">Question Preview</div>
+      <div id="ngj-preview-list" class="ngj-preview-list">
+        <div style="padding:12px;color:#5a6a7a;font-size:12px;">No preview available.</div>
+      </div>
+
+      <div class="ngj-section-title">Save Test</div>
+      <div class="ngj-save-row">
+        <div class="form-group">
+          <label class="form-label">Test name</label>
+          <input type="text" class="form-input" id="ngj-test-name" oninput="App.updateNbmeGeminiJsonSaveReadiness()" placeholder="e.g. Psych SELF Block 8">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Target folder</label>
+          <select class="form-input" id="ngj-folder-select" onchange="App.updateNbmeGeminiJsonSaveReadiness()">
+            <option value="">— choose folder —</option>
+          </select>
+        </div>
+      </div>
+      <div class="ngj-confirm-row">
+        <label class="check-row">
+          <input type="checkbox" id="ngj-confirm-check" onchange="App.updateNbmeGeminiJsonSaveReadiness()">
+          <span>I reviewed the validation warnings and want to save this test.</span>
+        </label>
+      </div>
+      <div id="ngj-readiness-note" class="ngj-readiness"></div>
+      <div id="ngj-save-error" style="display:none;font-size:12px;color:#c0392b;margin-bottom:6px;"></div>
+    </div>
+
+    <div class="modal-actions" style="margin-top:12px;">
+      <button type="button" class="btn-modal primary" id="ngj-save-btn" onclick="App.createTestFromNbmeGeminiJsonImport()" disabled>Save Test</button>
+      <button type="button" class="btn-modal" onclick="App.closeNbmeGeminiJsonImportModal()">Close</button>
     </div>
   </div>
 </div>
@@ -6608,6 +6710,7 @@ const App = (() => {
   let _noteSelection = null;
   let _noteHighlightSeq = 0;
   let _notesImportPreview = null;
+  let _nbmeGeminiJsonImport = null;
   let _ankiImportPreview = null;
   let _omeImportPreview = null;
   let _mehlmanImportPreview = null;
@@ -20352,6 +20455,697 @@ const App = (() => {
   window.toggleSelectionHighlight = toggleSelectionHighlight;
   window.setupImageStemHighlights = setupImageStemHighlights;
 
+  // ── NBME Gemini JSON Import ────────────────────────────────
+
+  const VALID_SOURCE_FORMATS = ['pdf','docx','ocr_text','screenshot','mixed','unknown',''];
+
+  function _ngjEsc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function openNbmeGeminiJsonImportModal() {
+    _nbmeGeminiJsonImport = {
+      rawText: '', parsed: null, validation: null,
+      normalizedItems: [], fileName: '', testName: '',
+      targetFolder: '', confirmed: false,
+      lastSaveResult: null, lastSaveError: null
+    };
+    const ta = document.getElementById('ngj-raw-text');
+    if (ta) ta.value = '';
+    const fi = document.getElementById('ngj-file-input');
+    if (fi) fi.value = '';
+    const fn = document.getElementById('ngj-file-name');
+    if (fn) fn.textContent = '';
+    document.getElementById('ngj-validation-area').style.display = 'none';
+    document.getElementById('ngj-save-error').style.display = 'none';
+    document.getElementById('ngj-save-btn').disabled = true;
+
+    // Populate folder select
+    const sel = document.getElementById('ngj-folder-select');
+    if (sel) {
+      sel.innerHTML = '<option value="">— choose folder —</option>';
+      const folders = DB.getFolders ? DB.getFolders() : (DB.get ? DB.get().folders : []);
+      if (Array.isArray(folders)) {
+        folders.forEach(f => {
+          const opt = document.createElement('option');
+          opt.value = f.id;
+          opt.textContent = f.name;
+          if (_currentFolder && f.id === _currentFolder) opt.selected = true;
+          sel.appendChild(opt);
+        });
+      }
+    }
+    document.getElementById('modal-nbme-gemini-json').style.display = 'flex';
+    setTimeout(() => document.getElementById('ngj-raw-text')?.focus(), 80);
+  }
+
+  function closeNbmeGeminiJsonImportModal() {
+    document.getElementById('modal-nbme-gemini-json').style.display = 'none';
+  }
+
+  function clearNbmeGeminiJsonImportState() {
+    _nbmeGeminiJsonImport = {
+      rawText: '', parsed: null, validation: null,
+      normalizedItems: [], fileName: '', testName: '',
+      targetFolder: '', confirmed: false,
+      lastSaveResult: null, lastSaveError: null
+    };
+    const ta = document.getElementById('ngj-raw-text');
+    if (ta) ta.value = '';
+    const fi = document.getElementById('ngj-file-input');
+    if (fi) fi.value = '';
+    const fn = document.getElementById('ngj-file-name');
+    if (fn) fn.textContent = '';
+    document.getElementById('ngj-validation-area').style.display = 'none';
+    document.getElementById('ngj-save-error').style.display = 'none';
+    document.getElementById('ngj-save-btn').disabled = true;
+  }
+
+  function handleNbmeGeminiJsonFileUpload(inp) {
+    const file = inp.files[0];
+    if (!file) return;
+    const fn = document.getElementById('ngj-file-name');
+    if (fn) fn.textContent = '📄 ' + file.name;
+    if (_nbmeGeminiJsonImport) _nbmeGeminiJsonImport.fileName = file.name;
+    const reader = new FileReader();
+    reader.onload = e => {
+      const text = e.target.result || '';
+      const ta = document.getElementById('ngj-raw-text');
+      if (ta) ta.value = text;
+      if (_nbmeGeminiJsonImport) _nbmeGeminiJsonImport.rawText = text;
+      // Suggest test name from filename
+      const tnInput = document.getElementById('ngj-test-name');
+      if (tnInput && !tnInput.value) {
+        tnInput.value = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim();
+        if (_nbmeGeminiJsonImport) _nbmeGeminiJsonImport.testName = tnInput.value;
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function _ngjDetectRtfOrBinary(text) {
+    if (text.startsWith('{\\rtf') || text.startsWith('{\\rtf1')) return 'rtf';
+    if (text.startsWith('%PDF')) return 'pdf';
+    return null;
+  }
+
+  function _ngjDetectUnescapedQuotes(text) {
+    // Crude check: look for patterns like "key": "...some "word" inside..."
+    // JSON strings should not have bare double-quotes inside without backslash
+    const lines = text.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      // Look for a string value that has an unescaped quote: : "text "word" text"
+      if (/:\s*"[^"]*[^\\]"[^",\}\]\n][^"]*"/.test(line)) return i + 1;
+      // Also catch simpler: a quote followed by non-backslash quote within a string context
+      const m = line.match(/^(\s*"[^"]+"\s*:\s*")(.*)/);
+      if (m) {
+        const val = m[2];
+        // Check for unescaped quote inside
+        if (/[^\\]"/.test(val.slice(0, val.lastIndexOf('"')))) return i + 1;
+      }
+    }
+    return null;
+  }
+
+  function validateNbmeGeminiJsonImport(payload) {
+    const blockingErrors = [];
+    const warnings = [];
+    const questionResults = [];
+
+    if (!payload || typeof payload !== 'object') {
+      blockingErrors.push('Payload is not an object.');
+      return { isValid: false, blockingErrors, warnings, questionResults, counts: _ngjZeroCounts() };
+    }
+
+    // Top-level checks
+    if (payload.testTitle !== undefined && payload.testTitle !== null && typeof payload.testTitle !== 'string') {
+      warnings.push('testTitle is not a string; it will be treated as null.');
+    }
+    if (payload.sourceFormat !== undefined && payload.sourceFormat !== null) {
+      const sf = String(payload.sourceFormat || '').toLowerCase();
+      if (!VALID_SOURCE_FORMATS.includes(sf)) {
+        warnings.push(`sourceFormat "${payload.sourceFormat}" is not a recognized value. Allowed: pdf, docx, ocr_text, screenshot, mixed, unknown.`);
+      }
+    }
+    if (!Array.isArray(payload.questions)) {
+      blockingErrors.push('"questions" is missing or not an array.');
+      return { isValid: false, blockingErrors, warnings, questionResults, counts: _ngjZeroCounts() };
+    }
+    if (payload.questions.length === 0) {
+      blockingErrors.push('"questions" array is empty.');
+      return { isValid: false, blockingErrors, warnings, questionResults, counts: _ngjZeroCounts() };
+    }
+
+    const seenNumbers = new Map();
+    let unresolvedFigureCount = 0;
+    let missingCorrectAnswerCount = 0;
+    let extractionWarningCount = 0;
+    let incompleteCount = 0;
+    let validCount = 0;
+
+    payload.questions.forEach((q, idx) => {
+      const qNum = q.questionNumber != null ? q.questionNumber : (idx + 1);
+      const qErrors = [];
+      const qWarnings = [];
+      let isIncomplete = false;
+
+      if (q.questionNumber == null || typeof q.questionNumber !== 'number') {
+        qErrors.push('questionNumber is missing or not a number.');
+      }
+      if (q.sourceQuestionNumber != null && typeof q.sourceQuestionNumber !== 'number' && typeof q.sourceQuestionNumber !== 'string') {
+        qWarnings.push('sourceQuestionNumber should be number, string, or null.');
+      }
+
+      // Duplicate check
+      if (seenNumbers.has(qNum)) {
+        qErrors.push(`Duplicate questionNumber: ${qNum} (first seen at index ${seenNumbers.get(qNum)}).`);
+      } else {
+        seenNumbers.set(qNum, idx);
+      }
+
+      // stem
+      if (!q.stem || typeof q.stem !== 'string' || !q.stem.trim()) {
+        qErrors.push('stem is missing or empty.');
+      }
+
+      // retrievalTag
+      if (!q.retrievalTag || typeof q.retrievalTag !== 'string' || !q.retrievalTag.trim()) {
+        qWarnings.push('retrievalTag is empty or missing.');
+      }
+
+      // answerChoices
+      if (!Array.isArray(q.answerChoices)) {
+        qErrors.push('answerChoices is missing or not an array.');
+      } else if (q.answerChoices.length < 2) {
+        qErrors.push(`answerChoices has fewer than 2 items (found ${q.answerChoices.length}).`);
+      } else {
+        const seenLabels = new Set();
+        q.answerChoices.forEach((ch, ci) => {
+          if (!ch.label || typeof ch.label !== 'string' || !ch.label.trim()) {
+            qErrors.push(`answerChoices[${ci}] has no label.`);
+          } else {
+            if (seenLabels.has(ch.label)) {
+              qWarnings.push(`Duplicate answer label: "${ch.label}".`);
+            }
+            seenLabels.add(ch.label);
+          }
+          if (ch.text === undefined || ch.text === null) {
+            qWarnings.push(`answerChoices[${ci}] text is null/undefined; treating as empty string.`);
+          } else if (typeof ch.text !== 'string') {
+            qWarnings.push(`answerChoices[${ci}] text is not a string.`);
+          }
+        });
+
+        // Check for non-sequential labels
+        const labels = q.answerChoices.map(c => (c.label || '').toUpperCase());
+        const expectedStart = 'A'.charCodeAt(0);
+        const isSequential = labels.every((l, i) => l.charCodeAt(0) === expectedStart + i);
+        if (!isSequential && labels.length > 0) {
+          qWarnings.push(`Answer labels are not sequential A-Z: [${labels.join(', ')}].`);
+        }
+      }
+
+      // correctAnswer
+      const labels = Array.isArray(q.answerChoices) ? q.answerChoices.map(c => c.label || '') : [];
+      if (!q.correctAnswer || typeof q.correctAnswer !== 'string' || !q.correctAnswer.trim()) {
+        qWarnings.push('correctAnswer is null or empty; question marked incomplete.');
+        isIncomplete = true;
+        missingCorrectAnswerCount++;
+      } else if (!labels.includes(q.correctAnswer.trim())) {
+        qWarnings.push(`correctAnswer "${q.correctAnswer}" does not match any answerChoices label [${labels.join(', ')}]. Marked incomplete.`);
+        isIncomplete = true;
+        missingCorrectAnswerCount++;
+      }
+
+      // educationalObjective
+      if (!q.educationalObjective || (typeof q.educationalObjective === 'string' && !q.educationalObjective.trim())) {
+        qWarnings.push('educationalObjective is missing or empty.');
+      }
+
+      // explanationSections
+      if (q.explanationSections === undefined || q.explanationSections === null) {
+        qWarnings.push('explanationSections is absent; will be treated as [].');
+      } else if (!Array.isArray(q.explanationSections)) {
+        qWarnings.push('explanationSections is not an array; will be treated as [].');
+      } else {
+        q.explanationSections.forEach((sec, si) => {
+          if (typeof sec.heading !== 'string') {
+            qWarnings.push(`explanationSections[${si}].heading is not a string.`);
+          }
+          if (!Array.isArray(sec.body)) {
+            if (typeof sec.body === 'string') {
+              qWarnings.push(`explanationSections[${si}].body is a string; will be wrapped in array.`);
+            } else {
+              qWarnings.push(`explanationSections[${si}].body is not an array.`);
+            }
+          }
+        });
+      }
+
+      // tables
+      if (q.tables !== undefined && q.tables !== null && !Array.isArray(q.tables)) {
+        qWarnings.push('tables is not an array; will be treated as [].');
+      }
+
+      // hasEmbeddedFigure / figureRefs
+      if (typeof q.hasEmbeddedFigure !== 'boolean') {
+        qWarnings.push('hasEmbeddedFigure is not boolean.');
+      }
+      const fRefs = Array.isArray(q.figureRefs) ? q.figureRefs : [];
+      if (q.hasEmbeddedFigure && fRefs.length === 0) {
+        qWarnings.push('hasEmbeddedFigure is true but figureRefs is empty.');
+        unresolvedFigureCount++;
+      }
+      if (!q.hasEmbeddedFigure && fRefs.length > 0) {
+        qWarnings.push('figureRefs are present but hasEmbeddedFigure is false; treating as true.');
+        unresolvedFigureCount++;
+      }
+      if (fRefs.length > 0) {
+        fRefs.forEach((fr, fi2) => {
+          if (!fr.id || !fr.placeholder) {
+            qWarnings.push(`figureRefs[${fi2}] missing id or placeholder.`);
+          }
+        });
+        // Check each figureRef placeholder appears in stem or explanations
+        const stemText = q.stem || '';
+        const expText = (Array.isArray(q.explanationSections) ? q.explanationSections : [])
+          .map(s => (Array.isArray(s.body) ? s.body : [s.body]).join(' ')).join(' ');
+        const combinedText = stemText + ' ' + expText;
+        fRefs.forEach(fr => {
+          if (fr.placeholder && !combinedText.includes(fr.placeholder)) {
+            qWarnings.push(`figureRefs placeholder "${fr.placeholder}" not found in stem or explanations.`);
+          }
+        });
+        unresolvedFigureCount = unresolvedFigureCount === 0 ? fRefs.length : unresolvedFigureCount;
+      }
+
+      // extractionWarnings
+      if (Array.isArray(q.extractionWarnings) && q.extractionWarnings.length > 0) {
+        extractionWarningCount += q.extractionWarnings.length;
+        qWarnings.push(`Has ${q.extractionWarnings.length} extractionWarning(s) from source.`);
+      }
+
+      const isValid = qErrors.length === 0;
+      if (!isValid) blockingErrors.push(`Q${qNum}: ${qErrors[0]}${qErrors.length > 1 ? ` (+${qErrors.length-1} more)` : ''}`);
+      if (isValid && !isIncomplete) validCount++;
+      if (isValid && isIncomplete) incompleteCount++;
+
+      questionResults.push({
+        questionNumber: qNum,
+        sourceQuestionNumber: q.sourceQuestionNumber ?? null,
+        isValid, isIncomplete,
+        errors: qErrors, warnings: qWarnings
+      });
+    });
+
+    const counts = {
+      totalQuestions: payload.questions.length,
+      validQuestions: validCount,
+      incompleteQuestions: incompleteCount,
+      blockingErrorCount: blockingErrors.length,
+      warningCount: warnings.length + questionResults.reduce((s,r) => s + r.warnings.length, 0),
+      unresolvedFigureCount,
+      missingCorrectAnswerCount,
+      extractionWarningCount
+    };
+
+    return {
+      isValid: blockingErrors.length === 0,
+      blockingErrors, warnings, questionResults, counts
+    };
+  }
+
+  function _ngjZeroCounts() {
+    return { totalQuestions:0, validQuestions:0, incompleteQuestions:0, blockingErrorCount:0, warningCount:0, unresolvedFigureCount:0, missingCorrectAnswerCount:0, extractionWarningCount:0 };
+  }
+
+  function _ngjBuildCorrectBlurb(sections, educationalObjective) {
+    // Build an HTML string for q.correctBlurb from explanationSections
+    let parts = [];
+    (sections || []).forEach(sec => {
+      const heading = (sec.heading || '').trim();
+      const body = Array.isArray(sec.body) ? sec.body : (typeof sec.body === 'string' ? [sec.body] : []);
+      if (heading && heading !== 'Unlabeled Explanation') {
+        parts.push('<strong>' + _ngjEsc(heading) + '</strong>');
+      }
+      body.forEach(p => { if (p && String(p).trim()) parts.push(_ngjEsc(String(p))); });
+    });
+    return parts.join('<br><br>');
+  }
+
+  function _ngjBuildPerChoiceExplanations(sections, answerChoices) {
+    // Try to extract per-choice explanations from "Incorrect Answers" sections
+    const e = {};
+    const labels = (answerChoices || []).map(c => c.label || '');
+    const incorrectSec = (sections || []).find(s => /incorrect/i.test(s.heading || ''));
+    if (!incorrectSec) return e;
+    const bodyLines = Array.isArray(incorrectSec.body) ? incorrectSec.body : (typeof incorrectSec.body === 'string' ? [incorrectSec.body] : []);
+    bodyLines.forEach(line => {
+      const singleMatch = line.match(/^Choice ([A-Z]):\s+(.+)/i);
+      if (singleMatch) {
+        const ltr = singleMatch[1].toUpperCase();
+        if (labels.includes(ltr)) e[ltr] = _ngjEsc(singleMatch[2]);
+      }
+    });
+    return e;
+  }
+
+  function normalizeNbmeGeminiJsonImport(payload) {
+    const items = [];
+    const qs = payload.questions || [];
+    qs.forEach((q, idx) => {
+      const qNum = typeof q.questionNumber === 'number' ? q.questionNumber : (idx + 1);
+      const choices = (q.answerChoices || []).map(ch => ({ l: String(ch.label || ''), t: String(ch.text || '') }));
+      const correctAnswer = (q.correctAnswer || '').trim() || null;
+      const sections = Array.isArray(q.explanationSections) ? q.explanationSections
+        : (q.explanationSections != null ? [] : []);
+      const normalizedSections = sections.map(s => ({
+        heading: String(s.heading || ''),
+        body: Array.isArray(s.body) ? s.body.map(String) : (typeof s.body === 'string' ? [s.body] : [])
+      }));
+
+      const correctBlurb = _ngjBuildCorrectBlurb(normalizedSections, q.educationalObjective);
+      const perChoiceE = _ngjBuildPerChoiceExplanations(normalizedSections, q.answerChoices);
+
+      const retrievalTag = (q.retrievalTag || '').trim();
+      const tags = retrievalTag ? [retrievalTag] : [];
+
+      const hasEmbeddedFigure = q.hasEmbeddedFigure === true || (Array.isArray(q.figureRefs) && q.figureRefs.length > 0);
+      const figureRefs = Array.isArray(q.figureRefs) ? q.figureRefs : [];
+      const tables = Array.isArray(q.tables) ? q.tables : [];
+      const extractionWarnings = Array.isArray(q.extractionWarnings) ? q.extractionWarnings : [];
+
+      const quizQuestion = {
+        n: qNum,
+        t: String(q.stem || ''),
+        o: choices,
+        c: correctAnswer,
+        e: perChoiceE,
+        tags,
+        educationalObjective: q.educationalObjective ? String(q.educationalObjective) : '',
+        correctBlurb: correctBlurb || '',
+        metadata: {
+          sourceType: 'nbme-gemini-json',
+          sourceQuestionNumber: q.sourceQuestionNumber ?? null,
+          retrievalTag,
+          hasEmbeddedFigure,
+          figureRefs,
+          tables,
+          sharedGroup: q.sharedGroup || null,
+          extractionWarnings,
+          explanationSections: normalizedSections,
+          schemaVersion: 'nbme-gemini-json-v1'
+        }
+      };
+      items.push(quizQuestion);
+    });
+    return items;
+  }
+
+  function parseNbmeGeminiJson() {
+    if (!_nbmeGeminiJsonImport) return;
+    const ta = document.getElementById('ngj-raw-text');
+    const rawText = (ta ? ta.value : '').trim();
+    _nbmeGeminiJsonImport.rawText = rawText;
+    _nbmeGeminiJsonImport.parsed = null;
+    _nbmeGeminiJsonImport.validation = null;
+    _nbmeGeminiJsonImport.normalizedItems = [];
+
+    const bodyEl = document.getElementById('ngj-validation-body');
+    const areaEl = document.getElementById('ngj-validation-area');
+    areaEl.style.display = 'block';
+
+    if (!rawText) {
+      bodyEl.innerHTML = '<div class="ngj-error-list">No JSON text provided. Paste or upload a JSON file first.</div>';
+      updateNbmeGeminiJsonSaveReadiness();
+      return;
+    }
+
+    // Detect RTF / binary
+    const fileType = _ngjDetectRtfOrBinary(rawText);
+    if (fileType === 'rtf') {
+      bodyEl.innerHTML = '<div class="ngj-error-list"><strong>Parse Error: RTF file detected.</strong><br>This file is in RTF format (not JSON). Please export plain JSON from Gemini, not a Word/TextEdit RTF document. The file extension should be .json and the content should start with <code>{</code>.</div>';
+      updateNbmeGeminiJsonSaveReadiness();
+      return;
+    }
+    if (fileType === 'pdf') {
+      bodyEl.innerHTML = '<div class="ngj-error-list"><strong>Parse Error: PDF file detected.</strong><br>This is a PDF file. Please upload a .json file containing the Gemini-extracted JSON.</div>';
+      updateNbmeGeminiJsonSaveReadiness();
+      return;
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch(err) {
+      const msg = err.message || String(err);
+      const lineHint = _ngjDetectUnescapedQuotes(rawText);
+      let extra = '';
+      if (lineHint) {
+        extra = `<br><br><strong>Likely cause:</strong> Unescaped double-quote inside a JSON string value near line ${lineHint}.<br>Example of the problem: <code>"stem": "Patient says she sees "bugs" on her skin."</code><br>Fix: Escape internal quotes as <code>\\"</code> — ask Gemini to re-export with escaped quotes.`;
+      } else if (msg.includes('Unexpected token') || msg.includes('Unexpected end')) {
+        extra = `<br><br>Check for: trailing commas, missing quotes around keys, unescaped special characters, or truncated output from Gemini.`;
+      }
+      bodyEl.innerHTML = `<div class="ngj-error-list"><strong>JSON Parse Error:</strong> ${_ngjEsc(msg)}${extra}</div>`;
+      updateNbmeGeminiJsonSaveReadiness();
+      return;
+    }
+
+    _nbmeGeminiJsonImport.parsed = parsed;
+
+    // Suggest test name from payload
+    const tnInput = document.getElementById('ngj-test-name');
+    if (tnInput && !tnInput.value && parsed.testTitle) {
+      tnInput.value = String(parsed.testTitle);
+    }
+    if (tnInput && _nbmeGeminiJsonImport) {
+      _nbmeGeminiJsonImport.testName = tnInput.value;
+    }
+
+    const validation = validateNbmeGeminiJsonImport(parsed);
+    _nbmeGeminiJsonImport.validation = validation;
+
+    if (validation.isValid) {
+      _nbmeGeminiJsonImport.normalizedItems = normalizeNbmeGeminiJsonImport(parsed);
+    }
+
+    renderNbmeGeminiJsonValidationSummary(validation);
+    renderNbmeGeminiJsonPreview(parsed, validation);
+    updateNbmeGeminiJsonSaveReadiness();
+  }
+
+  function renderNbmeGeminiJsonValidationSummary(validation) {
+    const el = document.getElementById('ngj-validation-body');
+    if (!el) return;
+    const c = validation.counts;
+    let html = '';
+
+    if (validation.isValid) {
+      html += `<div class="ngj-ok-banner">&#10003; JSON parsed and validated successfully. ${c.totalQuestions} question(s) ready to import.</div>`;
+    } else {
+      html += `<div class="ngj-error-list"><strong>Blocking errors (${validation.blockingErrors.length}):</strong><ul>`;
+      validation.blockingErrors.slice(0, 10).forEach(e => { html += `<li>${_ngjEsc(e)}</li>`; });
+      if (validation.blockingErrors.length > 10) html += `<li>… and ${validation.blockingErrors.length - 10} more.</li>`;
+      html += '</ul></div>';
+    }
+
+    if (validation.warnings.length > 0) {
+      html += `<div class="ngj-warn-list"><strong>Top-level warnings:</strong><ul>`;
+      validation.warnings.forEach(w => { html += `<li>${_ngjEsc(w)}</li>`; });
+      html += '</ul></div>';
+    }
+
+    html += `<div class="ngj-summary-grid">
+      <div class="ngj-stat ${c.blockingErrorCount > 0 ? 'error' : 'ok'}">
+        <div class="ngj-stat-label">Total questions</div>
+        <div class="ngj-stat-value">${c.totalQuestions}</div>
+      </div>
+      <div class="ngj-stat ${c.validQuestions === c.totalQuestions ? 'ok' : 'warn'}">
+        <div class="ngj-stat-label">Valid</div>
+        <div class="ngj-stat-value">${c.validQuestions}</div>
+      </div>
+      <div class="ngj-stat ${c.incompleteQuestions > 0 ? 'warn' : 'ok'}">
+        <div class="ngj-stat-label">Incomplete</div>
+        <div class="ngj-stat-value">${c.incompleteQuestions}</div>
+      </div>
+      <div class="ngj-stat ${c.blockingErrorCount > 0 ? 'error' : 'ok'}">
+        <div class="ngj-stat-label">Blocking errors</div>
+        <div class="ngj-stat-value">${c.blockingErrorCount}</div>
+      </div>
+      <div class="ngj-stat ${c.warningCount > 0 ? 'warn' : 'ok'}">
+        <div class="ngj-stat-label">Total warnings</div>
+        <div class="ngj-stat-value">${c.warningCount}</div>
+      </div>
+      <div class="ngj-stat ${c.unresolvedFigureCount > 0 ? 'warn' : 'ok'}">
+        <div class="ngj-stat-label">Unresolved figures</div>
+        <div class="ngj-stat-value">${c.unresolvedFigureCount}</div>
+      </div>
+      <div class="ngj-stat ${c.missingCorrectAnswerCount > 0 ? 'warn' : 'ok'}">
+        <div class="ngj-stat-label">Missing answers</div>
+        <div class="ngj-stat-value">${c.missingCorrectAnswerCount}</div>
+      </div>
+      <div class="ngj-stat ${c.extractionWarningCount > 0 ? 'warn' : 'ok'}">
+        <div class="ngj-stat-label">Extraction warnings</div>
+        <div class="ngj-stat-value">${c.extractionWarningCount}</div>
+      </div>
+    </div>`;
+
+    el.innerHTML = html;
+  }
+
+  function renderNbmeGeminiJsonPreview(payload, validation) {
+    const el = document.getElementById('ngj-preview-list');
+    if (!el) return;
+    const qs = (payload && payload.questions) || [];
+    if (!qs.length) { el.innerHTML = '<div style="padding:12px;color:#5a6a7a;font-size:12px;">No questions to preview.</div>'; return; }
+
+    const qrMap = {};
+    (validation.questionResults || []).forEach(r => { qrMap[r.questionNumber] = r; });
+
+    let html = '';
+    qs.forEach((q, idx) => {
+      const qNum = q.questionNumber != null ? q.questionNumber : (idx + 1);
+      const qr = qrMap[qNum] || {};
+      const stemPreview = String(q.stem || '').slice(0, 240) + (String(q.stem || '').length > 240 ? '…' : '');
+      const choices = Array.isArray(q.answerChoices) ? q.answerChoices : [];
+      const tag = (q.retrievalTag || '').trim();
+      const sections = Array.isArray(q.explanationSections) ? q.explanationSections : [];
+      const figureRefs = Array.isArray(q.figureRefs) ? q.figureRefs : [];
+      const tables = Array.isArray(q.tables) ? q.tables : [];
+      const extWarns = Array.isArray(q.extractionWarnings) ? q.extractionWarnings : [];
+
+      html += `<div class="ngj-q-block">`;
+      html += `<span class="ngj-q-num">Q${qNum}`;
+      if (q.sourceQuestionNumber != null && q.sourceQuestionNumber !== qNum) html += ` (src:${_ngjEsc(String(q.sourceQuestionNumber))})`;
+      html += `</span>`;
+      if (tag) html += ` <span class="ngj-q-tag">${_ngjEsc(tag)}</span>`;
+      if (qr.errors && qr.errors.length) html += ` <span class="ngj-q-err">&#10007; ${qr.errors.length} error(s)</span>`;
+      if (qr.isIncomplete) html += ` <span class="ngj-q-warn">incomplete</span>`;
+      if (figureRefs.length) html += ` <span class="ngj-q-warn">&#128247; ${figureRefs.length} figure(s)</span>`;
+      if (tables.length) html += ` <span class="ngj-table-note">&#128203; ${tables.length} table(s)</span>`;
+      if (extWarns.length) html += ` <span class="ngj-q-warn">&#9888; ${extWarns.length} extraction warning(s)</span>`;
+
+      html += `<div class="ngj-q-stem">${_ngjEsc(stemPreview)}</div>`;
+
+      html += `<div class="ngj-q-choices">`;
+      choices.forEach(ch => {
+        const isCorrect = ch.label === (q.correctAnswer || '').trim();
+        html += `<div class="ngj-q-choice${isCorrect ? ' correct' : ''}">${_ngjEsc(ch.label)}) ${_ngjEsc(String(ch.text || ''))}${isCorrect ? ' &#10003;' : ''}</div>`;
+      });
+      html += `</div>`;
+
+      if (q.educationalObjective) {
+        html += `<div class="ngj-q-eo">EO: ${_ngjEsc(String(q.educationalObjective).slice(0, 140))}${String(q.educationalObjective).length > 140 ? '…' : ''}</div>`;
+      }
+      if (sections.length) {
+        html += `<div class="ngj-q-sections">${sections.length} explanation section(s): ${_ngjEsc(sections.map(s => s.heading || '(unlabeled)').join(', ').slice(0,120))}</div>`;
+      }
+      if (figureRefs.length) {
+        figureRefs.forEach(fr => {
+          html += `<div class="ngj-figure-warn">&#128247; Figure needed: ${_ngjEsc(fr.placeholder || fr.id || '')} — ${_ngjEsc(fr.sourceLocation || 'location unknown')}</div>`;
+        });
+      }
+      if (qr.warnings && qr.warnings.length) {
+        html += `<div style="margin-top:4px;">`;
+        qr.warnings.slice(0, 3).forEach(w => { html += `<div class="ngj-q-warn" style="display:block;margin:2px 0;">${_ngjEsc(w)}</div>`; });
+        if (qr.warnings.length > 3) html += `<div class="ngj-q-warn" style="display:block;margin:2px 0;">…+${qr.warnings.length-3} more warning(s)</div>`;
+        html += `</div>`;
+      }
+      html += `</div>`;
+    });
+    el.innerHTML = html;
+  }
+
+  function updateNbmeGeminiJsonSaveReadiness() {
+    const st = _nbmeGeminiJsonImport;
+    const btn = document.getElementById('ngj-save-btn');
+    const noteEl = document.getElementById('ngj-readiness-note');
+    if (!btn || !noteEl) return;
+
+    if (!st || !st.validation) { btn.disabled = true; noteEl.textContent = ''; return; }
+
+    const testName = (document.getElementById('ngj-test-name')?.value || '').trim();
+    const folderId = document.getElementById('ngj-folder-select')?.value || '';
+    const confirmed = document.getElementById('ngj-confirm-check')?.checked || false;
+    const hasBlockingErrors = !st.validation.isValid;
+
+    const reasons = [];
+    if (hasBlockingErrors) reasons.push('fix blocking errors');
+    if (!testName) reasons.push('enter a test name');
+    if (!folderId) reasons.push('select a target folder');
+    if (!confirmed) reasons.push('check the confirmation checkbox');
+
+    if (reasons.length === 0) {
+      btn.disabled = false;
+      noteEl.textContent = `Ready to save ${(st.normalizedItems || []).length} question(s).`;
+      noteEl.style.color = '#27ae60';
+    } else {
+      btn.disabled = true;
+      noteEl.textContent = `To enable Save: ${reasons.join(', ')}.`;
+      noteEl.style.color = '#5a6a7a';
+    }
+
+    if (st.lastSaveError) {
+      const errEl = document.getElementById('ngj-save-error');
+      if (errEl) { errEl.style.display = 'block'; errEl.textContent = st.lastSaveError; }
+    }
+  }
+
+  function createTestFromNbmeGeminiJsonImport() {
+    const st = _nbmeGeminiJsonImport;
+    if (!st || !st.validation || !st.validation.isValid) { toast('Validation errors must be resolved first.', 4000); return; }
+
+    const testName = (document.getElementById('ngj-test-name')?.value || '').trim();
+    const folderId = document.getElementById('ngj-folder-select')?.value || '';
+    const confirmed = document.getElementById('ngj-confirm-check')?.checked || false;
+    const errEl = document.getElementById('ngj-save-error');
+
+    if (!testName) { toast('Enter a test name.'); return; }
+    if (!folderId) { toast('Select a target folder.'); return; }
+    if (!confirmed) { toast('Check the confirmation checkbox.'); return; }
+
+    const items = st.normalizedItems || [];
+    if (!items.length) { toast('No normalized questions to save.'); return; }
+
+    // Attach test-level metadata to each question
+    const payload = st.parsed || {};
+    const importedAt = new Date().toISOString();
+    const questions = items.map(q => {
+      const out = Object.assign({}, q);
+      out.metadata = Object.assign({}, out.metadata || {}, {
+        sourceType: 'nbme-gemini-json',
+        sourceFormat: payload.sourceFormat || null,
+        importedAt,
+        originalTestTitle: payload.testTitle || null,
+        schemaVersion: 'nbme-gemini-json-v1'
+      });
+      return out;
+    });
+
+    const beforeCount = DB.get().tests.length;
+    const test = DB.createTest(folderId, testName, questions);
+    const afterCount = DB.get().tests.length;
+
+    if (!test || afterCount !== beforeCount + 1) {
+      const msg = test ? 'Test was not persisted (storage may be full).' : 'DB.createTest failed (storage may be full).';
+      st.lastSaveError = msg;
+      if (errEl) { errEl.style.display = 'block'; errEl.textContent = msg; }
+      toast(msg, 6000);
+      return;
+    }
+
+    st.lastSaveResult = test;
+    st.lastSaveError = null;
+    if (errEl) errEl.style.display = 'none';
+
+    closeNbmeGeminiJsonImportModal();
+    _currentFolder = folderId;
+    renderSidebar();
+    renderHomeGrid();
+    toast(`✓ "${testName}" created with ${questions.length} questions (nbme-gemini-json).`);
+  }
+
   return {
     init,
     toast,
@@ -20481,7 +21275,14 @@ const App = (() => {
     showExplanationNoteToolbar,
     saveSelectedExplanationNote,
     openSettings,
-    toggleSidebar
+    toggleSidebar,
+    openNbmeGeminiJsonImportModal,
+    closeNbmeGeminiJsonImportModal,
+    clearNbmeGeminiJsonImportState,
+    handleNbmeGeminiJsonFileUpload,
+    parseNbmeGeminiJson,
+    updateNbmeGeminiJsonSaveReadiness,
+    createTestFromNbmeGeminiJsonImport
   };
 })();
 
