@@ -13781,24 +13781,39 @@ const App = (() => {
     draft.refinementError  = null;
     renderDivineDraftPreview(drafts);
 
-    // Build payload — mirrors what electron/main.js expects.
+    // Build payload — v7 teaching-cluster-summary schema.
+    // electron/main.js receives: conceptType, clusterSummary, sourceContext,
+    // sourceMeta, provenance, and an optional variantType hint.
+    // The old distilledObjective envelope and scaffold fields are no longer sent.
     const cluster = (_divineImportPreview.clusters || []).find(c => c.clusterId === draft.clusterId);
+    const obj     = cluster?.distilledObjective || {};
     const payload = {
-      distilledObjective: cluster?.distilledObjective || null,
-      variantType:        draft.variantType,
-      scaffold: {
-        stem:            draft.stem,
-        choices:         draft.choices,
-        correctAnswer:   draft.correctAnswer,
-        teachingPoint:   draft.teachingPoint,
-      },
-      provenance: {
-        sourceContext: draft.sourceSnippet || '',
-        conceptType:   draft.provenance?.conceptType || '',
-      },
+      // Core teaching-cluster fields — Gemini extracts the testable fact from these.
+      conceptType:    obj.conceptType    || draft.provenance?.conceptType || '',
+      clusterSummary: obj.clusterSummary || '',
+      sourceContext:  draft.sourceSnippet || '',
+
+      // Optional variant hint (may be undefined — main.js ignores if absent).
+      ...(draft.variantType ? { variantType: draft.variantType } : {}),
+
+      // Source attribution.
       sourceMeta: {
-        draftId:   draft.draftId,
-        clusterId: draft.clusterId,
+        draftId:    draft.draftId,
+        clusterId:  draft.clusterId,
+        sourceName: _divineImportPreview?.sourceName || '',
+      },
+
+      // Provenance ranges for audit trail — all default to [] / null if absent.
+      provenance: {
+        sourceSegmentIds:   Array.isArray(draft.provenance?.sourceSegmentIds)
+                              ? draft.provenance.sourceSegmentIds.slice()   : [],
+        originalLineRanges: Array.isArray(draft.provenance?.originalLineRanges)
+                              ? draft.provenance.originalLineRanges.slice() : [],
+        cleanedLineRanges:  Array.isArray(draft.provenance?.cleanedLineRanges)
+                              ? draft.provenance.cleanedLineRanges.slice()  : [],
+        timestampRanges:    Array.isArray(draft.provenance?.timestampRanges)
+                              ? draft.provenance.timestampRanges.slice()    : [],
+        timestampRange:     draft.timestampRange ? { ...draft.timestampRange } : null,
       },
     };
 
