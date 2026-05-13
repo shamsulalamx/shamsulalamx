@@ -2331,7 +2331,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
     </div>
     <div class="form-group" style="margin-top:12px;">
       <label class="form-label">Google Drive Backup</label>
-      <p style="font-size:12px;color:#5a6a7a;margin-bottom:8px;">Stores tests and original question images in your Google Drive. Use the deployed HTTPS Netlify URL. Local development also works from http://localhost:8888 or http://localhost:8080 after those origins are added in Google Cloud Console.</p>
+      <p style="font-size:12px;color:#5a6a7a;margin-bottom:8px;">Stores tests and question images in your Google Drive. Works from any HTTPS origin or from localhost (Electron dev). To use Drive from a new static host, add its origin to <code>DRIVE_EXTRA_ORIGINS</code> in the source and register it in Google Cloud Console.</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
         <button class="btn-modal" onclick="connectGoogleDrive()">Connect Drive</button>
         <button class="btn-modal" onclick="saveGoogleDriveNow()">Backup Now</button>
@@ -2834,16 +2834,22 @@ window.MiscDocStore = MiscDocStore;
    GOOGLE DRIVE BACKUP — Manifest + original figure files
 ============================================================ */
 (function() {
-  // Google Cloud Console after Netlify deployment:
-  // Authorized JavaScript origin: https://MY-NETLIFY-SITE.netlify.app
-  // Optional local dev origins: http://localhost:8888 and http://localhost:8080
-  // Authorized redirect URI: not required by this Google Identity Services token flow.
+  // To enable Drive on a new static host, add its exact origin to DRIVE_EXTRA_ORIGINS below,
+  // then add that same origin as an Authorized JavaScript Origin in Google Cloud Console
+  // for client ID 274374578651-5edirahp87c5hpv69donfpvcr81tmidk.apps.googleusercontent.com.
+  // No redirect URI is needed — this uses the Google Identity Services token flow.
+  // Electron dev origins (localhost:8888 / localhost:8080) are always allowed automatically.
+  const DRIVE_EXTRA_ORIGINS = [
+    // 'https://your-static-host.example.com',  // ← add your deployed origin here
+  ];
   const DRIVE_CLIENT_ID = '274374578651-5edirahp87c5hpv69donfpvcr81tmidk.apps.googleusercontent.com';
   const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
-  const DRIVE_FOLDER_NAME = 'NBME Self-Assessment Suite';
-  const DRIVE_MANIFEST_NAME = 'nbme_manifest.json';
-  const DRIVE_ENABLED_KEY = 'nbme_drive_backup_enabled_v1';
+  const DRIVE_FOLDER_NAME    = 'NBME Self-Assessment Suite';
+  const DRIVE_MANIFEST_NAME  = 'nbme_manifest.json';
+  const DRIVE_MISC_DOCS_NAME = 'NBME_MiscDocs_backup.json';
+  const DRIVE_ENABLED_KEY    = 'nbme_drive_backup_enabled_v1';
   let _tokenClient = null, _accessToken = null, _folderId = null, _manifestFileId = null;
+  let _miscDocsFileId = null;
   let _timer = null, _busy = false, _pending = false;
   let _skipNextSchedule = false;
 
@@ -2866,9 +2872,10 @@ window.MiscDocStore = MiscDocStore;
   }
 
   function isDriveOriginAllowed() {
-    return location.protocol === 'https:' ||
-      location.origin === 'http://localhost:8080' ||
-      location.origin === 'http://localhost:8888';
+    if (location.protocol === 'https:') return true;
+    if (location.origin === 'http://localhost:8080') return true;
+    if (location.origin === 'http://localhost:8888') return true;
+    return DRIVE_EXTRA_ORIGINS.includes(location.origin);
   }
 
   function waitForGoogleIdentity() {
@@ -3051,6 +3058,57 @@ window.MiscDocStore = MiscDocStore;
     await uploadDriveFile(DRIVE_MANIFEST_NAME, blob, 'application/json', await ensureDriveFolder(), manifestId);
   }
 
+  // ── MiscDocStore Drive sync ────────────────────────────────────────────────
+
+  async function saveMiscDocsToDrive() {
+    if (!window.MiscDocStore) return;
+    const docs = await window.MiscDocStore.getAllDocs().catch(() => []);
+    if (!docs.length) return;
+
+    // 50 MB guard — warn before uploading a large backup.
+    const totalBytes = docs.reduce((s, d) => s + (d.dataUrl ? d.dataUrl.length : 0), 0);
+    const totalMB = (totalBytes / 1024 / 1024).toFixed(1);
+    if (totalBytes > 50 * 1024 * 1024) {
+      if (!confirm(`Miscellaneous Documents backup is ${totalMB} MB. Upload to Drive now? Cancel to skip the document backup this time.`)) return;
+    }
+
+    // Find existing file to update, or create a new one.
+    if (!_miscDocsFileId) {
+      const folderId = await ensureDriveFolder();
+      const q = encodeURIComponent(`name='${DRIVE_MISC_DOCS_NAME}' and '${folderId}' in parents and trashed=false`);
+      const sr = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`);
+      const sd = await sr.json();
+      _miscDocsFileId = ((sd.files || [])[0] || {}).id || null;
+    }
+
+    const folderId = await ensureDriveFolder();
+    const blob = new Blob([JSON.stringify(docs)], { type: 'application/json' });
+    _miscDocsFileId = await uploadDriveFile(
+      DRIVE_MISC_DOCS_NAME, blob, 'application/json', folderId, _miscDocsFileId
+    );
+  }
+
+  async function restoreMiscDocsFromDrive() {
+    if (!window.MiscDocStore) return;
+    try {
+      const folderId = await ensureDriveFolder();
+      const q = encodeURIComponent(`name='${DRIVE_MISC_DOCS_NAME}' and '${folderId}' in parents and trashed=false`);
+      const sr = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`);
+      const sd = await sr.json();
+      const file = ((sd.files || [])[0]) || null;
+      if (!file) return; // no backup exists yet — skip silently
+      _miscDocsFileId = file.id;
+      const resp = await driveFetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`);
+      const docs = await resp.json();
+      if (!Array.isArray(docs)) return;
+      for (const doc of docs) {
+        if (doc && doc.id) await window.MiscDocStore.putDoc(doc).catch(() => {});
+      }
+    } catch (_) { /* silently skip — missing backup is not an error */ }
+  }
+
+  // ── End MiscDocStore Drive sync ───────────────────────────────────────────
+
   async function restoreFiguresFromDrive(snapshot) {
     if (!window.FigureStore) return;
     for (const test of snapshotTestsWithImages(snapshot)) {
@@ -3119,6 +3177,7 @@ window.MiscDocStore = MiscDocStore;
       _skipNextSchedule = true;
       DB.save();
       await saveManifestToDrive(snapshot);
+      await saveMiscDocsToDrive();
       setDriveStatus('Drive backup complete.', '#27ae60', '', 'ok');
     } catch(e) {
       setDriveStatus(e.message || 'Drive backup failed.', '#e74c3c', 'Backup failed', 'error');
@@ -3137,6 +3196,7 @@ window.MiscDocStore = MiscDocStore;
       const resp = await driveFetch(`https://www.googleapis.com/drive/v3/files/${manifestId}?alt=media`);
       const snapshot = await resp.json();
       await restoreFiguresFromDrive(snapshot);
+      await restoreMiscDocsFromDrive();
       const db = DB.get();
       if (snapshot.settings && typeof snapshot.settings === 'object') db.settings = snapshot.settings;
       // Sync restored Gemini key to the fast-access localStorage mirror; clear truly-legacy key.
@@ -22035,19 +22095,43 @@ const App = (() => {
       const docs = await MiscDocStore.getAllDocs();
       const doc = docs.find(d => d.id === id);
       if (!doc) { toast('Document not found.', 2000); return; }
+      // Convert dataUrl → Blob → blob: URL so browsers don't block the tab open.
+      // (Chrome 92+ blocks data: URI navigation to a new tab from script.)
+      const blob = _miscDocDataUrlToBlob(doc.dataUrl, doc.mimeType || 'application/octet-stream');
       const a = document.createElement('a');
-      a.href = doc.dataUrl;
-      if (doc.mimeType && (doc.mimeType.startsWith('image/') || doc.mimeType === 'application/pdf')) {
+      if (blob && (doc.mimeType?.startsWith('image/') || doc.mimeType === 'application/pdf')) {
+        const blobUrl = URL.createObjectURL(blob);
+        a.href = blobUrl;
         a.target = '_blank';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
       } else {
+        // DOCX / TXT / MD / RTF — trigger download directly
+        const blobUrl = blob ? URL.createObjectURL(blob) : doc.dataUrl;
+        a.href = blobUrl;
         a.download = doc.filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        if (blob) setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
       }
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
     } catch(err) {
       toast('Could not open file.', 2000);
     }
+  }
+
+  function _miscDocDataUrlToBlob(dataUrl, fallbackMime) {
+    try {
+      const m = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (!m) return null;
+      const mime  = m[1] || fallbackMime;
+      const bytes = atob(m[2]);
+      const arr   = new Uint8Array(bytes.length);
+      for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+      return new Blob([arr], { type: mime });
+    } catch (_) { return null; }
   }
 
   async function miscDocDelete(id) {
