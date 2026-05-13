@@ -1,15 +1,18 @@
 # NBME Self-Assessment Suite Project Status
 
-Last updated: 2026-05-08 20:15 EDT
+Last updated: 2026-05-11
 
 This file captures the current working state after the landing-page library rehaul, PDF report naming update, and local grouped-question parser/render stabilization. It supersedes older status files where they conflict.
+
+Ownership: this file is the current runtime/status snapshot. Durable rules belong in `PROJECT_CONTEXT.md`; staged Electron roadmap details belong in `ELECTRON_MIGRATION_PLAN.md`; prompt files are operational guidance only.
 
 ## Core Rules
 
 - `index.html` is the authoritative working app.
 - Keep active app edits inside `index.html`.
 - Do not split the current browser app into external CSS or JS files.
-- The Electron migration may add Electron-specific scaffolding such as `package.json`, `electron/main.js`, and `electron/preload.js`. That does not change `index.html` being the current authoritative browser app.
+- Long-term platform direction: Electron desktop is now the intended primary platform. Browser mode and Netlify remain transitional compatibility layers during migration.
+- The Electron migration may add Electron-specific scaffolding such as `package.json`, `electron/main.js`, and `electron/preload.js`. That does not change `index.html` being the current authoritative app during the transition.
 - The old split files still exist, but they are not the active implementation:
   - `app.js`
   - `db.js`
@@ -22,23 +25,27 @@ This file captures the current working state after the landing-page library reha
 - Keep the Gemini model string exactly `gemini-2.5-flash`.
 - Do not reintroduce Supabase unless explicitly requested.
 - Keep full-quality question and figure images in IndexedDB or Google Drive. Do not put image data back into localStorage.
-- Google Drive OAuth requires opening the app from `http://localhost:8080`, not `file://`, when connecting or syncing Drive.
+- Google Drive OAuth currently requires opening the app from an approved HTTP/HTTPS origin, not `file://`, when connecting or syncing Drive. Primary local origin: `http://localhost:8888`; secondary/fallback local origin: `http://localhost:8080`.
 - The app is currently private/personal use only. Future Electron security decisions, including local user-provided API key storage or OAuth token storage, should be evaluated in that context and revisited if public distribution is ever planned.
 
 ## Current File State
 
 - Active app: `index.html`
-- Informational snapshot at time of this file: `index.html` is about 8250 lines and 364 KB. Treat this as a timestamped reference, not a required invariant.
+- Informational snapshot at time of this update: `index.html` is about 9812 lines and 455 KB. Treat this as a timestamped reference, not a required invariant.
 - Previous handoffs:
   - `PROJECT_STATUS_2026-05-06.md`
   - `PROJECT_STATUS_2026-05-07.md`
 - Current handoff: `PROJECT_STATUS_2026-05-08.md`
 - Stable local checkpoint commit: `2ba4b1d Stabilize parser/render pipeline before Electron migration`
 - Local branch status at documentation update: `main` is ahead of `origin/main` by one commit.
-- Current uncommitted working tree at time of this file:
-  - Reusable documentation/prompt files are being organized for continuity across ChatGPT/Codex accounts.
+- Current uncommitted working tree at time of this documentation update:
+  - Documentation/prompt files are being synchronized with the current Electron and UWorld pipeline state.
+  - `deno.lock` is untracked and should not be touched unless explicitly requested.
 - `.DS_Store` is unrelated and should not be touched unless explicitly requested.
 - No push or Netlify deploy has been performed after checkpoint `2ba4b1d` from this checkout.
+- Source-level validation across NBME, UWorld, Anki, and OME passed without modifying files during validation.
+- Runtime and live fixture validation remain pending.
+- Gemini validation remains intentionally deferred to conserve API credits.
 
 ## Current Architecture
 
@@ -53,6 +60,8 @@ Main inlined modules:
 - `Quiz`: test-taking engine, timers, answer selection, hints, stem-image rendering, highlighting, and navigation.
 - `Results`: post-submit score page, review mode, analytics, and PDF report generation.
 - `App`: landing page, source-folder routing, sidebar navigation, home/search/notes/incorrect/marked/flagged/trash views, subfolders, modals, and test generation.
+- Anki text-import pipeline: plain-text `.txt` import only, normalized card preview, cloze/basic concept extraction, tag-first clustering, deterministic variant draft preview, review controls, approved-variant JSON export, quiz-object preview, and controlled save into real tests.
+- OME PDF pipeline: short high-quality PDF import only, PDF.js text-layer extraction only, structure/block preview, concept extraction, concept clustering, selected clusters, deterministic draft preview, review controls, approved-draft JSON export, quiz-object preview, and controlled save into real tests.
 
 ## Current Stable Parser And Rendering State
 
@@ -98,18 +107,18 @@ Operational status:
 - Browser app remains the stable baseline and fallback.
 - No push, pull request, or Netlify deployment has been performed after checkpoint `2ba4b1d` from this checkout.
 - Documentation and reusable prompt files are being organized for continuity across ChatGPT/Codex accounts.
-- Gemini, Google Drive, Netlify Functions, and deployment settings were intentionally left unchanged.
+- Netlify Functions and deployment settings remain transitional/rollback layers. Electron-local UWorld Gemini refinement now uses Electron main/preload and reads `GEMINI_API_KEY` from `process.env` only.
 - Saved/generated quizzes created before parser or render fixes may be stale. Do not silently mutate existing saved quizzes; regenerate or explicitly reparse them.
 
 ## Future Importer And Render Architecture
 
-The next planned phase is Electron migration.
+Electron migration is in early staged development and planning. The long-term target is a desktop-only Electron app, with browser/Netlify support retained only as transitional compatibility until desktop-native replacements are verified.
 
-The first Electron step should wrap the current stable app without changing app behavior. Avoid rewrites during the initial migration.
+Electron should continue wrapping the current stable app without changing app behavior. Avoid rewrites during initial migration.
 
 Electron work should begin locally and should not trigger Netlify deployments initially.
 
-Future architecture should preserve the current browser behavior while separating importer, parser, review, and renderer responsibilities more clearly.
+Future architecture should preserve the current working behavior during transition while separating importer, parser, review, renderer, storage, and desktop-native service responsibilities more clearly.
 
 Planned direction:
 
@@ -130,11 +139,161 @@ Render-mode decision policy:
 - Hybrid mode for usable text plus figures, tables, or images.
 - User review and override per question.
 
-Unresolved Electron Gemini decision:
+Electron Gemini direction:
 
-- Keep Netlify Functions initially.
-- Later consider Electron main-process Gemini calls with a user-provided local key, or a hybrid mode.
-- Do not decide this prematurely.
+- Netlify Functions remain available as transitional/rollback support.
+- Electron-local UWorld refinement now uses Electron main/preload.
+- `GEMINI_API_KEY` is read from `process.env` only for Electron-local refinement.
+- Do not remove Netlify Functions until desktop Gemini, storage, backup/restore, and rollback behavior are verified.
+- Preserve `gemini-2.5-flash`.
+
+Storage direction:
+
+- Browser `localStorage` and IndexedDB/FigureStore remain active during transition.
+- Long-term Electron storage should move quiz metadata, source artifacts, figures, backups, settings, parser runs, and debug exports into local app-data.
+- Do not migrate or remove browser storage paths until app-data export/import, backup, restore, and rollback are verified.
+
+## UWorld DOCX Pipeline Status
+
+Status: UWorld v1 implementation complete. Electron Gemini JSON extraction hardened (tagged uworld-gemini-v1-stable). Pending real-world validation.
+
+Implemented UWorld Notes flow:
+
+```text
+DOCX import
+→ normalized blocks
+→ concept extraction
+→ deterministic clustering/deduplication
+→ selected clusters
+→ deterministic draft scaffolds
+→ one-at-a-time Electron-local Gemini refinement
+→ review controls
+→ duplicate warnings and section/topic coverage summaries
+→ approved draft JSON export
+→ quiz-object preview
+→ controlled save into real tests
+```
+
+Current safeguards:
+
+- UWorld pipeline is separate from `OCR.processTestPDFs()` and the NBME PDF parser/render path.
+- Concept clustering and selected-cluster controls are implemented.
+- Draft previews are deterministic scaffolds until refined.
+- Electron-local Gemini refinement is called through Electron main/preload only; renderer code does not receive API keys.
+- `GEMINI_API_KEY` is read from `process.env` only and must not be stored in localStorage, frontend code, Drive backups, debug exports, or packaged assets.
+- Live batch queue infrastructure is implemented for selected deterministic drafts. It processes one draft at a time through the existing Electron Gemini bridge, caches by draft hash, skips duplicate draft hashes, supports pause/cancel/retry, stops after consecutive failures, and requires a visible preflight confirmation before live runs.
+- Duplicate refined-question warnings are implemented for similar stems, teaching points, source concepts, source blocks, and clusters. These warnings do not auto-reject, auto-remove, approve, or block saving.
+- Section/topic coverage summaries are implemented from selected clusters, deterministic drafts, refined drafts, approved drafts, duplicate warnings, and coverage gaps. They are display-only and do not rebalance or filter generation.
+- UWorld save into a real test requires approved refined drafts, valid quiz-object preview, explicit UWorld save target, nonempty inline test name, and inline review confirmation.
+- Browser `prompt()`/`confirm()` are not part of the UWorld save flow.
+- Live Gemini validation/testing is intentionally deferred to conserve API credits.
+
+Bug fixed (2026-05-11, electron/main.js only):
+
+- `extractGeminiJson()` previously stripped only simple leading/trailing markdown fences and called `JSON.parse()` once. Any prose before or after the JSON object caused `SyntaxError`, reported only as the generic "Gemini returned malformed JSON." message with no distinction from schema failures.
+- Fixed with a two-attempt strategy: (1) strip fences and parse directly; (2) if that fails, scan for the first `{` and walk brace depth tracking string/escape state to extract the first complete top-level JSON object without `eval`. If both fail, throw `SyntaxError('no valid JSON object found in model response')`.
+- Parse failures and schema validation failures now return separate `MODEL_RESPONSE_INVALID` messages with distinct `reason` fields. No API key, prompt text, or source content appears in any error message.
+- `responseMimeType: 'application/json'` was already present in the request and was not changed.
+- No auto-retry was added.
+
+## Anki Notes Pipeline Status
+
+Status: Anki v1 implementation complete. Approval-state and save-path bugs fixed (tagged anki-v1-stable). Pending real-world validation.
+
+Current Anki flow:
+
+```text
+plain-text Anki export (.txt only)
+→ normalized cards
+→ cloze/basic concept extraction
+→ tag-first clustering
+→ deterministic variant draft preview
+→ review controls
+→ approved-variant JSON export
+→ quiz-object preview
+→ controlled save into real tests
+```
+
+Current Anki safeguards:
+
+- `.apkg` is intentionally unsupported in Anki v1.
+- Anki v1 does not use Gemini yet.
+- Approved variants only are eligible for export, quiz-object preview, and controlled save.
+- The Anki save path requires an explicit Anki subfolder target, a nonempty test name, and an inline review confirmation.
+- Anki provenance stays separate from UWorld provenance and quiz-object review state.
+- The Anki and UWorld pipelines remain isolated.
+
+Bugs fixed (2026-05-11):
+
+- `getApprovedAnkiVariantDrafts()` was going through an indirect path; now calls `getApprovedAnkiDraftsFromReviewSnapshot()` directly.
+- `validateAnkiQuizObjectPreviewItem()` returns `{ ok, errors }`, not an array. Two call sites in `getApprovedAnkiQuizObjectPreviewValidation()` and `createTestFromApprovedAnkiVariants()` were calling `.map()` on the object, crashing the preview and save path. Fixed to `.errors.map()`.
+- Temporary debug panels (Anki Review State Debug, Quiz Preview Debug) removed after fix confirmation.
+
+Unresolved validation tasks:
+
+- Validate the plain-text Anki import flow against several real `.txt` exports.
+- Verify explicit target selection and new-folder creation in the Anki save path.
+- Verify controlled save into a real test with approved variants only.
+- Verify approved-variant JSON export and quiz-object preview with mixed note types and cloze groups.
+- Confirm no cross-talk with the UWorld DOCX pipeline.
+
+## OME Notes Pipeline Status
+
+Status: OME v1 implementation complete. Cluster index provenance bug fixed (tagged ome-v1-stable). Pending real-world validation.
+
+Current flow:
+
+```text
+short high-quality PDF
+→ PDF.js text-layer extraction only
+→ structure/block preview
+→ concept extraction
+→ concept clustering
+→ selected clusters
+→ deterministic draft preview
+→ review controls
+→ approved-draft JSON export
+→ quiz-object preview
+→ controlled save into real tests
+```
+
+Current safeguards:
+
+- OME accepts short high-quality PDFs in v1.
+- OME intentionally does not add OCR fallback in v1.
+- OME preview uses PDF.js text-layer extraction only.
+- OME structure, concept, cluster, draft, review, export, preview, and save logic stay isolated from the NBME PDF parser/OCR/render path, the UWorld DOCX path, and the Anki path.
+- Approved OME drafts only are eligible for export, quiz-object preview, and controlled save.
+- The OME save flow requires an explicit OME subfolder target, a nonempty test name, and an inline review confirmation.
+- OME provenance stays separate from UWorld provenance and Anki provenance.
+- No Gemini is used in OME v1 yet.
+- OME v1 does not modify NBME parser/OCR/render behavior.
+
+Bug fixed (2026-05-11):
+
+- `createOmeCluster(members, index)` built the cluster `id` from `index` but never stored `clusterIndex: index` on the returned object. All downstream provenance reads got `undefined`, which propagated as `null` through quiz-object preview and failed `Number.isFinite(null)` validation, blocking save. Fixed by adding `clusterIndex: index` to the returned object.
+
+Unresolved validation tasks:
+
+- Verify real short OME PDFs import cleanly with PDF.js text-layer extraction only.
+- Verify structure/block preview on PDFs with columns, tables, charts, algorithms, and diagrams.
+- Verify concept extraction and clustering do not cross into UWorld or Anki paths.
+- Verify selected-cluster draft previews, review controls, approved-draft JSON export, quiz-object preview, and controlled save into a real test.
+- Confirm the no-OCR-fallback rule remains intact on real OME fixtures.
+
+Current UWorld batch flow:
+
+```text
+selected clusters
+→ deterministic drafts
+→ one-at-a-time queue
+→ cache by draft hash
+→ pause/cancel/retry
+→ preflight confirmation
+→ review-gated save
+```
+
+`deno.lock` remains untracked and should not be touched unless explicitly requested.
 
 ## Historical Implementation And Debugging Notes
 
@@ -283,7 +442,7 @@ Implemented behavior:
 Important operational note:
 
 - For Netlify deployment, Google Drive OAuth should use the deployed HTTPS origin, for example `https://MY-NETLIFY-SITE.netlify.app`.
-- Local development may use `http://localhost:8888` or `http://localhost:8080` only if those origins are added in Google Cloud Console.
+- Local development should use `http://localhost:8888` as the primary origin, or `http://localhost:8080` as a secondary/fallback origin, only if those origins are added in Google Cloud Console.
 - Opening `index.html` directly with `file://` is not supported for Drive or Gemini.
 
 ### Supabase
@@ -310,7 +469,7 @@ Gemini is still used for:
 - one hyperspecific tag per question
 - one hint per question
 
-Gemini calls now run through Netlify Functions. The API key belongs only in the Netlify `GEMINI_API_KEY` environment variable and must not be stored in frontend JavaScript, localStorage, or Google Drive backups.
+Browser/Netlify Gemini calls still run through Netlify Functions. Electron-local UWorld refinement runs through Electron main/preload. `GEMINI_API_KEY` must not be stored in frontend JavaScript, renderer code, localStorage, Google Drive backups, debug exports, or packaged assets.
 
 The model string must remain:
 
@@ -427,8 +586,17 @@ Recent verification after the latest local parser/render stabilization:
 - Electron does not use `file://` for the app load path.
 - Browser/Netlify mode still works and remains the stable fallback.
 - Basic Electron interaction verification passed.
-- Gemini local verification intentionally skipped to avoid Netlify redeploy/API usage during early Electron migration.
+- Gemini live validation for UWorld v1 is intentionally deferred to conserve API credits.
 - No parser, render, OCR, Gemini, or Google Drive logic was modified for Stage 2 verification.
+
+Verification after 2026-05-11 bug fixes:
+
+- `node -c electron/main.js` syntax check passed.
+- `git diff --check` whitespace check passed on `electron/main.js`.
+- No API key, prompt text, or source content exposed in any error path (confirmed by diff sweep).
+- Only `electron/main.js` was modified; `index.html`, `electron/preload.js`, and `deno.lock` were not touched.
+- Anki `.errors.map` fix: `node -c` syntax check on `index.html` passed; no NBME/UWorld/OME/Gemini logic modified.
+- OME `clusterIndex` fix: single-line change to `createOmeCluster`; no NBME/UWorld/Anki/Gemini logic modified.
 
 For deployment and sync testing, use the deployed HTTPS Netlify URL or Netlify local dev. Do not test Drive or Gemini from a `file://` URL.
 
@@ -446,8 +614,11 @@ Use extra caution around:
 
 ## Recommended Next Steps
 
-- Begin the Electron migration as the next planned phase.
-- Start Electron migration by wrapping the current stable app without behavior changes.
+- Remaining work is real-world validation and eventual modularization, not new importers.
+- Validate Anki v1 end-to-end against real `.txt` exports; confirm approval → preview → save path with mixed note types.
+- Validate OME v1 end-to-end against real short high-quality PDFs; confirm cluster provenance, approved-draft export, quiz-object preview, and controlled save.
+- Validate UWorld v1 Electron Gemini refinement with a small live batch using real imported notes before any large run.
+- Continue Electron migration by adding desktop-native storage, backup/restore, and Gemini service boundaries as the next planned phase.
 - During Electron migration, preserve the current local browser behavior before changing importer or renderer architecture.
 - Design the future importer around a common intermediate format shared by PDFs, DOCX, pasted text, Anki, audio/podcast transcripts, video transcripts, lecture notes, screenshots, and future source types.
 - Add a reviewable render-mode decision layer so each question can be displayed as text, image, or hybrid based on metadata, confidence, and content type.

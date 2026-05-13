@@ -5,9 +5,29 @@
   "description": "Local Electron development wrapper for the existing NBME Self-Assessment Suite browser app.",
   "main": "electron/main.js",
   "scripts": {
-    "electron:dev": "electron ."
+    "electron:dev": "electron .",
+    "electron:build:mac": "electron-builder --mac dir --arm64"
   },
   "devDependencies": {
-    "electron": "^30.5.1"
+    "electron": "^30.5.1",
+    "electron-builder": "^26.8.1"
+  },
+  "build": {
+    "appId": "com.nbme.self-assessment-suite",
+    "productName": "NBME Self-Assessment Suite",
+    "asar": false,
+    "files": [
+      "index.html",
+      "electron/**",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.education",
+      "icon": "build/icon.icns",
+      "identity": null,
+      "target": [
+        { "target": "dir", "arch": ["arm64"] }
+      ]
+    }
   }
 }
