@@ -3216,6 +3216,9 @@ window.MiscDocStore = MiscDocStore;
       DB.save();
       if (typeof window.checkGeminiApiKeyStatus === 'function') window.checkGeminiApiKeyStatus();
       setDriveStatus('Drive restore complete. Reloading...', '#27ae60', '', 'ok');
+      // Guard: suppress any startup DB.save() / Drive autosave on the next page load so
+      // the freshly-restored manifest is not immediately overwritten.
+      sessionStorage.setItem('nbme_post_restore_v1', '1');
       setTimeout(() => location.reload(), 1000);
     } catch(e) {
       setDriveStatus(e.message || 'Drive restore failed.', '#e74c3c', 'Restore failed', 'error');
@@ -6347,8 +6350,7 @@ function setLocalGeminiKey(key) {
   // Mirror to localStorage for fast access before next DB.get() call.
   if (k) localStorage.setItem(_GEMINI_KEY_LS, k);
   else   localStorage.removeItem(_GEMINI_KEY_LS);
-  // Schedule Drive sync so the key propagates to other devices.
-  if (typeof window.scheduleGoogleDriveSave === 'function') window.scheduleGoogleDriveSave();
+  // DB.save() above already calls scheduleGoogleDriveSave() — no second call needed.
 }
 
 /* Direct call to Gemini API from the renderer — no Netlify involved. */
@@ -22395,6 +22397,12 @@ function labTab(id, btn) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Detect and clear the post-restore guard flag set by restoreGoogleDriveNow()
+  // before the page reloaded. When present, skip any startup DB.save() that could
+  // immediately overwrite the just-restored Drive manifest with stale local state.
+  const _postRestore = sessionStorage.getItem('nbme_post_restore_v1') === '1';
+  if (_postRestore) sessionStorage.removeItem('nbme_post_restore_v1');
+
   const saved = parseInt(localStorage.getItem('question_font_size')) || 14;
   _applyQuestionFontSize(saved);
   // Remove any stored PIN from previous versions
@@ -22402,7 +22410,9 @@ document.addEventListener('DOMContentLoaded', () => {
   App.init();
   if (typeof updateHintUsageCounter === 'function') updateHintUsageCounter();
   // One-time migration: if key exists in localStorage mirror but not yet in DB, promote it.
+  // Skipped on the first load after a Drive restore — the restored DB is already authoritative.
   (function migrateGeminiKeyToDb() {
+    if (_postRestore) return;
     try {
       const lsKey = (localStorage.getItem('nbme_gemini_key_v1') || '').trim();
       const db = DB.get();
