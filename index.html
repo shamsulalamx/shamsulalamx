@@ -20922,35 +20922,93 @@ const App = (() => {
     return { totalQuestions:0, validQuestions:0, incompleteQuestions:0, blockingErrorCount:0, warningCount:0, unresolvedFigureCount:0, missingCorrectAnswerCount:0, extractionWarningCount:0 };
   }
 
-  // ── NBME UI artifact sanitizer ────────────────────────────────────────────
-  // Removes NBME navigation-bar text (e.g. "Lab Values Calculator") that
-  // leaks into stems/explanations from screenshot-OCR-based source PDFs.
-  // Conservative: only removes multi-term clusters or fully isolated lines.
-  // Protects medical prose like "next step", "previous episode", "help diagnose".
+  // ── NBME artifact sanitizer ──────────────────────────────────────────────
+  // Phase A: UI navigation-bar text ("Lab Values Calculator", etc.)
+  // Phase B: OCR separator/header artifacts (dash runs, ".... Mark", etc.)
+  // Conservative throughout — protects medical prose.
   (function() {
+    // ── Phase A: UI footer clusters ──────────────────────────────────────
     const TERM = '(?:Previous|Next|Score\\s+Report|Lab\\s+Values|Calculator|Help|Pause)';
-    // Two or more UI terms adjacent (with optional whitespace/comma between them)
-    const _clusterRe = new RegExp(TERM + '(?:[\\s,]+' + TERM + ')+', 'gi');
-    // Single UI term alone on its own line (no other meaningful content)
+    const _clusterRe   = new RegExp(TERM + '(?:[\\s,]+' + TERM + ')+', 'gi');
     const _singleLineRe = new RegExp(
       '^[ \\t]*(?:Previous|Next|Score\\s+Report|Lab\\s+Values|Calculator|Help|Pause)[ \\t]*$',
       'gim'
     );
-    // Short known artifact appended after sentence terminator at end of line/string
     const _suffixRe = /([.;:!?)\]])\s+((?:Lab\s+Values|Score\s+Report))(?=\s*$|\s*\n)/gi;
+
+    // ── Phase B: OCR separator / header artifacts ────────────────────────
+    // Inline separator run: 3+ space-separated groups of only sep chars.
+    // First char of each group must be a strong sep char (not `.`) so sentence-
+    // ending periods are never consumed. An optional leading ` . ` prefix handles
+    // the OCR stray-dot-before-dash pattern (e.g. "G. . - - -").
+    // Replace with single space (not empty) to avoid fusing adjacent words.
+    const _ocrRunRe = /(?:[ \t]+\.[ \t]+)?(?:[-–—·•|\\\/]+[-–—.·•|\\\/]*[ \t]+){3,}[-–—.·•|\\\/]*/g;
+
+    // ".... Mark" / "... Mark" / ".. Mark" bookmark artifact.
+    const _dotMarkRe = /\.{2,}\s*Mark\b(?!\w)/gi;
+
+    // Standalone "Mark" immediately after a sentence period (the sep run was
+    // already removed, leaving ". Mark [legitimate text]").
+    // Only fires when preceded by . + ≤5 spaces — avoids "landmark" etc.
+    const _periodMarkRe = /(\.\s{0,5})Mark\b(?!\w)\s*/g;
+
+    // Chars considered junk/separator for the junk-line ratio test.
+    // Includes both · (U+00B7) and • (U+2022).
+    const _junkCharRe = /[·•\-–—.|\\\/,;'"()\[\]{}~^*+=<>!@#%&:]/g;
+
+    function _isNbmeOcrJunkLine(line) {
+      const t = line.trim();
+      if (!t) return true;
+      // Known header/URL artifacts
+      if (/Please\s+Walt/i.test(t)) return true;
+      if (/https?:\/\/t\.me\//i.test(t)) return true;
+      // Strip every sep/punct/space char — if only "Mark" (+ ≤2 stray OCR chars) remains it's junk
+      const lettersOnly = t.replace(_junkCharRe, '').replace(/\s/g, '');
+      if (/^Mark$/i.test(lettersOnly)) return true;
+      if (/Mark/i.test(lettersOnly) && lettersOnly.replace(/Mark/gi, '').length <= 2) return true;
+      // General ratio check: >70% of non-space chars are junk/separator chars
+      const nonSpace = t.replace(/\s/g, '');
+      if (nonSpace.length >= 8) {
+        const junkCount = (nonSpace.match(_junkCharRe) || []).length;
+        if (junkCount / nonSpace.length > 0.70) return true;
+      }
+      return false;
+    }
 
     window._ngjSanitizeUiArtifactsText = function(text, fieldPath, artifactLog) {
       if (typeof text !== 'string') return text;
       let result = text;
       const removed = [];
-      result = result.replace(_clusterRe, function(m) { removed.push(m.trim()); return ''; });
+
+      // Phase A — UI footer clusters
+      result = result.replace(_clusterRe,    function(m) { removed.push(m.trim()); return ''; });
       result = result.replace(_singleLineRe, function(m) { removed.push(m.trim()); return ''; });
       result = result.replace(_suffixRe, function(m, punct) { removed.push(m.trim()); return punct; });
+
+      // Phase B1 — inline OCR separator runs (replace with space to avoid word fusion)
+      result = result.replace(_ocrRunRe,     function(m) { removed.push(m.trim().slice(0, 60)); return ' '; });
+      // Phase B2 — ".... Mark" bookmarks
+      result = result.replace(_dotMarkRe,    function(m) { removed.push(m.trim()); return ''; });
+      // Phase B3 — residual "Mark" immediately after a sentence period
+      result = result.replace(_periodMarkRe, function(m, p) { removed.push('Mark'); return p; });
+
+      // Phase B4 — line-level junk (whole lines that are entirely separator noise)
+      const lines = result.split('\n');
+      const cleanLines = lines.filter(function(ln) {
+        if (_isNbmeOcrJunkLine(ln)) { if (ln.trim()) removed.push(ln.trim().slice(0, 60)); return false; }
+        return true;
+      });
+      result = cleanLines.join('\n');
+
       if (removed.length) {
-        artifactLog.push('Removed NBME UI artifact from ' + fieldPath + ': ' +
+        const tag = removed.some(function(r) { return /[-–—.·•]/.test(r) || /Mark/i.test(r); })
+          ? 'Removed NBME OCR separator/header artifact from '
+          : 'Removed NBME UI artifact from ';
+        artifactLog.push(tag + fieldPath + ': ' +
           removed.map(function(s) { return JSON.stringify(s); }).join(', '));
       }
-      // Normalize whitespace introduced by removals
+
+      // Normalize whitespace from all removals
       result = result
         .replace(/[ \t]{2,}/g, ' ')
         .replace(/[ \t]+$/gm, '')

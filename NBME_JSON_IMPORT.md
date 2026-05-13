@@ -1,6 +1,6 @@
 # NBME JSON Importer — Technical Specification
 
-**Last updated:** 2026-05-13  
+**Last updated:** 2026-05-13 (OCR separator sanitizer added)  
 **Status:** Implemented, partially validated. See BUGS_AND_NEXT_STEPS.md for outstanding issues.
 
 ---
@@ -272,6 +272,8 @@ Fields **not** sanitized: `correctAnswer`, labels, IDs, `retrievalTag`, metadata
 
 ### Removal rules (conservative)
 
+**Phase A — UI footer clusters:**
+
 1. **Multi-term clusters** — two or more UI terms adjacent (any whitespace between): always removed.  
    Recognized terms: `Previous`, `Next`, `Score Report`, `Lab Values`, `Calculator`, `Help`, `Pause`
 
@@ -279,9 +281,24 @@ Fields **not** sanitized: `correctAnswer`, labels, IDs, `retrievalTag`, metadata
 
 3. **Short known artifact as terminal suffix** — `Lab Values` or `Score Report` appearing after sentence-ending punctuation at the very end of a line or string: removed, punctuation preserved.
 
+**Phase B — OCR separator / header artifacts:**
+
+4. **Inline separator run** — 3+ space-separated groups of only separator characters (`-–—·•|\/\`), optionally preceded by a stray `. ` (OCR dot before dashes). Replaced with a single space (not empty, to avoid fusing adjacent words).
+
+5. **`.... Mark` bookmark** — 2+ consecutive dots followed by `Mark` (not `marked`/`marker`): removed.
+
+6. **Period-preceded standalone `Mark`** — residual `Mark` immediately following a sentence period after an inline run was removed (e.g. `. Mark [text]`): removed, period preserved.
+
+7. **Junk line** — a whole line (after `\n` split) is dropped if:
+   - Empty/whitespace only
+   - Contains `Please Walt`
+   - Contains `https://t.me/`
+   - After stripping all separator/punctuation chars, only `Mark` (+ ≤2 stray OCR chars) remain
+   - ≥8 non-space chars with >70% being separator/punctuation characters
+
 ### Protected medical phrases
 
-The sanitizer is **not** a word-level blocklist. Because rules 1–3 require adjacency or isolation, the following phrases are never touched:
+The sanitizer is **not** a word-level blocklist. Rules require adjacency, isolation, or heavy punctuation density:
 
 | Phrase | Why safe |
 |---|---|
@@ -289,15 +306,19 @@ The sanitizer is **not** a word-level blocklist. Because rules 1–3 require adj
 | `next menstrual cycle`, `next follow-up` | same |
 | `previous episode`, `previous examination` | `episode`/`examination` not UI terms |
 | `help diagnose`, `can help determine` | `diagnose` not a UI term |
-| `the lab values were abnormal` | `lab values` in sentence context, not isolated or adjacent to other UI terms |
-| `score reported as` | `reported` breaks the `Score Report` two-word match |
+| `the lab values were abnormal` | `lab values` in sentence context |
+| `score reported as` | `reported` breaks the two-word match |
+| `marked psychomotor slowing` | starts with `marked` (not bare `Mark`) |
+| `biomarker testing` | `Mark` preceded by `bio` (letter) |
 
-### Validation (Psych_Shelf_5)
+### Validation
 
-Verified against `test-data/Psych_Shelf_5_app_ready.json` (50 questions):
-- **50 artifact instances removed** — all `"Lab Values Calculator"` mid-paragraph occurrences
-- **0 false positives** — all `next step`, `previous episode`, `help diagnose`, and similar medical phrases preserved
-- Q48 explanation intact; Q10/Q21 had two instances each, both cleaned
+**Psych_Shelf_5** (50 questions): 50 `"Lab Values Calculator"` instances removed, 0 false positives.
+
+**Psych_Shelf_3** (50 questions): 49 fields cleaned (inline sep runs + `.... Mark` bookmarks), 0 false positives, 0 residual artifacts. Sample removals:
+- Q20/Q23/Q25: long `- - - -- -` runs with `.... Mark` bookmark mid-explanation body
+- Q37: `·- • - -· ·-·- - -·` Morse-like OCR separator run
+- Multiple questions: stray `. ` before dash runs consumed cleanly without touching sentence periods
 
 ---
 
@@ -340,6 +361,8 @@ The primary validation JSON is:
 This file contains 50 questions from a Psychiatry Shelf exam processed through Gemini. Q25, Q34, and Q48 contain `figureRefs`. Q1, Q9, Q11, and Q24 have long stems (608–1319 characters).
 
 Additional test files in `test-data/`:
+- `Psych_Shelf_3_app_ready.json` — 50 questions; used to validate OCR separator sanitizer (49 fields cleaned, Morse-like runs + `.... Mark` bookmarks)
+- `Psych_Shelf_4_app_ready.json`
 - `Psych_Shelf_5_app_ready.json` — 50 questions; used to validate UI artifact sanitizer (50 `Lab Values Calculator` instances removed)
 - `Psych_Shelf_6_app_ready.json`
 - `Psych_Shelf_7_repaired_app_ready.json`
