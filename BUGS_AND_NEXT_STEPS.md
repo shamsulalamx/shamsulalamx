@@ -1,6 +1,6 @@
 # BUGS AND NEXT STEPS
 
-**Last updated:** 2026-05-13 (Gemini key syncs through Drive)  
+**Last updated:** 2026-05-13 (Gemini key Drive sync + export safety complete)  
 **Purpose:** Active bug tracker and prioritized work queue. Contains all unresolved issues and pending validations. Update this file as items are resolved.
 
 ---
@@ -239,9 +239,30 @@ Gemini-powered "Generate Missing Tags & Pearls" is deferred until after the exam
 - The key lives in `db.settings.geminiApiKey` (canonical) and is mirrored to `localStorage('nbme_gemini_key_v1')` for fast access. `setLocalGeminiKey()` writes both, calls `DB.save()`, and schedules a Drive sync.
 - Drive snapshot includes the full `settings` block including `geminiApiKey`. Restoring from Drive on a new device syncs the key to localStorage and calls `checkGeminiApiKeyStatus()` to update the top-bar indicator.
 - Startup migration: if `localStorage('nbme_gemini_key_v1')` has a key but `db.settings.geminiApiKey` is absent, the key is promoted to the DB on first load (one-time, handles existing installs).
-- The key never appears in exported test JSON files — test export reads individual `DB.getTest()` objects, not `db.settings`.
+- The key never appears in downloadable files — all four JSON export call sites use `safeExportJson()`, a central serializer that strips every key in `_EXPORT_SENSITIVE_KEYS` (currently `{'geminiApiKey'}`) at any depth. Audit confirmed no current export path touches `db.settings` directly; the guard is defensive for future code.
 - Netlify function files remain in the repo as dead code (reference/rollback). They are not called anywhere in the renderer or Electron main process.
 - All AI output fields (`retrievalTag`, `reviewPearl`, `hints`, `generatedAt`, `model`) are stored with question/test data and sync through Drive normally.
+
+---
+
+## COMPLETED — 2026-05-13: Export safety — safeExportJson
+
+### [FEAT-004] Prevent Gemini key leakage in downloadable exports — ✅ COMPLETE
+
+**Audit result:** No current export path touches `db.settings`. All exports serialize individual draft/question/test objects. PDF report, notes PDF/DOCX, and all JSON exports were confirmed clean.
+
+**Implemented:**
+- `_EXPORT_SENSITIVE_KEYS = new Set(['geminiApiKey'])` — central list of keys to strip from all downloads
+- `safeExportJson(payload, indent)` — wrapper around `JSON.stringify` with a replacer that strips every key in `_EXPORT_SENSITIVE_KEYS` at any depth. Exposed as `window.safeExportJson`.
+- All four JSON export `Blob` call sites updated: OME approved drafts, Anki approved variants, UWorld approved drafts, parser debug export.
+- Drive manifest path (`saveManifestToDrive`) intentionally left on raw `JSON.stringify` — Drive backup is the correct sync destination for the key.
+
+**Smoke tested (Node.js):**
+1. Root-level `geminiApiKey` stripped; other fields preserved.
+2. Nested `geminiApiKey` stripped; sibling settings fields preserved.
+3. Clean OME payload with no sensitive keys — output byte-identical.
+
+**Syntax check:** 9 inline script blocks — 0 errors.
 
 ---
 

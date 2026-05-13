@@ -289,6 +289,26 @@ All in `test-data/`, committed to the `electron-runtime-phase-1` branch.
 
 ---
 
+## 10e. What Changed 2026-05-13 (Gemini key Drive sync + export safety)
+
+| Change | Status |
+|--------|--------|
+| **Gemini key now syncs through Drive** — stored in `db.settings.geminiApiKey` (canonical); mirrored to `localStorage('nbme_gemini_key_v1')` for fast access | ✅ |
+| `isUnsafeStorageValue()` — `geminiApiKey` exclusion removed; key now saved in `nbme_app_v1` and Drive manifest | ✅ |
+| `driveDbSnapshot()` — full `settings` block included; `geminiApiKey` no longer stripped | ✅ |
+| `restoreGoogleDriveNow()` — after settings restore, syncs key to localStorage mirror; calls `checkGeminiApiKeyStatus()` to update top bar | ✅ |
+| `setLocalGeminiKey()` — writes DB + localStorage, calls `DB.save()` and `scheduleGoogleDriveSave()` | ✅ |
+| `getLocalGeminiKey()` — reads `db.settings.geminiApiKey` first, falls back to localStorage | ✅ |
+| `clearLegacyGeminiKey()` — no longer deletes canonical DB key; removes only old `localStorage('gemini_api_key')` | ✅ |
+| Startup one-time migration — if key in localStorage but absent from DB, promoted to `db.settings.geminiApiKey` on load | ✅ |
+| **Export safety** — `safeExportJson(payload, indent)` added; strips `_EXPORT_SENSITIVE_KEYS` at any depth | ✅ |
+| All 4 JSON export call sites updated to use `safeExportJson()` | ✅ |
+| Audit confirmed: no current export path touches `db.settings` directly | ✅ |
+| Syntax check: 9 script blocks, 0 errors | ✅ |
+| Node.js smoke tests: 3 tests (root strip, nested strip, clean payload) — all pass | ✅ |
+
+---
+
 ## 11. Immediate Next Priorities
 
 **P0 — Backfill `retrievalTag` + `reviewPearl` for Psych Shelf 3–8.** Run `node backfill-pearls.js` (requires `GEMINI_API_KEY`). All 300 questions in `test-data/Psych_Shelf_*_app_ready.json` updated in-place. Deferred until exam prep permits.
