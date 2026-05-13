@@ -6249,7 +6249,23 @@ async function requestHint() {
   }
 }
 
-/* ── Local Gemini key (localStorage only, never in DB or Drive) ── */
+/* ── Export safety: keys that must never appear in downloadable files ── */
+const _EXPORT_SENSITIVE_KEYS = new Set(['geminiApiKey']);
+
+/**
+ * Safe JSON serializer for all user-facing file downloads.
+ * Strips _EXPORT_SENSITIVE_KEYS from every level of the payload.
+ * Use this instead of JSON.stringify for every Blob exported to disk.
+ */
+function safeExportJson(payload, indent) {
+  return JSON.stringify(payload, (key, value) => {
+    if (key !== '' && _EXPORT_SENSITIVE_KEYS.has(key)) return undefined;
+    return value;
+  }, indent);
+}
+window.safeExportJson = safeExportJson;
+
+/* ── Local Gemini key ── */
 const _GEMINI_KEY_LS  = 'nbme_gemini_key_v1';
 const _GEMINI_MODEL   = 'gemini-2.5-flash';
 const _GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${_GEMINI_MODEL}:generateContent`;
@@ -9397,7 +9413,7 @@ const App = (() => {
     }
 
     setOmeDraftExportError('');
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const blob = new Blob([safeExportJson(payload, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     const safeName = (sourceName || 'ome-pdf').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'ome-pdf';
@@ -17405,7 +17421,7 @@ const App = (() => {
       return;
     }
 
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const blob = new Blob([safeExportJson(payload, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     const safeName = (sourceName || 'anki-notes').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'anki-notes';
@@ -19573,7 +19589,7 @@ const App = (() => {
       toast(`Approved draft export blocked: ${validation.errors[0]}`, 8000);
       return;
     }
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const blob = new Blob([safeExportJson(payload, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     const safeName = (sourceName || 'uworld-notes').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'uworld-notes';
@@ -19943,7 +19959,7 @@ const App = (() => {
       return;
     }
     const payload = buildParserDebugDownload();
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const blob = new Blob([safeExportJson(payload, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     const safeName = (_genParsed?.name || 'parser-debug').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'parser-debug';
