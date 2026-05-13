@@ -217,6 +217,31 @@ Gemini-powered "Generate Missing Tags & Pearls" is deferred until after the exam
 
 ---
 
+---
+
+## COMPLETED — 2026-05-13: New study folders and Miscellaneous Documents storage
+
+### [FEAT-002] Emma Holiday, Fast Facts, Miscellaneous Documents — ✅ COMPLETE
+
+**Implemented:**
+
+- **Emma Holiday** (`src-emma-holiday`) and **Fast Facts** (`src-fast-facts`) added to `DEFAULT_SOURCE_FOLDERS` in the `DB` layer. Both use `sourceType: 'nbme'` and `workflows: ['pdf-test-import']`, giving them the full NBME JSON import workflow (upload JSON, save tests, run quizzes, score reports, `retrievalTag`/`reviewPearl` support). `ensureSourceFolders()` appends them to any existing install automatically on next load — no manual migration required.
+
+- **Miscellaneous Documents** card added to the landing grid (purple left-border, 📄 icon). This is a document-only storage folder — **not a quiz source**. No question generation, parsing, quiz mode, or score reports. Existing quiz/report/review workflows are completely untouched.
+  - `MiscDocStore` — new IndexedDB module (`nbme_misc_docs_v1`), isolated from `FigureStore` and `localStorage`. Stores `{ id, filename, mimeType, size, createdAt, dataUrl }` per file.
+  - Supported types: PDF, DOCX, TXT, RTF, MD, PNG, JPG, JPEG
+  - Open: PDFs and images open in a new tab; DOCX/TXT/RTF/MD trigger a browser download
+  - Delete: per-file with confirmation
+
+**Validated in `electron:dev` (smoke test 2026-05-13):**
+- All 3 cards visible on landing page
+- Emma Holiday and Fast Facts open the standard source folder page
+- Miscellaneous Documents opens the doc manager panel
+- File upload, open, and delete all functional
+- Existing NBME/UWorld/Anki folders unaffected
+
+---
+
 ## PRIORITIZED NEXT STEPS
 
 **P0 — Backfill `retrievalTag` + `reviewPearl` for Psych Shelf 3–8.** Run `node backfill-pearls.js` (requires `GEMINI_API_KEY`). Updates all 300 questions in `test-data/Psych_Shelf_*_app_ready.json` in-place. Validate, then commit. Deferred until exam prep permits.

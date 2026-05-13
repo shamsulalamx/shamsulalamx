@@ -33,6 +33,7 @@ Single-file SPA: **`index.html`** (~21,700+ lines). All HTML, CSS, and JS inline
 |--------|------|
 | `DB` IIFE | localStorage read/write: tests, folders, flags, marks, notes, history |
 | `FigureStore` | IndexedDB: large stem/exhibit images (PDF OCR pipeline) |
+| `MiscDocStore` | IndexedDB (`nbme_misc_docs_v1`): Miscellaneous Documents file blobs + metadata |
 | Stem rendering helpers | `window.buildStemHTML`, `window.buildQuestionStemHTML`, `window.buildSharedGroupHTML`, `window._ngjFigureToHTML`, `window._replaceFigureMarkersInStemHtml` |
 | Sanitizers | `window._ngjSanitizeUiArtifactsText`, `window._ngjSanitizeQuestion`, `window._isNbmeOcrJunkLine` |
 | `Quiz` IIFE | Test-taking engine: state, navigation, answer selection, explanation rendering |
@@ -267,6 +268,23 @@ All in `test-data/`, committed to the `electron-runtime-phase-1` branch.
 | BUG-006 fixed: `#q-pearl-block` added to `#exp-panel`; retrieval tag + pearl visible immediately after answering in tutor mode | ✅ |
 | BUG-007 fixed: `explanationParts(q)` reads `educationalObjective`, `correctBlurb`, `q.e` in addition to legacy `q.explanation`; PDF gate broadened to `exp.correctLine || exp.paras.length > 0` | ✅ |
 | All fixes validated in electron:dev | ✅ |
+| Packaged app rebuilt: `npm run electron:build:mac` | ✅ |
+
+---
+
+## 10d. What Changed 2026-05-13 (landing page — new study folders)
+
+| Change | Status |
+|--------|--------|
+| **Emma Holiday** added as top-level source folder (`src-emma-holiday`, order 8, `sourceType: 'nbme'`, `workflows: ['pdf-test-import']`) | ✅ |
+| **Fast Facts** added as top-level source folder (`src-fast-facts`, order 9, same schema as Emma Holiday) | ✅ |
+| Both folders reuse existing NBME JSON import workflow — no new parsing logic | ✅ |
+| `ensureSourceFolders()` migration: both folders appended automatically to existing installs on next load | ✅ |
+| **Miscellaneous Documents** card added to landing grid (purple left-border, document icon) | ✅ |
+| `MiscDocStore` IndexedDB module added (`nbme_misc_docs_v1`), isolated from `FigureStore` and `localStorage` | ✅ |
+| Misc docs panel: upload, list (filename/size/date), open (PDF/image → new tab; DOCX/TXT/MD → download), delete | ✅ |
+| No quiz engine, report engine, review engine, or retrievalTag/reviewPearl logic touched | ✅ |
+| Validated in `electron:dev` (smoke test passed) | ✅ |
 | Packaged app rebuilt: `npm run electron:build:mac` | ✅ |
 
 ---

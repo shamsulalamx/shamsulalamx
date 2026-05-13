@@ -1726,6 +1726,22 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 .ngj-figure-status { font-size: 11px; color: var(--muted); }
 .ngj-figure-status.ok { color: #27ae60; font-weight: 600; }
 .ngj-figure-status.auto { color: #2563eb; font-weight: 600; }
+
+/* ── Misc Docs panel ─────────────────────────────────── */
+.misc-docs-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+.misc-docs-list { display: flex; flex-direction: column; gap: 8px; }
+.misc-doc-row {
+  display: flex; align-items: center; gap: 12px;
+  background: white; border: 1px solid var(--border); border-radius: 5px;
+  padding: 10px 14px; transition: box-shadow .12s;
+}
+.misc-doc-row:hover { box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+.misc-doc-icon { font-size: 20px; flex-shrink: 0; }
+.misc-doc-info { flex: 1; min-width: 0; }
+.misc-doc-name { font-size: 13px; font-weight: 600; color: var(--navy); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.misc-doc-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.misc-doc-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
 </style>
 <div id="modal-nbme-gemini-json" class="modal-overlay">
   <div class="modal-box ngj-modal-box">
@@ -2344,7 +2360,9 @@ const DB = (() => {
     { id: 'src-divine-podcasts', name: 'Divine Podcasts', order: 4, sourceType: 'divine', workflows: ['divine-transcript-preview'] },
     { id: 'src-mehlman', name: 'Mehlman', order: 5, sourceType: 'mehlman', workflows: ['mehlman-pdf-preview'] },
     { id: 'src-images-and-tables', name: 'Images and Tables', order: 6, sourceType: 'images-tables', workflows: [] },
-    { id: 'src-amboss', name: 'Amboss', order: 7, sourceType: 'amboss', workflows: [] }
+    { id: 'src-amboss', name: 'Amboss', order: 7, sourceType: 'amboss', workflows: [] },
+    { id: 'src-emma-holiday', name: 'Emma Holiday', order: 8, sourceType: 'nbme', workflows: ['pdf-test-import'] },
+    { id: 'src-fast-facts', name: 'Fast Facts', order: 9, sourceType: 'nbme', workflows: ['pdf-test-import'] }
   ];
 
   function cloneSourceFolder(source) {
@@ -2744,6 +2762,66 @@ const FigureStore = (() => {
   return { put, get, deleteByPrefix };
 })();
 window.FigureStore = FigureStore;
+</script>
+<script>
+/* ============================================================
+   MISC DOC STORE — IndexedDB for uploaded study documents
+   Stores full file blobs (dataUrl) with metadata.
+   Completely separate from FigureStore and localStorage.
+============================================================ */
+const MiscDocStore = (() => {
+  const DB_NAME    = 'nbme_misc_docs_v1';
+  const STORE_NAME = 'documents';
+  let _db = null;
+
+  function open() {
+    if (_db) return Promise.resolve(_db);
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = e => {
+        e.target.result.createObjectStore(STORE_NAME, { keyPath: 'id' });
+      };
+      req.onsuccess = e => { _db = e.target.result; resolve(_db); };
+      req.onerror   = e => reject(e.target.error);
+    });
+  }
+
+  async function putDoc(doc) {
+    const db = await open();
+    return new Promise((resolve, reject) => {
+      const tx  = db.transaction(STORE_NAME, 'readwrite');
+      const st  = tx.objectStore(STORE_NAME);
+      const req = st.put(doc);
+      req.onsuccess = () => resolve();
+      req.onerror   = e => reject(e.target.error);
+    });
+  }
+
+  async function getAllDocs() {
+    const db = await open();
+    return new Promise((resolve, reject) => {
+      const tx  = db.transaction(STORE_NAME, 'readonly');
+      const st  = tx.objectStore(STORE_NAME);
+      const req = st.getAll();
+      req.onsuccess = e => resolve(e.target.result || []);
+      req.onerror   = e => reject(e.target.error);
+    });
+  }
+
+  async function deleteDoc(id) {
+    const db = await open();
+    return new Promise((resolve, reject) => {
+      const tx  = db.transaction(STORE_NAME, 'readwrite');
+      const st  = tx.objectStore(STORE_NAME);
+      const req = st.delete(id);
+      req.onsuccess = () => resolve();
+      req.onerror   = e => reject(e.target.error);
+    });
+  }
+
+  return { putDoc, getAllDocs, deleteDoc };
+})();
+window.MiscDocStore = MiscDocStore;
 </script>
 <script>
 /* ============================================================
@@ -7279,6 +7357,7 @@ const App = (() => {
   }
 
   function renderHomeGrid() {
+    if (_currentView === 'misc-docs') { renderMiscDocPanel(); return; }
     const titleEl = document.getElementById('home-title');
     const contentEl = document.getElementById('home-content');
     const generateBtn = document.getElementById('btn-home-generate');
@@ -7371,6 +7450,17 @@ const App = (() => {
         </div>
       </div>`;
     });
+    html += `<div class="source-card" onclick="App.showMiscDocs()" style="border-left:3px solid #9b59b6;">
+      <div class="source-card-top">
+        <div class="source-folder-icon" style="background:linear-gradient(180deg,#e8d5f5 0%,#d4aaee 100%);border-color:#c39ad9;font-size:20px;display:flex;align-items:center;justify-content:center;">📄</div>
+        <div class="source-card-count" id="misc-docs-landing-count">…</div>
+      </div>
+      <div>
+        <div class="source-card-name">Miscellaneous Documents</div>
+        <div class="source-card-meta">Study files &amp; references</div>
+      </div>
+      <div class="source-card-actions"></div>
+    </div>`;
     html += `<div class="source-card add" onclick="App.promptNewSourceFolder()">
       <div class="source-add-plus">＋</div>
       <div>
@@ -7380,6 +7470,10 @@ const App = (() => {
     </div>`;
     html += '</div>';
     contentEl.innerHTML = html;
+    MiscDocStore.getAllDocs().then(docs => {
+      const el = document.getElementById('misc-docs-landing-count');
+      if (el) el.textContent = docs.length;
+    }).catch(() => {});
   }
 
   function renderSourceFolderPage(contentEl) {
@@ -21721,6 +21815,142 @@ const App = (() => {
     toast(`✓ "${testName}" created with ${questions.length} questions (nbme-gemini-json).`);
   }
 
+  // ── Miscellaneous Documents ────────────────────────────────
+  function showMiscDocs() {
+    _currentView = 'misc-docs';
+    _currentSource = null;
+    _currentFolder = null;
+    document.getElementById('screen-home').style.display    = 'flex';
+    document.getElementById('screen-quiz').style.display    = 'none';
+    document.getElementById('screen-results').style.display = 'none';
+    document.getElementById('screen-review').style.display  = 'none';
+    document.getElementById('home-title').textContent = 'Miscellaneous Documents';
+    const generateBtn = document.getElementById('btn-home-generate');
+    if (generateBtn) generateBtn.style.display = 'none';
+    setActiveNav(null);
+    renderMiscDocPanel();
+  }
+
+  function renderMiscDocPanel() {
+    const contentEl = document.getElementById('home-content');
+    if (!contentEl) return;
+    contentEl.innerHTML = `
+      <div class="misc-docs-toolbar">
+        <button class="btn-generate" onclick="App.miscDocUpload()">＋ Upload File</button>
+        <span style="font-size:12px;color:var(--muted)">PDF · DOCX · TXT · RTF · MD · PNG · JPG</span>
+      </div>
+      <div class="misc-docs-list" id="misc-docs-list">
+        <div class="no-tests">Loading…</div>
+      </div>`;
+    MiscDocStore.getAllDocs().then(docs => {
+      const listEl = document.getElementById('misc-docs-list');
+      if (!listEl) return;
+      if (!docs.length) {
+        listEl.innerHTML = '<div class="no-tests">No documents yet. Click "＋ Upload File" to add study materials.</div>';
+        return;
+      }
+      docs.sort((a, b) => b.createdAt - a.createdAt);
+      let html = '';
+      docs.forEach(doc => {
+        const icon = _miscDocIcon(doc.mimeType, doc.filename);
+        const size = _miscDocSize(doc.size);
+        const date = new Date(doc.createdAt).toLocaleDateString();
+        html += `<div class="misc-doc-row">
+          <div class="misc-doc-icon">${icon}</div>
+          <div class="misc-doc-info">
+            <div class="misc-doc-name" title="${escapeHTML(doc.filename)}">${escapeHTML(doc.filename)}</div>
+            <div class="misc-doc-meta">${size} · ${date}</div>
+          </div>
+          <div class="misc-doc-actions">
+            <button class="btn-card primary" onclick="App.miscDocOpen('${doc.id}')">Open</button>
+            <button class="btn-card danger" onclick="App.miscDocDelete('${doc.id}')">Delete</button>
+          </div>
+        </div>`;
+      });
+      listEl.innerHTML = html;
+    }).catch(() => {
+      const listEl = document.getElementById('misc-docs-list');
+      if (listEl) listEl.innerHTML = '<div class="no-tests">Error loading documents.</div>';
+    });
+  }
+
+  function _miscDocIcon(mimeType, filename) {
+    const ext = (filename || '').split('.').pop().toLowerCase();
+    if (mimeType && mimeType.startsWith('image/')) return '🖼';
+    if (mimeType === 'application/pdf' || ext === 'pdf') return '📕';
+    if (ext === 'docx' || (mimeType && mimeType.includes('word'))) return '📝';
+    if (ext === 'md') return '📋';
+    return '📄';
+  }
+
+  function _miscDocSize(bytes) {
+    if (!bytes) return '';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return Math.round(bytes / 1024) + ' KB';
+    return (bytes / 1048576).toFixed(1) + ' MB';
+  }
+
+  function miscDocUpload() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.pdf,.docx,.txt,.rtf,.md,.png,.jpg,.jpeg';
+    input.onchange = e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async ev => {
+        const doc = {
+          id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+          filename: file.name,
+          mimeType: file.type || 'application/octet-stream',
+          size: file.size,
+          createdAt: Date.now(),
+          dataUrl: ev.target.result
+        };
+        try {
+          await MiscDocStore.putDoc(doc);
+          toast('File uploaded.');
+          if (_currentView === 'misc-docs') renderMiscDocPanel();
+        } catch(err) {
+          toast('Upload failed: ' + (err && err.message ? err.message : String(err)), 4000);
+        }
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  }
+
+  async function miscDocOpen(id) {
+    try {
+      const docs = await MiscDocStore.getAllDocs();
+      const doc = docs.find(d => d.id === id);
+      if (!doc) { toast('Document not found.', 2000); return; }
+      const a = document.createElement('a');
+      a.href = doc.dataUrl;
+      if (doc.mimeType && (doc.mimeType.startsWith('image/') || doc.mimeType === 'application/pdf')) {
+        a.target = '_blank';
+      } else {
+        a.download = doc.filename;
+      }
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch(err) {
+      toast('Could not open file.', 2000);
+    }
+  }
+
+  async function miscDocDelete(id) {
+    if (!confirm('Delete this document? This cannot be undone.')) return;
+    try {
+      await MiscDocStore.deleteDoc(id);
+      toast('Document deleted.');
+      if (_currentView === 'misc-docs') renderMiscDocPanel();
+    } catch(err) {
+      toast('Delete failed.', 2000);
+    }
+  }
+
   return {
     init,
     toast,
@@ -21859,7 +22089,11 @@ const App = (() => {
     updateNbmeGeminiJsonSaveReadiness,
     createTestFromNbmeGeminiJsonImport,
     ngjHandleFigureUpload,
-    ngjRemoveFigureAttachment
+    ngjRemoveFigureAttachment,
+    showMiscDocs,
+    miscDocUpload,
+    miscDocOpen,
+    miscDocDelete
   };
 })();
 

@@ -23,6 +23,8 @@ A local Electron desktop app for generating and reviewing NBME-style self-assess
 |---|---|---|
 | NBME | PDF (screenshot/OCR) | No |
 | NBME Gemini JSON | Pre-structured `.json` (external AI extraction) | No (JSON is already AI output) |
+| Emma Holiday | Pre-structured `.json` (same workflow as NBME Gemini JSON) | No |
+| Fast Facts | Pre-structured `.json` (same workflow as NBME Gemini JSON) | No |
 | UWorld | DOCX export | Yes (Electron IPC) |
 | OME | Short high-quality PDF | No (v1) |
 | Anki | Plain-text `.txt` export | No (v1) |
@@ -30,6 +32,27 @@ A local Electron desktop app for generating and reviewing NBME-style self-assess
 | Divine Podcasts | Transcript `.txt` / `.md` | Yes (Electron IPC) |
 
 Each source pipeline is isolated. Changes to one pipeline do not affect others.
+
+### Emma Holiday and Fast Facts
+
+Emma Holiday and Fast Facts are top-level study library folders that use the identical JSON-import workflow as the NBME source. Import a `.json` file structured using the NBME Gemini JSON schema, run quizzes, review score reports, and access `retrievalTag` / `reviewPearl` fields exactly as with NBME tests. No new parsing logic — these folders are first-class entries in the source folder list that reuse the existing test and folder infrastructure.
+
+---
+
+## Miscellaneous Documents
+
+Miscellaneous Documents is a lightweight study-file repository built into the app. It is **not** a quiz folder — there is no question generation, parsing, or quiz mode. Use it to store reference materials alongside your active tests.
+
+**Supported file types:** PDF, DOCX, TXT, RTF, MD, PNG, JPG, JPEG
+
+**Features:**
+- Upload any supported file from the landing page
+- Files are stored locally in IndexedDB (`MiscDocStore`, `nbme_misc_docs_v1`) — no server, no sync
+- Document list shows filename, file size, and upload date
+- Open PDFs and images directly in a new window; download DOCX/TXT/MD/RTF files
+- Delete individual files with confirmation
+
+**What it is not:** No quizzes, no score reports, no review mode, no Gemini integration. The existing quiz engine, report engine, review engine, and all import pipelines are completely unaffected.
 
 ---
 
@@ -119,6 +142,7 @@ Gemini refinement is available for the **UWorld** and **Divine Podcasts** pipeli
 |---|---|
 | `localStorage` | Test metadata, folders, marks, flags, notes, settings |
 | IndexedDB (`FigureStore`) | Question stem images, figures, exhibits |
+| IndexedDB (`MiscDocStore`) | Miscellaneous Documents uploads (file blobs + metadata) |
 | Google Drive (optional) | Full backup and cross-device restore |
 
 Google Drive backup is optional. If connected, you can back up and restore your full library — tests, images, notes, and history — across devices. Drive is not required to use the app.
