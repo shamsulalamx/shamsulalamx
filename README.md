@@ -123,11 +123,17 @@ Raw transcript text is never sent to Gemini. The cluster summary is the sole med
 
 ## Gemini-Assisted Refinement
 
-Gemini refinement is available for the **UWorld** and **Divine Podcasts** pipelines. All Gemini calls run through the local Electron main process — your API key never leaves your machine.
+Gemini refinement is available for the **UWorld** and **Divine Podcasts** pipelines. All Gemini calls are direct from this app — no server intermediary, no Netlify functions.
+
+**Architecture:**
+
+- Your Gemini API key is stored only in `localStorage` on your machine (`nbme_gemini_key_v1`). It is never committed to the repository, never written to the app database, and never included in Google Drive backups.
+- Hint and tagging requests (`requestHint`, `aiTagQuestions`) call the Gemini API directly from the renderer via `fetch` with an `x-goog-api-key` header.
+- UWorld and Divine refinement requests go through the Electron IPC layer (`nbme:ai:refine-uworld-draft`, `nbme:ai:refine-divine-draft`), which receives the key from the renderer payload and falls back to `process.env.GEMINI_API_KEY` if absent.
 
 **How it works:**
 
-- You provide your own Gemini API key in the app's Settings panel.
+- You provide your own Gemini API key in the app's Settings panel. It is saved to `localStorage` only.
 - The app sends a sanitized, clamped summary to Gemini (never raw source text).
 - Gemini returns a clinical vignette draft with five answer choices.
 - The app validates the response: anti-copy checks, voice-marker rejection, schema validation, and provenance assembly all run locally before the draft is shown to you.
@@ -210,7 +216,6 @@ cp index.html "dist/mac-arm64/NBME Self-Assessment Suite.app/Contents/Resources/
 - **Mehlman:** No Gemini refinement in v1.
 - **Divine:** Transcript quality affects clustering. Low-testability clusters are filtered out and not shown for review.
 - **All pipelines:** Pending broader real-world validation beyond local testing.
-- **Netlify Functions** exist in the codebase as a legacy rollback path. They are not the active path for Gemini refinement.
 - The app is currently personal/private use. Security and distribution assumptions have not been reviewed for public release.
 
 ---

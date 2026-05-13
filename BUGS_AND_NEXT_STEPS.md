@@ -1,6 +1,6 @@
 # BUGS AND NEXT STEPS
 
-**Last updated:** 2026-05-13 (renderer/report bug fixes complete)  
+**Last updated:** 2026-05-13 (no-Netlify Gemini architecture complete)  
 **Purpose:** Active bug tracker and prioritized work queue. Contains all unresolved issues and pending validations. Update this file as items are resolved.
 
 ---
@@ -216,6 +216,29 @@ Confirmed working: blue "Educational Objective" box, structured explanation sect
 Gemini-powered "Generate Missing Tags & Pearls" is deferred until after the exam. The planned path is Electron IPC (`ipcMain.handle('nbme:ai:generate-pearls', ...)`) — same pattern as existing `refine-uworld-draft`. No Netlify dependency. Do not implement until Phase 1 has been used in real studying and the Electron IPC path is confirmed appropriate.
 
 ---
+
+---
+
+## COMPLETED — 2026-05-13: No-Netlify Gemini architecture
+
+### [FEAT-003] Remove Netlify dependency from all Gemini code paths — ✅ COMPLETE
+
+**Implemented:**
+- `localStorage` key `nbme_gemini_key_v1` — sole storage for the Gemini API key. Never written to the app DB, never synced via Drive, never committed.
+- `getLocalGeminiKey()` / `setLocalGeminiKey(key)` — helpers for all renderer Gemini callers.
+- `callGeminiDirect(contents, generationConfig)` — direct `fetch` to `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent` with `x-goog-api-key` header, 30s timeout, `NO_KEY` error code when key absent.
+- Settings modal: replaced Netlify description with local key input (password field, Save/Clear buttons, live status).
+- `requestHint()` — Netlify call replaced with `callGeminiDirect()` using verbatim hint prompt from `netlify/functions/gemini-hint.js`.
+- `aiTagQuestions()` — Netlify call replaced with `callGeminiDirect()` using verbatim tagging prompt from `netlify/functions/gemini-tagging.js`.
+- `refineDivineDraft` payload — `apiKey: getLocalGeminiKey()` injected.
+- `refineNotesDraft` / `processNextLiveBatchItem` (UWorld) — `apiKey: getLocalGeminiKey()` injected in both call sites.
+- `electron/main.js` — both `nbme:ai:refine-uworld-draft` and `nbme:ai:refine-divine-draft` handlers now use `(payload?.apiKey || '').trim() || process.env.GEMINI_API_KEY || ''`.
+- `refreshNotesAiStatus()` — status message now reads from `getLocalGeminiKey()` instead of IPC `hasApiKey`.
+
+**Key invariants:**
+- The key lives only in `localStorage`. Drive backup serializer (`driveDbSnapshot`) reads only `DB.get()` — never sees `localStorage.getItem('nbme_gemini_key_v1')`.
+- Netlify function files remain in the repo as dead code (reference/rollback). They are not called anywhere in the renderer or Electron main process.
+- All AI output fields (`retrievalTag`, `reviewPearl`, `hints`, `generatedAt`, `model`) are stored with question/test data and sync through Drive normally.
 
 ---
 

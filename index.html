@@ -2319,8 +2319,15 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
     <h3>Settings</h3>
     <div class="form-group" style="margin-top:12px;">
       <label class="form-label">Gemini AI</label>
-      <p style="font-size:12px;color:#5a6a7a;margin-bottom:8px;">AI-powered tagging and hints run through secure Netlify Functions. The Gemini API key must be set as a Netlify environment variable, not entered in this browser.</p>
-      <div id="gemini-settings-status" style="font-size:11px;color:#5a6a7a;margin-top:6px;">Checking Gemini backend...</div>
+      <p style="font-size:12px;color:#5a6a7a;margin-bottom:8px;">Powers hints and auto-tagging. Your key is stored only in this browser — never synced to Drive, never committed, never sent anywhere except directly to Google's Gemini API.</p>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
+        <input type="password" id="gemini-key-input" placeholder="Paste Gemini API key…" autocomplete="off"
+               style="flex:1;min-width:180px;padding:6px 8px;font-size:12px;border:1px solid #c8d0da;border-radius:3px;font-family:monospace;"
+               onkeydown="if(event.key==='Enter')saveGeminiKeyFromSettings()">
+        <button class="btn-modal primary" onclick="saveGeminiKeyFromSettings()">Save Key</button>
+        <button class="btn-modal" onclick="clearGeminiKeyFromSettings()">Clear</button>
+      </div>
+      <div id="gemini-settings-status" style="font-size:11px;color:#5a6a7a;margin-top:4px;">Checking…</div>
     </div>
     <div class="form-group" style="margin-top:12px;">
       <label class="form-label">Google Drive Backup</label>
@@ -4940,12 +4947,31 @@ const OCR = (() => {
     }));
 
     try {
-      const data = await callGeminiFunction('/.netlify/functions/gemini-tagging', { questions: payload });
-      const parsed = Array.isArray(data?.tags) ? data.tags : [];
-      const byItem = new Map(parsed.map(row => [Number(row.item), String(row.tag || '').trim()]).filter(([, tag]) => tag));
+      const tagPrompt =
+        'Create exactly one hyperspecific USMLE topic tag for each item.\n' +
+        'Each tag must name the exact diagnosis, drug, adverse effect, mechanism, management step, or tested association.\n' +
+        'Avoid broad labels like Pharmacology, Neurology, Alzheimer disease, or Cardiology.\n' +
+        'Good examples: "Alzheimer treatment: cholinesterase inhibitor first line", "Pramipexole adverse effect: impulse control disorder", "Myasthenia gravis: anti-AChR antibody postsynaptic blockade".\n' +
+        'Return ONLY valid JSON array in this exact shape: [{"item":1,"tag":"specific tag"}].\n' +
+        'Use 6-12 words per tag when possible.\n' +
+        JSON.stringify(payload);
+      const raw = await callGeminiDirect(
+        [{ parts: [{ text: tagPrompt }] }],
+        { temperature: 0.2, maxOutputTokens: Math.max(512, payload.length * 24), thinkingConfig: { thinkingBudget: 0 } }
+      );
+      const text = extractGeminiText(raw);
+      const match = text.match(/\[[\s\S]*\]/);
+      const parsed = match ? JSON.parse(match[0]) : [];
+      const byItem = new Map(
+        (Array.isArray(parsed) ? parsed : [])
+          .map(row => [Number(row.item), String(row.tag || '').trim()])
+          .filter(([, tag]) => tag)
+      );
       questions.forEach(q => { q.tags = [byItem.get(Number(q.n)) || 'Untagged']; });
-    } catch (_) {
-      if (typeof window.setGeminiNotice === 'function') window.setGeminiNotice('Gemini failed', 'error');
+      setGeminiNotice('', 'ok');
+    } catch (e) {
+      const noKey = e?.code === 'NO_KEY';
+      setGeminiNotice(noKey ? 'Gemini key missing' : 'Gemini failed', noKey ? 'warn' : 'error');
       questions.forEach(q => { q.tags = ['Untagged']; });
     }
     if (onProgress) onProgress(questions.length, questions.length);
@@ -6183,9 +6209,23 @@ async function requestHint() {
   btn.disabled = true;
 
   try {
-    const data = await callGeminiFunction('/.netlify/functions/gemini-hint', { stem, choices, stemImage });
-    const hintText = String(data?.hint || '').trim();
+    const hintPrompt =
+      'You are a medical education tutor helping a student work through a multiple choice question. ' +
+      'Read the question stem from the attached image when present. Give one direct, efficient hint that points to the key reasoning step without explicitly giving the answer or naming the correct choice.\n' +
+      `Parsed stem fallback: ${stem}\n` +
+      `Answer choices: ${choices}\n` +
+      'Prefer one sentence. Use two sentences only if needed. No preamble.';
+    const parts = [{ text: hintPrompt }];
+    if (stemImage?.mimeType && stemImage?.data) {
+      parts.push({ inlineData: { mimeType: stemImage.mimeType, data: stemImage.data } });
+    }
+    const data = await callGeminiDirect(
+      [{ parts }],
+      { temperature: 0.3, maxOutputTokens: 90, thinkingConfig: { thinkingBudget: 0 } }
+    );
+    const hintText = extractGeminiText(data);
     if (!hintText) throw new Error('empty');
+    setGeminiNotice('', 'ok');
     q.hint = hintText;
     DB.updateTest(test.id, { questions: test.questions });
     incrementDailyHintUsage();
@@ -6194,87 +6234,127 @@ async function requestHint() {
     _renderHints();
     _updateHintButton();
   } catch(e) {
-    if (typeof window.setGeminiNotice === 'function') window.setGeminiNotice('Gemini failed', 'error');
+    const noKey = e?.code === 'NO_KEY';
+    setGeminiNotice(noKey ? 'Gemini key missing' : 'Gemini failed', noKey ? 'warn' : 'error');
     _updateHintButton();
     panel.style.display = 'block';
-    if (!document.getElementById('hint-err')) {
-      const err = document.createElement('div');
-      err.id = 'hint-err';
-      err.className = 'hint-item';
-      err.innerHTML = `Hint unavailable. Check Gemini setup in Settings.<button class="hint-error-btn" onclick="App.openSettings()">Open Settings</button>`;
-      panel.appendChild(err);
-    }
+    const existing = document.getElementById('hint-err');
+    if (existing) existing.remove();
+    const errDiv = document.createElement('div');
+    errDiv.id = 'hint-err';
+    errDiv.className = 'hint-item';
+    errDiv.innerHTML = noKey
+      ? `Hint unavailable — Gemini API key not configured.<button class="hint-error-btn" onclick="App.openSettings()">Add Key in Settings</button>`
+      : `Hint unavailable. ${e?.message || ''}<button class="hint-error-btn" onclick="App.openSettings()">Open Settings</button>`;
+    panel.appendChild(errDiv);
   }
 }
 
-async function callGeminiFunction(endpoint, payload) {
-  const resp = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload || {})
-  });
-  const data = await resp.json().catch(() => ({}));
-  if (!resp.ok) {
-    const message = data?.error || 'Gemini backend failed';
-    throw new Error(message);
+/* ── Local Gemini key (localStorage only, never in DB or Drive) ── */
+const _GEMINI_KEY_LS  = 'nbme_gemini_key_v1';
+const _GEMINI_MODEL   = 'gemini-2.5-flash';
+const _GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${_GEMINI_MODEL}:generateContent`;
+
+function getLocalGeminiKey() {
+  return (localStorage.getItem(_GEMINI_KEY_LS) || '').trim();
+}
+function setLocalGeminiKey(key) {
+  const k = (key || '').trim();
+  if (k) localStorage.setItem(_GEMINI_KEY_LS, k);
+  else   localStorage.removeItem(_GEMINI_KEY_LS);
+}
+
+/* Direct call to Gemini API from the renderer — no Netlify involved. */
+async function callGeminiDirect(contents, generationConfig) {
+  const key = getLocalGeminiKey();
+  if (!key) {
+    const err = new Error('Gemini API key not configured. Add your key in Settings.');
+    err.code = 'NO_KEY';
+    throw err;
   }
-  if (typeof window.setGeminiNotice === 'function') window.setGeminiNotice('', 'ok');
-  return data;
+  const ctrl = new AbortController();
+  const tid  = setTimeout(() => ctrl.abort(), 30000);
+  try {
+    const resp = await fetch(_GEMINI_API_URL, {
+      method: 'POST',
+      signal: ctrl.signal,
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify({ contents, generationConfig: generationConfig || {} })
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (resp.status === 429) throw new Error('Gemini rate limit reached. Try again later.');
+    if (!resp.ok) throw new Error(data?.error?.message || `Gemini API error (${resp.status})`);
+    return data;
+  } finally {
+    clearTimeout(tid);
+  }
+}
+
+function extractGeminiText(data) {
+  return String(
+    (data?.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('')
+  ).trim();
 }
 
 function clearLegacyGeminiKey() {
+  // Remove all legacy key storage locations.
   localStorage.removeItem('gemini_api_key');
   const db = DB.get();
-  if (db.settings?.geminiApiKey) {
-    delete db.settings.geminiApiKey;
-    DB.save();
-  }
+  if (db.settings?.geminiApiKey) { delete db.settings.geminiApiKey; DB.save(); }
 }
 
 function setGeminiNotice(text, state = 'warn') {
   const alert = document.getElementById('gemini-alert');
   if (!alert) return;
-  if (!text) {
-    alert.className = 'gemini-alert';
-    alert.textContent = '';
-    return;
-  }
+  if (!text) { alert.className = 'gemini-alert'; alert.textContent = ''; return; }
   alert.textContent = text;
   alert.className = 'gemini-alert show' + (state === 'error' ? ' error' : state === 'ok' ? ' ok' : '');
 }
 
-async function checkGeminiApiKeyStatus() {
+function checkGeminiApiKeyStatus() {
   clearLegacyGeminiKey();
-  const settings = document.getElementById('gemini-settings-status');
-  if (location.protocol === 'file:') {
-    if (settings) {
-      settings.textContent = 'Gemini requires the deployed Netlify app or Netlify local dev server.';
-      settings.style.color = '#e74c3c';
+  const statusEl = document.getElementById('gemini-settings-status');
+  const inputEl  = document.getElementById('gemini-key-input');
+  const key = getLocalGeminiKey();
+  // Show masked placeholder in input (never reveal the real key).
+  if (inputEl && document.activeElement !== inputEl) inputEl.value = key ? '••••••••••••••••' : '';
+  if (statusEl) {
+    if (key) {
+      statusEl.textContent = 'Gemini API key configured. Hints and auto-tagging are enabled.';
+      statusEl.style.color = '#27ae60';
+      setGeminiNotice('', 'ok');
+    } else {
+      statusEl.textContent = 'No Gemini API key — hints and auto-tagging unavailable.';
+      statusEl.style.color = '#e74c3c';
+      setGeminiNotice('Gemini key missing', 'warn');
     }
-    setGeminiNotice('Use hosted app for Gemini', 'warn');
-    return;
-  }
-  try {
-    const resp = await fetch('/.netlify/functions/gemini-analysis', { method: 'GET' });
-    const data = await resp.json().catch(() => ({}));
-    if (!resp.ok || !data.configured) throw new Error(data?.error || 'Gemini is not configured.');
-    if (settings) {
-      settings.textContent = 'Gemini backend is configured.';
-      settings.style.color = '#27ae60';
-    }
-    setGeminiNotice('', 'ok');
-  } catch (_) {
-    if (settings) {
-      settings.textContent = 'Gemini backend is not available. Set GEMINI_API_KEY in Netlify, then redeploy.';
-      settings.style.color = '#e74c3c';
-    }
-    setGeminiNotice('Configure Gemini env', 'error');
   }
 }
 
-window.setGeminiNotice = setGeminiNotice;
-window.checkGeminiApiKeyStatus = checkGeminiApiKeyStatus;
-window.callGeminiFunction = callGeminiFunction;
+function saveGeminiKeyFromSettings() {
+  const inputEl = document.getElementById('gemini-key-input');
+  if (!inputEl) return;
+  const raw = inputEl.value.trim();
+  // Ignore if the user left the masked placeholder unchanged.
+  if (raw && raw !== '••••••••••••••••') setLocalGeminiKey(raw);
+  else if (!raw) setLocalGeminiKey('');
+  checkGeminiApiKeyStatus();
+  if (typeof window.toast === 'function') window.toast(getLocalGeminiKey() ? 'Gemini key saved.' : 'Gemini key cleared.');
+}
+
+function clearGeminiKeyFromSettings() {
+  setLocalGeminiKey('');
+  const inputEl = document.getElementById('gemini-key-input');
+  if (inputEl) inputEl.value = '';
+  checkGeminiApiKeyStatus();
+  if (typeof window.toast === 'function') window.toast('Gemini key cleared.');
+}
+
+window.setGeminiNotice          = setGeminiNotice;
+window.checkGeminiApiKeyStatus  = checkGeminiApiKeyStatus;
+window.saveGeminiKeyFromSettings = saveGeminiKeyFromSettings;
+window.clearGeminiKeyFromSettings = clearGeminiKeyFromSettings;
+window.getLocalGeminiKey        = getLocalGeminiKey;
 
 </script>
 <script>
@@ -14236,6 +14316,9 @@ const App = (() => {
                               ? draft.provenance.timestampRanges.slice()    : [],
         timestampRange:     draft.timestampRange ? { ...draft.timestampRange } : null,
       },
+
+      // Local Gemini key — main.js falls back to process.env.GEMINI_API_KEY if absent.
+      apiKey: getLocalGeminiKey(),
     };
 
     try {
@@ -17546,7 +17629,7 @@ const App = (() => {
         el.textContent = '';
         return;
       }
-      const keyText = status.hasApiKey ? 'API key detected in Electron main process' : 'no API key detected in Electron main process';
+      const keyText = getLocalGeminiKey() ? 'API key set in Settings' : 'no API key set (add one in Settings)';
       el.textContent = `Desktop AI status: ${status.provider || 'unknown'} ${status.model || ''}; ${keyText}. No AI requests are made from this preview.`;
     } catch (_) {
       el.style.color = '#8a5a00';
@@ -18879,7 +18962,8 @@ const App = (() => {
         sourceMeta: {
           sourceName: _notesImportPreview.fileName || '',
           sourceHash: _notesImportPreview.blocks?.[0]?.sourceHash || ''
-        }
+        },
+        apiKey: getLocalGeminiKey(),
       });
       if (!result?.ok || !result.refinedDraft) {
         throw result || { errorCode: 'MODEL_RESPONSE_INVALID', message: 'AI refinement failed validation.' };
@@ -19513,7 +19597,8 @@ const App = (() => {
         sourceMeta: {
           sourceName: _notesImportPreview.fileName || '',
           sourceHash: _notesImportPreview.blocks?.[0]?.sourceHash || ''
-        }
+        },
+        apiKey: getLocalGeminiKey(),
       });
       if (result?.ok && result.refinedDraft) {
         _notesImportPreview.refinedDrafts[draftId] = result.refinedDraft;

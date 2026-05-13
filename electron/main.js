@@ -192,8 +192,8 @@ function validateRefinedDraft(raw, input) {
 }
 
 ipcMain.handle('nbme:ai:refine-uworld-draft', async (_event, payload) => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return safeError('NO_API_KEY', 'Gemini API key is not configured for Electron desktop refinement.');
+  const apiKey = ((payload?.apiKey || '').trim()) || process.env.GEMINI_API_KEY || '';
+  if (!apiKey) return safeError('NO_API_KEY', 'Gemini API key is not configured. Enter it in Settings.');
 
   const input = sanitizeDraftInput(payload);
   if (!input || !input.draft.draftId || !input.concept.conceptId) {
@@ -491,8 +491,8 @@ function validateDivineRefinedDraft(raw, input) {
 }
 
 ipcMain.handle('nbme:ai:refine-divine-draft', async (_event, payload) => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return safeError('NO_API_KEY', 'Gemini API key is not configured for Electron desktop refinement.');
+  const apiKey = ((payload?.apiKey || '').trim()) || process.env.GEMINI_API_KEY || '';
+  if (!apiKey) return safeError('NO_API_KEY', 'Gemini API key is not configured. Enter it in Settings.');
 
   const input = sanitizeDivineDraftInput(payload);
   if (!input) {
