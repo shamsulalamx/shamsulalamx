@@ -1,7 +1,7 @@
 # BUGS AND NEXT STEPS
 
-**Last updated:** 2026-05-12 (BUG-001 resolved)  
-**Purpose:** Active bug tracker and prioritized work queue for handoff to Codex. Contains all unresolved issues, failed diagnoses, and explicit debugging instructions. This file must be updated as bugs are resolved.
+**Last updated:** 2026-05-13  
+**Purpose:** Active bug tracker and prioritized work queue. Contains all unresolved issues and pending validations. Update this file as items are resolved.
 
 ---
 
@@ -92,16 +92,9 @@ Both files are now 1,073,458 bytes.
 
 ## PENDING VALIDATION (code written but not end-to-end tested)
 
-### [VAL-001] Explanation rendering end-to-end test
+### [VAL-001] Explanation rendering end-to-end test — ✅ VALIDATED
 
-**What to test:**
-1. `npm run electron:dev`
-2. Delete any previously imported Psych_Shelf_8 test (it predates the fix)
-3. Import `test-data:/Psych_Shelf_8_full_app_ready.json` fresh
-4. Start a quiz, answer Q1, click "Correct Answer" or view explanation
-5. Verify: blue "Educational Objective" box appears with plain text
-6. Verify: structured explanation block appears below with the "Correct Answer" section content
-7. Verify: per-choice explanations appear for each incorrect choice
+Confirmed working: blue "Educational Objective" box, structured explanation sections (with correct inter-section spacing), and per-choice rationales all render correctly for Psych_Shelf_8 Q1.
 
 ---
 
@@ -129,10 +122,10 @@ Both files are now 1,073,458 bytes.
 
 ## PRIORITIZED NEXT STEPS
 
-**P1 — Run VAL-001 (explanation rendering).** Delete old imported test, reimport, answer Q1, confirm explanation panel works.
+**P1 — Run VAL-002 (figure rendering).** Import `test-data/Psych_Shelf_8_full_app_ready.json`, navigate to Q25, Q34, Q48, confirm lab-values table renders inline where the `[FIGURE: ...]` marker was. Then test the figure-upload workflow: attach a test image for one figureId before saving, confirm it renders as `<img>` in quiz view.
 
-**P2 — Run VAL-002 (figure rendering).** Answer Q25/Q34/Q48, confirm placeholder appears. Then test figure upload workflow end-to-end.
+**P2 — Complete VAL-003 (save valid only).** Read the `saveValidNbmeGeminiJsonQuestionsOnly` function body. If it's stubbed, implement it following the pattern of `createTestFromNbmeGeminiJsonImport` but filtering `normalizedItems` to only questions whose `validation.questionResults` entry has `status === 'ok'`. Test with a JSON file that has at least one invalid question.
 
-**P3 — Complete VAL-003 (save valid only).** Read the `saveValidNbmeGeminiJsonQuestionsOnly` function body. If it's stubbed, implement it following the pattern of `createTestFromNbmeGeminiJsonImport` but filtering to `validation.questionResults.filter(r => r.status === 'ok')`.
+**P3 — Repeat extraction workflow for other NBME folders.** The Psych Shelf (3–8) is fully validated. Next: run the Gemini extraction prompt on the remaining NBME subject folders (Medicine, Surgery, Family Medicine, Pediatrics, OB/GYN, Neurology, etc.), produce `*_app_ready.json` files, import and validate each one, add to `test-data/`, commit. Each new folder may expose new sanitizer edge cases.
 
-**P4 — Broader JSON import validation.** Test with a JSON file that has mixed valid/invalid questions to confirm the validation summary, warning counts, and save options all behave correctly.
+**P4 — Shared-group rendering validation.** Psych_Shelf_3 Q33–Q36 and Psych_Shelf_4 have `sharedGroup.sharedStem`. After importing these files, navigate to those questions in quiz mode and confirm the shared vignette renders above the per-question stem via `buildSharedGroupHTML`. Verify linked question range is shown correctly.

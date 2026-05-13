@@ -48,7 +48,27 @@ The NBME Gemini JSON importer accepts a pre-structured JSON file created by runn
 
 Questions with blocking validation errors are not saved. Questions with warnings are saved but flagged.
 
-**Known limitation:** Long-stem questions (Q1, Q9, Q11, Q24 in `Psych_Shelf_8_full_app_ready.json`) show only 1–2 lines in quiz view. This is an **unresolved bug**. See `BUGS_AND_NEXT_STEPS.md` for debugging instructions.
+**Supported question types:**
+- Standard 5-choice single-answer questions
+- Shared-stem groups (one vignette, multiple questions — `sharedGroup.sharedStem`)
+- Shared answer choice sets (`sharedGroup.sharedChoices`)
+- Embedded lab tables (`tables[]` field or `figureRef.visibleText`)
+- Figure references (`[FIGURE: figureId]` markers with optional image upload)
+
+**Sanitizers run automatically at import time:**
+- *UI artifact sanitizer* — removes NBME navigation-bar text (`Previous Next Score Report Lab Values Calculator Help Pause`) that leaks into stems or explanations via screenshot OCR.
+- *OCR separator sanitizer* — removes long dash/bullet runs (`- - - -- -`), `.... Mark` bookmarks, Morse-like separator strings, and other OCR noise from explanation body text.
+
+**Validated fixture set** (`test-data/`):
+
+| File | Questions | Notes |
+|---|---|---|
+| `Psych_Shelf_3_app_ready.json` | 50 | Heavy OCR separator artifacts; 49 fields cleaned by sanitizer |
+| `Psych_Shelf_4_app_ready.json` | 50 | 4 shared-stem groups |
+| `Psych_Shelf_5_app_ready.json` | 50 | UI footer artifact validation (50 removed) |
+| `Psych_Shelf_6_app_ready.json` | 50 | Lab tables in `tables[]` field |
+| `Psych_Shelf_7_repaired_app_ready.json` | 50 | Repaired extraction |
+| `Psych_Shelf_8_full_app_ready.json` | 50 | FigureRefs with lab visibleText (Q25, Q34, Q48) |
 
 Full technical spec: `NBME_JSON_IMPORT.md`.
 
@@ -153,7 +173,7 @@ cp index.html "dist/mac-arm64/NBME Self-Assessment Suite.app/Contents/Resources/
 ## Current Limitations
 
 - **NBME PDF:** PDF import uses OCR. Accuracy depends on screenshot or scan quality. Grouped/shared-stem questions are supported but may require review.
-- **NBME Gemini JSON:** ⚠️ **Unresolved bug:** Long-stem questions show only 1–2 lines in quiz view. Explanation rendering and figure rendering have not been end-to-end validated. See `BUGS_AND_NEXT_STEPS.md`.
+- **NBME Gemini JSON:** Stable. All known bugs resolved as of 2026-05-12. Psych Shelf 3–8 validated. Figure rendering (VAL-002) and "save valid only" button (VAL-003) have not been end-to-end validated. See `BUGS_AND_NEXT_STEPS.md`.
 - **UWorld:** DOCX export only. Gemini refinement is one-at-a-time; batch queue can be paused or cancelled.
 - **OME:** Short, high-quality PDFs only. No OCR fallback in v1.
 - **Anki:** Plain-text `.txt` export only. `.apkg` files are not supported.

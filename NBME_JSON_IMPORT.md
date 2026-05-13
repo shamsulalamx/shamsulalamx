@@ -1,7 +1,7 @@
 # NBME JSON Importer — Technical Specification
 
-**Last updated:** 2026-05-13 (OCR separator sanitizer added)  
-**Status:** Implemented, partially validated. See BUGS_AND_NEXT_STEPS.md for outstanding issues.
+**Last updated:** 2026-05-13  
+**Status:** Stable. All blocking bugs resolved. Psych Shelf 3–8 validated. VAL-002 (figure rendering) and VAL-003 (save-valid-only) pending end-to-end validation.
 
 ---
 
@@ -72,8 +72,12 @@ The JSON file must be an object with a `questions` array. Each element must have
 
 ### Optional fields per question:
 - `educationalObjective` — plain text educational objective
-- `explanationSections` — array of `{heading, text}` objects
+- `explanationSections` — array of `{heading, body[]}` objects
 - `figureRefs` — array of figure reference objects (see Figure References below)
+- `tables` — array of embedded table objects (see Tables below)
+- `sharedGroup` — shared-stem/shared-choices group descriptor (see Shared Groups below)
+- `retrievalTag` — string tag added to `q.tags`
+- `extractionWarnings` — string array; merged into `q.metadata.extractionWarnings`
 
 ---
 
@@ -208,6 +212,59 @@ After JSON is parsed and validated, if any questions have `figureRefs`, the impo
 - After attachment: a thumbnail and "Remove" button
 
 The base64 DataURL is stored in `_nbmeGeminiJsonImport.figureAttachments[figureId]`. When saving, `createTestFromNbmeGeminiJsonImport` copies the relevant attachments into each question's `q.metadata.figureAttachments`.
+
+---
+
+## Tables
+
+The `tables` field carries embedded structured tables (lab values, vitals panels, etc.) that were extracted from the original exam into structured form rather than as `figureRef.visibleText`.
+
+### `tables[]` schema:
+```json
+{
+  "title": "Laboratory studies",
+  "headers": ["Test", "Result"],
+  "rows": [
+    ["Sodium", "138 mEq/L"],
+    ["Potassium", "3.9 mEq/L"]
+  ]
+}
+```
+
+Tables are stored in `q.metadata.tables`. They are NOT automatically rendered inline in the stem — they are preserved in metadata for future rendering support. (Unlike `figureRef.visibleText`, which is rendered as a lab-values table whenever a `[FIGURE: figureId]` marker is present in the stem.)
+
+Validated in: Psych_Shelf_3 Q10 (8-row lab table), Psych_Shelf_5, Psych_Shelf_6, Psych_Shelf_7.
+
+---
+
+## Shared Groups
+
+Some NBME questions share a common patient vignette across multiple consecutive questions (shared stem) or share a common answer choice list (shared choices). These are encoded in the `sharedGroup` field.
+
+### `sharedGroup` schema:
+```json
+{
+  "id": "group_q33_q36",
+  "questionRange": { "start": 33, "end": 36 },
+  "linkedQuestionIds": [33, 34, 35, 36],
+  "sharedStem": "A 45-year-old man is brought to the emergency department by his wife...",
+  "sharedInstruction": "For each patient description, select the most likely diagnosis.",
+  "sharedChoices": [
+    { "label": "A", "text": "Alcohol withdrawal" },
+    { "label": "B", "text": "Benzodiazepine intoxication" }
+  ]
+}
+```
+
+All fields are optional. The most common form in NBME JSON files is `sharedStem` only (shared vignette, per-question answer choices).
+
+### How shared groups are rendered:
+
+The `sharedGroup` is stored in `q.metadata.sharedGroup`. The quiz renderer detects it via `q.metadata.sharedGroup` and uses `window.buildSharedGroupHTML(q)` to render the shared vignette above the per-question stem.
+
+If `sharedGroup.sharedChoices` is a non-empty array with ≥2 items, it overrides `q.o` (the per-question answer choices) at quiz render time.
+
+Validated in: Psych_Shelf_3 Q33–Q36 (shared stem, no shared choices), Psych_Shelf_4 (4 shared-stem groups).
 
 ---
 
@@ -351,30 +408,34 @@ Both `buildExplanationHTML` functions (local in Quiz IIFE ~line 5644, global `wi
 
 ---
 
-## Test File
+## Validated Fixture Set
 
-The primary validation JSON is:
-```
-/Users/shamsulalam/Desktop/NBME Self-Assessment Suite/test-data/Psych_Shelf_8_full_app_ready.json
-```
+All fixtures are in `test-data/` and committed to the repository. Each was imported cleanly (0 blocking errors) and used to validate a specific pipeline feature.
 
-This file contains 50 questions from a Psychiatry Shelf exam processed through Gemini. Q25, Q34, and Q48 contain `figureRefs`. Q1, Q9, Q11, and Q24 have long stems (608–1319 characters).
+| File | Qs | Blocking errors | Notable features | Validated features |
+|---|---|---|---|---|
+| `Psych_Shelf_3_app_ready.json` | 50 | 0 | OCR separator artifacts, 1 lab table (Q10), 4 shared-stem groups (Q33–Q36) | OCR separator sanitizer (49 fields cleaned) |
+| `Psych_Shelf_4_app_ready.json` | 50 | 0 | 4 shared-stem groups | Shared-stem passthrough |
+| `Psych_Shelf_5_app_ready.json` | 50 | 0 | UI footer artifacts, 2 lab tables | UI artifact sanitizer (50 removals) |
+| `Psych_Shelf_6_app_ready.json` | 50 | 0 | 1 lab table | Tables passthrough |
+| `Psych_Shelf_7_repaired_app_ready.json` | 50 | 0 | Repaired extraction | General importer stability |
+| `Psych_Shelf_8_full_app_ready.json` | 50 | 0 | FigureRefs + visibleText on Q25/Q34/Q48; long stems on Q1/Q9/Q11/Q24 | Explanation rendering (VAL-001 ✅), stem rendering (BUG-001 ✅) |
 
-Additional test files in `test-data/`:
-- `Psych_Shelf_3_app_ready.json` — 50 questions; used to validate OCR separator sanitizer (49 fields cleaned, Morse-like runs + `.... Mark` bookmarks)
-- `Psych_Shelf_4_app_ready.json`
-- `Psych_Shelf_5_app_ready.json` — 50 questions; used to validate UI artifact sanitizer (50 `Lab Values Calculator` instances removed)
-- `Psych_Shelf_6_app_ready.json`
-- `Psych_Shelf_7_repaired_app_ready.json`
+### Next phase
+The Psych Shelf folder (Shelves 3–8) is complete. The next step is to repeat the Gemini extraction + import workflow for the remaining NBME folders (Medicine, Surgery, Family Medicine, Pediatrics, OB/GYN, Neurology, etc.) and add their app-ready JSON files to `test-data/`.
 
 ---
 
-## Known Issues
+## Known Issues and Validation Status
 
 See `BUGS_AND_NEXT_STEPS.md` for the full bug tracker.
 
-Summary:
-- **BUG-001:** Quiz stem truncation for Q1/Q9/Q11/Q24 — ✅ RESOLVED (2026-05-12)
-- **VAL-001:** Explanation rendering end-to-end — ✅ validated
-- **VAL-002:** Figure rendering end-to-end — not yet validated
-- **VAL-003:** "Save valid questions only" button — partially implemented, verify function body
+| Item | Status |
+|---|---|
+| BUG-001 Quiz stem truncation (long stems) | ✅ Resolved 2026-05-12 |
+| BUG-002 Explanation panel empty for JSON questions | ✅ Resolved |
+| BUG-003 Import preview stems truncated at 240 chars | ✅ Resolved |
+| BUG-004 Stale packaged app silently hiding fixes | ✅ Resolved |
+| VAL-001 Explanation rendering end-to-end | ✅ Validated |
+| VAL-002 Figure rendering end-to-end (Q25/Q34/Q48) | Pending |
+| VAL-003 "Save valid questions only" button | Partially implemented — verify function body |
