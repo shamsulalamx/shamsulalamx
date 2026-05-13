@@ -55,6 +55,12 @@ Questions with blocking validation errors are not saved. Questions with warnings
 - Embedded lab tables (`tables[]` field or `figureRef.visibleText`)
 - Figure references (`[FIGURE: figureId]` markers with optional image upload)
 
+**High-yield metadata fields (optional):**
+- `retrievalTag` — short searchable memory anchor encoding the exact tested concept (e.g., `"PTSD duration threshold"`, `"Clozapine ANC monitoring"`). Displayed in the score summary table, review detail panel, and PDF report.
+- `reviewPearl` — one-line high-yield review statement for last-minute recall (e.g., `"PTSD requires symptoms lasting more than 1 month after trauma."`). Displayed alongside `retrievalTag` in all review surfaces.
+
+Both fields are optional and do not affect import validation. Questions without them continue to work normally.
+
 **Sanitizers run automatically at import time:**
 - *UI artifact sanitizer* — removes NBME navigation-bar text (`Previous Next Score Report Lab Values Calculator Help Pause`) that leaks into stems or explanations via screenshot OCR.
 - *OCR separator sanitizer* — removes long dash/bullet runs (`- - - -- -`), `.... Mark` bookmarks, Morse-like separator strings, and other OCR noise from explanation body text.
@@ -173,7 +179,7 @@ cp index.html "dist/mac-arm64/NBME Self-Assessment Suite.app/Contents/Resources/
 ## Current Limitations
 
 - **NBME PDF:** PDF import uses OCR. Accuracy depends on screenshot or scan quality. Grouped/shared-stem questions are supported but may require review.
-- **NBME Gemini JSON:** Stable. All known bugs resolved as of 2026-05-12. Psych Shelf 3–8 validated. Figure rendering (VAL-002) and "save valid only" button (VAL-003) have not been end-to-end validated. See `BUGS_AND_NEXT_STEPS.md`.
+- **NBME Gemini JSON:** Stable. All known bugs resolved as of 2026-05-12. Psych Shelf 3–8 validated. `retrievalTag` and `reviewPearl` fully supported as of 2026-05-13. Figure rendering (VAL-002) and "save valid only" button (VAL-003) have not been end-to-end validated. See `BUGS_AND_NEXT_STEPS.md`.
 - **UWorld:** DOCX export only. Gemini refinement is one-at-a-time; batch queue can be paused or cancelled.
 - **OME:** Short, high-quality PDFs only. No OCR fallback in v1.
 - **Anki:** Plain-text `.txt` export only. `.apkg` files are not supported.

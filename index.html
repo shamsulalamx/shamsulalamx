@@ -1255,7 +1255,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
             <div class="res-nav-dots" id="res-nav-dots"></div>
             <div style="overflow-x:auto;">
               <table class="res-table">
-                <thead><tr><th>#</th><th>Result</th><th>Question tag</th><th>Time</th><th>Flag</th><th>Review</th></tr></thead>
+                <thead><tr><th>#</th><th>Result</th><th>Retrieval Tag</th><th>Review Pearl</th><th>Flag</th><th>Review</th></tr></thead>
                 <tbody id="res-tbody"></tbody>
               </table>
             </div>
@@ -1296,6 +1296,13 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
           </div>
           <!-- AI topic tags (shown after explanation) -->
           <div id="rev-tags" style="display:none;flex-wrap:wrap;gap:4px;margin-top:8px;"></div>
+          <!-- Retrieval tag + review pearl (always visible in review mode) -->
+          <div id="rev-pearl-block" style="display:none;margin-top:12px;padding:10px 14px;background:#fff8e1;border-left:3px solid #f59e0b;border-radius:3px;">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#92400e;margin-bottom:3px;">Retrieval Tag</div>
+            <div id="rev-retrieval-tag" style="font-weight:600;color:#1a1a2e;margin-bottom:8px;"></div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#92400e;margin-bottom:3px;">Review Pearl</div>
+            <div id="rev-review-pearl" style="color:#1a1a2e;font-style:italic;"></div>
+          </div>
         </div>
       </div>
 
@@ -6191,6 +6198,13 @@ const Results = (() => {
     }[ch]));
   }
 
+  function getRetrievalTag(q) {
+    return (q && (q.retrievalTag || q.metadata?.retrievalTag)) || '';
+  }
+  function getReviewPearl(q) {
+    return (q && (q.reviewPearl  || q.metadata?.reviewPearl))  || '';
+  }
+
   function show(testId, entry, results, questions) {
     _testId = testId; _entry = entry; _results = results; _questions = questions;
     _inReview = false;
@@ -6286,14 +6300,15 @@ const Results = (() => {
       const tag = r.chosen===null
         ? '<span class="tag-skip">SKIP</span>'
         : r.correct ? '<span class="tag-ok">✓</span>' : '<span class="tag-bad">✗</span>';
-      const questionTag = (q.tags && q.tags.length) ? q.tags[0] : 'Untagged';
+      const rt = getRetrievalTag(q) || (q.tags && q.tags.length ? q.tags[0] : '');
+      const rp = getReviewPearl(q);
       const flagBtn = `<button class="btn-flag-review ${DB.isFlagged(_testId,q.n)?'flagged':''}"
         onclick="toggleFlagReview(${i})" title="Flag for review">🏳</button>`;
       tr.innerHTML = `
         <td>${i+1}</td>
         <td>${tag}</td>
-        <td class="td-text">${escapeHTML(questionTag)}</td>
-        <td class="td-time">${Math.max(0, Math.min(r.time || 0, 3600))}s</td>
+        <td class="td-text">${escapeHTML(rt)}</td>
+        <td class="td-text td-pearl">${escapeHTML(rp)}</td>
         <td>${flagBtn}</td>
         <td><button class="btn-review-item" onclick="openReview(${i})">Review</button></td>`;
       tbody.appendChild(tr);
@@ -6369,6 +6384,18 @@ const Results = (() => {
     } else {
       // fallback
       window.buildExplanationHTML(q, r, expBody);
+    }
+
+    // Retrieval tag + review pearl
+    const pearlBlock = document.getElementById('rev-pearl-block');
+    if (pearlBlock) {
+      const rtVal = getRetrievalTag(q);
+      const rpVal = getReviewPearl(q);
+      pearlBlock.style.display = (rtVal || rpVal) ? 'block' : 'none';
+      const rtNode = document.getElementById('rev-retrieval-tag');
+      const rpNode = document.getElementById('rev-review-pearl');
+      if (rtNode) rtNode.textContent = rtVal || '—';
+      if (rpNode) rpNode.textContent = rpVal || '—';
     }
 
     // Flag button
@@ -6595,10 +6622,9 @@ const Results = (() => {
 
     // Stats block
     const stats = [
-      { l:'Correct',    v: String(score) },
-      { l:'Incorrect',  v: String(wrong) },
-      { l:'Skipped',    v: String(skipped) },
-      { l:'Avg / Q',    v: `${avgTime}s` },
+      { l:'Correct',   v: String(score) },
+      { l:'Incorrect', v: String(wrong) },
+      { l:'Skipped',   v: String(skipped) },
     ];
     const sx0 = ML + 58, sw = (CW - 58) / stats.length;
     stats.forEach((s, i) => {
@@ -6731,6 +6757,25 @@ const Results = (() => {
         y = tagY + 8;
       }
 
+      const rtPdf = normalizePdfText(getRetrievalTag(q));
+      const pearlPdf = normalizePdfText(getReviewPearl(q));
+      if (rtPdf || pearlPdf) {
+        checkY(16);
+        setFill([255, 251, 235]); setDraw([245, 158, 11]);
+        doc.setLineWidth(0.4);
+        if (rtPdf) {
+          addWrappedText('Tag: ' + rtPdf, cardX + 4, cardW - 8, 3.8,
+            { size: 7.5, style: 'bold', color: [120, 60, 0], onPageBreak: continueQuestionPage });
+          y += 1;
+        }
+        if (pearlPdf) {
+          addWrappedText('Pearl: ' + pearlPdf, cardX + 4, cardW - 8, 3.8,
+            { size: 7.5, style: 'italic', color: [80, 50, 10], onPageBreak: continueQuestionPage });
+          y += 1;
+        }
+        y += 3;
+      }
+
       const hasStemCrop = shouldUseStemCropForQuestion(q);
       if (hasStemCrop) await addQuestionImages(q, false);
       else addWrappedText(stemText(q) || '(No stem)', cardX + 4, cardW - 8, 4.2, { size: 8.8, onPageBreak: continueQuestionPage });
@@ -6816,6 +6861,8 @@ const Results = (() => {
 window.Results = Results;
 window.openReview        = Results.openReview;
 window.toggleFlagReview  = Results.toggleFlagReview;
+window.getRetrievalTag   = (q) => (q && (q.retrievalTag || q.metadata?.retrievalTag)) || '';
+window.getReviewPearl    = (q) => (q && (q.reviewPearl  || q.metadata?.reviewPearl))  || '';
 
 </script>
 <script>
@@ -20586,7 +20633,7 @@ const App = (() => {
 
   // ── NBME Gemini JSON Import ────────────────────────────────
 
-  const VALID_SOURCE_FORMATS = ['pdf','docx','ocr_text','screenshot','mixed','unknown',''];
+  const VALID_SOURCE_FORMATS = ['pdf','docx','ocr_text','screenshot','mixed','unknown','rtf',''];
 
   function _ngjEsc(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -21134,6 +21181,7 @@ const App = (() => {
       const perChoiceE = _ngjBuildPerChoiceExplanations(normalizedSections, q.answerChoices);
 
       const retrievalTag = (q.retrievalTag || '').trim();
+      const reviewPearl  = (q.reviewPearl  || '').trim();
       const tags = retrievalTag ? [retrievalTag] : [];
 
       const hasEmbeddedFigure = q.hasEmbeddedFigure === true || (Array.isArray(q.figureRefs) && q.figureRefs.length > 0);
@@ -21151,6 +21199,8 @@ const App = (() => {
         c: correctAnswer,
         e: perChoiceE,
         tags,
+        retrievalTag,
+        reviewPearl,
         educationalObjective: q.educationalObjective ? String(q.educationalObjective) : '',
         correctBlurb: correctBlurb || '',
         metadata: {
@@ -21158,6 +21208,7 @@ const App = (() => {
           sourceQuestionNumber: q.sourceQuestionNumber ?? null,
           sourceId: q.id || null,
           retrievalTag,
+          reviewPearl,
           hasEmbeddedFigure,
           figureRefs,
           tables,

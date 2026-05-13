@@ -102,15 +102,19 @@ Opens `#modal-nbme-gemini-json-import`.
   o: [{ l: "A", t: "text" }],
   c: "E",
   e: { "A": "escaped html" },      // per-choice explanations
-  tags: ["retrievalTag"],
+  tags: ["retrievalTag or empty"],  // retrievalTag promoted to tags[0], or []
+  retrievalTag: "string",           // top-level; '' if not in input
+  reviewPearl: "string",            // top-level; '' if not in input
   educationalObjective: "string",
-  correctBlurb: "HTML string",     // pre-escaped HTML from explanationSections
+  correctBlurb: "HTML string",      // pre-escaped HTML from explanationSections
   metadata: {
     sourceType: "nbme-gemini-json",
+    retrievalTag: "string",         // mirrored from top-level
+    reviewPearl: "string",          // mirrored from top-level
     figureRefs: [...],
     tables: [...],
     sharedGroup: { ... } | null,
-    figureAttachments: {},         // { figureId: "data:image/png;base64,..." }
+    figureAttachments: {},          // { figureId: "data:image/png;base64,..." }
     extractionWarnings: [],
     schemaVersion: "nbme-gemini-json-v1"
   }
@@ -239,6 +243,22 @@ All in `test-data/`, committed to the `electron-runtime-phase-1` branch.
 
 ---
 
+## 10b. What Changed 2026-05-13 (Phase 1: retrieval tag + review pearl)
+
+| Change | Status |
+|--------|--------|
+| `getRetrievalTag(q)` / `getReviewPearl(q)` getter helpers added to `Results` IIFE; exposed globally | ✅ |
+| NBME JSON normalizer: `reviewPearl` passthrough added (top-level + `metadata`) | ✅ |
+| Score summary table: columns changed from `Question tag \| Time` to `Retrieval Tag \| Review Pearl` | ✅ |
+| Review detail panel: amber `#rev-pearl-block` added below explanation; hidden when fields empty | ✅ |
+| PDF report: `Tag:` + `Pearl:` lines added per question; `Avg / Q` stat removed from header | ✅ |
+| `sourceFormat: "rtf"` added to `VALID_SOURCE_FORMATS` in NBME JSON validator | ✅ |
+| PDF variable rename: `rpPdf` → `rtPdf` (retrieval tag variable) | ✅ |
+| Validated in Electron dev mode: import, quiz, summary, review detail, PDF all correct | ✅ |
+| Backward compatibility: existing tests without pearls unaffected | ✅ |
+
+---
+
 ## 11. Immediate Next Priorities
 
 **P1 — VAL-002: Figure rendering.** Import `test-data/Psych_Shelf_8_full_app_ready.json`, navigate to Q25/Q34/Q48, confirm lab-values table renders inline. Then test image upload workflow for one figureId.
@@ -248,3 +268,5 @@ All in `test-data/`, committed to the `electron-runtime-phase-1` branch.
 **P3 — Next NBME folder extraction.** Psych Shelf is done. Run the Gemini extraction prompt on Medicine Shelf (or whichever folder is next). Produce `*_app_ready.json`, import and validate, add to `test-data/`, commit.
 
 **P4 — VAL-004: Shared group rendering.** Import Psych_Shelf_3 or Psych_Shelf_4, navigate to a shared-stem group, confirm `buildSharedGroupHTML` renders the shared vignette above the per-question stem in quiz mode.
+
+**P5 (post-exam) — Phase 2: Gemini pearl generation via Electron IPC.** Add `nbme:ai:generate-pearls` IPC handler to `electron/main.js`. Expose via `preload.js`. Gate the "Generate Missing Tags & Pearls" button on `window.nbmeDesktop?.ai?.generatePearls`. No Netlify involvement.

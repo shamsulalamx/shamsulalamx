@@ -1,7 +1,7 @@
 # NBME JSON Importer — Technical Specification
 
 **Last updated:** 2026-05-13  
-**Status:** Stable. All blocking bugs resolved. Psych Shelf 3–8 validated. VAL-002 (figure rendering) and VAL-003 (save-valid-only) pending end-to-end validation.
+**Status:** Stable. All blocking bugs resolved. Psych Shelf 3–8 validated. `retrievalTag` + `reviewPearl` display support added 2026-05-13. VAL-002 (figure rendering) and VAL-003 (save-valid-only) pending end-to-end validation.
 
 ---
 
@@ -76,8 +76,12 @@ The JSON file must be an object with a `questions` array. Each element must have
 - `figureRefs` — array of figure reference objects (see Figure References below)
 - `tables` — array of embedded table objects (see Tables below)
 - `sharedGroup` — shared-stem/shared-choices group descriptor (see Shared Groups below)
-- `retrievalTag` — string tag added to `q.tags`
+- `retrievalTag` — short memory anchor encoding the exact tested concept (e.g., `"PTSD duration threshold"`). Stored at `q.retrievalTag` and `q.metadata.retrievalTag`. Also added to `q.tags[0]` for backward compatibility with tag-based UI surfaces.
+- `reviewPearl` — one-line high-yield review statement (e.g., `"PTSD requires symptoms lasting more than 1 month after trauma."`). Stored at `q.reviewPearl` and `q.metadata.reviewPearl`.
 - `extractionWarnings` — string array; merged into `q.metadata.extractionWarnings`
+
+### Optional top-level fields:
+- `sourceFormat` — string describing the input format. Recognized values: `pdf`, `docx`, `ocr_text`, `screenshot`, `mixed`, `rtf`, `unknown`. Other values produce a validation warning but do not block import.
 
 ---
 
@@ -99,13 +103,17 @@ After normalization, each question is stored in localStorage as part of a test's
     "A": "Bipolar I disorder requires...",
     "B": "Major depressive disorder..."
   },
-  tags: [],
+  tags: ["PTSD duration threshold"],  // retrievalTag promoted to tags[0], or [] if absent
+  retrievalTag: "PTSD duration threshold",   // top-level, '' if not in input
+  reviewPearl: "PTSD requires symptoms lasting more than 1 month after trauma.",  // top-level, '' if not in input
   educationalObjective: "Borderline personality disorder is characterized by...",
   correctBlurb: "<strong>Correct Answer</strong><br><br>BPD is characterized by...",
   metadata: {
     sourceType: "nbme-gemini-json",
     questionNumber: 1,
     originalStem: "A 32-year-old woman...",
+    retrievalTag: "PTSD duration threshold",  // mirrored in metadata for lookup compatibility
+    reviewPearl: "PTSD requires symptoms lasting more than 1 month after trauma.",
     figureRefs: [ /* copied from input */ ],
     figureAttachments: {
       "Figure_Q25_Lab": "data:image/png;base64,..."  // only if user attached
@@ -121,6 +129,8 @@ After normalization, each question is stored in localStorage as part of a test's
 - `q.correctBlurb` — pre-escaped HTML built from `explanationSections[0]` (the "Correct Answer" section). Set as `innerHTML` by `buildExplanationHTML`. Built by `_ngjBuildCorrectBlurb()`.
 - `q.e` — per-choice explanations parsed from `explanationSections[1]` (the "Incorrect Answers" section). Built by `_ngjBuildPerChoiceExplanations()`.
 - `q.educationalObjective` — plain text, set as `textContent` by `buildExplanationHTML`.
+- `q.retrievalTag` — top-level string. Read by `getRetrievalTag(q)`, which also checks `q.metadata.retrievalTag` as fallback.
+- `q.reviewPearl` — top-level string. Read by `getReviewPearl(q)`, which also checks `q.metadata.reviewPearl` as fallback.
 - `q.metadata.figureAttachments` — base64 DataURLs for user-uploaded figure images, keyed by `figureId`. This is what enables inline image rendering when the quiz displays `[FIGURE: figureId]` markers.
 
 ---
