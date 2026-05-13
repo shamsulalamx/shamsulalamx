@@ -2433,7 +2433,6 @@ const DB = (() => {
   }
 
   function isUnsafeStorageValue(key, value) {
-    if (key === 'geminiApiKey') return true;
     if (key === 'dataUrl' || key === '_figureData') return true;
     if (key === 'highlights') return true;
     if (key === '_range') return true;
@@ -2958,12 +2957,10 @@ window.MiscDocStore = MiscDocStore;
 
   function driveDbSnapshot() {
     const db = DB.get();
-    const settings = Object.assign({}, db.settings || {});
-    delete settings.geminiApiKey;
     return JSON.parse(JSON.stringify({
       version: 1,
       updatedAt: new Date().toISOString(),
-      settings,
+      settings: db.settings || {},
       sourceFolders: db.sourceFolders,
       folders: db.folders,
       tests: db.tests,
@@ -2973,7 +2970,6 @@ window.MiscDocStore = MiscDocStore;
       notes: db.notes || [],
       history: db.history
     }, (key, value) => {
-      if (key === 'geminiApiKey') return undefined;
       if (key === 'dataUrl' || key === '_figureData' || key === 'highlights') return undefined;
       if (key === '_range' || key === 'blob' || key === 'base64') return undefined;
       if (key === 'src' && typeof value === 'string' && /^data:image\//i.test(value)) return undefined;
@@ -3143,7 +3139,10 @@ window.MiscDocStore = MiscDocStore;
       await restoreFiguresFromDrive(snapshot);
       const db = DB.get();
       if (snapshot.settings && typeof snapshot.settings === 'object') db.settings = snapshot.settings;
-      if (db.settings?.geminiApiKey) delete db.settings.geminiApiKey;
+      // Sync restored Gemini key to the fast-access localStorage mirror; clear truly-legacy key.
+      const restoredKey = (db.settings?.geminiApiKey || '').trim();
+      if (restoredKey) localStorage.setItem('nbme_gemini_key_v1', restoredKey);
+      else             localStorage.removeItem('nbme_gemini_key_v1');
       localStorage.removeItem('gemini_api_key');
       if (Array.isArray(snapshot.sourceFolders)) db.sourceFolders = snapshot.sourceFolders;
       if (Array.isArray(snapshot.folders)) db.folders = snapshot.folders;
@@ -6256,12 +6255,24 @@ const _GEMINI_MODEL   = 'gemini-2.5-flash';
 const _GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${_GEMINI_MODEL}:generateContent`;
 
 function getLocalGeminiKey() {
+  // DB is canonical; localStorage mirror is a fast-access fallback for cold reads.
+  const dbKey = (DB.get().settings?.geminiApiKey || '').trim();
+  if (dbKey) return dbKey;
   return (localStorage.getItem(_GEMINI_KEY_LS) || '').trim();
 }
 function setLocalGeminiKey(key) {
   const k = (key || '').trim();
+  // Write to canonical DB location so the key syncs through Drive.
+  const db = DB.get();
+  if (!db.settings) db.settings = {};
+  if (k) db.settings.geminiApiKey = k;
+  else   delete db.settings.geminiApiKey;
+  DB.save();
+  // Mirror to localStorage for fast access before next DB.get() call.
   if (k) localStorage.setItem(_GEMINI_KEY_LS, k);
   else   localStorage.removeItem(_GEMINI_KEY_LS);
+  // Schedule Drive sync so the key propagates to other devices.
+  if (typeof window.scheduleGoogleDriveSave === 'function') window.scheduleGoogleDriveSave();
 }
 
 /* Direct call to Gemini API from the renderer — no Netlify involved. */
@@ -6297,10 +6308,8 @@ function extractGeminiText(data) {
 }
 
 function clearLegacyGeminiKey() {
-  // Remove all legacy key storage locations.
+  // Remove only truly-legacy key location. db.settings.geminiApiKey is now canonical — do not touch it.
   localStorage.removeItem('gemini_api_key');
-  const db = DB.get();
-  if (db.settings?.geminiApiKey) { delete db.settings.geminiApiKey; DB.save(); }
 }
 
 function setGeminiNotice(text, state = 'warn') {
@@ -22292,6 +22301,18 @@ document.addEventListener('DOMContentLoaded', () => {
   localStorage.removeItem('nbme_pin_v1');
   App.init();
   if (typeof updateHintUsageCounter === 'function') updateHintUsageCounter();
+  // One-time migration: if key exists in localStorage mirror but not yet in DB, promote it.
+  (function migrateGeminiKeyToDb() {
+    try {
+      const lsKey = (localStorage.getItem('nbme_gemini_key_v1') || '').trim();
+      const db = DB.get();
+      if (lsKey && !(db.settings?.geminiApiKey || '').trim()) {
+        if (!db.settings) db.settings = {};
+        db.settings.geminiApiKey = lsKey;
+        DB.save();
+      }
+    } catch (_) {}
+  })();
   if (typeof checkGeminiApiKeyStatus === 'function') checkGeminiApiKeyStatus();
   if (typeof autoConnectGoogleDrive === 'function') autoConnectGoogleDrive();
   restoreNavSidebarState();

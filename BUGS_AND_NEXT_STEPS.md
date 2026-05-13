@@ -1,6 +1,6 @@
 # BUGS AND NEXT STEPS
 
-**Last updated:** 2026-05-13 (no-Netlify Gemini architecture complete)  
+**Last updated:** 2026-05-13 (Gemini key syncs through Drive)  
 **Purpose:** Active bug tracker and prioritized work queue. Contains all unresolved issues and pending validations. Update this file as items are resolved.
 
 ---
@@ -236,7 +236,10 @@ Gemini-powered "Generate Missing Tags & Pearls" is deferred until after the exam
 - `refreshNotesAiStatus()` — status message now reads from `getLocalGeminiKey()` instead of IPC `hasApiKey`.
 
 **Key invariants:**
-- The key lives only in `localStorage`. Drive backup serializer (`driveDbSnapshot`) reads only `DB.get()` — never sees `localStorage.getItem('nbme_gemini_key_v1')`.
+- The key lives in `db.settings.geminiApiKey` (canonical) and is mirrored to `localStorage('nbme_gemini_key_v1')` for fast access. `setLocalGeminiKey()` writes both, calls `DB.save()`, and schedules a Drive sync.
+- Drive snapshot includes the full `settings` block including `geminiApiKey`. Restoring from Drive on a new device syncs the key to localStorage and calls `checkGeminiApiKeyStatus()` to update the top-bar indicator.
+- Startup migration: if `localStorage('nbme_gemini_key_v1')` has a key but `db.settings.geminiApiKey` is absent, the key is promoted to the DB on first load (one-time, handles existing installs).
+- The key never appears in exported test JSON files — test export reads individual `DB.getTest()` objects, not `db.settings`.
 - Netlify function files remain in the repo as dead code (reference/rollback). They are not called anywhere in the renderer or Electron main process.
 - All AI output fields (`retrievalTag`, `reviewPearl`, `hints`, `generatedAt`, `model`) are stored with question/test data and sync through Drive normally.
 

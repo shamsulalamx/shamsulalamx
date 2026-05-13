@@ -127,7 +127,8 @@ Gemini refinement is available for the **UWorld** and **Divine Podcasts** pipeli
 
 **Architecture:**
 
-- Your Gemini API key is stored only in `localStorage` on your machine (`nbme_gemini_key_v1`). It is never committed to the repository, never written to the app database, and never included in Google Drive backups.
+- Your Gemini API key is stored in `db.settings.geminiApiKey` (the app's local database) and mirrored to `localStorage('nbme_gemini_key_v1')` for fast access. It is never committed to the repository and never included in exported test JSON files.
+- Because this is a private single-user app, the key **is** included in Google Drive backups (`settings` block of the Drive manifest). Restoring from Drive on a new device automatically restores the key — no manual re-entry required.
 - Hint and tagging requests (`requestHint`, `aiTagQuestions`) call the Gemini API directly from the renderer via `fetch` with an `x-goog-api-key` header.
 - UWorld and Divine refinement requests go through the Electron IPC layer (`nbme:ai:refine-uworld-draft`, `nbme:ai:refine-divine-draft`), which receives the key from the renderer payload and falls back to `process.env.GEMINI_API_KEY` if absent.
 
