@@ -259,7 +259,21 @@ All in `test-data/`, committed to the `electron-runtime-phase-1` branch.
 
 ---
 
+## 10c. What Changed 2026-05-13 (renderer/report bug fixes)
+
+| Change | Status |
+|--------|--------|
+| BUG-005 fixed: `_isLabPara()` question-mark guard — short stems with inline lab values no longer truncated (Q13/Q23/Q35 UWorld Notes) | ✅ |
+| BUG-006 fixed: `#q-pearl-block` added to `#exp-panel`; retrieval tag + pearl visible immediately after answering in tutor mode | ✅ |
+| BUG-007 fixed: `explanationParts(q)` reads `educationalObjective`, `correctBlurb`, `q.e` in addition to legacy `q.explanation`; PDF gate broadened to `exp.correctLine || exp.paras.length > 0` | ✅ |
+| All fixes validated in electron:dev | ✅ |
+| Packaged app rebuilt: `npm run electron:build:mac` | ✅ |
+
+---
+
 ## 11. Immediate Next Priorities
+
+**P0 — Backfill `retrievalTag` + `reviewPearl` for Psych Shelf 3–8.** Run `node backfill-pearls.js` (requires `GEMINI_API_KEY`). All 300 questions in `test-data/Psych_Shelf_*_app_ready.json` updated in-place. Deferred until exam prep permits.
 
 **P1 — VAL-002: Figure rendering.** Import `test-data/Psych_Shelf_8_full_app_ready.json`, navigate to Q25/Q34/Q48, confirm lab-values table renders inline. Then test image upload workflow for one figureId.
 

@@ -1,6 +1,6 @@
 # BUGS AND NEXT STEPS
 
-**Last updated:** 2026-05-13 (Phase 1 retrieval tag + review pearl complete)  
+**Last updated:** 2026-05-13 (renderer/report bug fixes complete)  
 **Purpose:** Active bug tracker and prioritized work queue. Contains all unresolved issues and pending validations. Update this file as items are resolved.
 
 ---
@@ -42,6 +42,80 @@ function _isLabPara(para) {
 ```
 
 **Caveat:** Lab detection must remain conservative. Do not loosen `_LAB_SCAN_RE` or remove the guards. If real lab-value paragraphs exceed 400 chars in future test files, raise the threshold carefully and re-verify Q1/Q24 still render as prose.
+
+**See also:** BUG-005 below — a second `_isLabPara` false-positive affecting short stems was fixed separately.
+
+---
+
+### [BUG-005] `_isLabPara()` false-positive on short clinical stems with inline lab values — RESOLVED 2026-05-13
+
+**Status:** ✅ FIXED. Verified in electron:dev: Q13, Q23, Q35 of `UWorld_Notes_Psych_Questions_enhanced_app_ready.json` now render full stems.
+
+**Symptom:**
+Short clinical vignettes (< 400 chars) containing inline lab values were misclassified as lab-value table blocks. The stem was truncated to a single-row table and the rest of the text silently discarded. Examples:
+- Q13 (280 chars): "…Lithium level is 2.1 mEq/L. Which medication is most likely responsible?"
+- Q23 (310 chars): "…Serum sodium is 128 mEq/L. Which substance did she most likely ingest?"
+- Q35 (239 chars): "…Potassium is 2.8 mEq/L and bicarbonate is 32 mEq/L. Which diagnosis is most likely?"
+
+**Root cause:**
+The BUG-001 length guard (`para.length > 400`) did not protect short stems. The word-count guard (`nameWords.length <= 4`) also failed because "Lithium level is" is only 3 words — a valid regex match. Real question stems always end with a question mark; isolated lab-value table blocks never do.
+
+**Fix applied (`index.html`, `_isLabPara()`, ~line 5086):**
+Added a question-mark guard as the second check, immediately after the length guard:
+```javascript
+if (/\?/.test(para)) return false;
+```
+Current full function:
+```javascript
+function _isLabPara(para) {
+  if (para.length > 400) return false;
+  if (/\?/.test(para)) return false;
+  _LAB_SCAN_RE.lastIndex = 0;
+  let m;
+  while ((m = _LAB_SCAN_RE.exec(para)) !== null) {
+    const nameWords = m[1].trim().split(/\s+/);
+    if (nameWords.length <= 4) return true;
+  }
+  return false;
+}
+```
+
+**Caveat:** Do not remove this guard. Real NBME lab-value table blocks are isolated paragraphs with no question marks.
+
+---
+
+### [BUG-006] Retrieval tag and review pearl missing from quiz explanation area — RESOLVED 2026-05-13
+
+**Status:** ✅ FIXED. Pearl block now appears immediately below the "Answer Explanation" header in tutor mode, above the explanation body.
+
+**Symptom:**
+After Phase 1 implementation, `retrievalTag` and `reviewPearl` appeared in the score summary table and review detail panel, but not in the tutor-mode quiz view after answering. Users saw no pearl at the moment of feedback.
+
+**Fix applied (`index.html`):**
+1. Added `#q-pearl-block` div inside `#exp-panel` (line ~1201), before `#exp-body`. Same amber styling as `#rev-pearl-block` (background `#fff8e1`, left border `#f59e0b`).
+2. `renderExplanation()` (line ~5717) now populates `#q-retrieval-tag` and `#q-review-pearl` from `getRetrievalTag(q)` / `getReviewPearl(q)` and shows the block only when at least one field is non-empty.
+
+**Backward compatibility:** Pearl block hidden (`display:none`) for questions without these fields. Existing UWorld/PDF/OCR imports unaffected.
+
+---
+
+### [BUG-007] PDF report missing all explanations for JSON-imported questions — RESOLVED 2026-05-13
+
+**Status:** ✅ FIXED. PDF now includes Educational Objective, all explanation sections, and per-choice rationales for NBME JSON questions.
+
+**Symptom:**
+The PDF score report rendered answer choice pills for each question but showed no explanation text for NBME JSON-imported questions. Legacy PDF-OCR and UWorld imports were unaffected.
+
+**Root cause:**
+`explanationParts(q)` (PDF code, ~line 6544) only read `q.explanation` (the legacy field). NBME JSON questions store explanations in `q.educationalObjective` (plain text), `q.correctBlurb` (pre-escaped HTML), and `q.e` (per-choice rationale object). The rendering block was also gated on `if (q.explanation)`, so JSON questions were skipped entirely.
+
+**Fix applied (`index.html`):**
+1. `explanationParts(q)` now collects paragraphs from four sources in priority order:
+   - `q.educationalObjective` → prefixed "Objective: …" (plain text)
+   - `q.correctBlurb` → HTML stripped via `plainTextFromHTML()`, split on double-newlines
+   - `q.explanation` → legacy plain text (unchanged; UWorld/OCR imports)
+   - `q.e` entries → each letter's rationale rendered as "X) text"
+2. Rendering gate changed from `if (q.explanation)` to `if (exp.correctLine || exp.paras.length > 0)`.
 
 ---
 
@@ -144,6 +218,8 @@ Gemini-powered "Generate Missing Tags & Pearls" is deferred until after the exam
 ---
 
 ## PRIORITIZED NEXT STEPS
+
+**P0 — Backfill `retrievalTag` + `reviewPearl` for Psych Shelf 3–8.** Run `node backfill-pearls.js` (requires `GEMINI_API_KEY`). Updates all 300 questions in `test-data/Psych_Shelf_*_app_ready.json` in-place. Validate, then commit. Deferred until exam prep permits.
 
 **P1 — Run VAL-002 (figure rendering).** Import `test-data/Psych_Shelf_8_full_app_ready.json`, navigate to Q25, Q34, Q48, confirm lab-values table renders inline where the `[FIGURE: ...]` marker was. Then test the figure-upload workflow: attach a test image for one figureId before saving, confirm it renders as `<img>` in quiz view.
 

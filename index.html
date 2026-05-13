@@ -1198,6 +1198,12 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
             <!-- Explanation -->
             <div class="exp-panel" id="exp-panel" style="display:none;">
               <div class="exp-panel-title">📖 Answer Explanation</div>
+              <div id="q-pearl-block" style="display:none;margin-bottom:12px;padding:10px 14px;background:#fff8e1;border-left:3px solid #f59e0b;border-radius:3px;">
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#92400e;margin-bottom:3px;">Retrieval Tag</div>
+                <div id="q-retrieval-tag" style="font-weight:600;color:#1a1a2e;margin-bottom:8px;"></div>
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#92400e;margin-bottom:3px;">Review Pearl</div>
+                <div id="q-review-pearl" style="color:#1a1a2e;font-style:italic;"></div>
+              </div>
               <div id="exp-body"></div>
             </div>
 
@@ -5088,6 +5094,10 @@ function renderImages(q, topElId, bottomElId) {
     // "80% intelligible" — these must never be classified as lab-value blocks.
     // Real lab-value paragraphs in NBME questions are always short dedicted blocks.
     if (para.length > 400) return false;
+    // Any paragraph that contains a question mark is a clinical question stem,
+    // never a standalone lab-value block (e.g. "Lithium level is 2.1 mEq/L. Which
+    // medication is most likely responsible?").
+    if (/\?/.test(para)) return false;
     _LAB_SCAN_RE.lastIndex = 0;
     let m;
     while ((m = _LAB_SCAN_RE.exec(para)) !== null) {
@@ -5704,6 +5714,16 @@ const Quiz = (() => {
     const showExp = state.mode === 'tutor' && r.answered;
     panel.style.display = showExp ? 'block' : 'none';
     if (!showExp) return;
+    const pearlBlock = document.getElementById('q-pearl-block');
+    if (pearlBlock) {
+      const rtVal = typeof getRetrievalTag === 'function' ? getRetrievalTag(q) : '';
+      const rpVal = typeof getReviewPearl  === 'function' ? getReviewPearl(q)  : '';
+      pearlBlock.style.display = (rtVal || rpVal) ? 'block' : 'none';
+      const rtNode = document.getElementById('q-retrieval-tag');
+      const rpNode = document.getElementById('q-review-pearl');
+      if (rtNode) rtNode.textContent = rtVal || '—';
+      if (rpNode) rpNode.textContent = rpVal || '—';
+    }
     buildExplanationHTML(q, r, document.getElementById('exp-body'));
     // Re-apply current font size with explanation offset.
     const sz = parseInt(localStorage.getItem('question_font_size')) || 14;
@@ -6525,10 +6545,38 @@ const Results = (() => {
 	      const choices = typeof window.getQuestionChoices === 'function' ? window.getQuestionChoices(q) : (q.o || []);
 	      const correctOpt = choices.find(o => o.l === q.c);
       const correctLine = q.c ? normalizePdfText(`${q.c}) ${correctOpt?.t || ''}`) : '';
-      const paras = String(q.explanation || '')
-        .split(/\n\n+/)
-        .map(p => normalizePdfText(p.replace(/\s+/g, ' ')))
-        .filter(Boolean);
+      const paras = [];
+
+      // Educational objective (NBME JSON import)
+      if (q.educationalObjective) {
+        paras.push(normalizePdfText('Objective: ' + String(q.educationalObjective)));
+      }
+
+      // Correct blurb — pre-escaped HTML from JSON import; strip tags for PDF
+      if (q.correctBlurb) {
+        plainTextFromHTML(q.correctBlurb)
+          .split(/\n\n+/)
+          .map(p => normalizePdfText(p.replace(/\s+/g, ' ')))
+          .filter(Boolean)
+          .forEach(p => paras.push(p));
+      }
+
+      // Legacy plain-text explanation (PDF OCR / UWorld imports)
+      if (q.explanation) {
+        String(q.explanation)
+          .split(/\n\n+/)
+          .map(p => normalizePdfText(p.replace(/\s+/g, ' ')))
+          .filter(Boolean)
+          .forEach(p => paras.push(p));
+      }
+
+      // Per-choice rationales (q.e object — keyed by letter)
+      if (q.e && typeof q.e === 'object') {
+        Object.entries(q.e).forEach(([letter, text]) => {
+          if (text) paras.push(normalizePdfText(`${letter}) ${String(text)}`));
+        });
+      }
+
       return { correctLine, paras };
     }
 
@@ -6820,10 +6868,10 @@ const Results = (() => {
       }
       y += 4;
 
-      if (q.explanation) {
+      const exp = explanationParts(q);
+      if (exp.correctLine || exp.paras.length > 0) {
         const expX = cardX + 4;
         const expW = cardW - 8;
-        const exp = explanationParts(q);
         ensureQuestionSpace(14);
         setDraw([200, 208, 218]); setFill(WHITE);
         doc.rect(expX, y, expW, 10, 'S');
