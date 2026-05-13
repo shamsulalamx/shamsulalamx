@@ -212,7 +212,7 @@ Psych_Shelf_3 Q33–Q36 and Psych_Shelf_4 contain shared-stem groups. Rendering 
 
 ## 9. Validated Fixture Set
 
-All in `test-data/`, committed to the `electron-runtime-phase-1` branch.
+All in `test-data/`, committed to `main` (merged from `electron-runtime-phase-1` on 2026-05-13, commit `f282bb1`).
 
 | File | Qs | Shared groups | Tables | FigureRefs |
 |------|-----|---------------|--------|------------|
@@ -309,16 +309,66 @@ All in `test-data/`, committed to the `electron-runtime-phase-1` branch.
 
 ---
 
-## 11. Immediate Next Priorities
+## 10f. What Changed 2026-05-13 (Drive autosave hardening + GitHub Pages deployment)
 
-**P0 — Backfill `retrievalTag` + `reviewPearl` for Psych Shelf 3–8.** Run `node backfill-pearls.js` (requires `GEMINI_API_KEY`). All 300 questions in `test-data/Psych_Shelf_*_app_ready.json` updated in-place. Deferred until exam prep permits.
+| Change | Status |
+|--------|--------|
+| `setLocalGeminiKey()` — removed redundant `scheduleGoogleDriveSave()` call; `DB.save()` is the sole scheduler | ✅ |
+| `restoreGoogleDriveNow()` — writes `sessionStorage('nbme_post_restore_v1')` before `location.reload()` | ✅ |
+| `DOMContentLoaded` — reads/clears post-restore flag; `migrateGeminiKeyToDb` skips its `DB.save()` when flag present | ✅ |
+| `.nojekyll` added at repo root (commit `37d6d4c`) | ✅ |
+| `electron-runtime-phase-1` merged into `main` — all session work now on `main` (commit `f282bb1`) | ✅ |
+| GitHub Pages live at https://shamsulalamx.github.io/NBME-Self-Assessment-Suite/ | ✅ |
+| Gemini key entry, persistence, Drive sync, and incognito restore all confirmed working | ✅ |
+| Drive OAuth `origin_mismatch` on school browser — `https://shamsulalamx.github.io` added to `274374578651-` Web credential | ⏳ pending cache propagation / school browser retest |
+| Packaged Electron app rebuilt and verified (`dist/` index.html matches source) | ✅ |
+| Syntax check: 9 script blocks, 0 errors | ✅ |
 
-**P1 — VAL-002: Figure rendering.** Import `test-data/Psych_Shelf_8_full_app_ready.json`, navigate to Q25/Q34/Q48, confirm lab-values table renders inline. Then test image upload workflow for one figureId.
+---
 
-**P2 — VAL-003: Save valid questions only.** Read `saveValidNbmeGeminiJsonQuestionsOnly` function body. If stubbed, implement it (filter `normalizedItems` to `status === 'ok'` entries, reuse `createTestFromNbmeGeminiJsonImport` save logic).
+## 11. Current Branch State (as of end of 2026-05-13)
 
-**P3 — Next NBME folder extraction.** Psych Shelf is done. Run the Gemini extraction prompt on Medicine Shelf (or whichever folder is next). Produce `*_app_ready.json`, import and validate, add to `test-data/`, commit.
+| Branch | HEAD | Notes |
+|--------|------|-------|
+| `main` | `f282bb1` | GitHub Pages source; contains all app work |
+| `electron-runtime-phase-1` | `4101bfc` | Feature branch; all commits merged into main |
+| `origin/main` | `f282bb1` | In sync with local main |
 
-**P4 — VAL-004: Shared group rendering.** Import Psych_Shelf_3 or Psych_Shelf_4, navigate to a shared-stem group, confirm `buildSharedGroupHTML` renders the shared vignette above the per-question stem in quiz mode.
+**Key commits (most recent first):**
 
-**P5 (post-exam) — Phase 2: Gemini pearl generation via Electron IPC.** Add `nbme:ai:generate-pearls` IPC handler to `electron/main.js`. Expose via `preload.js`. Gate the "Generate Missing Tags & Pearls" button on `window.nbmeDesktop?.ai?.generatePearls`. No Netlify involvement.
+| Hash | Description |
+|------|-------------|
+| `f282bb1` | Merge electron-runtime-phase-1 into main for GitHub Pages |
+| `37d6d4c` | Add .nojekyll for GitHub Pages static hosting |
+| `4101bfc` | Harden Drive autosave: remove redundant schedule, post-restore guard |
+| `3f29d7b` | Cross-device hardening: MiscDocs Drive sync, blob URL open, origin config |
+| `4bf15eb` | Prevent Gemini key leakage in downloadable exports |
+| `335d665` | Add safeExportJson() to guard all downloadable file exports |
+| `f0cdc16` | Sync Gemini API key through Google Drive |
+| `68bc136` | Remove Netlify dependency: implement no-Netlify Gemini architecture |
+
+---
+
+## 12. Immediate Next Priorities (next session)
+
+### Must-do before studying — cross-device restore validation
+
+1. **Full Drive backup from Mac** — Settings → Backup Now → wait for green completion status
+2. **Open GitHub Pages in incognito** → Connect Drive → Restore Drive → confirm all data present
+3. **Confirm Gemini key restored** — Settings → Gemini shows "Key saved"; test a hint
+4. **Confirm Misc docs restored** — Miscellaneous Documents panel shows uploaded files
+5. **School Windows retest** — open GitHub Pages in Chrome/Edge; if Drive OAuth still fails, verify `274374578651-` credential type is "Web application" (not Desktop) in Google Cloud Console
+
+### After restore is stable
+
+6. **Add close-tab warning / dirty-state indicator** (optional) — only after restore works end-to-end
+7. **Consider Windows Electron build** — only if browser mode is insufficient for school use
+
+### Content work
+
+- **P0** — Backfill retrievalTag + reviewPearl: `node backfill-pearls.js` for Psych Shelf 3–8
+- **P1** — VAL-002: Figure rendering (Psych_Shelf_8 Q25/Q34/Q48)
+- **P2** — VAL-003: Save-valid-only button
+- **P3** — Next NBME shelf extraction (Medicine, Surgery, etc.)
+- **P4** — VAL-004: Shared-group rendering (Psych_Shelf_3 Q33–Q36)
+- **P5 (post-exam)** — Phase 2 pearl generation via Electron IPC

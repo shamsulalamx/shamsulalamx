@@ -1,6 +1,6 @@
 # BUGS AND NEXT STEPS
 
-**Last updated:** 2026-05-13 (Gemini key Drive sync + export safety complete)  
+**Last updated:** 2026-05-13 (GitHub Pages deployment + Drive autosave hardening complete)  
 **Purpose:** Active bug tracker and prioritized work queue. Contains all unresolved issues and pending validations. Update this file as items are resolved.
 
 ---
@@ -236,9 +236,9 @@ Gemini-powered "Generate Missing Tags & Pearls" is deferred until after the exam
 - `refreshNotesAiStatus()` — status message now reads from `getLocalGeminiKey()` instead of IPC `hasApiKey`.
 
 **Key invariants:**
-- The key lives in `db.settings.geminiApiKey` (canonical) and is mirrored to `localStorage('nbme_gemini_key_v1')` for fast access. `setLocalGeminiKey()` writes both, calls `DB.save()`, and schedules a Drive sync.
+- The key lives in `db.settings.geminiApiKey` (canonical) and is mirrored to `localStorage('nbme_gemini_key_v1')` for fast access. `setLocalGeminiKey()` writes both and calls `DB.save()` (which schedules Drive sync automatically — no second `scheduleGoogleDriveSave()` call needed).
 - Drive snapshot includes the full `settings` block including `geminiApiKey`. Restoring from Drive on a new device syncs the key to localStorage and calls `checkGeminiApiKeyStatus()` to update the top-bar indicator.
-- Startup migration: if `localStorage('nbme_gemini_key_v1')` has a key but `db.settings.geminiApiKey` is absent, the key is promoted to the DB on first load (one-time, handles existing installs).
+- Startup migration: if `localStorage('nbme_gemini_key_v1')` has a key but `db.settings.geminiApiKey` is absent, the key is promoted to the DB on first load (one-time, handles existing installs). Skipped on first load after a Drive restore (see FEAT-005).
 - The key never appears in downloadable files — all four JSON export call sites use `safeExportJson()`, a central serializer that strips every key in `_EXPORT_SENSITIVE_KEYS` (currently `{'geminiApiKey'}`) at any depth. Audit confirmed no current export path touches `db.settings` directly; the guard is defensive for future code.
 - Netlify function files remain in the repo as dead code (reference/rollback). They are not called anywhere in the renderer or Electron main process.
 - All AI output fields (`retrievalTag`, `reviewPearl`, `hints`, `generatedAt`, `model`) are stored with question/test data and sync through Drive normally.
@@ -289,7 +289,114 @@ Gemini-powered "Generate Missing Tags & Pearls" is deferred until after the exam
 
 ---
 
-## PRIORITIZED NEXT STEPS
+---
+
+## COMPLETED — 2026-05-13: Drive autosave hardening
+
+### [FEAT-005] Drive autosave hardening: remove redundant schedule + post-restore guard — ✅ COMPLETE
+
+**Implemented:**
+
+**Fix 1 — Remove redundant `scheduleGoogleDriveSave()` call from `setLocalGeminiKey`:**
+- `setLocalGeminiKey()` previously called `DB.save()` (which schedules Drive sync internally) and then explicitly called `scheduleGoogleDriveSave()` a second time.
+- The second call was a no-op that reset the 1200ms debounce timer, extending the sync delay unnecessarily.
+- Removed the explicit call. `DB.save()` remains the sole scheduler.
+
+**Fix 2 — Post-restore startup autosave guard:**
+- `restoreGoogleDriveNow()` now writes `sessionStorage('nbme_post_restore_v1', '1')` immediately before `location.reload()`.
+- On the next page load, `DOMContentLoaded` reads and clears the flag.
+- If the flag was present, `migrateGeminiKeyToDb()` returns early — skipping its conditional `DB.save()` call, which would otherwise trigger `scheduleGoogleDriveSave()` and potentially overwrite the just-restored Drive manifest with stale local state.
+- This closes the narrow window where a startup key-migration write could race against a fresh restore.
+
+**Commit:** `4101bfc`
+
+---
+
+## COMPLETED — 2026-05-13: GitHub Pages static hosting
+
+### [FEAT-006] GitHub Pages browser deployment — ✅ COMPLETE
+
+**Implemented:**
+- `.nojekyll` added at repo root — prevents Jekyll from mangling underscore-prefixed identifiers.
+- `electron-runtime-phase-1` merged into `main` (`f282bb1`) — all app work that had accumulated on the feature branch is now on `main` and served by GitHub Pages.
+- Live URL: **https://shamsulalamx.github.io/NBME-Self-Assessment-Suite/**
+
+**Google OAuth / Drive setup:**
+- OAuth Client ID in use: `274374578651-5edirahp87c5hpv69donfpvcr81tmidk.apps.googleusercontent.com`
+- Required Authorized JavaScript Origins in Google Cloud Console (credential must be type **Web application**):
+  - `https://shamsulalamx.github.io` — GitHub Pages
+  - `http://localhost:8080` — Electron dev (fallback port)
+  - `http://localhost:8888` — Electron dev (primary port)
+- No Redirect URIs are required — the app uses the GIS token flow, not the redirect-based OAuth flow.
+
+**Confirmed working:**
+- GitHub Pages app loads correctly
+- Gemini key entry in Settings works
+- Gemini key persists after page reload
+- Gemini key syncs through Google Drive manifest
+- Incognito browser restore auto-populated Gemini key after Drive sync
+- `safeExportJson` prevents `geminiApiKey` leakage into downloadable JSON exports
+- Miscellaneous Documents open via blob URLs (not blocked by popup blockers)
+
+**Pending validation (next session):**
+- Drive OAuth `origin_mismatch` on school browser — likely Google Cloud Console cache delay or wrong credential type; origin `https://shamsulalamx.github.io` added to `274374578651-` credential
+- Full Drive Backup Now → Restore cycle on fresh browser profile
+- Miscellaneous Documents restore on a fresh profile
+- School Windows computer retest
+
+**Commits:** `37d6d4c` (.nojekyll), `f282bb1` (merge to main)
+
+---
+
+## CROSS-DEVICE RESTORE — KNOWN DEFERRED RISKS
+
+The following risks were audited but not fixed (deferred for post-exam stability):
+
+| Risk | Severity | Deferred reason |
+|---|---|---|
+| Concurrent session overwrite (two tabs, no ETag check) | Medium | Single-user app; low real-world probability |
+| `saveAttempt` scheduling mid-quiz (~50 Drive calls collapsed to 1–2) | Very low | Debounce collapses correctly; not a quota risk |
+| `confirm()` dialog holding `_busy` open during large MiscDoc upload | Low (UX) | Non-blocking; 50MB gate is functional |
+
+Implement ETag/modifiedTime concurrency protection only after cross-device restore is validated end-to-end and stable.
+
+---
+
+## PRIORITIZED NEXT STEPS (next session — week of 2026-05-19)
+
+### Immediate — validate cross-device restore before studying
+
+**Step 1 — Run a clean full Drive backup from the Mac app:**
+Open Electron app or GitHub Pages in Chrome → Settings → **Backup Now** → wait until status shows "Drive backup complete". Do not close or navigate away mid-backup.
+
+**Step 2 — Confirm backup completed cleanly:**
+Re-open Settings → Drive status shows "Drive ready" (green). No error banner.
+
+**Step 3 — Open GitHub Pages in a fresh browser / incognito tab:**
+Go to https://shamsulalamx.github.io/NBME-Self-Assessment-Suite/
+
+**Step 4 — Connect Drive and restore:**
+Settings → Connect Drive → (OAuth popup) → authorize → Restore Drive. Wait for "Drive restore complete. Reloading…" and automatic page reload.
+
+**Step 5 — Confirm all data restored:**
+- [ ] Tests and folders visible in library
+- [ ] Gemini key populated (Settings → Gemini status shows "Key saved")
+- [ ] Hints work on a question
+- [ ] Misc docs visible in Miscellaneous Documents panel
+- [ ] Score history visible for a previously completed test
+
+**Step 6 — Retest on school Windows computer:**
+Open GitHub Pages in Chrome/Edge with popups allowed. Repeat Step 3–5. If Drive OAuth fails with `origin_mismatch`, verify the `274374578651-` credential in Google Cloud Console has `https://shamsulalamx.github.io` listed and is type **Web application** (not Desktop).
+
+### After restore is stable
+
+**Step 7 — Add unsynced-changes warning (optional):**
+Consider a `beforeunload` warning or Drive dirty-state indicator so the user knows when Drive is not yet synced. Implement only after restore is working end-to-end.
+
+**Step 8 — Consider Windows Electron build (optional):**
+If the GitHub Pages browser mode is sufficient for school use, skip the Windows build. Only build if popup restrictions or browser limitations make the hosted app impractical.
+
+### Content work (when study time permits)
 
 **P0 — Backfill `retrievalTag` + `reviewPearl` for Psych Shelf 3–8.** Run `node backfill-pearls.js` (requires `GEMINI_API_KEY`). Updates all 300 questions in `test-data/Psych_Shelf_*_app_ready.json` in-place. Validate, then commit. Deferred until exam prep permits.
 
@@ -302,3 +409,14 @@ Gemini-powered "Generate Missing Tags & Pearls" is deferred until after the exam
 **P4 — Shared-group rendering validation.** Psych_Shelf_3 Q33–Q36 and Psych_Shelf_4 have `sharedGroup.sharedStem`. After importing these files, navigate to those questions in quiz mode and confirm the shared vignette renders above the per-question stem via `buildSharedGroupHTML`. Verify linked question range is shown correctly.
 
 **P5 (post-exam) — Phase 2 pearl generation.** Add `ipcMain.handle('nbme:ai:generate-pearls', ...)` to `electron/main.js`. Expose via `preload.js`. Add "Generate Missing Tags & Pearls" button in score summary, guarded by `window.nbmeDesktop?.ai?.generatePearls` so it only appears in Electron. No Netlify involvement.
+
+---
+
+## DO NOT
+
+- Reintroduce Netlify functions or any server-side backend.
+- Hardcode the Gemini API key anywhere in the source.
+- Put the Gemini API key into exported test JSON files (all downloads must use `safeExportJson()`).
+- Perform major storage migrations (FigureStore, IndexedDB rewrite, localStorage restructure) before the exam.
+- Implement Supabase, Firebase, or any external database.
+- Refactor into React or add a build system without a clear need.

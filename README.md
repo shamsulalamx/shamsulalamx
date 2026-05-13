@@ -1,8 +1,20 @@
 # NBME Self-Assessment Suite
 
-A local Electron desktop app for generating and reviewing NBME-style self-assessment questions from personal study materials.
+A personal study tool for generating and reviewing NBME-style self-assessment questions from personal study materials. Runs as an Electron desktop app on Mac or as a static web app hosted on GitHub Pages — no backend required.
 
 > **This app is review-assisted, not autonomous.** All generated question drafts require human review and approval before being saved. No content is published or exported without an explicit user action. This tool is for personal study use only.
+
+---
+
+## Deployment
+
+| Mode | URL / How to run |
+|---|---|
+| **GitHub Pages (browser)** | https://shamsulalamx.github.io/NBME-Self-Assessment-Suite/ |
+| **Electron (Mac, dev)** | `npm run electron:dev` |
+| **Electron (Mac, packaged)** | `npm run electron:build:mac` → open `dist/mac-arm64/…` |
+
+All three modes share the same `index.html`. Electron-only features (UWorld and Divine Gemini refinement via IPC) are silently unavailable in the browser; all other features work identically.
 
 ---
 
@@ -10,7 +22,7 @@ A local Electron desktop app for generating and reviewing NBME-style self-assess
 
 - Import study materials from multiple source types and generate NBME-style question drafts.
 - Review, edit, approve, or discard each draft before saving.
-- Optionally refine drafts with Gemini AI (local Electron path — your API key, your machine, no third-party server).
+- Optionally refine drafts with Gemini AI (your API key, your machine, no third-party server).
 - Organize saved tests into a study library with folders, subfolders, notes, marks, and history.
 - Take timed or untimed self-assessments with hints, answer review, and score reports.
 - Back up and restore your library across devices via Google Drive.
@@ -25,11 +37,11 @@ A local Electron desktop app for generating and reviewing NBME-style self-assess
 | NBME Gemini JSON | Pre-structured `.json` (external AI extraction) | No (JSON is already AI output) |
 | Emma Holiday | Pre-structured `.json` (same workflow as NBME Gemini JSON) | No |
 | Fast Facts | Pre-structured `.json` (same workflow as NBME Gemini JSON) | No |
-| UWorld | DOCX export | Yes (Electron IPC) |
+| UWorld | DOCX export | Yes (Electron IPC only) |
 | OME | Short high-quality PDF | No (v1) |
 | Anki | Plain-text `.txt` export | No (v1) |
 | Mehlman | Structured text notes | No (v1) |
-| Divine Podcasts | Transcript `.txt` / `.md` | Yes (Electron IPC) |
+| Divine Podcasts | Transcript `.txt` / `.md` | Yes (Electron IPC only) |
 
 Each source pipeline is isolated. Changes to one pipeline do not affect others.
 
@@ -47,9 +59,10 @@ Miscellaneous Documents is a lightweight study-file repository built into the ap
 
 **Features:**
 - Upload any supported file from the landing page
-- Files are stored locally in IndexedDB (`MiscDocStore`, `nbme_misc_docs_v1`) — no server, no sync
+- Files are stored locally in IndexedDB (`MiscDocStore`, `nbme_misc_docs_v1`)
+- Drive backup saves all docs to a separate `NBME_MiscDocs_backup.json` file in the same Drive folder as the main manifest
 - Document list shows filename, file size, and upload date
-- Open PDFs and images directly in a new window; download DOCX/TXT/MD/RTF files
+- Open PDFs and images directly in a new window (blob URL — not blocked by popup blockers); download DOCX/TXT/MD/RTF files
 - Delete individual files with confirmation
 
 **What it is not:** No quizzes, no score reports, no review mode, no Gemini integration. The existing quiz engine, report engine, review engine, and all import pipelines are completely unaffected.
@@ -123,18 +136,18 @@ Raw transcript text is never sent to Gemini. The cluster summary is the sole med
 
 ## Gemini-Assisted Refinement
 
-Gemini refinement is available for the **UWorld** and **Divine Podcasts** pipelines. All Gemini calls are direct from this app — no server intermediary, no Netlify functions.
+Gemini refinement is available for the **UWorld** and **Divine Podcasts** pipelines in Electron, and for **hints** and **question tagging** in both Electron and the browser. All Gemini calls are direct from the app — no server intermediary, no Netlify functions.
 
 **Architecture:**
 
 - Your Gemini API key is stored in `db.settings.geminiApiKey` (the app's local database) and mirrored to `localStorage('nbme_gemini_key_v1')` for fast access. It is never committed to the repository and never included in exported test JSON files.
 - Because this is a private single-user app, the key **is** included in Google Drive backups (`settings` block of the Drive manifest). Restoring from Drive on a new device automatically restores the key — no manual re-entry required.
-- Hint and tagging requests (`requestHint`, `aiTagQuestions`) call the Gemini API directly from the renderer via `fetch` with an `x-goog-api-key` header.
-- UWorld and Divine refinement requests go through the Electron IPC layer (`nbme:ai:refine-uworld-draft`, `nbme:ai:refine-divine-draft`), which receives the key from the renderer payload and falls back to `process.env.GEMINI_API_KEY` if absent.
+- Hint and tagging requests (`requestHint`, `aiTagQuestions`) call the Gemini API directly from the renderer via `fetch` with an `x-goog-api-key` header. These work in both the browser and Electron.
+- UWorld and Divine refinement requests go through the Electron IPC layer (`nbme:ai:refine-uworld-draft`, `nbme:ai:refine-divine-draft`), which receives the key from the renderer payload and falls back to `process.env.GEMINI_API_KEY` if absent. These are not available in the browser.
 
 **How it works:**
 
-- You provide your own Gemini API key in the app's Settings panel. It is saved to `localStorage` only.
+- You provide your own Gemini API key in the app's Settings panel. It is saved to the app database and syncs through Google Drive to other devices.
 - The app sends a sanitized, clamped summary to Gemini (never raw source text).
 - Gemini returns a clinical vignette draft with five answer choices.
 - The app validates the response: anti-copy checks, voice-marker rejection, schema validation, and provenance assembly all run locally before the draft is shown to you.
@@ -143,16 +156,33 @@ Gemini refinement is available for the **UWorld** and **Divine Podcasts** pipeli
 
 ---
 
+## Google Drive / OAuth Setup
+
+Drive backup uses a Google OAuth 2.0 web client. The following origins must be registered in [Google Cloud Console](https://console.cloud.google.com) → **APIs & Services → Credentials** → the OAuth Client ID starting with `274374578651-`.
+
+| Origin | Required for |
+|---|---|
+| `https://shamsulalamx.github.io` | GitHub Pages browser app |
+| `http://localhost:8080` | Electron embedded server (fallback port) |
+| `http://localhost:8888` | Electron embedded server (primary port) |
+
+**Credential type must be Web application.** Desktop-type credentials do not support Authorized JavaScript Origins and will not work.
+
+To add a new static hosting origin without changing app logic, add it to `DRIVE_EXTRA_ORIGINS[]` near the top of the Drive IIFE in `index.html` and register it in Google Cloud Console.
+
+---
+
 ## Local Persistence
 
 | Storage | Contents |
 |---|---|
-| `localStorage` | Test metadata, folders, marks, flags, notes, settings |
+| `localStorage` (`nbme_app_v1`) | Test metadata, folders, marks, flags, notes, settings (including Gemini key) |
 | IndexedDB (`FigureStore`) | Question stem images, figures, exhibits |
 | IndexedDB (`MiscDocStore`) | Miscellaneous Documents uploads (file blobs + metadata) |
-| Google Drive (optional) | Full backup and cross-device restore |
+| Google Drive — main manifest | Full DB snapshot: tests, folders, history, settings, Gemini key |
+| Google Drive — `NBME_MiscDocs_backup.json` | Miscellaneous Documents blobs (separate file, same Drive folder) |
 
-Google Drive backup is optional. If connected, you can back up and restore your full library — tests, images, notes, and history — across devices. Drive is not required to use the app.
+Google Drive backup is optional. If connected, you can back up and restore your full library — tests, images, notes, Gemini key, and misc docs — across devices. Drive is not required to use the app.
 
 ---
 
@@ -187,10 +217,10 @@ cp index.html "dist/mac-arm64/NBME Self-Assessment Suite.app/Contents/Resources/
 
 ### Gemini API key setup
 
-1. Open the app.
+1. Open the app (browser or Electron).
 2. Go to **Settings**.
 3. Enter your Gemini API key.
-4. The key is stored locally and used only by the Electron main process. It is never sent to any third-party server, stored in Google Drive, or committed to the repository.
+4. The key is saved to the local app database and synced through Google Drive. It is never sent to any third-party server and never committed to the repository.
 
 ---
 
@@ -209,15 +239,27 @@ cp index.html "dist/mac-arm64/NBME Self-Assessment Suite.app/Contents/Resources/
 
 ## Current Limitations
 
+- **Browser (GitHub Pages):** UWorld and Divine Gemini refinement (Electron IPC) are unavailable. Drive OAuth requires the `https://shamsulalamx.github.io` origin to be registered in Google Cloud Console.
 - **NBME PDF:** PDF import uses OCR. Accuracy depends on screenshot or scan quality. Grouped/shared-stem questions are supported but may require review.
-- **NBME Gemini JSON:** Stable. All known bugs resolved as of 2026-05-12. Psych Shelf 3–8 validated. `retrievalTag` and `reviewPearl` fully supported as of 2026-05-13. Figure rendering (VAL-002) and "save valid only" button (VAL-003) have not been end-to-end validated. See `BUGS_AND_NEXT_STEPS.md`.
-- **UWorld:** DOCX export only. Gemini refinement is one-at-a-time; batch queue can be paused or cancelled.
+- **NBME Gemini JSON:** Stable. All known bugs resolved as of 2026-05-12. Psych Shelf 3–8 validated. Figure rendering (VAL-002) and "save valid only" button (VAL-003) have not been end-to-end validated. See `BUGS_AND_NEXT_STEPS.md`.
+- **UWorld:** DOCX export only. Gemini refinement is one-at-a-time; batch queue can be paused or cancelled. Electron only.
 - **OME:** Short, high-quality PDFs only. No OCR fallback in v1.
 - **Anki:** Plain-text `.txt` export only. `.apkg` files are not supported.
 - **Mehlman:** No Gemini refinement in v1.
-- **Divine:** Transcript quality affects clustering. Low-testability clusters are filtered out and not shown for review.
+- **Divine:** Transcript quality affects clustering. Low-testability clusters are filtered out and not shown for review. Gemini refinement is Electron only.
 - **All pipelines:** Pending broader real-world validation beyond local testing.
 - The app is currently personal/private use. Security and distribution assumptions have not been reviewed for public release.
+
+---
+
+## Do Not
+
+- Reintroduce Netlify functions or any server-side backend.
+- Hardcode the Gemini API key anywhere in the source.
+- Put the Gemini API key into exported test JSON files (use `safeExportJson()` for all downloads).
+- Perform major storage migrations before the exam unless absolutely necessary.
+- Implement Supabase, Firebase, or any external database.
+- Refactor into React or introduce a build system without clear need.
 
 ---
 
@@ -227,4 +269,4 @@ cp index.html "dist/mac-arm64/NBME Self-Assessment Suite.app/Contents/Resources/
 - You are responsible for reviewing every draft before saving it to your library.
 - The app does not publish, share, or submit content anywhere without your explicit action.
 - Generated questions may contain errors. Do not rely on them as authoritative medical references.
-- Do not commit your Gemini API key to this repository or store it in Google Drive backups.
+- Do not commit your Gemini API key to this repository.
