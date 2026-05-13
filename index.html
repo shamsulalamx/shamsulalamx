@@ -925,9 +925,14 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
   font-size: inherit;
   color: var(--text);
   line-height: 1.65;
-  white-space: pre-wrap;
   word-break: break-word;
 }
+/* Structured explanation sections (ngj importer) */
+.ngj-exp-section { margin-bottom: 10px; }
+.ngj-exp-section:last-child { margin-bottom: 0; }
+.ngj-exp-section strong { display: block; margin-bottom: 2px; }
+.ngj-exp-section p { margin: 0 0 1px; }
+.ngj-exp-section p:last-child { margin-bottom: 0; }
 
 /* ── Question images ───────────────────────────────────── */
 .q-images-top, .q-images-bottom,
@@ -20918,17 +20923,23 @@ const App = (() => {
   }
 
   function _ngjBuildCorrectBlurb(sections, educationalObjective) {
-    // Build an HTML string for q.correctBlurb from explanationSections
-    let parts = [];
+    // Build an HTML string for q.correctBlurb from explanationSections.
+    // Each section gets a wrapper so headings can have inter-section spacing
+    // while paragraphs within a section stay tightly grouped.
+    let html = '';
     (sections || []).forEach(sec => {
       const heading = (sec.heading || '').trim();
       const body = Array.isArray(sec.body) ? sec.body : (typeof sec.body === 'string' ? [sec.body] : []);
+      const bodyParts = body.filter(p => p && String(p).trim());
+      if (!heading && !bodyParts.length) return;
+      html += '<div class="ngj-exp-section">';
       if (heading && heading !== 'Unlabeled Explanation') {
-        parts.push('<strong>' + _ngjEsc(heading) + '</strong>');
+        html += '<strong>' + _ngjEsc(heading) + '</strong>';
       }
-      body.forEach(p => { if (p && String(p).trim()) parts.push(_ngjEsc(String(p))); });
+      bodyParts.forEach(p => { html += '<p>' + _ngjEsc(String(p)) + '</p>'; });
+      html += '</div>';
     });
-    return parts.join('<br><br>');
+    return html;
   }
 
   function _ngjBuildPerChoiceExplanations(sections, answerChoices) {
