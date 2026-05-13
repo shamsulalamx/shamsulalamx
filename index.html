@@ -20922,6 +20922,88 @@ const App = (() => {
     return { totalQuestions:0, validQuestions:0, incompleteQuestions:0, blockingErrorCount:0, warningCount:0, unresolvedFigureCount:0, missingCorrectAnswerCount:0, extractionWarningCount:0 };
   }
 
+  // ── NBME UI artifact sanitizer ────────────────────────────────────────────
+  // Removes NBME navigation-bar text (e.g. "Lab Values Calculator") that
+  // leaks into stems/explanations from screenshot-OCR-based source PDFs.
+  // Conservative: only removes multi-term clusters or fully isolated lines.
+  // Protects medical prose like "next step", "previous episode", "help diagnose".
+  (function() {
+    const TERM = '(?:Previous|Next|Score\\s+Report|Lab\\s+Values|Calculator|Help|Pause)';
+    // Two or more UI terms adjacent (with optional whitespace/comma between them)
+    const _clusterRe = new RegExp(TERM + '(?:[\\s,]+' + TERM + ')+', 'gi');
+    // Single UI term alone on its own line (no other meaningful content)
+    const _singleLineRe = new RegExp(
+      '^[ \\t]*(?:Previous|Next|Score\\s+Report|Lab\\s+Values|Calculator|Help|Pause)[ \\t]*$',
+      'gim'
+    );
+    // Short known artifact appended after sentence terminator at end of line/string
+    const _suffixRe = /([.;:!?)\]])\s+((?:Lab\s+Values|Score\s+Report))(?=\s*$|\s*\n)/gi;
+
+    window._ngjSanitizeUiArtifactsText = function(text, fieldPath, artifactLog) {
+      if (typeof text !== 'string') return text;
+      let result = text;
+      const removed = [];
+      result = result.replace(_clusterRe, function(m) { removed.push(m.trim()); return ''; });
+      result = result.replace(_singleLineRe, function(m) { removed.push(m.trim()); return ''; });
+      result = result.replace(_suffixRe, function(m, punct) { removed.push(m.trim()); return punct; });
+      if (removed.length) {
+        artifactLog.push('Removed NBME UI artifact from ' + fieldPath + ': ' +
+          removed.map(function(s) { return JSON.stringify(s); }).join(', '));
+      }
+      // Normalize whitespace introduced by removals
+      result = result
+        .replace(/[ \t]{2,}/g, ' ')
+        .replace(/[ \t]+$/gm, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+      return result;
+    };
+
+    window._ngjSanitizeQuestion = function(q, artifactLog) {
+      const S = window._ngjSanitizeUiArtifactsText;
+      if (q.stem)                  q.stem                  = S(q.stem,                  'stem',                  artifactLog);
+      if (q.educationalObjective)  q.educationalObjective  = S(q.educationalObjective,  'educationalObjective',  artifactLog);
+      (q.answerChoices || []).forEach(function(ch, ci) {
+        if (ch && ch.text) ch.text = S(ch.text, 'answerChoices[' + ci + '].text', artifactLog);
+      });
+      (q.explanationSections || []).forEach(function(sec, si) {
+        if (sec.heading) sec.heading = S(sec.heading, 'explanationSections[' + si + '].heading', artifactLog);
+        if (Array.isArray(sec.body)) {
+          sec.body = sec.body.map(function(p, pi) {
+            return S(String(p), 'explanationSections[' + si + '].body[' + pi + ']', artifactLog);
+          });
+        } else if (typeof sec.body === 'string') {
+          sec.body = S(sec.body, 'explanationSections[' + si + '].body', artifactLog);
+        }
+      });
+      (q.figureRefs || []).forEach(function(fr, fi) {
+        (fr.visibleText || []).forEach(function(vt, vi) {
+          fr.visibleText[vi] = S(String(vt), 'figureRefs[' + fi + '].visibleText[' + vi + ']', artifactLog);
+        });
+      });
+      (q.tables || []).forEach(function(tbl, ti) {
+        if (tbl.title) tbl.title = S(tbl.title, 'tables[' + ti + '].title', artifactLog);
+        (tbl.headers || []).forEach(function(h, hi) {
+          tbl.headers[hi] = S(String(h), 'tables[' + ti + '].headers[' + hi + ']', artifactLog);
+        });
+        if (Array.isArray(tbl.rows)) {
+          tbl.rows.forEach(function(row, ri) {
+            if (Array.isArray(row)) {
+              row.forEach(function(cell, ci2) {
+                row[ci2] = S(String(cell), 'tables[' + ti + '].rows[' + ri + '][' + ci2 + ']', artifactLog);
+              });
+            } else if (row && typeof row === 'object') {
+              Object.keys(row).forEach(function(k) {
+                row[k] = S(String(row[k]), 'tables[' + ti + '].rows[' + ri + '].' + k, artifactLog);
+              });
+            }
+          });
+        }
+      });
+    };
+  }());
+  // ── end sanitizer ─────────────────────────────────────────────────────────
+
   function _ngjBuildCorrectBlurb(sections, educationalObjective) {
     // Build an HTML string for q.correctBlurb from explanationSections.
     // Each section gets a wrapper so headings can have inter-section spacing
@@ -20975,6 +21057,11 @@ const App = (() => {
     const items = [];
     const qs = payload.questions || [];
     qs.forEach((q, idx) => {
+      // Sanitize UI footer artifacts (e.g. "Lab Values Calculator") before extracting
+      // any fields so cleaned text flows through to correctBlurb and per-choice HTML.
+      const sanitizerWarnings = [];
+      window._ngjSanitizeQuestion(q, sanitizerWarnings);
+
       const qNum = typeof q.questionNumber === 'number' ? q.questionNumber : (idx + 1);
       const choices = (q.answerChoices || []).map(ch => ({ l: String(ch.label || ''), t: String(ch.text || '') }));
       const correctAnswer = (q.correctAnswer || '').trim() || null;
@@ -20994,7 +21081,10 @@ const App = (() => {
       const hasEmbeddedFigure = q.hasEmbeddedFigure === true || (Array.isArray(q.figureRefs) && q.figureRefs.length > 0);
       const figureRefs = Array.isArray(q.figureRefs) ? q.figureRefs : [];
       const tables = Array.isArray(q.tables) ? q.tables : [];
-      const extractionWarnings = Array.isArray(q.extractionWarnings) ? q.extractionWarnings : [];
+      const extractionWarnings = [
+        ...(Array.isArray(q.extractionWarnings) ? q.extractionWarnings : []),
+        ...sanitizerWarnings
+      ];
 
       const quizQuestion = {
         n: qNum,

@@ -1,6 +1,6 @@
 # NBME JSON Importer — Technical Specification
 
-**Last updated:** 2026-05-12  
+**Last updated:** 2026-05-13  
 **Status:** Implemented, partially validated. See BUGS_AND_NEXT_STEPS.md for outstanding issues.
 
 ---
@@ -237,6 +237,70 @@ Each entry: `{ questionNumber, status: 'ok'|'warning'|'error', errors[], warning
 
 ---
 
+## UI Artifact Sanitizer
+
+Screenshot-OCR-based NBME source PDFs sometimes leak navigation-bar text into stems or explanation body paragraphs. The most common form is the NBME footer bar:
+
+```
+Previous  Next  Score Report  Lab Values  Calculator  Help  Pause
+```
+
+or truncated versions such as `Lab Values Calculator` appearing inline after legitimate explanation text.
+
+### Sanitizer functions (`index.html`)
+
+| Function | Purpose |
+|---|---|
+| `window._ngjSanitizeUiArtifactsText(text, fieldPath, log)` | Sanitizes a single string; appends removal notices to `log[]` |
+| `window._ngjSanitizeQuestion(q, log)` | Applies sanitizer to all text fields of a raw JSON question object |
+
+### When it runs
+
+`normalizeNbmeGeminiJsonImport()` calls `_ngjSanitizeQuestion(q, sanitizerWarnings)` as the **first step** before extracting any fields. Cleaned text flows into `normalizedSections`, `correctBlurb`, and per-choice explanations. Any removal notices are appended to the question's `extractionWarnings` in `metadata`.
+
+### Fields sanitized
+
+- `q.stem`
+- `q.educationalObjective`
+- `q.answerChoices[].text`
+- `q.explanationSections[].heading`
+- `q.explanationSections[].body[]`
+- `q.figureRefs[].visibleText[]`
+- `q.tables[].title`, `.headers[]`, `.rows[][]` / `.rows[].value`
+
+Fields **not** sanitized: `correctAnswer`, labels, IDs, `retrievalTag`, metadata keys.
+
+### Removal rules (conservative)
+
+1. **Multi-term clusters** — two or more UI terms adjacent (any whitespace between): always removed.  
+   Recognized terms: `Previous`, `Next`, `Score Report`, `Lab Values`, `Calculator`, `Help`, `Pause`
+
+2. **Single UI term alone on a line** — a line whose entire content (after stripping whitespace) is exactly one UI term: removed.
+
+3. **Short known artifact as terminal suffix** — `Lab Values` or `Score Report` appearing after sentence-ending punctuation at the very end of a line or string: removed, punctuation preserved.
+
+### Protected medical phrases
+
+The sanitizer is **not** a word-level blocklist. Because rules 1–3 require adjacency or isolation, the following phrases are never touched:
+
+| Phrase | Why safe |
+|---|---|
+| `next step`, `next best step` | `step` is not a UI term; no cluster forms |
+| `next menstrual cycle`, `next follow-up` | same |
+| `previous episode`, `previous examination` | `episode`/`examination` not UI terms |
+| `help diagnose`, `can help determine` | `diagnose` not a UI term |
+| `the lab values were abnormal` | `lab values` in sentence context, not isolated or adjacent to other UI terms |
+| `score reported as` | `reported` breaks the `Score Report` two-word match |
+
+### Validation (Psych_Shelf_5)
+
+Verified against `test-data/Psych_Shelf_5_app_ready.json` (50 questions):
+- **50 artifact instances removed** — all `"Lab Values Calculator"` mid-paragraph occurrences
+- **0 false positives** — all `next step`, `previous episode`, `help diagnose`, and similar medical phrases preserved
+- Q48 explanation intact; Q10/Q21 had two instances each, both cleaned
+
+---
+
 ## Per-Choice Explanation Parsing
 
 The "Incorrect Answers" section of `explanationSections` typically looks like:
@@ -270,12 +334,15 @@ Both `buildExplanationHTML` functions (local in Quiz IIFE ~line 5644, global `wi
 
 The primary validation JSON is:
 ```
-/Users/shamsulalam/Desktop/NBME Self-Assessment Suite/test-data:/Psych_Shelf_8_full_app_ready.json
+/Users/shamsulalam/Desktop/NBME Self-Assessment Suite/test-data/Psych_Shelf_8_full_app_ready.json
 ```
 
-Note: The directory name is literally `test-data:` (with a colon). Always quote this path in bash.
+This file contains 50 questions from a Psychiatry Shelf exam processed through Gemini. Q25, Q34, and Q48 contain `figureRefs`. Q1, Q9, Q11, and Q24 have long stems (608–1319 characters).
 
-This file contains 50 questions from a Psychiatry Shelf exam processed through Gemini. Q25, Q34, and Q48 contain `figureRefs`. Q1, Q9, Q11, and Q24 have long stems (608–1319 characters) that are subject to BUG-001.
+Additional test files in `test-data/`:
+- `Psych_Shelf_5_app_ready.json` — 50 questions; used to validate UI artifact sanitizer (50 `Lab Values Calculator` instances removed)
+- `Psych_Shelf_6_app_ready.json`
+- `Psych_Shelf_7_repaired_app_ready.json`
 
 ---
 
@@ -284,7 +351,7 @@ This file contains 50 questions from a Psychiatry Shelf exam processed through G
 See `BUGS_AND_NEXT_STEPS.md` for the full bug tracker.
 
 Summary:
-- **BUG-001:** Quiz stem truncation for Q1/Q9/Q11/Q24 — ❌ UNRESOLVED
-- **VAL-001:** Explanation rendering end-to-end — not yet validated
+- **BUG-001:** Quiz stem truncation for Q1/Q9/Q11/Q24 — ✅ RESOLVED (2026-05-12)
+- **VAL-001:** Explanation rendering end-to-end — ✅ validated
 - **VAL-002:** Figure rendering end-to-end — not yet validated
 - **VAL-003:** "Save valid questions only" button — partially implemented, verify function body
