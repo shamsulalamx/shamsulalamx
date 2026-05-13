@@ -496,7 +496,7 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 
 /* Quiz center: question */
 #quiz-main {
-  flex: 1; overflow-y: auto; display: flex; flex-direction: column;
+  flex: 1; overflow: hidden; display: flex; flex-direction: column;
   background: var(--bg);
 }
 .quiz-topbar {
@@ -5072,8 +5072,19 @@ function renderImages(q, topElId, bottomElId) {
   }
 
   function _isLabPara(para) {
+    // Clinical sentences can be long paragraphs that incidentally contain "14%" or
+    // "80% intelligible" — these must never be classified as lab-value blocks.
+    // Real lab-value paragraphs in NBME questions are always short dedicted blocks.
+    if (para.length > 400) return false;
     _LAB_SCAN_RE.lastIndex = 0;
-    return _LAB_SCAN_RE.test(para);
+    let m;
+    while ((m = _LAB_SCAN_RE.exec(para)) !== null) {
+      // Reject matches where the captured "name" is a sentence fragment (> 4 words),
+      // e.g. "he sustained second-degree burns to" or "speech is".
+      const nameWords = m[1].trim().split(/\s+/);
+      if (nameWords.length <= 4) return true;
+    }
+    return false;
   }
 
   function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }

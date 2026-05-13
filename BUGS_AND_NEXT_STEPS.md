@@ -1,96 +1,47 @@
 # BUGS AND NEXT STEPS
 
-**Last updated:** 2026-05-12  
+**Last updated:** 2026-05-12 (BUG-001 resolved)  
 **Purpose:** Active bug tracker and prioritized work queue for handoff to Codex. Contains all unresolved issues, failed diagnoses, and explicit debugging instructions. This file must be updated as bugs are resolved.
 
 ---
 
 ## UNRESOLVED BUGS
 
-### [BUG-001] Quiz stem truncation — CRITICAL, UNRESOLVED
+*(none currently — see Resolved section below)*
 
-**Status:** ❌ NOT FIXED. Do not mark this fixed without confirmed DOM evidence.
+---
+
+## RESOLVED BUGS
+
+### [BUG-001] Quiz stem truncation — RESOLVED 2026-05-12
+
+**Status:** ✅ FIXED. Verified in running app: Q1, Q9, Q11, Q24 all render full stems. Q25, Q34, Q48 figure/lab tables still render correctly.
 
 **Symptom:**  
-When a question from the `nbme-gemini-json` importer is displayed in quiz mode, Q1, Q9, Q11, and Q24 of `Psych_Shelf_8_full_app_ready.json` show only 1–2 lines of text. The stems for these questions are 608, 828, 1160, and 1319 characters respectively. No scrollbar appears. The missing content is not accessible to the user.
+Q1, Q9, Q11, and Q24 of `Psych_Shelf_8_full_app_ready.json` showed only 1–2 lines of text in quiz mode. Stems are 608, 828, 1160, and 1319 characters respectively. No scrollbar. Missing content inaccessible.
 
-**Scope:** This affects quiz view only (the screen shown when actively answering a question). The import preview modal and explanation review panel are separate and have their own known-fixed issues.
+**Root cause:**  
+`_isLabPara()` in `buildStemHTML()` (`index.html` ~line 5074) used `_LAB_SCAN_RE.test(para)` to decide whether a paragraph should render as a lab-values table. The regex includes `%` as a recognized unit. Clinical sentences like "80% intelligible" (Q1) and "14% of his total body surface area" (Q24) matched — causing `buildStemHTML` to treat the entire 1319-char clinical paragraph as a lab-value block. It extracted one table row ("he sustained second-degree burns to" | "14%") and silently discarded all remaining text. DOM inspection confirmed: `stemEl.innerText.length = 39`, `scrollHeight = clientHeight = 24px` — the text was never in the DOM at all.
 
-**What has been verified:**
-- The raw JSON file contains the full stem text for all questions.
-- The `normalizeNbmeGeminiJsonImport` function copies `q.t` from the JSON without truncation.
-- The 240-character truncation that was in the import preview (`stemPreview = String(q.stem || '').slice(0, 240)`) was removed — but this only affected the import preview modal, NOT quiz view. This removal did not fix the quiz stem display.
-- The dist bundle (`dist/mac-arm64/.../index.html`) was synced with the source on 2026-05-12 19:13. After the sync, the bug still persisted. Therefore the stale build was not the sole cause.
-- A CSS fix was applied to `.quiz-content-area` (added `min-height: 0; overflow-y: auto; overflow-x: hidden`). The bug still persisted after this fix.
+**Fix applied (`index.html`, `_isLabPara()`, ~line 5074):**  
+Added two guards before returning `true`:
+1. **Length guard:** `if (para.length > 400) return false` — real NBME lab-value blocks are always short dedicated paragraphs, never 1000+ char clinical vignettes.
+2. **Name word-count guard:** after each regex match, count words in the captured name field; if > 4 words, it's a sentence fragment (e.g., "he sustained second-degree burns to"), not a lab name — skip it.
 
-**Three failed diagnosis attempts:**
-1. **240-char slice hypothesis** — Removed `slice(0,240)` from import preview. Did not affect quiz view. Wrong location.
-2. **Stale dist build hypothesis** — Synced dist bundle. Bug persisted. Not the sole root cause.
-3. **Flexbox overflow CSS hypothesis** — Added `min-height:0; overflow-y:auto` to `.quiz-content-area`. Bug persisted. CSS change may not have taken effect, or root cause is elsewhere.
-
-**What has NOT been investigated (must be checked):**
-
-1. **`shouldUseStemCropForQuestion(q)` returning true** — Search for this function in `index.html`. If it returns true for a question, the quiz renderer switches to image-crop mode, which shows `buildSharedGroupHTML(q)` instead of text. Questions from `nbme-gemini-json` have no crop image, so this would show nothing or 1–2 lines from a mismatched path.
-
-2. **`r.highlights` being set unexpectedly** — Inside `renderQuestion()` (the main quiz question renderer), if `r.highlights` is set, a different stem rendering path may be taken. Check what `r` is for these questions.
-
-3. **`-webkit-line-clamp` from an undetected CSS rule** — Search entire `index.html` for `-webkit-line-clamp` and `line-clamp`. If any ancestor of `#q-stem` has this property set, it will cap displayed lines regardless of content or overflow.
-
-4. **`max-height` on an ancestor element** — Search for `max-height` on `#q-stem`, `.quiz-content-area`, `.question-stem-container`, `.stem-text-container`, `#quiz-main`, `#screen-quiz`. Any pixel-value `max-height` combined with `overflow: hidden` would clip the content invisibly.
-
-5. **Wrong renderer being called** — There may be a separate renderer for questions with `sourceType: 'nbme-gemini-json'`. Confirm which code path actually executes for these questions by adding a temporary `console.log` at the top of each candidate render function.
-
-6. **Electron window width triggering a media query** — The Electron window may be narrower than 768px or another breakpoint. Search for media queries in the CSS that affect `.quiz-content-area` or `#q-stem`.
-
-**How to debug correctly (step-by-step):**
-
-```
-STEP 1: Run the app in dev mode only.
-  cd "/Users/shamsulalam/Desktop/NBME Self-Assessment Suite"
-  npm run electron:dev
-
-STEP 2: Import Psych_Shelf_8_full_app_ready.json via the NBME JSON importer.
-  File is at: /Users/shamsulalam/Desktop/NBME Self-Assessment Suite/test-data:/Psych_Shelf_8_full_app_ready.json
-  (Note: "test-data:" is the literal directory name with a colon)
-
-STEP 3: Start a quiz with Q1.
-
-STEP 4: Open Electron DevTools: View > Toggle Developer Tools (or Cmd+Option+I).
-
-STEP 5: In Console, run:
-  const stem = document.getElementById('q-stem');
-  console.log('element:', stem);
-  console.log('innerText length:', stem?.innerText?.length);
-  console.log('scrollHeight:', stem?.scrollHeight);
-  console.log('clientHeight:', stem?.clientHeight);
-  console.log('full text:', stem?.innerText);
-
-  Expected if full stem is in DOM: innerText.length ≈ 600, scrollHeight > clientHeight
-  Expected if stem is truncated in DOM: innerText.length ≈ 60–120
-
-STEP 6: If DOM contains full text but content is clipped (scrollHeight > clientHeight):
-  Root cause is CSS. Use DevTools Elements panel to inspect #q-stem and every ancestor:
-  - Look for: overflow:hidden, max-height, -webkit-line-clamp, height (fixed px)
-  - Toggle them off one-by-one until content appears
-
-STEP 7: If DOM contains only 1–2 lines (innerText.length is short):
-  Root cause is the renderer. Add console.log at the START of these functions:
-  - renderQuestion() (Quiz IIFE, ~line 5644 area)
-  - window.buildStemHTML()
-  - window.buildQuestionStemHTML()
-  Check which one runs for Q1 and what text it receives.
-
-STEP 8: If none of the above reveals the issue:
-  Search index.html for: shouldUseStemCropForQuestion
-  If found, check what it returns for a q with sourceType='nbme-gemini-json' and no metadata.cropRect.
+```javascript
+function _isLabPara(para) {
+  if (para.length > 400) return false;
+  _LAB_SCAN_RE.lastIndex = 0;
+  let m;
+  while ((m = _LAB_SCAN_RE.exec(para)) !== null) {
+    const nameWords = m[1].trim().split(/\s+/);
+    if (nameWords.length <= 4) return true;
+  }
+  return false;
+}
 ```
 
-**Key function locations:**
-- `renderQuestion()` — Quiz IIFE, look for the function that calls `buildQuestionStemHTML` or sets `#q-stem` innerHTML
-- `window.buildQuestionStemHTML` — ~line 5168
-- `window.buildStemHTML` — ~line 5140 area
-- `window._replaceFigureMarkersInStemHtml` — ~line 5228
-- CSS for `.quiz-content-area` — ~line 546
+**Caveat:** Lab detection must remain conservative. Do not loosen `_LAB_SCAN_RE` or remove the guards. If real lab-value paragraphs exceed 400 chars in future test files, raise the threshold carefully and re-verify Q1/Q24 still render as prose.
 
 ---
 
@@ -177,8 +128,6 @@ Both files are now 1,073,458 bytes.
 ---
 
 ## PRIORITIZED NEXT STEPS
-
-**P0 — Fix BUG-001 (stem truncation).** Follow the debugging instructions above. Do not skip Step 5 (DOM inspection). Do not apply another CSS fix without first confirming via `scrollHeight` vs `clientHeight` whether the text is in the DOM or not.
 
 **P1 — Run VAL-001 (explanation rendering).** Delete old imported test, reimport, answer Q1, confirm explanation panel works.
 
