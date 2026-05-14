@@ -2386,6 +2386,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
         <button class="btn-modal" onclick="connectGoogleDrive()">Connect Drive</button>
         <button class="btn-modal" onclick="saveGoogleDriveNow()">Backup Now</button>
         <button class="btn-modal" onclick="restoreGoogleDriveNow()">Restore Drive</button>
+        <button class="btn-modal" onclick="window.nbmeDiagnosticExport()" title="Download a JSON backup of your current local data with diagnostic info">📥 Diagnostic Backup</button>
       </div>
       <div id="drive-sync-status" style="font-size:11px;color:#5a6a7a;margin-top:6px;">Drive not connected.</div>
     </div>
@@ -3387,6 +3388,14 @@ window.MiscDocStore = MiscDocStore;
       await ensureManifestFile();
       setDriveStatus('Drive connected.', '#27ae60');
       updateDriveIndicator();
+      // If local DB has tests, schedule a sync immediately on reconnect so Drive
+      // always reflects the latest local state after any session or token expiry.
+      // Guard: never auto-upload from a fresh device that has 0 tests — that would
+      // overwrite a good Drive backup with an empty DB.
+      const _autoSyncDb = DB.get();
+      if ((_autoSyncDb.tests || []).length > 0) {
+        window.scheduleGoogleDriveSave();
+      }
     } catch(e) {
       setDriveStatus('Drive needs reconnection. Click Connect Drive.', '#e74c3c', 'Reconnect Drive', 'error');
     }
@@ -3428,8 +3437,42 @@ window.MiscDocStore = MiscDocStore;
       await ensureDriveAuth('');
       localStorage.setItem(DRIVE_ENABLED_KEY, '1');
       const manifestId = await ensureManifestFile();
+      console.log('[Drive Restore] manifest file id:', manifestId);
       const resp = await driveFetch(`https://www.googleapis.com/drive/v3/files/${manifestId}?alt=media`);
       const snapshot = await resp.json();
+
+      // ── Diagnostic log: what is in the manifest? ─────────────────────────
+      const snapTests    = Array.isArray(snapshot.tests)         ? snapshot.tests.length         : 'missing';
+      const snapFolders  = Array.isArray(snapshot.folders)       ? snapshot.folders.length       : 'missing';
+      const snapSources  = Array.isArray(snapshot.sourceFolders) ? snapshot.sourceFolders.length : 'missing';
+      const snapHistory  = Array.isArray(snapshot.history)       ? snapshot.history.length       : 'missing';
+      const snapPin      = snapshot.settings?.pinEnabled;
+      const snapGemini   = !!(snapshot.settings?.geminiApiKey);
+      const snapUpdated  = snapshot.updatedAt || '(no timestamp)';
+      console.group('[Drive Restore] Manifest content');
+      console.log('updatedAt:          ', snapUpdated);
+      console.log('tests:              ', snapTests);
+      console.log('folders:            ', snapFolders);
+      console.log('sourceFolders:      ', snapSources);
+      console.log('history:            ', snapHistory);
+      console.log('settings.pinEnabled:', snapPin);
+      console.log('geminiApiKey present:', snapGemini);
+      console.groupEnd();
+
+      // Warn early if manifest looks empty — user can cancel before reload.
+      if (snapTests === 0 && snapFolders === 0) {
+        const proceed = confirm(
+          'Warning: the Drive backup has 0 tests and 0 folders.\n\n' +
+          'This usually means Drive was never successfully synced from the original device.\n\n' +
+          'Click OK to continue anyway (settings & Misc Docs will still be restored).\n' +
+          'Click Cancel to abort and keep your current local data.'
+        );
+        if (!proceed) {
+          setDriveStatus('Restore cancelled — local data unchanged.', '#5a6a7a', '', 'warn');
+          return;
+        }
+      }
+
       await restoreFiguresFromDrive(snapshot);
       await restoreMiscDocsFromDrive();
       const db = DB.get();
@@ -3440,22 +3483,39 @@ window.MiscDocStore = MiscDocStore;
       else             localStorage.removeItem('nbme_gemini_key_v1');
       localStorage.removeItem('gemini_api_key');
       if (Array.isArray(snapshot.sourceFolders)) db.sourceFolders = snapshot.sourceFolders;
-      if (Array.isArray(snapshot.folders)) db.folders = snapshot.folders;
-      if (Array.isArray(snapshot.tests)) db.tests = snapshot.tests;
-      if (Array.isArray(snapshot.trash)) db.trash = snapshot.trash;
-      if (Array.isArray(snapshot.flags)) db.flags = snapshot.flags;
-      if (Array.isArray(snapshot.marks)) db.marks = snapshot.marks;
-      if (Array.isArray(snapshot.notes)) db.notes = snapshot.notes;
-      if (Array.isArray(snapshot.history)) db.history = snapshot.history;
+      if (Array.isArray(snapshot.folders))       db.folders       = snapshot.folders;
+      if (Array.isArray(snapshot.tests))         db.tests         = snapshot.tests;
+      if (Array.isArray(snapshot.trash))         db.trash         = snapshot.trash;
+      if (Array.isArray(snapshot.flags))         db.flags         = snapshot.flags;
+      if (Array.isArray(snapshot.marks))         db.marks         = snapshot.marks;
+      if (Array.isArray(snapshot.notes))         db.notes         = snapshot.notes;
+      if (Array.isArray(snapshot.history))       db.history       = snapshot.history;
       _skipNextSchedule = true;
-      DB.save();
+      const saveOk = DB.save();
+
+      // ── Diagnostic log: what was written to localStorage? ────────────────
+      console.group('[Drive Restore] After DB.save()');
+      console.log('save() returned:', saveOk);
+      console.log('db.tests.length:  ', (db.tests   || []).length);
+      console.log('db.folders.length:', (db.folders || []).length);
+      console.log('db.settings.pinEnabled:', db.settings?.pinEnabled);
+      console.groupEnd();
+
       if (typeof window.checkGeminiApiKeyStatus === 'function') window.checkGeminiApiKeyStatus();
-      setDriveStatus('Drive restore complete. Reloading...', '#27ae60', '', 'ok');
+      const tc = (db.tests || []).length;
+      const fc = (db.folders || []).length;
+      const statusMsg = tc > 0
+        ? `Drive restore complete — ${tc} test${tc!==1?'s':''}, ${fc} folder${fc!==1?'s':''}. Reloading…`
+        : 'Drive restore complete (0 tests in backup). Reloading…';
+      setDriveStatus(statusMsg, '#27ae60', '', 'ok');
       // Guard: suppress any startup DB.save() / Drive autosave on the next page load so
       // the freshly-restored manifest is not immediately overwritten.
       sessionStorage.setItem('nbme_post_restore_v1', '1');
-      setTimeout(() => location.reload(), 1000);
+      // Store restore summary for post-reload toast.
+      sessionStorage.setItem('nbme_post_restore_summary_v1', JSON.stringify({ tests: tc, folders: fc }));
+      setTimeout(() => location.reload(), 1200);
     } catch(e) {
+      console.error('[Drive Restore] Error:', e);
       setDriveStatus(e.message || 'Drive restore failed.', '#e74c3c', 'Restore failed', 'error');
     }
   };
@@ -6686,6 +6746,61 @@ window.checkGeminiApiKeyStatus  = checkGeminiApiKeyStatus;
 window.saveGeminiKeyFromSettings = saveGeminiKeyFromSettings;
 window.clearGeminiKeyFromSettings = clearGeminiKeyFromSettings;
 window.getLocalGeminiKey        = getLocalGeminiKey;
+
+/* ── Diagnostic export ─────────────────────────────────────────────────────
+   Call window.nbmeDiagnosticExport() from DevTools console, or click the
+   "Diagnostic Backup" button in Settings, to capture current DB state and
+   download a timestamped JSON backup before any destructive restore.       */
+window.nbmeDiagnosticExport = function(fileName) {
+  const LOCAL_KEY   = 'nbme_app_v1';
+  const DRIVE_KEY   = 'nbme_drive_backup_enabled_v1';
+  const PIN_KEY     = 'nbme_pin_v1';
+  const GEMINI_KEY  = 'nbme_gemini_key_v1';
+
+  const raw = localStorage.getItem(LOCAL_KEY) || '{}';
+  let db;
+  try { db = JSON.parse(raw); } catch(_) { db = {}; }
+
+  const dbFromModule = (typeof DB !== 'undefined') ? DB.get() : db;
+
+  const diag = {
+    testCount:         (dbFromModule.tests       || []).length,
+    folderCount:       (dbFromModule.folders     || []).length,
+    sourceFolderCount: (dbFromModule.sourceFolders|| []).length,
+    historyCount:      (dbFromModule.history     || []).length,
+    trashCount:        (dbFromModule.trash       || []).length,
+    flagCount:         (dbFromModule.flags       || []).length,
+    pinEnabled:        !!(dbFromModule.settings?.pinEnabled),
+    pinStoredInDb:     !!(dbFromModule.settings?.pin),
+    pinStoredInLS:     !!(localStorage.getItem(PIN_KEY)),
+    geminiApiKeyPresent: !!(dbFromModule.settings?.geminiApiKey || localStorage.getItem(GEMINI_KEY)),
+    driveEnabled:      localStorage.getItem(DRIVE_KEY) === '1',
+    localStorageRawBytes: raw.length,
+    exportedAt:        new Date().toISOString()
+  };
+
+  console.group('[NBME Diagnostic]');
+  console.log('Tests:         ', diag.testCount);
+  console.log('Folders:       ', diag.folderCount);
+  console.log('Source folders:', diag.sourceFolderCount);
+  console.log('History entries:', diag.historyCount);
+  console.log('settings.pinEnabled:', diag.pinEnabled);
+  console.log('geminiApiKey present:', diag.geminiApiKeyPresent);
+  console.log('Drive enabled: ', diag.driveEnabled);
+  console.log('localStorage bytes:', diag.localStorageRawBytes);
+  console.groupEnd();
+
+  const backup = { diagnostics: diag, db: dbFromModule };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  const ts   = new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-');
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(blob),
+    download: fileName || ('LOCAL_APP_BACKUP_BEFORE_DRIVE_RESTORE_FIX_' + ts + '.json')
+  });
+  a.click();
+  if (typeof window.toast === 'function') toast('Diagnostic backup downloaded.', 3000);
+  return diag;
+};
 
 </script>
 <script>
@@ -22712,6 +22827,23 @@ document.addEventListener('DOMContentLoaded', () => {
   // immediately overwrite the just-restored Drive manifest with stale local state.
   const _postRestore = sessionStorage.getItem('nbme_post_restore_v1') === '1';
   if (_postRestore) sessionStorage.removeItem('nbme_post_restore_v1');
+  const _postRestoreSummaryRaw = sessionStorage.getItem('nbme_post_restore_summary_v1');
+  if (_postRestoreSummaryRaw) sessionStorage.removeItem('nbme_post_restore_summary_v1');
+
+  // ── Post-restore diagnostic: log DB state immediately after reload ─────
+  if (_postRestore) {
+    try {
+      const db = DB.get();
+      console.group('[Post-Restore Reload] DB state after reload');
+      console.log('tests:              ', (db.tests        || []).length);
+      console.log('folders:            ', (db.folders      || []).length);
+      console.log('sourceFolders:      ', (db.sourceFolders|| []).length);
+      console.log('history:            ', (db.history      || []).length);
+      console.log('settings.pinEnabled:', db.settings?.pinEnabled);
+      console.log('geminiApiKey present:', !!(db.settings?.geminiApiKey));
+      console.groupEnd();
+    } catch(_) {}
+  }
 
   const saved = parseInt(localStorage.getItem('question_font_size')) || 14;
   _applyQuestionFontSize(saved);
@@ -22722,6 +22854,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const lockBtn = document.getElementById('btn-lock-app');
     if (lockBtn) lockBtn.style.display = PIN.isEnabled() ? 'inline-flex' : 'none';
     if (typeof updateHintUsageCounter === 'function') updateHintUsageCounter();
+
+    // Show post-restore summary toast so the user knows exactly what was loaded.
+    if (_postRestore) {
+      try {
+        const summary = _postRestoreSummaryRaw ? JSON.parse(_postRestoreSummaryRaw) : null;
+        const db = DB.get();
+        const tc = summary ? summary.tests   : (db.tests   || []).length;
+        const fc = summary ? summary.folders : (db.folders || []).length;
+        const msg = tc > 0
+          ? `✓ Drive restore loaded ${tc} test${tc!==1?'s':''} in ${fc} folder${fc!==1?'s':''}. Select a library below.`
+          : '⚠ Drive restore complete, but 0 tests were in the backup. Check Drive sync on your original device.';
+        if (typeof toast === 'function') toast(msg, 7000);
+      } catch(_) {}
+    }
+
     // One-time migration: if key exists in localStorage mirror but not yet in DB, promote it.
     // Skipped on the first load after a Drive restore — the restored DB is already authoritative.
     (function migrateGeminiKeyToDb() {
