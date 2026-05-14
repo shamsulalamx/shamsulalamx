@@ -152,6 +152,21 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 .home-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
 .home-header h2 { font-size: 18px; font-weight: 700; color: var(--navy); }
 .home-header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.nav-hist-btns { display: flex; gap: 4px; flex-shrink: 0; }
+.nav-hist-btn { background: none; border: 1px solid var(--border, #d0d7e2); border-radius: 6px; padding: 4px 10px; font-size: 15px; cursor: pointer; color: var(--navy); line-height: 1; transition: background .15s; }
+.nav-hist-btn:hover:not(:disabled) { background: var(--hover-bg, #f0f4fa); }
+.nav-hist-btn:disabled { opacity: .35; cursor: default; }
+/* PIN screen */
+#pin-screen { position:fixed;inset:0;z-index:9999;background:var(--bg,#f5f7fa);display:none;align-items:center;justify-content:center;flex-direction:column; }
+.pin-box { text-align:center;max-width:300px;width:100%;padding:32px 20px; }
+.pin-app-name { font-size:20px;font-weight:700;color:var(--navy);margin-bottom:4px; }
+.pin-dot { width:16px;height:16px;border-radius:50%;border:2px solid var(--navy);display:inline-block;background:transparent;transition:background .1s;margin:0 8px; }
+.pin-dot.filled { background:var(--navy); }
+.pin-dot.error { border-color:#e74c3c !important;background:#e74c3c !important; }
+.pin-keypad { display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:220px;margin:0 auto; }
+.pin-key { padding:15px 0;font-size:18px;font-weight:600;border:1px solid #d0d7e2;border-radius:8px;background:#fff;cursor:pointer;color:var(--navy);transition:background .12s; }
+.pin-key:hover { background:#f0f4fa; }
+.pin-key-wide { font-size:14px;font-weight:700; }
 .search-input {
   width: min(360px, 48vw); padding: 8px 10px; border: 1px solid var(--border);
   border-radius: 3px; font-size: 12.5px; outline: none;
@@ -1046,6 +1061,36 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 <div id="app">
 
   <!-- ═══ TOP BAR ═══ -->
+  <!-- ── PIN Gate ── -->
+  <div id="pin-screen">
+    <div class="pin-box">
+      <div class="pin-app-name">NBME Suite</div>
+      <div id="pin-subtitle" style="font-size:14px;color:#5a6a7a;margin:6px 0 24px;">Enter your PIN</div>
+      <div style="margin-bottom:10px;">
+        <span class="pin-dot" id="pd0"></span>
+        <span class="pin-dot" id="pd1"></span>
+        <span class="pin-dot" id="pd2"></span>
+        <span class="pin-dot" id="pd3"></span>
+      </div>
+      <div id="pin-error" style="height:18px;font-size:12px;color:#e74c3c;margin-bottom:6px;"></div>
+      <div id="pin-setup-hint" style="font-size:12px;color:#5a6a7a;margin-bottom:16px;min-height:16px;"></div>
+      <div class="pin-keypad">
+        <button class="pin-key" onclick="PIN.press('1')">1</button>
+        <button class="pin-key" onclick="PIN.press('2')">2</button>
+        <button class="pin-key" onclick="PIN.press('3')">3</button>
+        <button class="pin-key" onclick="PIN.press('4')">4</button>
+        <button class="pin-key" onclick="PIN.press('5')">5</button>
+        <button class="pin-key" onclick="PIN.press('6')">6</button>
+        <button class="pin-key" onclick="PIN.press('7')">7</button>
+        <button class="pin-key" onclick="PIN.press('8')">8</button>
+        <button class="pin-key" onclick="PIN.press('9')">9</button>
+        <button class="pin-key pin-key-wide" onclick="PIN.del()">⌫</button>
+        <button class="pin-key" onclick="PIN.press('0')">0</button>
+        <button class="pin-key pin-key-wide" onclick="PIN.enter()">OK</button>
+      </div>
+    </div>
+  </div>
+
   <div id="topbar">
     <div class="topbar-brand">
       <div class="topbar-brand-logo">NB</div>
@@ -1055,10 +1100,11 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
       </div>
     </div>
     <div class="topbar-right">
-      <button class="drive-alert" id="drive-alert" onclick="App.openSettings()" title="Open Drive backup settings"></button>
+      <button class="drive-alert" id="drive-alert" onclick="window.driveIndicatorClick()" title="Backup Now / Open Drive settings"></button>
       <button class="gemini-alert" id="gemini-alert" onclick="App.openSettings()" title="Open Gemini API settings"></button>
       <button class="topbar-btn" onclick="adjFontSize(-1)" title="Decrease font size">A-</button>
       <button class="topbar-btn" onclick="adjFontSize(1)"  title="Increase font size">A+</button>
+      <button class="topbar-btn" id="btn-lock-app" onclick="PIN.lock()" title="Lock app" style="display:none;">🔒</button>
       <button class="topbar-btn" onclick="App.openSettings()" title="Settings">⚙ Settings</button>
     </div>
   </div>
@@ -1111,6 +1157,10 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
       <!-- ─── HOME SCREEN ─── -->
       <div id="screen-home" style="display:flex;flex-direction:column;flex:1;padding:24px;">
         <div class="home-header">
+          <div class="nav-hist-btns">
+            <button id="nav-back"    class="nav-hist-btn" onclick="App.navBack()"    disabled title="Back">&#8592;</button>
+            <button id="nav-forward" class="nav-hist-btn" onclick="App.navForward()" disabled title="Forward">&#8594;</button>
+          </div>
           <h2 id="home-title">Welcome</h2>
           <div class="home-header-actions">
             <input type="search" class="search-input" id="global-search" placeholder="Search" oninput="App.searchQuestionContent(this.value)">
@@ -2339,6 +2389,11 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
       </div>
       <div id="drive-sync-status" style="font-size:11px;color:#5a6a7a;margin-top:6px;">Drive not connected.</div>
     </div>
+    <div class="form-group" style="margin-top:12px;">
+      <label class="form-label">App PIN Lock</label>
+      <p style="font-size:12px;color:#5a6a7a;margin-bottom:8px;">Require a 4-digit PIN when opening the app. PIN is stored locally and syncs via Google Drive.</p>
+      <div id="pin-settings-body"></div>
+    </div>
     <div class="modal-actions">
       <button class="btn-modal primary" onclick="document.getElementById('modal-settings').style.display='none'">Done</button>
     </div>
@@ -2702,6 +2757,164 @@ window.DB = DB;
 </script>
 <script>
 /* ============================================================
+   PIN.JS — 4-digit passcode gate (optional, privacy-only)
+============================================================ */
+const PIN = (() => {
+  const LS_KEY = 'nbme_pin_v1';
+  let _mode = 'enter'; // 'enter' | 'setup' | 'confirm'
+  let _firstPin = '';
+  let _buffer = '';
+  let _onUnlocked = null;   // called after gate unlock / setup completion
+
+  function _settings() { const db = DB.get(); if (!db.settings) db.settings = {}; return db.settings; }
+  function getStored()  { return _settings().pin || localStorage.getItem(LS_KEY) || null; }
+  function isEnabled()  { return !!(_settings().pinEnabled) && !!getStored(); }
+
+  function _save(pin) {
+    const s = _settings(); s.pin = pin; s.pinEnabled = true;
+    DB.save(); localStorage.setItem(LS_KEY, pin);
+  }
+  function _clear() {
+    const s = _settings(); delete s.pin; s.pinEnabled = false;
+    DB.save(); localStorage.removeItem(LS_KEY);
+  }
+
+  function _showScreen(subtitle, hint) {
+    _buffer = ''; _updateDots();
+    const sc = document.getElementById('pin-screen');
+    if (!sc) return;
+    sc.style.display = 'flex'; sc.style.opacity = '1'; sc.style.transition = '';
+    document.getElementById('pin-subtitle').textContent   = subtitle || 'Enter your PIN';
+    document.getElementById('pin-setup-hint').textContent = hint    || '';
+    document.getElementById('pin-error').textContent      = '';
+  }
+  function _hideScreen() {
+    const sc = document.getElementById('pin-screen');
+    if (!sc) return;
+    sc.style.opacity = '0'; sc.style.transition = 'opacity .3s';
+    setTimeout(() => { sc.style.display = 'none'; sc.style.transition = ''; }, 300);
+    document.removeEventListener('keydown', _onKey);
+  }
+
+  function _updateDots() {
+    for (let i = 0; i < 4; i++) {
+      const d = document.getElementById('pd' + i);
+      if (!d) continue;
+      d.classList.remove('error');
+      d.classList.toggle('filled', i < _buffer.length);
+    }
+  }
+  function _shakeError(msg) {
+    for (let i = 0; i < 4; i++) { const d = document.getElementById('pd'+i); if(d) d.classList.add('error'); }
+    document.getElementById('pin-error').textContent = msg;
+    setTimeout(() => { for (let i=0;i<4;i++) { const d=document.getElementById('pd'+i); if(d) d.classList.remove('error'); } }, 600);
+  }
+
+  function _onKey(e) {
+    const sc = document.getElementById('pin-screen');
+    if (!sc || sc.style.display === 'none') return;
+    if (e.key >= '0' && e.key <= '9') press(e.key);
+    else if (e.key === 'Backspace') del();
+    else if (e.key === 'Enter') enter();
+  }
+
+  function press(digit) {
+    if (_buffer.length >= 4) return;
+    _buffer += digit; _updateDots();
+    if (_buffer.length === 4) setTimeout(enter, 120);
+  }
+  function del() {
+    _buffer = _buffer.slice(0, -1); _updateDots();
+    document.getElementById('pin-error').textContent = '';
+  }
+  function enter() {
+    if (_buffer.length < 4) { document.getElementById('pin-error').textContent = 'Enter all 4 digits'; return; }
+
+    if (_mode === 'setup') {
+      _firstPin = _buffer; _buffer = ''; _mode = 'confirm';
+      document.getElementById('pin-subtitle').textContent   = 'Confirm your PIN';
+      document.getElementById('pin-setup-hint').textContent = 'Enter the same PIN again.';
+      _updateDots(); return;
+    }
+    if (_mode === 'confirm') {
+      if (_buffer === _firstPin) {
+        _save(_buffer); _hideScreen(); _syncLockBtn(); updatePinSettingsUI();
+        if (typeof _onUnlocked === 'function') { const cb = _onUnlocked; _onUnlocked = null; cb(); }
+      } else {
+        _shakeError('PINs do not match. Start over.');
+        _buffer = ''; _firstPin = ''; _mode = 'setup';
+        document.getElementById('pin-subtitle').textContent   = 'Create a 4-digit PIN';
+        document.getElementById('pin-setup-hint').textContent = 'You will be asked to confirm your PIN.';
+        _updateDots();
+      }
+      return;
+    }
+    if (_mode === 'enter') {
+      if (_buffer === getStored()) {
+        _hideScreen();
+        if (typeof _onUnlocked === 'function') { const cb = _onUnlocked; _onUnlocked = null; cb(); }
+      } else {
+        _shakeError('Incorrect PIN. Try again.'); _buffer = ''; _updateDots();
+      }
+    }
+  }
+
+  function _syncLockBtn() {
+    const btn = document.getElementById('btn-lock-app');
+    if (btn) btn.style.display = isEnabled() ? 'inline-flex' : 'none';
+  }
+
+  // Called on every page load: show gate if PIN is enabled, else run callback immediately.
+  function checkAndGate(onUnlocked) {
+    _onUnlocked = onUnlocked;
+    if (!isEnabled()) { onUnlocked(); return; }
+    _mode = 'enter';
+    _showScreen('Enter your PIN', '');
+    document.addEventListener('keydown', _onKey);
+  }
+
+  // Called by "Lock App" button.
+  function lock() {
+    if (!isEnabled()) return;
+    _onUnlocked = null;
+    _mode = 'enter';
+    _showScreen('Enter your PIN', '');
+    document.addEventListener('keydown', _onKey);
+  }
+
+  // Called from Settings to create or change the PIN.
+  function setupPin() {
+    _onUnlocked = function() { _syncLockBtn(); updatePinSettingsUI(); };
+    _mode = 'setup'; _firstPin = '';
+    _showScreen('Create a 4-digit PIN', 'You will be asked to confirm your PIN.');
+    document.addEventListener('keydown', _onKey);
+  }
+
+  function clearPin() { _clear(); _syncLockBtn(); updatePinSettingsUI(); }
+
+  function updatePinSettingsUI() {
+    const el = document.getElementById('pin-settings-body');
+    if (!el) return;
+    if (isEnabled()) {
+      el.innerHTML =
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
+          '<button class="btn-modal" onclick="PIN.setupPin()">Change PIN</button>' +
+          '<button class="btn-modal" onclick="PIN.clearPin()">Disable PIN</button>' +
+        '</div>' +
+        '<div style="font-size:11px;color:#27ae60;margin-top:4px;">&#10003; PIN lock is active</div>';
+    } else {
+      el.innerHTML =
+        '<button class="btn-modal" onclick="PIN.setupPin()">Enable PIN</button>' +
+        '<div style="font-size:11px;color:#5a6a7a;margin-top:4px;">PIN lock is disabled</div>';
+    }
+  }
+
+  return { checkAndGate, lock, setupPin, clearPin, isEnabled, press, del, enter, updatePinSettingsUI };
+})();
+window.PIN = PIN;
+</script>
+<script>
+/* ============================================================
    FIGURE STORE — IndexedDB for figure images
    Keeps base64 PNG data OUT of localStorage entirely.
    Keys: "testId:questionNum"  Values: base64 dataUrl string
@@ -2852,6 +3065,7 @@ window.MiscDocStore = MiscDocStore;
   let _miscDocsFileId = null;
   let _timer = null, _busy = false, _pending = false;
   let _skipNextSchedule = false;
+  let _driveDirty = false, _driveSyncInProgress = false;
 
   function setDriveNotice(text, state = 'warn') {
     const alert = document.getElementById('drive-alert');
@@ -2870,6 +3084,18 @@ window.MiscDocStore = MiscDocStore;
     if (el) { el.textContent = text; el.style.color = color || '#5a6a7a'; }
     setDriveNotice(noticeText, noticeState);
   }
+
+  function updateDriveIndicator() {
+    if (!_accessToken) return;
+    if (_driveSyncInProgress)   setDriveNotice('Syncing…', 'warn');
+    else if (_driveDirty)       setDriveNotice('Unsynced changes', 'warn');
+    else                        setDriveNotice('Drive synced', 'ok');
+  }
+
+  window.driveIndicatorClick = function() {
+    if (_accessToken) window.saveGoogleDriveNow();
+    else App.openSettings();
+  };
 
   function isDriveOriginAllowed() {
     if (location.protocol === 'https:') return true;
@@ -3138,7 +3364,8 @@ window.MiscDocStore = MiscDocStore;
       await ensureDriveFolder();
       await ensureManifestFile();
       localStorage.setItem(DRIVE_ENABLED_KEY, '1');
-      setDriveStatus('Drive connected.', '#27ae60', 'Drive ready', 'ok');
+      setDriveStatus('Drive connected.', '#27ae60');
+      updateDriveIndicator();
     } catch(e) {
       setDriveStatus(e.message || 'Drive connection failed.', '#e74c3c', 'Reconnect Drive', 'error');
     }
@@ -3158,7 +3385,8 @@ window.MiscDocStore = MiscDocStore;
       await ensureDriveAuth('');
       await ensureDriveFolder();
       await ensureManifestFile();
-      setDriveStatus('Drive connected.', '#27ae60', 'Drive ready', 'ok');
+      setDriveStatus('Drive connected.', '#27ae60');
+      updateDriveIndicator();
     } catch(e) {
       setDriveStatus('Drive needs reconnection. Click Connect Drive.', '#e74c3c', 'Reconnect Drive', 'error');
     }
@@ -3168,6 +3396,8 @@ window.MiscDocStore = MiscDocStore;
     try {
       if (_busy) { _pending = true; return; }
       _busy = true;
+      _driveSyncInProgress = true;
+      updateDriveIndicator();
       setDriveStatus('Backing up to Drive...', '#f0a500');
       await ensureDriveAuth('');
       localStorage.setItem(DRIVE_ENABLED_KEY, '1');
@@ -3178,11 +3408,16 @@ window.MiscDocStore = MiscDocStore;
       DB.save();
       await saveManifestToDrive(snapshot);
       await saveMiscDocsToDrive();
-      setDriveStatus('Drive backup complete.', '#27ae60', '', 'ok');
+      _driveDirty = false;
+      _driveSyncInProgress = false;
+      setDriveStatus('Drive backup complete.', '#27ae60');
+      updateDriveIndicator();
     } catch(e) {
-      setDriveStatus(e.message || 'Drive backup failed.', '#e74c3c', 'Backup failed', 'error');
+      _driveSyncInProgress = false;
+      setDriveStatus(e.message || 'Drive backup failed.', '#e74c3c', 'Sync failed', 'error');
     } finally {
       _busy = false;
+      _driveSyncInProgress = false;
       if (_pending) { _pending = false; window.scheduleGoogleDriveSave(); }
     }
   };
@@ -3234,9 +3469,18 @@ window.MiscDocStore = MiscDocStore;
     }
     if (_skipNextSchedule) { _skipNextSchedule = false; return; }
     if (_busy) { _pending = true; return; }
+    _driveDirty = true;
+    updateDriveIndicator();
     if (_timer) clearTimeout(_timer);
     _timer = setTimeout(() => window.saveGoogleDriveNow(), 1200);
   };
+
+  window.addEventListener('beforeunload', (e) => {
+    if (_accessToken && (_driveDirty || _driveSyncInProgress)) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
 
   window.loadFigureFromGoogleDrive = async function(img) {
     if (!img?.driveFileId || !img.figureKey || !window.FigureStore || !_accessToken) return null;
@@ -7170,6 +7414,7 @@ const App = (() => {
   let _currentSource = null;
   let _currentFolder = null;
   let _currentView   = 'home'; // 'home'|'quiz'|'results'|'flagged'|'trash'
+  let _backStack = [], _forwardStack = [], _suppressNavPush = false;
   let _genQBFile = null, _genAKFile = null;
 	  let _genParsed = null;
 	  let _lastParserDebug = null;
@@ -7479,7 +7724,61 @@ const App = (() => {
   }
 
   // ── Views ──────────────────────────────────────────────────
+  // ── Navigation history ────────────────────────────────────
+  function _getCurLoc() {
+    return { view: _currentView, sourceId: _currentSource, folderId: _currentFolder };
+  }
+
+  function _pushNav() {
+    if (_suppressNavPush) return;
+    // Skip pushing the initial blank "Welcome" state when the stack is empty
+    if (!_backStack.length && _currentView === 'home' && !_currentFolder && !_currentSource) return;
+    _backStack.push(_getCurLoc());
+    if (_backStack.length > 50) _backStack.shift();
+    _forwardStack = [];
+    _updateNavBtns();
+  }
+
+  function _updateNavBtns() {
+    const b = document.getElementById('nav-back');
+    const f = document.getElementById('nav-forward');
+    if (b) b.disabled = !_backStack.length;
+    if (f) f.disabled = !_forwardStack.length;
+  }
+
+  function _restoreLoc(loc) {
+    _suppressNavPush = true;
+    switch (loc.view) {
+      case 'home':
+        if (loc.folderId)       showHome(loc.folderId);
+        else if (loc.sourceId)  showSourceHome(loc.sourceId);
+        else                    showHome();
+        break;
+      case 'flagged':   showFlagged(loc.folderId); break;
+      case 'trash':     showTrash(); break;
+      case 'incorrect': showIncorrect(); break;
+      case 'marked':    showMarked(loc.folderId); break;
+      case 'notes':     showNotes(); break;
+      case 'misc-docs': showMiscDocs(); break;
+    }
+    _suppressNavPush = false;
+    _updateNavBtns();
+  }
+
+  function navBack() {
+    if (!_backStack.length) return;
+    _forwardStack.push(_getCurLoc());
+    _restoreLoc(_backStack.pop());
+  }
+
+  function navForward() {
+    if (!_forwardStack.length) return;
+    _backStack.push(_getCurLoc());
+    _restoreLoc(_forwardStack.pop());
+  }
+
   function showHome(folderId) {
+    _pushNav();
     _currentView = 'home';
     if (folderId) {
       _currentFolder = folderId;
@@ -7499,6 +7798,7 @@ const App = (() => {
 
   function showSourceHome(sourceId) {
     if (!DB.getSourceFolder(sourceId)) return;
+    _pushNav();
     _currentSource = sourceId;
     _currentFolder = null;
     _currentView = 'home';
@@ -7512,9 +7812,10 @@ const App = (() => {
   }
 
   function showFolderHome(folderId, highlightTestId) {
-    _currentFolder = folderId;
-    setSourceFromFolder(folderId);
+    _pushNav();
+    _suppressNavPush = true;
     showHome(folderId);
+    _suppressNavPush = false;
     if (highlightTestId) {
       // Scroll to card
       setTimeout(() => {
@@ -7726,6 +8027,7 @@ const App = (() => {
   }
 
   function showFlagged(folderId) {
+    _pushNav();
     _currentView = 'flagged';
     document.getElementById('screen-home').style.display    = 'flex';
     document.getElementById('screen-quiz').style.display    = 'none';
@@ -7785,6 +8087,7 @@ const App = (() => {
   }
 
   function showIncorrect() {
+    _pushNav();
     _currentView = 'incorrect';
     document.getElementById('screen-home').style.display    = 'flex';
     document.getElementById('screen-quiz').style.display    = 'none';
@@ -7881,6 +8184,7 @@ const App = (() => {
   }
 
   function showMarked(folderId) {
+    _pushNav();
     _currentView = 'marked';
     document.getElementById('screen-home').style.display    = 'flex';
     document.getElementById('screen-quiz').style.display    = 'none';
@@ -7977,6 +8281,7 @@ const App = (() => {
   }
 
   function showNotes() {
+    _pushNav();
     _currentView = 'notes';
     document.getElementById('screen-home').style.display    = 'flex';
     document.getElementById('screen-quiz').style.display    = 'none';
@@ -19772,6 +20077,7 @@ const App = (() => {
   }
 
   function showTrash() {
+    _pushNav();
     _currentView = 'trash';
     document.getElementById('home-title').textContent = '🗑 Trash';
     const db = DB.get();
@@ -20829,6 +21135,7 @@ const App = (() => {
 
   function openSettings() {
     if (typeof checkGeminiApiKeyStatus === 'function') checkGeminiApiKeyStatus();
+    if (window.PIN) PIN.updatePinSettingsUI();
     document.getElementById('modal-settings').style.display = 'flex';
   }
 
@@ -21989,6 +22296,7 @@ const App = (() => {
 
   // ── Miscellaneous Documents ────────────────────────────────
   function showMiscDocs() {
+    _pushNav();
     _currentView = 'misc-docs';
     _currentSource = null;
     _currentFolder = null;
@@ -22289,7 +22597,9 @@ const App = (() => {
     showMiscDocs,
     miscDocUpload,
     miscDocOpen,
-    miscDocDelete
+    miscDocDelete,
+    navBack,
+    navForward
   };
 })();
 
@@ -22405,39 +22715,43 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const saved = parseInt(localStorage.getItem('question_font_size')) || 14;
   _applyQuestionFontSize(saved);
-  // Remove any stored PIN from previous versions
-  localStorage.removeItem('nbme_pin_v1');
-  App.init();
-  if (typeof updateHintUsageCounter === 'function') updateHintUsageCounter();
-  // One-time migration: if key exists in localStorage mirror but not yet in DB, promote it.
-  // Skipped on the first load after a Drive restore — the restored DB is already authoritative.
-  (function migrateGeminiKeyToDb() {
-    if (_postRestore) return;
-    try {
-      const lsKey = (localStorage.getItem('nbme_gemini_key_v1') || '').trim();
-      const db = DB.get();
-      if (lsKey && !(db.settings?.geminiApiKey || '').trim()) {
-        if (!db.settings) db.settings = {};
-        db.settings.geminiApiKey = lsKey;
-        DB.save();
-      }
-    } catch (_) {}
-  })();
-  if (typeof checkGeminiApiKeyStatus === 'function') checkGeminiApiKeyStatus();
-  if (typeof autoConnectGoogleDrive === 'function') autoConnectGoogleDrive();
-  restoreNavSidebarState();
-  // Close calculator popup when leaving the quiz screen
-  const _qs = document.getElementById('screen-quiz');
-  if (_qs) {
-    new MutationObserver(() => {
-      if (_qs.style.display !== 'flex') {
-        const p = document.getElementById('calc-popup');
-        const b = document.getElementById('btn-calc-toggle');
-        if (p) p.classList.remove('open');
-        if (b) b.style.background = '';
-      }
-    }).observe(_qs, { attributes: true, attributeFilter: ['style'] });
-  }
+
+  PIN.checkAndGate(function() {
+    App.init();
+    // Sync Lock button visibility after app is ready
+    const lockBtn = document.getElementById('btn-lock-app');
+    if (lockBtn) lockBtn.style.display = PIN.isEnabled() ? 'inline-flex' : 'none';
+    if (typeof updateHintUsageCounter === 'function') updateHintUsageCounter();
+    // One-time migration: if key exists in localStorage mirror but not yet in DB, promote it.
+    // Skipped on the first load after a Drive restore — the restored DB is already authoritative.
+    (function migrateGeminiKeyToDb() {
+      if (_postRestore) return;
+      try {
+        const lsKey = (localStorage.getItem('nbme_gemini_key_v1') || '').trim();
+        const db = DB.get();
+        if (lsKey && !(db.settings?.geminiApiKey || '').trim()) {
+          if (!db.settings) db.settings = {};
+          db.settings.geminiApiKey = lsKey;
+          DB.save();
+        }
+      } catch (_) {}
+    })();
+    if (typeof checkGeminiApiKeyStatus === 'function') checkGeminiApiKeyStatus();
+    if (typeof autoConnectGoogleDrive === 'function') autoConnectGoogleDrive();
+    restoreNavSidebarState();
+    // Close calculator popup when leaving the quiz screen
+    const _qs = document.getElementById('screen-quiz');
+    if (_qs) {
+      new MutationObserver(() => {
+        if (_qs.style.display !== 'flex') {
+          const p = document.getElementById('calc-popup');
+          const b = document.getElementById('btn-calc-toggle');
+          if (p) p.classList.remove('open');
+          if (b) b.style.background = '';
+        }
+      }).observe(_qs, { attributes: true, attributeFilter: ['style'] });
+    }
+  });
 });
 
 </script>
