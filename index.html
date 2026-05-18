@@ -319,7 +319,14 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
   font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
   color: var(--ltblue); padding: 5px 14px 5px 36px;
   background: #fafbfd; border-bottom: 1px solid #edf0f5;
+  display: flex; align-items: center; justify-content: space-between;
 }
+.section-btn-inline {
+  font-size: 10px; font-weight: 500; text-transform: none; letter-spacing: 0;
+  padding: 2px 7px; border-radius: 3px; border: 1px solid var(--border);
+  background: white; color: var(--navy); cursor: pointer; white-space: nowrap; flex-shrink: 0;
+}
+.section-btn-inline:hover { background: #f5f7fa; }
 .notes-import-summary { background: #f5f7fa; border: 1px solid var(--border); border-radius: 4px; padding: 10px 12px; font-size: 12px; color: var(--muted); margin: 10px 0; }
 .notes-import-preview { max-height: 52vh; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; background: #fff; }
 .notes-import-block { border-bottom: 1px solid #edf1f5; padding: 10px 12px; }
@@ -8508,7 +8515,7 @@ const App = (() => {
 
       if (!groups[srcKey]) groups[srcKey] = { srcName, srcOrd, folders: {} };
       const sg = groups[srcKey];
-      if (!sg.folders[fldKey]) sg.folders[fldKey] = { fldName, tests: {} };
+      if (!sg.folders[fldKey]) sg.folders[fldKey] = { fldId: fldKey, fldName, tests: {} };
       const fg = sg.folders[fldKey];
       if (!fg.tests[testId]) fg.tests[testId] = { testName: test.name, test, items: [] };
       fg.tests[testId].items.push(item);
@@ -8519,13 +8526,15 @@ const App = (() => {
       .map(sg => ({
         srcName: sg.srcName,
         folders: Object.values(sg.folders).map(fg => ({
+          fldId: fg.fldId,
           fldName: fg.fldName,
           tests: Object.values(fg.tests)
         }))
       }));
   }
 
-  function _sectionGroupsHTML(sectionKey, groups, renderItems) {
+  function _sectionGroupsHTML(sectionKey, groups, renderItems, options) {
+    options = options || {};
     let html = '';
     groups.forEach((srcGrp, si) => {
       const srcId = `${sectionKey}-s${si}`;
@@ -8542,18 +8551,21 @@ const App = (() => {
       srcGrp.folders.forEach((fldGrp, fi) => {
         const fldId  = `${sectionKey}-f${si}x${fi}`;
         const fldCnt = fldGrp.tests.reduce((s, t) => s + t.items.length, 0);
+        const folderBtnHTML = options.folderBtn ? options.folderBtn(fldGrp) : '';
         html += `<div class="section-sub-group">
           <div class="section-sub-header open" id="${fldId}-hdr" onclick="App.toggleMarkedFolder('${fldId}')">
             <span>📂 ${escapeHTML(fldGrp.fldName)}</span>
             <span style="display:flex;align-items:center;gap:6px;">
+              ${folderBtnHTML}
               <span class="marked-folder-count">${fldCnt}</span>
               <span class="marked-folder-chevron">▶</span>
             </span>
           </div>
           <div class="marked-folder-body open" id="${fldId}-body">`;
         fldGrp.tests.forEach(tg => {
+          const testBtnHTML = options.testBtn ? options.testBtn(tg) : '';
           html += `<div class="section-test-group">
-            <div class="section-test-label">📋 ${escapeHTML(tg.testName)}</div>
+            <div class="section-test-label"><span>📋 ${escapeHTML(tg.testName)}</span>${testBtnHTML}</div>
             ${renderItems(tg.items, tg.test)}
           </div>`;
         });
@@ -8640,9 +8652,18 @@ const App = (() => {
       <button class="btn-card primary" onclick="App.createGlobalIncorrectsTest()" title="Create a new test from all incorrect answers">✗ Create Incorrects Test (All)</button>
     </div>`;
     const groups = _buildSectionGroups(items, item => item.test.id);
-    content.innerHTML = globalBtn + _sectionGroupsHTML('incorrect', groups, (items) =>
-      items.map(item => _incorrectItemHTML(item)).join('')
-    );
+    const incorrectOptions = {
+      folderBtn: function(fldGrp) {
+        if (fldGrp.fldId === '__unfiled__') return '';
+        return '<button class="section-btn-inline" onclick="event.stopPropagation();App.createIncorrectsTestFromFolder(\'' + fldGrp.fldId + '\')">✗ Incorrects</button>';
+      },
+      testBtn: function(tg) {
+        return '<button class="section-btn-inline" onclick="App.createIncorrectsTestFromTest(\'' + tg.test.id + '\')">✗ Incorrects</button>';
+      }
+    };
+    content.innerHTML = globalBtn + _sectionGroupsHTML('incorrect', groups, function(items) {
+      return items.map(function(item) { return _incorrectItemHTML(item); }).join('');
+    }, incorrectOptions);
   }
 
   function _collectAllIncorrectItems() {
@@ -20795,6 +20816,29 @@ const App = (() => {
     Quiz.startTest(newTest.id);
   }
 
+  function createIncorrectsTestFromFolder(folderId) {
+    const folder = DB.getFolders().find(function(f) { return f.id === folderId; });
+    const folderName = folder ? folder.name : 'Folder';
+    const allItems = _collectAllIncorrectItems();
+    const seen = new Set();
+    const questions = [];
+    allItems.forEach(function(item) {
+      if (item.test.folderId !== folderId) return;
+      const key = item.test.id + ':' + item.idx;
+      if (seen.has(key)) return;
+      seen.add(key);
+      questions.push(sanitizeQuestionForRedo(item.q));
+    });
+    if (!questions.length) { toast('No incorrect questions in this subfolder.', 2500); return; }
+    if (!confirm('Create a new test from ' + questions.length + ' incorrect question' + (questions.length !== 1 ? 's' : '') + ' in ' + folderName + '?')) return;
+    const today   = new Date().toISOString().slice(0, 10);
+    const newTest = DB.createTest(folderId, folderName + ' Incorrects ' + today, questions);
+    if (!newTest) { toast('Could not create test — storage may be full.', 4000); return; }
+    renderSidebar();
+    renderHomeGrid();
+    Quiz.startTest(newTest.id);
+  }
+
   function generateInFolder(folderId) {
     _currentFolder = folderId;
     setSourceFromFolder(folderId);
@@ -23264,6 +23308,7 @@ const App = (() => {
     trashTest,
     redoTest,
     createIncorrectsTestFromTest,
+    createIncorrectsTestFromFolder,
     createGlobalIncorrectsTest,
     generateInFolder,
     viewHistory,
