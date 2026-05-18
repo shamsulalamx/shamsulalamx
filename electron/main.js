@@ -586,9 +586,15 @@ function resolveLocalPath(rawUrl) {
   }
 }
 
-function serveIndexHtml(res) {
+function serveIndexHtml(res, reason) {
   const indexPath = path.join(PROJECT_ROOT, 'index.html');
-  console.log('[NBME] Serving index.html from:', indexPath);
+  console.log('[NBME ROUTE /] Serving index from:', indexPath, reason ? `(reason: ${reason})` : '');
+  try {
+    const indexHtml = fs.readFileSync(indexPath, 'utf8');
+    console.log('[NBME INDEX MARKER PRESENT]', indexHtml.includes('APP_BUILD_MARKER'));
+  } catch(e) {
+    console.log('[NBME INDEX MARKER PRESENT] error reading file synchronously:', e.message);
+  }
   fs.readFile(indexPath, (err, data) => {
     if (err) { res.writeHead(500); res.end(); return; }
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
@@ -598,11 +604,12 @@ function serveIndexHtml(res) {
 
 function createRequestHandler() {
   return function (req, res) {
+    console.log('[NBME REQUEST]', req.method, req.url);
     const localPath = resolveLocalPath(req.url);
-    if (!localPath) return serveIndexHtml(res); // bad URL → SPA fallback
+    if (!localPath) return serveIndexHtml(res, 'bad URL'); // bad URL → SPA fallback
 
     fs.stat(localPath, (err, stat) => {
-      if (err || !stat.isFile()) return serveIndexHtml(res); // not found → SPA fallback
+      if (err || !stat.isFile()) return serveIndexHtml(res, `not found: ${localPath}`); // not found → SPA fallback
 
       const ext = path.extname(localPath).toLowerCase();
       const contentType = MIME[ext];
