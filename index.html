@@ -23625,19 +23625,27 @@ function _applyQuestionFontSize(sz) {
 }
 
 window.compareStemChoiceFont = function() {
-  const stem   = document.getElementById('q-stem');
-  const optEl  = document.querySelector('#options-list .opt-text');
-  const optRow = document.querySelector('#options-list .opt-row');
+  const stem    = document.getElementById('q-stem');
+  // .opt-text uses font-size:1em, so it purely inherits from #options-list.
+  // Use #options-list as the authoritative choice comparator — always present.
+  const optList = document.getElementById('options-list');
+  // Also try a live .opt-text if choices are currently rendered.
+  const optText = optList ? optList.querySelector('.opt-text') : null;
+  const choiceEl = optList || null;
   const result = {
-    stemEl:           stem   ? '#q-stem'                    : null,
-    choiceEl:         optEl  ? '#options-list .opt-text'    : null,
-    stemFontSize:     stem   ? getComputedStyle(stem).fontSize   : null,
-    choiceFontSize:   optEl  ? getComputedStyle(optEl).fontSize  : null,
-    stemLineHeight:   stem   ? getComputedStyle(stem).lineHeight  : null,
-    choiceLineHeight: optEl  ? getComputedStyle(optEl).lineHeight : null,
-    stemInlineStyle:  stem   ? stem.style.fontSize               : null,
-    optionsListInline: document.getElementById('options-list')?.style.fontSize ?? null,
-    match: stem && optEl ? getComputedStyle(stem).fontSize === getComputedStyle(optEl).fontSize : false,
+    stemEl:            stem     ? '#q-stem'         : null,
+    choiceEl:          choiceEl ? '#options-list'   : null,
+    choiceTextEl:      optText  ? '.opt-text (live)': 'not rendered yet',
+    stemFontSize:      stem     ? getComputedStyle(stem).fontSize     : null,
+    choiceFontSize:    choiceEl ? getComputedStyle(choiceEl).fontSize : null,
+    optTextFontSize:   optText  ? getComputedStyle(optText).fontSize  : 'n/a',
+    stemLineHeight:    stem     ? getComputedStyle(stem).lineHeight   : null,
+    choiceLineHeight:  choiceEl ? getComputedStyle(choiceEl).lineHeight : null,
+    stemInlineStyle:   stem     ? stem.style.fontSize                 : null,
+    optionsListInline: choiceEl ? choiceEl.style.fontSize             : null,
+    match: stem && choiceEl
+      ? getComputedStyle(stem).fontSize === getComputedStyle(choiceEl).fontSize
+      : false,
   };
   console.table(result);
   return result;
