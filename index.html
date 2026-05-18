@@ -565,7 +565,7 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 .timer-val.timer-red  { color: #ff6b6b; }
 .timer-lbl { font-size: 9px; color: #7a9ab8; text-transform: uppercase; letter-spacing: .05em; }
 
-.q-timer-warning { color: #ff0000 !important; animation: timerBlink 1s linear infinite !important; }
+.q-timer-warning { color: #ff6b6b !important; animation: timerBlink 1s linear infinite !important; }
 @keyframes timerBlink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0.15; } }
 
 .quiz-progress { height: 3px; background: rgba(255,255,255,.15); flex-shrink: 0; }
@@ -6146,7 +6146,7 @@ const Quiz = (() => {
     const s = state.qSecs || 0;
     el.textContent = fmtQTime(s);
     console.log('[QuestionTimer] elapsed', s);
-    const warn = s >= 90;
+    const warn = s > 90;
     el.classList.toggle('q-timer-warning', warn);
     if (warn) console.log('[QuestionTimer] warning active');
   }
@@ -6765,16 +6765,12 @@ const Quiz = (() => {
 window.Quiz = Quiz;
 console.log('ACTIVE QUIZ EXPORTS', Object.keys(window.Quiz || {}));
 
+// DEBUG ONLY — not auto-called; remove before production
 window.forceTimerWarning = function() {
   var el = document.getElementById('timer-q');
   console.log('[forceTimerWarning]', el);
-  if (el) {
-    el.classList.add('q-timer-warning');
-    el.style.color = '#ff0000';
-    el.style.animation = 'timerBlink 1s linear infinite';
-  }
+  if (el) el.classList.add('q-timer-warning');
 };
-console.log('[forceTimerWarning installed]');
 // Expose explanation builder globally for use by Results review screen
 window.buildExplanationHTML = function(q, r, container) {
   container.innerHTML = '';
