@@ -706,6 +706,8 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 .block-timer-display {
   font-size: 13px; font-weight: 700; color: #9ab0c8;
   font-family: 'Courier New', monospace; letter-spacing: .04em;
+  font-variant-numeric: tabular-nums;
+  min-width: 52px; text-align: center;
 }
 
 /* ── Screen: Results ─────────────────────────────────────── */
@@ -1378,14 +1380,16 @@ body.quiz-fullscreen-mode .modal-overlay {
 
           <!-- Bottom nav bar -->
           <div class="quiz-bottom-bar no-sidebar">
-            <div style="display:flex;align-items:center;gap:12px;">
+            <div style="display:flex;align-items:center;gap:12px;flex:1;">
               <div class="score-info" id="bottom-score">Score: 0 / 0</div>
-              <div class="block-timer-display" id="block-timer">00:00</div>
               <button class="quiz-btn" id="btn-calc-toggle" onclick="toggleCalc()" title="Calculator">🖩 Calc</button>
               <button class="quiz-btn" onclick="openLabValues()" title="Lab Values">🧪 Lab</button>
               <button class="quiz-btn btn-mode" id="btn-mode-toggle" onclick="App.toggleMode()">📖 Tutor</button>
             </div>
-            <div style="display:flex;gap:8px;">
+            <div style="flex:1;display:flex;justify-content:center;align-items:center;">
+              <div class="block-timer-display" id="block-timer">00:00</div>
+            </div>
+            <div style="display:flex;gap:8px;flex:1;justify-content:flex-end;">
               <button class="quiz-btn" id="btn-prev" onclick="Quiz.prevQ()" disabled>◀ Prev</button>
               <button class="quiz-btn primary" id="btn-next" onclick="Quiz.nextQ()">Next ▶</button>
               <button class="quiz-btn btn-finish" id="btn-finish" style="display:none;" onclick="App.confirmFinish()">Finish ✓</button>
@@ -6034,6 +6038,7 @@ const Quiz = (() => {
 
   // ── State ──────────────────────────────────────────────────
   let state = null;
+  let _totTimerRef = null; // module-level so initState never orphans the old interval
   /*
   state = {
     testId, mode ('tutor'|'exam'), qIdx,
@@ -6046,13 +6051,14 @@ const Quiz = (() => {
 
   // ── Timer helpers ──────────────────────────────────────────
   function startTotalTimer() {
-    if (state.totTimerRef) clearInterval(state.totTimerRef);
+    if (_totTimerRef) clearInterval(_totTimerRef);
     const base = Date.now() - state.totSecs * 1000;
     renderTotalTimer(); // immediate render so display is correct from tick 0
-    state.totTimerRef = setInterval(() => {
+    _totTimerRef = setInterval(() => {
+      if (!state) { clearInterval(_totTimerRef); _totTimerRef = null; return; }
       state.totSecs = Math.floor((Date.now() - base) / 1000);
       renderTotalTimer();
-    }, 500);
+    }, 1000);
   }
 
   function startQTimer() {
@@ -6072,7 +6078,7 @@ const Quiz = (() => {
   }
 
   function stopAllTimers() {
-    if (state.totTimerRef) { clearInterval(state.totTimerRef); state.totTimerRef = null; }
+    if (_totTimerRef) { clearInterval(_totTimerRef); _totTimerRef = null; }
     stopQTimer();
   }
 
@@ -6158,7 +6164,7 @@ const Quiz = (() => {
       results: questions.map(() => ({ answered: false, correct: false, chosen: null, time: 0, highlights: {}, strikethrough: [] })),
       marks: new Set(),
       totSecs: 0, qSecs: 0, qStart: Date.now(),
-      totTimerRef: null, qTimerRef: null,
+      qTimerRef: null,
       paused: false
     };
     startTotalTimer();
@@ -6173,7 +6179,7 @@ const Quiz = (() => {
       results: saved.results || test.questions.map(() => ({ answered: false, correct: false, chosen: null, time: 0, highlights: {}, strikethrough: [] })),
       marks: new Set(saved.marks || []),
       totSecs: saved.totSecs || 0, qSecs: 0, qStart: Date.now(),
-      totTimerRef: null, qTimerRef: null,
+      qTimerRef: null,
       paused: false
     };
     startTotalTimer();
