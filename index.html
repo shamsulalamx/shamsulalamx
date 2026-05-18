@@ -6476,6 +6476,35 @@ const Quiz = (() => {
     btn.classList.toggle('mode-exam', state.mode === 'exam');
   }
 
+  // ── Fullscreen / Focus Mode ────────────────────────────────
+  let quizFullscreenMode = false;
+
+  function _applyFullscreenUI(active) {
+    quizFullscreenMode = active;
+    document.body.classList.toggle('quiz-fullscreen-mode', active);
+    const btn = document.getElementById('btn-quiz-fullscreen');
+    if (btn) btn.textContent = active ? '✕ Exit Focus' : '⛶ Focus';
+  }
+
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement && quizFullscreenMode) _applyFullscreenUI(false);
+  });
+
+  function enterQuizFullscreen() {
+    console.log('FULLSCREEN BUTTON CLICKED');
+    _applyFullscreenUI(true);
+    document.documentElement.requestFullscreen().catch(() => {});
+  }
+
+  function exitQuizFullscreen() {
+    _applyFullscreenUI(false);
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  }
+
+  function toggleQuizFullscreen() {
+    if (quizFullscreenMode) exitQuizFullscreen(); else enterQuizFullscreen();
+  }
+
   // ── Public API ─────────────────────────────────────────────
   return {
     startTest, pauseTest, unpauseTest, finishTest,
@@ -6484,10 +6513,12 @@ const Quiz = (() => {
     renderQuestion, renderOptions, renderExplanation,
     updateNavPanel, renderScoreLive,
     getState: () => state,
-    getScore, getAnswered, fmtTime
+    getScore, getAnswered, fmtTime,
+    enterQuizFullscreen, exitQuizFullscreen, toggleQuizFullscreen
   };
 })();
 window.Quiz = Quiz;
+console.log('ACTIVE QUIZ EXPORTS', Object.keys(window.Quiz || {}));
 // Expose explanation builder globally for use by Results review screen
 window.buildExplanationHTML = function(q, r, container) {
   container.innerHTML = '';
