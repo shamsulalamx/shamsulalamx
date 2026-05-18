@@ -292,7 +292,7 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 .test-card-footer { display: flex; justify-content: space-between; align-items: center; }
 .test-card-prog-label { font-size: 11px; color: var(--muted); }
 .test-card-score { font-size: 12px; font-weight: 700; color: var(--navy); }
-.test-card-actions { display: flex; gap: 4px; margin-top: 10px; }
+.test-card-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
 .btn-card { padding: 5px 10px; font-size: 11px; border-radius: 3px; border: 1px solid var(--border); background: white; color: var(--navy); transition: background .12s; }
 .btn-card:hover { background: #f5f7fa; }
 .btn-card.primary { background: var(--navy); color: white; border-color: var(--navy); }
@@ -8116,6 +8116,7 @@ const App = (() => {
           ${test.status==='completed'
             ? `<button class="btn-card" onclick="App.showScoreReport('${test.id}')">Score Report</button>`
             : `<button class="btn-card" onclick="App.viewHistory('${test.id}')">📊</button>`}
+          ${(() => { console.log('Rendering redo button for test', test.id, test.name); return `<button class="btn-card" onclick="console.log('Redo button clicked','${test.id}');App.redoTest('${test.id}')" title="Create a fresh attempt">↺ Redo</button>`; })()}
           <button class="btn-card" onclick="App.startRenameTest('${test.id}')">✏️</button>
           <button class="btn-card danger" onclick="App.trashTest('${test.id}')">🗑</button>
         </div>
@@ -20420,6 +20421,26 @@ const App = (() => {
     renderSidebar(); renderHomeGrid(); toast('Moved to Trash.');
   }
 
+  function sanitizeQuestionForRedo(q) {
+    const copy = JSON.parse(JSON.stringify(q));
+    ['hint','hints','generatedHint','aiHint','hintHtml','hintShown','hintUsed',
+     'selectedAnswer','userAnswer','isCorrect','flagged','confidence',
+     'notes','scratch','elapsedTime','timeSpent','answeredAt','reviewedAt','markedForReview'
+    ].forEach(f => delete copy[f]);
+    return copy;
+  }
+
+  function redoTest(testId) {
+    const test = DB.getTest(testId);
+    if (!test) return;
+    if (!confirm('Create a fresh attempt for this test?')) return;
+    const newTest = DB.createTest(test.folderId, test.name + ' (Redo)', test.questions.map(sanitizeQuestionForRedo));
+    if (!newTest) { toast('Could not create redo attempt — storage may be full.', 4000); return; }
+    renderSidebar();
+    renderHomeGrid();
+    Quiz.startTest(newTest.id);
+  }
+
   function generateInFolder(folderId) {
     _currentFolder = folderId;
     setSourceFromFolder(folderId);
@@ -22785,6 +22806,7 @@ const App = (() => {
     startRenameTest,
     deleteFolder,
     trashTest,
+    redoTest,
     generateInFolder,
     viewHistory,
     showScoreReport,

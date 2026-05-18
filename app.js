@@ -264,10 +264,12 @@ const App = (() => {
           <span class="test-card-score">${scoreLabel}</span>
         </div>
         <div class="test-card-actions">
+          ${(() => { console.log('VISIBLE TEST CARD RENDER PATH', test.id, test.name); return ''; })()}
           <button class="btn-card primary" onclick="Quiz.startTest('${test.id}')">▶ ${test.status==='in_progress'?'Resume':'Start'}</button>
           <button class="btn-card" onclick="App.viewHistory('${test.id}')">📊</button>
           <button class="btn-card" onclick="App.startRenameTest('${test.id}')">✏️</button>
           <button class="btn-card danger" onclick="App.trashTest('${test.id}')">🗑</button>
+          <button class="btn-card" onclick="console.log('VISIBLE REDO CLICKED','${test.id}');App.redoTest('${test.id}')" title="Create a fresh attempt">↺ Redo</button>
         </div>
       </div>`;
     });
@@ -419,6 +421,26 @@ const App = (() => {
     if (!confirm('Move this test to Trash?')) return;
     DB.trashTest(id);
     renderSidebar(); renderHomeGrid(); toast('Moved to Trash.');
+  }
+
+  function sanitizeQuestionForRedo(q) {
+    const copy = JSON.parse(JSON.stringify(q));
+    ['hint','hints','generatedHint','aiHint','hintHtml','hintShown','hintUsed',
+     'selectedAnswer','userAnswer','isCorrect','flagged','confidence',
+     'notes','scratch','elapsedTime','timeSpent','answeredAt','reviewedAt','markedForReview'
+    ].forEach(f => delete copy[f]);
+    return copy;
+  }
+
+  function redoTest(testId) {
+    const test = DB.getTest(testId);
+    if (!test) return;
+    if (!confirm('Create a fresh attempt for this test?')) return;
+    const newTest = DB.createTest(test.folderId, test.name + ' (Redo)', test.questions.map(sanitizeQuestionForRedo));
+    if (!newTest) { toast('Could not create redo attempt — storage may be full.', 4000); return; }
+    renderSidebar();
+    renderHomeGrid();
+    Quiz.startTest(newTest.id);
   }
 
   function generateInFolder(folderId) {
@@ -849,6 +871,7 @@ const App = (() => {
     startRenameTest,
     deleteFolder,
     trashTest,
+    redoTest,
     generateInFolder,
     viewHistory,
     retakeTest,
