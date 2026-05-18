@@ -1161,6 +1161,11 @@ body.quiz-fullscreen-mode .quiz-bottom-bar.no-sidebar {
   left: 0 !important;
 }
 
+/* Modals must appear above the focus-mode screen (z-index:9999) */
+body.quiz-fullscreen-mode .modal-overlay {
+  z-index: 10000;
+}
+
 </style>
 </head>
 <body>
