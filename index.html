@@ -20774,21 +20774,51 @@ const App = (() => {
     Quiz.startTest(newTest.id);
   }
 
+  function _getOrCreateIncorrectsSource() {
+    const existing = DB.getSourceFolders().find(function(s) { return s.name === 'Incorrects'; });
+    if (existing) return existing;
+    return DB.createSourceFolder('Incorrects');
+  }
+
+  function _getOrCreateIncorrectsDefaultFolder(sourceId) {
+    const existing = DB.getFolders(sourceId).find(function(f) { return f.name === 'Generated'; });
+    if (existing) return existing;
+    return DB.createFolder('Generated', sourceId);
+  }
+
+  function _incorrectsDestFolder() {
+    const src = _getOrCreateIncorrectsSource();
+    return _getOrCreateIncorrectsDefaultFolder(src.id);
+  }
+
+  function _sourceLabelForFolder(folderId) {
+    const allFolders = DB.getFolders();
+    const folder = allFolders.find(function(f) { return f.id === folderId; }) || null;
+    const source = folder && folder.sourceId ? DB.getSourceFolder(folder.sourceId) : null;
+    return {
+      srcName: source ? source.name : 'NBME',
+      fldName: folder ? folder.name : 'Unfiled'
+    };
+  }
+
   function createIncorrectsTestFromTest(testId) {
     const test   = DB.getTest(testId);
     if (!test) return;
     const latest = DB.getHistory(testId)[0];
     if (!latest || !latest.results) { toast('No completed attempt found for this test.', 2500); return; }
     const incorrectQs = [];
-    latest.results.forEach((r, idx) => {
+    latest.results.forEach(function(r, idx) {
       if (!r || !r.answered || r.correct) return;
       const q = test.questions[idx];
       if (!q) return;
       incorrectQs.push(sanitizeQuestionForRedo(q));
     });
     if (!incorrectQs.length) { toast('No incorrect questions for this test.', 2500); return; }
-    if (!confirm(`Create a new test from ${incorrectQs.length} incorrect question${incorrectQs.length !== 1 ? 's' : ''}?`)) return;
-    const newTest = DB.createTest(test.folderId, test.name + ' (Incorrects)', incorrectQs);
+    if (!confirm('Create a new test from ' + incorrectQs.length + ' incorrect question' + (incorrectQs.length !== 1 ? 's' : '') + '?')) return;
+    const lbl     = _sourceLabelForFolder(test.folderId);
+    const newName = lbl.srcName + ' - ' + lbl.fldName + ' - ' + test.name;
+    const dest    = _incorrectsDestFolder();
+    const newTest = DB.createTest(dest.id, newName, incorrectQs);
     if (!newTest) { toast('Could not create test — storage may be full.', 4000); return; }
     renderSidebar();
     renderHomeGrid();
@@ -20800,16 +20830,21 @@ const App = (() => {
     if (!allItems.length) { toast('No incorrect questions found across any test.', 2500); return; }
     const seen = new Set();
     const questions = [];
-    allItems.forEach(item => {
+    const srcNames = new Set();
+    allItems.forEach(function(item) {
       const key = item.test.id + ':' + item.idx;
       if (seen.has(key)) return;
       seen.add(key);
       questions.push(sanitizeQuestionForRedo(item.q));
+      const lbl = _sourceLabelForFolder(item.test.folderId);
+      srcNames.add(lbl.srcName);
     });
-    if (!confirm(`Create a new test from ${questions.length} incorrect question${questions.length !== 1 ? 's' : ''} across all tests?`)) return;
-    const today    = new Date().toISOString().slice(0, 10);
-    const folderId = allItems[0].test.folderId || null;
-    const newTest  = DB.createTest(folderId, `Incorrects Review ${today}`, questions);
+    if (!confirm('Create a new test from ' + questions.length + ' incorrect question' + (questions.length !== 1 ? 's' : '') + ' across all tests?')) return;
+    const today     = new Date().toISOString().slice(0, 10);
+    const srcPrefix = srcNames.size === 1 ? Array.from(srcNames)[0] + ' - ' : '';
+    const newName   = srcPrefix + 'All Incorrects - ' + today;
+    const dest      = _incorrectsDestFolder();
+    const newTest   = DB.createTest(dest.id, newName, questions);
     if (!newTest) { toast('Could not create test — storage may be full.', 4000); return; }
     renderSidebar();
     renderHomeGrid();
@@ -20817,8 +20852,7 @@ const App = (() => {
   }
 
   function createIncorrectsTestFromFolder(folderId) {
-    const folder = DB.getFolders().find(function(f) { return f.id === folderId; });
-    const folderName = folder ? folder.name : 'Folder';
+    const lbl = _sourceLabelForFolder(folderId);
     const allItems = _collectAllIncorrectItems();
     const seen = new Set();
     const questions = [];
@@ -20830,9 +20864,10 @@ const App = (() => {
       questions.push(sanitizeQuestionForRedo(item.q));
     });
     if (!questions.length) { toast('No incorrect questions in this subfolder.', 2500); return; }
-    if (!confirm('Create a new test from ' + questions.length + ' incorrect question' + (questions.length !== 1 ? 's' : '') + ' in ' + folderName + '?')) return;
-    const today   = new Date().toISOString().slice(0, 10);
-    const newTest = DB.createTest(folderId, folderName + ' Incorrects ' + today, questions);
+    if (!confirm('Create a new test from ' + questions.length + ' incorrect question' + (questions.length !== 1 ? 's' : '') + ' in ' + lbl.fldName + '?')) return;
+    const newName = lbl.srcName + ' - ' + lbl.fldName + ' - Incorrects';
+    const dest    = _incorrectsDestFolder();
+    const newTest = DB.createTest(dest.id, newName, questions);
     if (!newTest) { toast('Could not create test — storage may be full.', 4000); return; }
     renderSidebar();
     renderHomeGrid();
