@@ -8749,15 +8749,33 @@ const App = (() => {
     if (!testId || !Array.isArray(results) || !Array.isArray(questions)) return;
     const test = DB.getTest(testId);
     if (!test) return;
+    console.log('[Flashcards] finishTest trigger', test.id, test.name);
     const folder = DB.getFolders().find(f => f.id === test.folderId);
     const sourceFolders = DB.getSourceFolders ? DB.getSourceFolders() : (DB.get().sourceFolders || []);
     const sourceFolder = folder ? sourceFolders.find(s => s.id === folder.sourceId) : null;
+
+    const incorrectQuestions = results.filter(r => !r.correct);
+    console.log('[Flashcards] incorrect count', incorrectQuestions.length);
 
     results.forEach((r, idx) => {
       if (r.correct) return;
       const q = questions[idx];
       if (!q) return;
-      const pearl = (q.reviewPearl || q.explanation || '').trim();
+      // Priority: reviewPearl > clinicalPearl > pearl > pearls > educationalObjective > explanation > correctBlurb
+      // Each field also checked under q.metadata for questions stored with a metadata wrapper
+      const m = q.metadata || {};
+      const pearl = (
+        q.reviewPearl        || m.reviewPearl        ||
+        q.clinicalPearl      || m.clinicalPearl      ||
+        q.pearl              || m.pearl              ||
+        (Array.isArray(q.pearls) ? q.pearls[0] : (q.pearls || '')) ||
+        (Array.isArray(m.pearls) ? m.pearls[0] : (m.pearls || '')) ||
+        q.educationalObjective || m.educationalObjective ||
+        q.explanation        || m.explanation        ||
+        q.correctBlurb       || m.correctBlurb       ||
+        ''
+      ).trim();
+      console.log('[Flashcards] candidate pearl', q.id || q.n || idx, pearl);
       if (!pearl) return;
       const cardId = _simpleHash(testId + ':' + idx + ':' + pearl);
       const existing = DB.getFlashcards().find(c => c.id === cardId);
@@ -8765,7 +8783,7 @@ const App = (() => {
       DB.upsertFlashcard({
         id: cardId,
         pearl,
-        retrievalTag: q.retrievalTag || '',
+        retrievalTag: q.retrievalTag || m.retrievalTag || '',
         tags: q.tags || [],
         questionNum: q.n || (idx + 1),
         questionIdx: idx,
@@ -8776,6 +8794,7 @@ const App = (() => {
         createdAt: Date.now()
       });
     });
+    console.log('[Flashcards] saved count', DB.getFlashcards().length);
   }
 
   function showFlashcards() {
