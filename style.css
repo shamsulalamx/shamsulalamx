@@ -525,3 +525,21 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
   #sidebar { display: none; }
   #quiz-nav-panel { width: 160px; min-width: 160px; }
 }
+
+/* ── Quiz Fullscreen / Focus Mode ─────────────────────────── */
+body.quiz-fullscreen-mode #topbar,
+body.quiz-fullscreen-mode #sidebar { display: none !important; }
+
+body.quiz-fullscreen-mode #screen-quiz {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  height: 100vh !important;
+  z-index: 9000;
+}
+
+body.quiz-fullscreen-mode .quiz-bottom-bar,
+body.quiz-fullscreen-mode .quiz-bottom-bar.no-sidebar {
+  left: 0 !important;
+}
+
+#btn-quiz-fullscreen { font-size: 16px; padding: 4px 9px; }

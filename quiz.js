@@ -206,6 +206,7 @@ const Quiz = (() => {
   function finishTest() {
     if (!state) return;
     stopAllTimers();
+    exitQuizFullscreen();
     const entry = DB.finishAttempt(state.testId, state.results, state.totSecs, state.mode);
     window.Results && window.Results.show(state.testId, entry, state.results, getTest().questions);
     state = null;
@@ -267,6 +268,7 @@ const Quiz = (() => {
   }
 
   function renderQuestion() {
+    console.log('VISIBLE QUIZ RENDER PATH', state?.testId, state?.qIdx);
     const q = getQuestion();
     const r = state.results[state.qIdx];
     const test = getTest();
@@ -456,6 +458,38 @@ const Quiz = (() => {
   }
 
   // ── Public API ─────────────────────────────────────────────
+  // ── Fullscreen / Focus Mode ────────────────────────────────
+  function syncFullscreenClass() {
+    const inFs = !!document.fullscreenElement;
+    document.body.classList.toggle('quiz-fullscreen-mode', inFs);
+    const btn = document.getElementById('btn-quiz-fullscreen');
+    if (btn) btn.textContent = inFs ? '⛶ Exit Focus' : '⛶ Focus';
+  }
+
+  document.addEventListener('fullscreenchange', syncFullscreenClass);
+
+  function enterQuizFullscreen() {
+    document.documentElement.requestFullscreen().catch(() => {});
+    document.body.classList.add('quiz-fullscreen-mode');
+    const btn = document.getElementById('btn-quiz-fullscreen');
+    if (btn) btn.textContent = '⛶ Exit Focus';
+  }
+
+  function exitQuizFullscreen() {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    document.body.classList.remove('quiz-fullscreen-mode');
+    const btn = document.getElementById('btn-quiz-fullscreen');
+    if (btn) btn.textContent = '⛶ Focus';
+  }
+
+  function toggleQuizFullscreen() {
+    if (document.fullscreenElement || document.body.classList.contains('quiz-fullscreen-mode')) {
+      exitQuizFullscreen();
+    } else {
+      enterQuizFullscreen();
+    }
+  }
+
   return {
     startTest, pauseTest, unpauseTest, finishTest,
     goTo, nextQ, prevQ, setMode,
@@ -463,7 +497,8 @@ const Quiz = (() => {
     renderQuestion, renderOptions, renderExplanation,
     updateNavPanel, renderScoreLive,
     getState: () => state,
-    getScore, getAnswered, fmtTime
+    getScore, getAnswered, fmtTime,
+    enterQuizFullscreen, exitQuizFullscreen, toggleQuizFullscreen
   };
 })();
 window.Quiz = Quiz;
