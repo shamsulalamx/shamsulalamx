@@ -457,37 +457,36 @@ const Quiz = (() => {
     btn.classList.toggle('mode-exam', state.mode === 'exam');
   }
 
-  // ── Public API ─────────────────────────────────────────────
   // ── Fullscreen / Focus Mode ────────────────────────────────
-  function syncFullscreenClass() {
-    const inFs = !!document.fullscreenElement;
-    document.body.classList.toggle('quiz-fullscreen-mode', inFs);
+  let quizFullscreenMode = false;
+
+  function _applyFullscreenUI(active) {
+    quizFullscreenMode = active;
+    document.body.classList.toggle('quiz-fullscreen-mode', active);
     const btn = document.getElementById('btn-quiz-fullscreen');
-    if (btn) btn.textContent = inFs ? '⛶ Exit Focus' : '⛶ Focus';
+    if (btn) btn.textContent = active ? '✕ Exit Focus' : '⛶ Focus';
   }
 
-  document.addEventListener('fullscreenchange', syncFullscreenClass);
+  // Only clears on external exit (e.g. Escape key) — never sets from here.
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement && quizFullscreenMode) {
+      _applyFullscreenUI(false);
+    }
+  });
 
   function enterQuizFullscreen() {
+    console.log('FULLSCREEN BUTTON CLICKED');
+    _applyFullscreenUI(true);
     document.documentElement.requestFullscreen().catch(() => {});
-    document.body.classList.add('quiz-fullscreen-mode');
-    const btn = document.getElementById('btn-quiz-fullscreen');
-    if (btn) btn.textContent = '⛶ Exit Focus';
   }
 
   function exitQuizFullscreen() {
+    _applyFullscreenUI(false);
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-    document.body.classList.remove('quiz-fullscreen-mode');
-    const btn = document.getElementById('btn-quiz-fullscreen');
-    if (btn) btn.textContent = '⛶ Focus';
   }
 
   function toggleQuizFullscreen() {
-    if (document.fullscreenElement || document.body.classList.contains('quiz-fullscreen-mode')) {
-      exitQuizFullscreen();
-    } else {
-      enterQuizFullscreen();
-    }
+    if (quizFullscreenMode) exitQuizFullscreen(); else enterQuizFullscreen();
   }
 
   return {

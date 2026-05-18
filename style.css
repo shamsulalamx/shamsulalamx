@@ -530,16 +530,22 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 body.quiz-fullscreen-mode #topbar,
 body.quiz-fullscreen-mode #sidebar { display: none !important; }
 
+/* Lift the quiz screen above everything and fill the viewport */
 body.quiz-fullscreen-mode #screen-quiz {
-  position: fixed;
+  position: fixed !important;
   top: 0; left: 0; right: 0; bottom: 0;
+  width: 100vw !important;
   height: 100vh !important;
-  z-index: 9000;
+  z-index: 9999;
+  display: flex !important;
+  flex-direction: row;
+  overflow: hidden;
 }
 
+/* Bottom bar no longer needs to account for the sidebar offset */
 body.quiz-fullscreen-mode .quiz-bottom-bar,
 body.quiz-fullscreen-mode .quiz-bottom-bar.no-sidebar {
   left: 0 !important;
 }
 
-#btn-quiz-fullscreen { font-size: 16px; padding: 4px 9px; }
+#btn-quiz-fullscreen { padding: 4px 9px; }
