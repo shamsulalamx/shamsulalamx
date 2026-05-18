@@ -6682,18 +6682,25 @@ async function requestHint() {
 
   try {
     const hintPrompt =
-      'You are a medical education tutor helping a student work through a multiple choice question. ' +
-      'Read the question stem from the attached image when present. Give one direct, efficient hint that points to the key reasoning step without explicitly giving the answer or naming the correct choice.\n' +
-      `Parsed stem fallback: ${stem}\n` +
-      `Answer choices: ${choices}\n` +
-      'Prefer one sentence. Use two sentences only if needed. No preamble.';
+      'You are a Step 2 CK clinical reasoning coach. Generate exactly one hint, but the hint must contain 2-3 sentences and 35-80 words. ' +
+      'The hint should help the student notice the discriminating clue pattern, understand why it matters clinically or mechanistically, ' +
+      'and avoid at least one tempting distractor. ' +
+      'Do not state the diagnosis, answer choice, or management step if that would directly reveal the answer. ' +
+      'Do not restate the vignette. Do not give generic advice like "focus on the key features" or "think about the timeline" without specific clinical content. ' +
+      'The output must be only the hint — no preamble, no label, no closing sentence.\n\n' +
+      'REQUIRED STRUCTURE (all 3 components must be present):\n' +
+      '1. Name the specific clue or clue cluster in the vignette that controls the question.\n' +
+      '2. Explain why that clue matters — the mechanism, the clinical pattern, or the diagnostic implication.\n' +
+      '3. Identify one plausible competing answer and the specific reason it is less likely here.\n\n' +
+      (stemImage ? 'Question stem is in the attached image.\n' : `Question stem: ${stem}\n`) +
+      `Answer choices:\n${choices}\n`;
     const parts = [{ text: hintPrompt }];
     if (stemImage?.mimeType && stemImage?.data) {
       parts.push({ inlineData: { mimeType: stemImage.mimeType, data: stemImage.data } });
     }
     const data = await callGeminiDirect(
       [{ parts }],
-      { temperature: 0.3, maxOutputTokens: 90, thinkingConfig: { thinkingBudget: 0 } }
+      { temperature: 0.45, maxOutputTokens: 220, thinkingConfig: { thinkingBudget: 0 } }
     );
     const hintText = extractGeminiText(data);
     if (!hintText) throw new Error('empty');
