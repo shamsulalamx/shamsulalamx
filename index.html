@@ -23609,25 +23609,39 @@ function toggleCalc() {
 }
 
 function _applyQuestionFontSize(sz) {
-  const stemPx = sz + 'px';
-  const choicesPx = (sz + 1) + 'px';
+  const sharedPx = (sz + 1) + 'px';   // stem and choices share one size
   const expPx = (sz + 0.5) + 'px';
-  // Apply to the quiz screen container so it covers stem, options,
-  // explanation, and review screen — all in one shot via CSS inheritance.
   const quizScreen = document.getElementById('screen-quiz');
-  if (quizScreen) quizScreen.style.setProperty('--q-font-size', stemPx);
-  // Also set directly on individual elements for immediate effect
-  // and for any elements that override font-size explicitly.
+  if (quizScreen) quizScreen.style.setProperty('--q-font-size', sharedPx);
   const groups = [
-    { ids: ['q-stem', 'rev-stem'], size: stemPx },
-    { ids: ['options-list', 'rev-options'], size: choicesPx },
-    { ids: ['exp-body', 'rev-exp-body'], size: expPx }
+    { ids: ['q-stem', 'rev-stem'],          size: sharedPx },
+    { ids: ['options-list', 'rev-options'], size: sharedPx },
+    { ids: ['exp-body', 'rev-exp-body'],    size: expPx }
   ];
   groups.forEach(({ ids, size }) => ids.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.fontSize = size;
   }));
 }
+
+window.compareStemChoiceFont = function() {
+  const stem   = document.getElementById('q-stem');
+  const optEl  = document.querySelector('#options-list .opt-text');
+  const optRow = document.querySelector('#options-list .opt-row');
+  const result = {
+    stemEl:           stem   ? '#q-stem'                    : null,
+    choiceEl:         optEl  ? '#options-list .opt-text'    : null,
+    stemFontSize:     stem   ? getComputedStyle(stem).fontSize   : null,
+    choiceFontSize:   optEl  ? getComputedStyle(optEl).fontSize  : null,
+    stemLineHeight:   stem   ? getComputedStyle(stem).lineHeight  : null,
+    choiceLineHeight: optEl  ? getComputedStyle(optEl).lineHeight : null,
+    stemInlineStyle:  stem   ? stem.style.fontSize               : null,
+    optionsListInline: document.getElementById('options-list')?.style.fontSize ?? null,
+    match: stem && optEl ? getComputedStyle(stem).fontSize === getComputedStyle(optEl).fontSize : false,
+  };
+  console.table(result);
+  return result;
+};
 
 function adjFontSize(delta) {
   const current = parseInt(localStorage.getItem('question_font_size')) || 14;
