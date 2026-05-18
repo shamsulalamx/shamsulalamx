@@ -303,6 +303,23 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 .notes-list { margin: 0; padding: 12px 20px 14px 30px; }
 .notes-list li { font-size: 14px; line-height: 1.65; margin-bottom: 8px; }
 .notes-meta { display: block; font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+/* Shared 3-level section hierarchy: source → subfolder → test */
+.section-sub-group { border-top: 1px solid var(--border); }
+.section-sub-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 7px 14px 7px 26px; background: #f8fafc;
+  cursor: pointer; user-select: none;
+  font-size: 12px; font-weight: 600; color: var(--navy);
+}
+.section-sub-header:hover { background: #eff3f8; }
+.section-sub-header .marked-folder-chevron { font-size: 11px; color: var(--muted); transition: transform .2s; }
+.section-sub-header.open .marked-folder-chevron { transform: rotate(90deg); }
+.section-test-group { border-top: 1px solid #edf0f5; }
+.section-test-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--ltblue); padding: 5px 14px 5px 36px;
+  background: #fafbfd; border-bottom: 1px solid #edf0f5;
+}
 .notes-import-summary { background: #f5f7fa; border: 1px solid var(--border); border-radius: 4px; padding: 10px 12px; font-size: 12px; color: var(--muted); margin: 10px 0; }
 .notes-import-preview { max-height: 52vh; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; background: #fff; }
 .notes-import-block { border-bottom: 1px solid #edf1f5; padding: 10px 12px; }
@@ -8326,7 +8343,8 @@ const App = (() => {
           ${test.status==='completed'
             ? `<button class="btn-card" onclick="App.showScoreReport('${test.id}')">Score Report</button>`
             : `<button class="btn-card" onclick="App.viewHistory('${test.id}')">📊</button>`}
-          ${(() => { console.log('Rendering redo button for test', test.id, test.name); return `<button class="btn-card" onclick="console.log('Redo button clicked','${test.id}');App.redoTest('${test.id}')" title="Create a fresh attempt">↺ Redo</button>`; })()}
+          <button class="btn-card" onclick="App.redoTest('${test.id}')" title="Create a fresh attempt">↺ Redo</button>
+          ${test.status==='completed' ? `<button class="btn-card" onclick="App.createIncorrectsTestFromTest('${test.id}')" title="New test from incorrect answers">✗ Incorrects</button>` : ''}
           <button class="btn-card" onclick="App.startRenameTest('${test.id}')">✏️</button>
           <button class="btn-card danger" onclick="App.trashTest('${test.id}')">🗑</button>
         </div>
@@ -8465,18 +8483,98 @@ const App = (() => {
     content.innerHTML = html;
   }
 
+  // ── Shared 3-level hierarchy helpers (source → subfolder → test) ──────────
+  function _buildSectionGroups(items, getTestId) {
+    const sourceFolders = DB.getSourceFolders();
+    const allFolders    = DB.getFolders();
+    const allTests      = DB.get().tests;
+    const testById      = {};
+    allTests.forEach(t => { testById[t.id] = t; });
+
+    const groups = {};
+    items.forEach(item => {
+      const testId = getTestId(item);
+      const test   = testById[testId];
+      if (!test) return;
+
+      const folder  = allFolders.find(f => f.id === test.folderId) || null;
+      const source  = folder?.sourceId ? (sourceFolders.find(s => s.id === folder.sourceId) || null) : null;
+
+      const srcKey  = source ? source.id   : '__unfiled__';
+      const srcName = source ? source.name : 'NBME';
+      const srcOrd  = source?.order ?? 999;
+      const fldKey  = folder ? folder.id   : '__unfiled__';
+      const fldName = folder ? folder.name : 'Unfiled';
+
+      if (!groups[srcKey]) groups[srcKey] = { srcName, srcOrd, folders: {} };
+      const sg = groups[srcKey];
+      if (!sg.folders[fldKey]) sg.folders[fldKey] = { fldName, tests: {} };
+      const fg = sg.folders[fldKey];
+      if (!fg.tests[testId]) fg.tests[testId] = { testName: test.name, test, items: [] };
+      fg.tests[testId].items.push(item);
+    });
+
+    return Object.values(groups)
+      .sort((a, b) => a.srcOrd - b.srcOrd || a.srcName.localeCompare(b.srcName))
+      .map(sg => ({
+        srcName: sg.srcName,
+        folders: Object.values(sg.folders).map(fg => ({
+          fldName: fg.fldName,
+          tests: Object.values(fg.tests)
+        }))
+      }));
+  }
+
+  function _sectionGroupsHTML(sectionKey, groups, renderItems) {
+    let html = '';
+    groups.forEach((srcGrp, si) => {
+      const srcId = `${sectionKey}-s${si}`;
+      const total = srcGrp.folders.reduce((s, f) => s + f.tests.reduce((s2, t) => s2 + t.items.length, 0), 0);
+      html += `<div class="marked-folder-section">
+        <div class="marked-folder-header open" id="${srcId}-hdr" onclick="App.toggleMarkedFolder('${srcId}')">
+          <span>📁 ${escapeHTML(srcGrp.srcName)}</span>
+          <span style="display:flex;align-items:center;gap:8px;">
+            <span class="marked-folder-count">${total}</span>
+            <span class="marked-folder-chevron">▶</span>
+          </span>
+        </div>
+        <div class="marked-folder-body open" id="${srcId}-body">`;
+      srcGrp.folders.forEach((fldGrp, fi) => {
+        const fldId  = `${sectionKey}-f${si}x${fi}`;
+        const fldCnt = fldGrp.tests.reduce((s, t) => s + t.items.length, 0);
+        html += `<div class="section-sub-group">
+          <div class="section-sub-header open" id="${fldId}-hdr" onclick="App.toggleMarkedFolder('${fldId}')">
+            <span>📂 ${escapeHTML(fldGrp.fldName)}</span>
+            <span style="display:flex;align-items:center;gap:6px;">
+              <span class="marked-folder-count">${fldCnt}</span>
+              <span class="marked-folder-chevron">▶</span>
+            </span>
+          </div>
+          <div class="marked-folder-body open" id="${fldId}-body">`;
+        fldGrp.tests.forEach(tg => {
+          html += `<div class="section-test-group">
+            <div class="section-test-label">📋 ${escapeHTML(tg.testName)}</div>
+            ${renderItems(tg.items, tg.test)}
+          </div>`;
+        });
+        html += `</div></div>`;
+      });
+      html += `</div></div>`;
+    });
+    return html;
+  }
+  // ── End shared helpers ──────────────────────────────────────────────────────
+
   function showFlagged(folderId) {
     _pushNav();
     _currentView = 'flagged';
     document.getElementById('screen-home').style.display    = 'flex';
     document.getElementById('screen-quiz').style.display    = 'none';
     document.getElementById('screen-results').style.display = 'none';
+    document.getElementById('home-title').textContent = 'All Flagged Questions';
+    setActiveNav('nav-flagged');
 
-    document.getElementById('home-title').textContent = folderId
-      ? `Flagged — ${DB.getFolders().find(f=>f.id===folderId)?.name || ''}`
-      : 'All Flagged Questions';
-
-    const flags = folderId ? DB.getFlags(folderId) : DB.get().flags;
+    const flags   = DB.get().flags;
     const content = document.getElementById('home-content');
 
     if (!flags.length) {
@@ -8484,38 +8582,33 @@ const App = (() => {
       return;
     }
 
-    let html = '';
-    flags.forEach(flag => {
-      const test = DB.getTest(flag.testId);
-      if (!test) return;
-      const q = test.questions.find(q => q.n === flag.questionId);
-      if (!q) return;
-      const history = DB.getHistory(flag.testId);
-      // Find last answer for this question
-      let lastAnswer = null;
-      for (const h of history) {
-        const r = h.results?.find(r => r.qNum === q.n || h.results?.indexOf(r) === q.n - 1);
-        if (r) { lastAnswer = r; break; }
-      }
-	      const choices = typeof window.getQuestionChoices === 'function' ? window.getQuestionChoices(q) : (q.o || []);
-	      const correctOpt = choices.find(o => o.l === q.c);
-
-      html += `<div class="flagged-item">
-        <div class="flagged-item-source">📋 ${test.name}</div>
-        <div class="flagged-item-q">${q.t.slice(0, 200)}${q.t.length > 200 ? '…' : ''}</div>
-        ${lastAnswer ? `<div class="flagged-item-answer">
-          <strong>Your Answer:</strong> ${lastAnswer.chosen || 'Skipped'}
-          ${lastAnswer.correct ? ' <span style="color:#27ae60">✓</span>' : ' <span style="color:#c0392b">✗</span>'}
-          &nbsp;|&nbsp; <strong>Correct:</strong> ${q.c}) ${correctOpt?.t || ''}
-        </div>` : ''}
-        ${q.explanation ? `<div class="flagged-item-exp">${q.explanation.slice(0, 300)}${q.explanation.length > 300 ? '…' : ''}</div>` : ''}
-        <div class="flagged-item-footer">
-          <button class="btn-unflag" onclick="App.unflag('${flag.testId}',${flag.questionId})">Remove Flag</button>
-        </div>
-      </div>`;
+    const groups = _buildSectionGroups(flags, f => f.testId);
+    content.innerHTML = _sectionGroupsHTML('flagged', groups, (items, test) => {
+      return items.map(flag => {
+        const q = test.questions.find(q => q.n === flag.questionId);
+        if (!q) return '';
+        const history = DB.getHistory(flag.testId);
+        let lastAnswer = null;
+        for (const h of history) {
+          const idx = test.questions.indexOf(q);
+          const r   = idx >= 0 && h.results ? h.results[idx] : null;
+          if (r) { lastAnswer = r; break; }
+        }
+        const choices    = typeof window.getQuestionChoices === 'function' ? window.getQuestionChoices(q) : (q.o || []);
+        const correctOpt = choices.find(o => o.l === q.c);
+        return `<div class="flagged-item">
+          <div class="flagged-item-q">${q.t.slice(0, 200)}${q.t.length > 200 ? '…' : ''}</div>
+          ${lastAnswer ? `<div class="flagged-item-answer">
+            <strong>Your Answer:</strong> ${lastAnswer.chosen || 'Skipped'}
+            ${lastAnswer.correct ? ' <span style="color:#27ae60">✓</span>' : ' <span style="color:#c0392b">✗</span>'}
+            &nbsp;|&nbsp; <strong>Correct:</strong> ${q.c}) ${escapeHTML(correctOpt?.t || '')}
+          </div>` : ''}
+          <div class="flagged-item-footer">
+            <button class="btn-unflag" onclick="App.unflag('${flag.testId}',${flag.questionId})">Remove Flag</button>
+          </div>
+        </div>`;
+      }).join('');
     });
-    content.innerHTML = html;
-    setActiveNav('nav-flagged');
   }
 
   function unflag(testId, questionId) {
@@ -8536,87 +8629,46 @@ const App = (() => {
     setActiveNav('nav-incorrect');
 
     const content = document.getElementById('home-content');
-    const folders = DB.getFolders();
-    const folderIds = folders.map(f => f.id);
-    let totalIncorrect = 0;
-    let html = '';
+    const items   = _collectAllIncorrectItems();
 
-    folders.forEach(folder => {
-      const grouped = collectIncorrectByTag(DB.getTests(folder.id));
-      const folderCount = Object.values(grouped).reduce((sum, items) => sum + items.length, 0);
-      if (!folderCount) return;
-      totalIncorrect += folderCount;
-      html += incorrectFolderHTML(folder.name, folder.id, grouped, folderCount);
-    });
-
-    const otherTests = DB.get().tests.filter(t => !folderIds.includes(t.folderId));
-    const otherGrouped = collectIncorrectByTag(otherTests);
-    const otherCount = Object.values(otherGrouped).reduce((sum, items) => sum + items.length, 0);
-    if (otherCount) {
-      totalIncorrect += otherCount;
-      html += incorrectFolderHTML('Other', 'other', otherGrouped, otherCount);
+    if (!items.length) {
+      content.innerHTML = '<div class="no-tests">No incorrect questions yet. Finish a test to build this list.</div>';
+      return;
     }
 
-    content.innerHTML = totalIncorrect
-      ? html
-      : '<div class="no-tests">No incorrect questions yet. Finish a test to build this list.</div>';
+    const globalBtn = `<div style="margin-bottom:14px;">
+      <button class="btn-card primary" onclick="App.createGlobalIncorrectsTest()" title="Create a new test from all incorrect answers">✗ Create Incorrects Test (All)</button>
+    </div>`;
+    const groups = _buildSectionGroups(items, item => item.test.id);
+    content.innerHTML = globalBtn + _sectionGroupsHTML('incorrect', groups, (items) =>
+      items.map(item => _incorrectItemHTML(item)).join('')
+    );
   }
 
-  function collectIncorrectByTag(tests) {
-    const grouped = {};
-    tests.forEach(test => {
+  function _collectAllIncorrectItems() {
+    const items = [];
+    DB.get().tests.forEach(test => {
       const latest = DB.getHistory(test.id)[0];
       if (!latest || !latest.results) return;
       latest.results.forEach((r, idx) => {
         if (!r || !r.answered || r.correct) return;
         const q = test.questions[idx];
         if (!q) return;
-        const tag = (q.tags && q.tags.length) ? q.tags[0] : 'Untagged';
-        if (!grouped[tag]) grouped[tag] = [];
-        grouped[tag].push({ test, q, result: r, idx });
+        items.push({ test, q, result: r, idx });
       });
     });
-    return grouped;
+    return items;
   }
 
-  function incorrectFolderHTML(folderName, folderId, grouped, count) {
-    const sectionId = 'incorrect-folder-' + folderId;
-    let html = `<div class="marked-folder-section">
-      <div class="marked-folder-header open" id="${sectionId}-hdr" onclick="App.toggleMarkedFolder('${sectionId}')">
-        <span>📁 ${escapeHTML(folderName)}</span>
-        <span style="display:flex;align-items:center;gap:8px;">
-          <span class="marked-folder-count">${count}</span>
-          <span class="marked-folder-chevron">▶</span>
-        </span>
-      </div>
-      <div class="marked-folder-body open" id="${sectionId}-body">`;
-
-    Object.keys(grouped).sort((a,b) => a.localeCompare(b)).forEach(tag => {
-      html += `<div class="incorrect-tag-group">
-        <div class="incorrect-tag-title">${escapeHTML(tag)}</div>`;
-      grouped[tag].forEach(item => {
-        html += incorrectItemHTML(item);
-      });
-      html += '</div>';
-    });
-
-    html += '</div></div>';
-    return html;
-  }
-
-	  function incorrectItemHTML({ test, q, result, idx }) {
-	    const choices = typeof window.getQuestionChoices === 'function' ? window.getQuestionChoices(q) : (q.o || []);
-	    const correctOpt = choices.find(o => o.l === q.c);
-	    const chosenOpt = choices.find(o => o.l === result.chosen);
-    const tag = (q.tags && q.tags.length) ? q.tags[0] : 'Untagged';
-    const chosen = result.chosen ? `${result.chosen}) ${chosenOpt?.t || ''}` : 'Skipped';
-    const correct = q.c ? `${q.c}) ${correctOpt?.t || ''}` : 'Not listed';
-
+  function _incorrectItemHTML({ test, q, result, idx }) {
+    const choices    = typeof window.getQuestionChoices === 'function' ? window.getQuestionChoices(q) : (q.o || []);
+    const correctOpt = choices.find(o => o.l === q.c);
+    const chosenOpt  = choices.find(o => o.l === result.chosen);
+    const chosen     = result.chosen ? `${result.chosen}) ${chosenOpt?.t || ''}` : 'Skipped';
+    const correct    = q.c ? `${q.c}) ${correctOpt?.t || ''}` : 'Not listed';
     return `<div class="incorrect-item" onclick="Quiz.startTestAt('${test.id}',${idx})" title="Open this question">
       <span class="incorrect-item-num">Q${q.n || idx + 1}</span>
       <div class="incorrect-item-body">
-        <div class="incorrect-item-source">${escapeHTML(test.name)}</div>
-        <div class="incorrect-item-q">${escapeHTML(tag)}</div>
         <div class="incorrect-item-answer">Your answer: ${escapeHTML(chosen)} · Correct: ${escapeHTML(correct)}</div>
       </div>
     </div>`;
@@ -8628,12 +8680,10 @@ const App = (() => {
     document.getElementById('screen-home').style.display    = 'flex';
     document.getElementById('screen-quiz').style.display    = 'none';
     document.getElementById('screen-results').style.display = 'none';
-
     document.getElementById('home-title').textContent = 'Marked Questions';
     setActiveNav('nav-marked');
 
-    const content = document.getElementById('home-content');
-    const folders  = DB.getFolders();
+    const content  = document.getElementById('home-content');
     const allMarks = DB.getMarks();
 
     if (!allMarks.length) {
@@ -8641,82 +8691,22 @@ const App = (() => {
       return;
     }
 
-    // Group marks by folder
-    let html = '';
-    folders.forEach(folder => {
-      const folderTestIds = DB.getTests(folder.id).map(t => t.id);
-      const folderMarks   = allMarks.filter(m => folderTestIds.includes(m.testId));
-      if (!folderMarks.length) return;
-
-      const sectionId = 'marked-folder-' + folder.id;
-      html += `<div class="marked-folder-section">
-        <div class="marked-folder-header" id="${sectionId}-hdr" onclick="App.toggleMarkedFolder('${sectionId}')">
-          <span>📁 ${folder.name}</span>
-          <span style="display:flex;align-items:center;gap:8px;">
-            <span class="marked-folder-count">${folderMarks.length}</span>
-            <span class="marked-folder-chevron">▶</span>
-          </span>
-        </div>
-        <div class="marked-folder-body" id="${sectionId}-body">`;
-
-      folderMarks.forEach(mark => {
-        const test = DB.getTest(mark.testId);
-        if (!test) return;
+    const groups = _buildSectionGroups(allMarks, m => m.testId);
+    content.innerHTML = _sectionGroupsHTML('marked', groups, (items, test) =>
+      items.map(mark => {
         const q = test.questions[mark.questionIdx];
-        if (!q) return;
-        html += `<div class="marked-item">
+        if (!q) return '';
+        return `<div class="marked-item">
           <span class="marked-item-num">Q${mark.questionNum || (mark.questionIdx + 1)}</span>
           <div class="marked-item-body">
-            <div class="marked-item-source">📋 ${test.name}</div>
             <div class="marked-item-q">${q.t.slice(0, 220)}${q.t.length > 220 ? '…' : ''}</div>
             <div class="marked-item-footer">
               <button class="btn-unmark" onclick="App.unmark('${mark.testId}',${mark.questionIdx})">Remove Mark</button>
             </div>
           </div>
         </div>`;
-      });
-
-      html += `</div></div>`;
-    });
-
-    // Also show marks from tests with no folder (orphaned)
-    const allFolderTestIds = folders.flatMap(f => DB.getTests(f.id).map(t => t.id));
-    const orphanMarks = allMarks.filter(m => !allFolderTestIds.includes(m.testId));
-    if (orphanMarks.length) {
-      const sectionId = 'marked-folder-orphan';
-      html += `<div class="marked-folder-section">
-        <div class="marked-folder-header" id="${sectionId}-hdr" onclick="App.toggleMarkedFolder('${sectionId}')">
-          <span>📁 Other</span>
-          <span style="display:flex;align-items:center;gap:8px;">
-            <span class="marked-folder-count">${orphanMarks.length}</span>
-            <span class="marked-folder-chevron">▶</span>
-          </span>
-        </div>
-        <div class="marked-folder-body" id="${sectionId}-body">`;
-      orphanMarks.forEach(mark => {
-        const test = DB.getTest(mark.testId);
-        if (!test) return;
-        const q = test.questions[mark.questionIdx];
-        if (!q) return;
-        html += `<div class="marked-item">
-          <span class="marked-item-num">Q${mark.questionNum || (mark.questionIdx + 1)}</span>
-          <div class="marked-item-body">
-            <div class="marked-item-source">📋 ${test.name}</div>
-            <div class="marked-item-q">${q.t.slice(0, 220)}${q.t.length > 220 ? '…' : ''}</div>
-            <div class="marked-item-footer">
-              <button class="btn-unmark" onclick="App.unmark('${mark.testId}',${mark.questionIdx})">Remove Mark</button>
-            </div>
-          </div>
-        </div>`;
-      });
-      html += `</div></div>`;
-    }
-
-    if (!html) {
-      content.innerHTML = '<div class="no-tests">No marked questions yet.</div>';
-      return;
-    }
-    content.innerHTML = html;
+      }).join('')
+    );
   }
 
   function showNotes() {
@@ -8729,47 +8719,27 @@ const App = (() => {
     document.getElementById('home-title').textContent = 'Notes';
     setActiveNav('nav-notes');
 
-    const content = document.getElementById('home-content');
+    const content      = document.getElementById('home-content');
+    const notesActions = '<div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:12px;flex-wrap:wrap;">' +
+      '<button class="btn-card" onclick="App.openNotesImportPreview()">Import DOCX Preview</button>' +
+      '<button class="btn-card" onclick="App.downloadNotesDocx()">Download DOCX</button>' +
+      '<button class="btn-card" onclick="App.downloadNotesPdf()">Download PDF</button></div>';
     const notes = DB.getNotes();
-    const notesActions = '<div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:12px;flex-wrap:wrap;"><button class="btn-card" onclick="App.openNotesImportPreview()">Import DOCX Preview</button><button class="btn-card" onclick="App.downloadNotesDocx()">Download DOCX</button><button class="btn-card" onclick="App.downloadNotesPdf()">Download PDF</button></div>';
+
     if (!notes.length) {
       content.innerHTML = notesActions + '<div class="no-tests">No notes yet. Select answer explanation text during review, then choose Add to Notes.</div>';
       return;
     }
 
-    const folders = DB.getFolders();
-    let html = notesActions;
-    folders.forEach(folder => {
-      const folderTestIds = DB.getTests(folder.id).map(t => t.id);
-      const folderNotes = notes.filter(n => folderTestIds.includes(n.testId));
-      if (!folderNotes.length) return;
-      html += `<div class="notes-folder"><div class="notes-folder-title">${folder.name}</div><ul class="notes-list">`;
-      folderNotes.forEach(n => {
-        html += `<li>${escapeHTML(n.text)}
-          <span class="notes-meta">${escapeHTML(n.testName || 'Test')} · Q${n.questionNum || n.questionIdx + 1}
-          <button class="btn-card" onclick="App.deleteNote('${n.id}')" style="margin-left:8px;">Delete</button></span>
-        </li>`;
-      });
-      html += '</ul></div>';
-    });
-
-    const folderIds = folders.map(f => f.id);
-    const otherNotes = notes.filter(n => {
-      const test = DB.getTest(n.testId);
-      return !test || !folderIds.includes(test.folderId);
-    });
-    if (otherNotes.length) {
-      html += '<div class="notes-folder"><div class="notes-folder-title">Other</div><ul class="notes-list">';
-      otherNotes.forEach(n => {
-        html += `<li>${escapeHTML(n.text)}
-          <span class="notes-meta">${escapeHTML(n.testName || 'Test')} · Q${n.questionNum || n.questionIdx + 1}
-          <button class="btn-card" onclick="App.deleteNote('${n.id}')" style="margin-left:8px;">Delete</button></span>
-        </li>`;
-      });
-      html += '</ul></div>';
-    }
-
-    content.innerHTML = html || '<div class="no-tests">No notes yet.</div>';
+    const groups = _buildSectionGroups(notes, n => n.testId);
+    content.innerHTML = notesActions + _sectionGroupsHTML('notes', groups, (items) =>
+      '<ul class="notes-list">' +
+      items.map(n =>
+        `<li>${escapeHTML(n.text)}<span class="notes-meta">Q${n.questionNum != null ? n.questionNum : (n.questionIdx != null ? n.questionIdx + 1 : '?')}` +
+        `<button class="btn-card" onclick="App.deleteNote('${n.id}')" style="margin-left:8px;">Delete</button></span></li>`
+      ).join('') +
+      '</ul>'
+    );
   }
 
   function deleteNote(id) {
@@ -20783,6 +20753,48 @@ const App = (() => {
     Quiz.startTest(newTest.id);
   }
 
+  function createIncorrectsTestFromTest(testId) {
+    const test   = DB.getTest(testId);
+    if (!test) return;
+    const latest = DB.getHistory(testId)[0];
+    if (!latest || !latest.results) { toast('No completed attempt found for this test.', 2500); return; }
+    const incorrectQs = [];
+    latest.results.forEach((r, idx) => {
+      if (!r || !r.answered || r.correct) return;
+      const q = test.questions[idx];
+      if (!q) return;
+      incorrectQs.push(sanitizeQuestionForRedo(q));
+    });
+    if (!incorrectQs.length) { toast('No incorrect questions for this test.', 2500); return; }
+    if (!confirm(`Create a new test from ${incorrectQs.length} incorrect question${incorrectQs.length !== 1 ? 's' : ''}?`)) return;
+    const newTest = DB.createTest(test.folderId, test.name + ' (Incorrects)', incorrectQs);
+    if (!newTest) { toast('Could not create test — storage may be full.', 4000); return; }
+    renderSidebar();
+    renderHomeGrid();
+    Quiz.startTest(newTest.id);
+  }
+
+  function createGlobalIncorrectsTest() {
+    const allItems = _collectAllIncorrectItems();
+    if (!allItems.length) { toast('No incorrect questions found across any test.', 2500); return; }
+    const seen = new Set();
+    const questions = [];
+    allItems.forEach(item => {
+      const key = item.test.id + ':' + item.idx;
+      if (seen.has(key)) return;
+      seen.add(key);
+      questions.push(sanitizeQuestionForRedo(item.q));
+    });
+    if (!confirm(`Create a new test from ${questions.length} incorrect question${questions.length !== 1 ? 's' : ''} across all tests?`)) return;
+    const today    = new Date().toISOString().slice(0, 10);
+    const folderId = allItems[0].test.folderId || null;
+    const newTest  = DB.createTest(folderId, `Incorrects Review ${today}`, questions);
+    if (!newTest) { toast('Could not create test — storage may be full.', 4000); return; }
+    renderSidebar();
+    renderHomeGrid();
+    Quiz.startTest(newTest.id);
+  }
+
   function generateInFolder(folderId) {
     _currentFolder = folderId;
     setSourceFromFolder(folderId);
@@ -23251,6 +23263,8 @@ const App = (() => {
     deleteFolder,
     trashTest,
     redoTest,
+    createIncorrectsTestFromTest,
+    createGlobalIncorrectsTest,
     generateInFolder,
     viewHistory,
     showScoreReport,
