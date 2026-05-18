@@ -65,6 +65,10 @@ input, textarea, select { font-family: inherit; }
   transition: background .15s;
 }
 .topbar-btn:hover { background: rgba(255,255,255,.2); }
+.et-clock {
+  font-size: 11px; font-weight: 500; color: #9ab8d0;
+  letter-spacing: .02em; white-space: nowrap; user-select: none;
+}
 .drive-alert, .gemini-alert {
   display: none; align-items: center; gap: 6px;
   padding: 5px 10px; font-size: 11px; font-weight: 700;
@@ -1102,6 +1106,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
     <div class="topbar-right">
       <button class="drive-alert" id="drive-alert" onclick="window.driveIndicatorClick()" title="Backup Now / Open Drive settings"></button>
       <button class="gemini-alert" id="gemini-alert" onclick="App.openSettings()" title="Open Gemini API settings"></button>
+      <span id="et-clock" class="et-clock"></span>
       <button class="topbar-btn" onclick="adjFontSize(-1)" title="Decrease font size">A-</button>
       <button class="topbar-btn" onclick="adjFontSize(1)"  title="Increase font size">A+</button>
       <button class="topbar-btn" id="btn-lock-app" onclick="PIN.lock()" title="Lock app" style="display:none;">🔒</button>
@@ -23006,6 +23011,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 });
 
+</script>
+<script>
+(function() {
+  function updateETClock() {
+    const el = document.getElementById('et-clock');
+    if (!el) return;
+    el.textContent = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true
+    }).format(new Date()) + ' ET';
+  }
+  updateETClock();
+  setInterval(updateETClock, 1000);
+})();
 </script>
 
 </body>
