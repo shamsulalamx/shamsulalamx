@@ -1059,6 +1059,30 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 .rev-all-exp  { margin: 0 16px 14px; }
 .rev-all-tags { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 16px 14px; }
 
+/* ── Quiz Focus / Fullscreen Mode ─────────────────────────── */
+body.quiz-fullscreen-mode #topbar  { display: none !important; }
+body.quiz-fullscreen-mode #sidebar { display: none !important; }
+
+body.quiz-fullscreen-mode #main {
+  height: 100vh !important;
+}
+
+body.quiz-fullscreen-mode #screen-quiz {
+  position: fixed !important;
+  top: 0; left: 0; right: 0; bottom: 0;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 9999;
+  display: flex !important;
+  flex-direction: row;
+  overflow: hidden;
+}
+
+body.quiz-fullscreen-mode .quiz-bottom-bar,
+body.quiz-fullscreen-mode .quiz-bottom-bar.no-sidebar {
+  left: 0 !important;
+}
+
 </style>
 </head>
 <body>
@@ -6482,6 +6506,7 @@ const Quiz = (() => {
   function _applyFullscreenUI(active) {
     quizFullscreenMode = active;
     document.body.classList.toggle('quiz-fullscreen-mode', active);
+    console.log('FOCUS MODE ENABLED', document.body.className);
     const btn = document.getElementById('btn-quiz-fullscreen');
     if (btn) btn.textContent = active ? '✕ Exit Focus' : '⛶ Focus';
   }
