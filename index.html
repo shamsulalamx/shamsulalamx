@@ -2476,6 +2476,44 @@ body.quiz-fullscreen-mode .quiz-bottom-bar.no-sidebar {
   </div>
 </div>
 
+<!-- ═══ INCORRECTS SAVE MODAL ═══ -->
+<div id="modal-incorrects-save" class="modal-overlay">
+  <div class="modal-box" style="max-width:420px;">
+    <h3>Save Incorrects Test</h3>
+    <div class="form-group">
+      <label class="form-label">Test Name</label>
+      <input type="text" class="form-input" id="incorrects-save-name" placeholder="e.g. NBME - Psychiatry - Shelf 8" onkeydown="if(event.key==='Enter')App._confirmIncorrectsSave()">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Save to</label>
+      <select class="form-input" id="incorrects-save-folder" onchange="App._onIncorrectsSaveFolderChange()"></select>
+    </div>
+    <div id="incorrects-save-new-row" style="display:none;" class="form-group">
+      <label class="form-label">New Subfolder Name</label>
+      <input type="text" class="form-input" id="incorrects-save-new-folder-name" placeholder="e.g. Psychiatry">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal" onclick="App._cancelIncorrectsSave()">Cancel</button>
+      <button class="btn-modal primary" onclick="App._confirmIncorrectsSave()">Save &amp; Start</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MOVE TEST MODAL ═══ -->
+<div id="modal-move-test" class="modal-overlay">
+  <div class="modal-box" style="max-width:380px;">
+    <h3>Move Test to Folder</h3>
+    <div class="form-group">
+      <label class="form-label">Destination</label>
+      <select class="form-input" id="move-test-folder-select"></select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal" onclick="App._cancelMoveTest()">Cancel</button>
+      <button class="btn-modal primary" onclick="App._confirmMoveTest()">Move</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ CONFIRM FINISH MODAL ═══ -->
 <div id="modal-confirm-finish" class="modal-overlay">
   <div class="modal-box" style="max-width:380px;text-align:center;">
@@ -8163,6 +8201,7 @@ const App = (() => {
       ${test.status === 'completed'
         ? `<div class="ctx-item" onclick="App.showScoreReport('${test.id}')">📊 Score Report</div>`
         : `<div class="ctx-item" onclick="App.viewHistory('${test.id}')">📊 History</div>`}
+      <div class="ctx-item" onclick="App.moveTestToFolder('${test.id}')">📂 Move to folder...</div>
       <div class="ctx-item ctx-danger" onclick="App.trashTest('${test.id}')">🗑 Move to Trash</div>`;
     styleContextMenu(menu);
     document.body.appendChild(menu);
@@ -20780,17 +20819,6 @@ const App = (() => {
     return DB.createSourceFolder('Incorrects');
   }
 
-  function _getOrCreateIncorrectsDefaultFolder(sourceId) {
-    const existing = DB.getFolders(sourceId).find(function(f) { return f.name === 'Generated'; });
-    if (existing) return existing;
-    return DB.createFolder('Generated', sourceId);
-  }
-
-  function _incorrectsDestFolder() {
-    const src = _getOrCreateIncorrectsSource();
-    return _getOrCreateIncorrectsDefaultFolder(src.id);
-  }
-
   function _sourceLabelForFolder(folderId) {
     const allFolders = DB.getFolders();
     const folder = allFolders.find(function(f) { return f.id === folderId; }) || null;
@@ -20801,8 +20829,73 @@ const App = (() => {
     };
   }
 
+  let _incorrectsPending = null;
+
+  function _openIncorrectsSaveModal(questions, defaultName) {
+    if (!questions.length) { toast('No incorrect questions to save.', 2500); return; }
+    _incorrectsPending = { questions };
+    const src = _getOrCreateIncorrectsSource();
+    const subfolders = DB.getFolders(src.id);
+    const sel = document.getElementById('incorrects-save-folder');
+    sel.innerHTML = '<option value="__unfiled__">Incorrects / Unfiled</option>';
+    subfolders.forEach(function(f) {
+      const opt = document.createElement('option');
+      opt.value = f.id;
+      opt.textContent = 'Incorrects / ' + f.name;
+      sel.appendChild(opt);
+    });
+    const newOpt = document.createElement('option');
+    newOpt.value = '__new__';
+    newOpt.textContent = '＋ New subfolder...';
+    sel.appendChild(newOpt);
+    document.getElementById('incorrects-save-name').value = defaultName;
+    document.getElementById('incorrects-save-new-row').style.display = 'none';
+    document.getElementById('incorrects-save-new-folder-name').value = '';
+    document.getElementById('modal-incorrects-save').style.display = 'flex';
+    setTimeout(function() { document.getElementById('incorrects-save-name').focus(); }, 80);
+  }
+
+  function _onIncorrectsSaveFolderChange() {
+    const val = document.getElementById('incorrects-save-folder').value;
+    document.getElementById('incorrects-save-new-row').style.display = val === '__new__' ? 'block' : 'none';
+    if (val === '__new__') setTimeout(function() { document.getElementById('incorrects-save-new-folder-name').focus(); }, 80);
+  }
+
+  function _cancelIncorrectsSave() {
+    _incorrectsPending = null;
+    document.getElementById('modal-incorrects-save').style.display = 'none';
+  }
+
+  function _confirmIncorrectsSave() {
+    if (!_incorrectsPending) return;
+    const name = document.getElementById('incorrects-save-name').value.trim();
+    if (!name) { toast('Please enter a test name.'); return; }
+    const selVal = document.getElementById('incorrects-save-folder').value;
+    const src = _getOrCreateIncorrectsSource();
+    let folderId;
+    if (selVal === '__new__') {
+      const newName = document.getElementById('incorrects-save-new-folder-name').value.trim();
+      if (!newName) { toast('Please enter a subfolder name.'); return; }
+      const newFolder = DB.createFolder(newName, src.id);
+      folderId = newFolder.id;
+    } else if (selVal === '__unfiled__') {
+      const existing = DB.getFolders(src.id).find(function(f) { return f.name === 'Unfiled'; });
+      folderId = existing ? existing.id : DB.createFolder('Unfiled', src.id).id;
+    } else {
+      folderId = selVal;
+    }
+    const questions = _incorrectsPending.questions;
+    _incorrectsPending = null;
+    document.getElementById('modal-incorrects-save').style.display = 'none';
+    const newTest = DB.createTest(folderId, name, questions);
+    if (!newTest) { toast('Could not create test — storage may be full.', 4000); return; }
+    renderSidebar();
+    renderHomeGrid();
+    Quiz.startTest(newTest.id);
+  }
+
   function createIncorrectsTestFromTest(testId) {
-    const test   = DB.getTest(testId);
+    const test = DB.getTest(testId);
     if (!test) return;
     const latest = DB.getHistory(testId)[0];
     if (!latest || !latest.results) { toast('No completed attempt found for this test.', 2500); return; }
@@ -20814,15 +20907,8 @@ const App = (() => {
       incorrectQs.push(sanitizeQuestionForRedo(q));
     });
     if (!incorrectQs.length) { toast('No incorrect questions for this test.', 2500); return; }
-    if (!confirm('Create a new test from ' + incorrectQs.length + ' incorrect question' + (incorrectQs.length !== 1 ? 's' : '') + '?')) return;
-    const lbl     = _sourceLabelForFolder(test.folderId);
-    const newName = lbl.srcName + ' - ' + lbl.fldName + ' - ' + test.name;
-    const dest    = _incorrectsDestFolder();
-    const newTest = DB.createTest(dest.id, newName, incorrectQs);
-    if (!newTest) { toast('Could not create test — storage may be full.', 4000); return; }
-    renderSidebar();
-    renderHomeGrid();
-    Quiz.startTest(newTest.id);
+    const lbl = _sourceLabelForFolder(test.folderId);
+    _openIncorrectsSaveModal(incorrectQs, lbl.srcName + ' - ' + lbl.fldName + ' - ' + test.name);
   }
 
   function createGlobalIncorrectsTest() {
@@ -20836,19 +20922,11 @@ const App = (() => {
       if (seen.has(key)) return;
       seen.add(key);
       questions.push(sanitizeQuestionForRedo(item.q));
-      const lbl = _sourceLabelForFolder(item.test.folderId);
-      srcNames.add(lbl.srcName);
+      srcNames.add(_sourceLabelForFolder(item.test.folderId).srcName);
     });
-    if (!confirm('Create a new test from ' + questions.length + ' incorrect question' + (questions.length !== 1 ? 's' : '') + ' across all tests?')) return;
     const today     = new Date().toISOString().slice(0, 10);
     const srcPrefix = srcNames.size === 1 ? Array.from(srcNames)[0] + ' - ' : '';
-    const newName   = srcPrefix + 'All Incorrects - ' + today;
-    const dest      = _incorrectsDestFolder();
-    const newTest   = DB.createTest(dest.id, newName, questions);
-    if (!newTest) { toast('Could not create test — storage may be full.', 4000); return; }
-    renderSidebar();
-    renderHomeGrid();
-    Quiz.startTest(newTest.id);
+    _openIncorrectsSaveModal(questions, srcPrefix + 'All Incorrects - ' + today);
   }
 
   function createIncorrectsTestFromFolder(folderId) {
@@ -20864,14 +20942,50 @@ const App = (() => {
       questions.push(sanitizeQuestionForRedo(item.q));
     });
     if (!questions.length) { toast('No incorrect questions in this subfolder.', 2500); return; }
-    if (!confirm('Create a new test from ' + questions.length + ' incorrect question' + (questions.length !== 1 ? 's' : '') + ' in ' + lbl.fldName + '?')) return;
-    const newName = lbl.srcName + ' - ' + lbl.fldName + ' - Incorrects';
-    const dest    = _incorrectsDestFolder();
-    const newTest = DB.createTest(dest.id, newName, questions);
-    if (!newTest) { toast('Could not create test — storage may be full.', 4000); return; }
+    _openIncorrectsSaveModal(questions, lbl.srcName + ' - ' + lbl.fldName + ' - Incorrects');
+  }
+
+  let _moveTestPending = null;
+
+  function moveTestToFolder(testId) {
+    _moveTestPending = testId;
+    const allFolders = DB.getFolders();
+    const sources    = DB.getSourceFolders();
+    const sel = document.getElementById('move-test-folder-select');
+    sel.innerHTML = '';
+    sources.forEach(function(src) {
+      const grpFolders = allFolders.filter(function(f) { return (f.sourceId || 'src-nbme') === src.id; });
+      if (!grpFolders.length) return;
+      const grp = document.createElement('optgroup');
+      grp.label = src.name;
+      grpFolders.forEach(function(f) {
+        const opt = document.createElement('option');
+        opt.value = f.id;
+        opt.textContent = f.name;
+        grp.appendChild(opt);
+      });
+      sel.appendChild(grp);
+    });
+    const test = DB.getTest(testId);
+    if (test && test.folderId) sel.value = test.folderId;
+    document.getElementById('modal-move-test').style.display = 'flex';
+  }
+
+  function _confirmMoveTest() {
+    if (!_moveTestPending) return;
+    const folderId = document.getElementById('move-test-folder-select').value;
+    if (!folderId) { toast('Select a destination folder.'); return; }
+    DB.updateTest(_moveTestPending, { folderId });
+    _moveTestPending = null;
+    document.getElementById('modal-move-test').style.display = 'none';
     renderSidebar();
     renderHomeGrid();
-    Quiz.startTest(newTest.id);
+    toast('Test moved.');
+  }
+
+  function _cancelMoveTest() {
+    _moveTestPending = null;
+    document.getElementById('modal-move-test').style.display = 'none';
   }
 
   function generateInFolder(folderId) {
@@ -23345,6 +23459,12 @@ const App = (() => {
     createIncorrectsTestFromTest,
     createIncorrectsTestFromFolder,
     createGlobalIncorrectsTest,
+    _onIncorrectsSaveFolderChange,
+    _cancelIncorrectsSave,
+    _confirmIncorrectsSave,
+    moveTestToFolder,
+    _confirmMoveTest,
+    _cancelMoveTest,
     generateInFolder,
     viewHistory,
     showScoreReport,
