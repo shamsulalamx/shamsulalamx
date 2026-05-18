@@ -515,10 +515,12 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 .qns-item.qns-current { background: rgba(41,128,185,.14); border-left-color: #2980b9; }
 .qns-item.qns-correct { border-left-color: #27ae60; }
 .qns-item.qns-wrong   { border-left-color: #c0392b; }
+.qns-item.qns-current.qns-correct,
+.qns-item.qns-current.qns-wrong { border-left-color: #4fc3f7; background: rgba(41,128,185,.22); }
 .qns-item.qns-marked  { box-shadow: inset 0 0 0 1px rgba(240,165,0,.45); }
 
 .qns-num {
-  font-size: 11px; font-weight: 600; color: #3a5570;
+  font-size: 12.5px; font-weight: 600; color: #3a5570;
   min-width: 22px; text-align: right; flex-shrink: 0;
 }
 .qns-item.qns-current .qns-num { color: #5bb8f5; }
@@ -6425,6 +6427,7 @@ const Quiz = (() => {
     if (finBtn)  finBtn.style.display  = state.qIdx === test.questions.length - 1 ? 'inline-flex' : 'none';
 
     renderScoreLive();
+    updateNavPanel();
   }
 
   function renderOptions() {
