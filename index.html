@@ -1878,6 +1878,21 @@ body.quiz-fullscreen-mode .quiz-bottom-bar.no-sidebar {
 .misc-doc-name { font-size: 13px; font-weight: 600; color: var(--navy); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .misc-doc-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
 .misc-doc-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.misc-subfolder-section { margin-bottom: 16px; }
+.misc-subfolder-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 12px; background: #f0f4f8;
+  border: 1px solid var(--border); border-radius: 5px 5px 0 0;
+}
+.misc-subfolder-title { font-size: 12px; font-weight: 700; color: var(--navy); flex: 1; text-transform: uppercase; letter-spacing: .05em; }
+.misc-subfolder-actions { display: flex; gap: 4px; }
+.misc-subfolder-docs { border: 1px solid var(--border); border-top: none; border-radius: 0 0 5px 5px; }
+.misc-subfolder-docs .misc-doc-row { border: none; border-top: 1px solid var(--border); border-radius: 0; margin: 0; }
+.misc-subfolder-docs .misc-doc-row:first-child { border-top: none; }
+.misc-subfolder-empty { padding: 10px 14px; font-size: 12px; color: var(--muted); font-style: italic; }
+.misc-doc-move-row { display: flex; align-items: center; gap: 5px; margin-top: 5px; padding-top: 4px; border-top: 1px solid #f0f4f8; }
+.misc-doc-move-label { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.misc-doc-move-select { font-size: 11px; border: 1px solid var(--border); border-radius: 3px; padding: 2px 5px; color: var(--navy); background: white; max-width: 160px; }
 
 </style>
 <div id="modal-nbme-gemini-json" class="modal-overlay">
@@ -2531,7 +2546,8 @@ const DB = (() => {
       marks: [],
       notes: [],
       history: [],
-      flashcards: []
+      flashcards: [],
+      miscDocFolders: []
     };
   }
 
@@ -2952,6 +2968,26 @@ const DB = (() => {
     save();
   }
 
+  function getMiscDocFolders() {
+    const db = get();
+    if (!db.miscDocFolders) db.miscDocFolders = [];
+    return db.miscDocFolders;
+  }
+  function upsertMiscDocFolder(folder) {
+    const db = get();
+    if (!db.miscDocFolders) db.miscDocFolders = [];
+    const idx = db.miscDocFolders.findIndex(f => f.id === folder.id);
+    if (idx >= 0) db.miscDocFolders[idx] = folder;
+    else db.miscDocFolders.push(folder);
+    save();
+  }
+  function deleteMiscDocFolder(id) {
+    const db = get();
+    if (!db.miscDocFolders) db.miscDocFolders = [];
+    db.miscDocFolders = db.miscDocFolders.filter(f => f.id !== id);
+    save();
+  }
+
   return { get, save, initAsync, flushAppState, saveAppState, uid,
     getSourceFolders, getSourceFolder, getDefaultSourceFolderWorkflows, createSourceFolder, renameSourceFolder,
     getFolders, createFolder, renameFolder, deleteFolder,
@@ -2959,7 +2995,8 @@ const DB = (() => {
     saveAttempt, finishAttempt, getHistory, getFlags, addFlag, removeFlag, isFlagged,
     getMarks, addMark, removeMark, isMarked, syncMarks,
     getNotes, addNote, deleteNote,
-    getFlashcards, upsertFlashcard, deleteFlashcard };
+    getFlashcards, upsertFlashcard, deleteFlashcard,
+    getMiscDocFolders, upsertMiscDocFolder, deleteMiscDocFolder };
 })();
 window.DB = DB;
 
@@ -3411,7 +3448,8 @@ window.MiscDocStore = MiscDocStore;
       marks: db.marks || [],
       notes: db.notes || [],
       history: db.history,
-      flashcards: db.flashcards || []
+      flashcards: db.flashcards || [],
+      miscDocFolders: db.miscDocFolders || []
     }, (key, value) => {
       if (key === 'dataUrl' || key === '_figureData' || key === 'highlights') return undefined;
       if (key === '_range' || key === 'blob' || key === 'base64') return undefined;
@@ -3720,7 +3758,8 @@ window.MiscDocStore = MiscDocStore;
       if (Array.isArray(snapshot.marks))         db.marks         = snapshot.marks;
       if (Array.isArray(snapshot.notes))         db.notes         = snapshot.notes;
       if (Array.isArray(snapshot.history))       db.history       = snapshot.history;
-      if (Array.isArray(snapshot.flashcards))    db.flashcards    = snapshot.flashcards;
+      if (Array.isArray(snapshot.flashcards))       db.flashcards       = snapshot.flashcards;
+      if (Array.isArray(snapshot.miscDocFolders))  db.miscDocFolders   = snapshot.miscDocFolders;
       console.log('[Drive Restore Selected]', {
         fileName: DRIVE_MANIFEST_NAME,
         fileId: manifestId,
@@ -22869,6 +22908,7 @@ const App = (() => {
     contentEl.innerHTML = `
       <div class="misc-docs-toolbar">
         <button class="btn-generate" onclick="App.miscDocUpload()">＋ Upload File</button>
+        <button class="btn-card" onclick="App.miscFolderCreate()" style="font-size:12px;">＋ New Subfolder</button>
         <span style="font-size:12px;color:var(--muted)">PDF · DOCX · TXT · RTF · MD · PNG · JPG</span>
       </div>
       <div class="misc-docs-list" id="misc-docs-list">
@@ -22877,28 +22917,84 @@ const App = (() => {
     MiscDocStore.getAllDocs().then(docs => {
       const listEl = document.getElementById('misc-docs-list');
       if (!listEl) return;
-      if (!docs.length) {
+      const folders = DB.getMiscDocFolders().sort((a, b) => a.createdAt - b.createdAt);
+      docs.sort((a, b) => b.createdAt - a.createdAt);
+
+      if (!docs.length && !folders.length) {
         listEl.innerHTML = '<div class="no-tests">No documents yet. Click "＋ Upload File" to add study materials.</div>';
         return;
       }
-      docs.sort((a, b) => b.createdAt - a.createdAt);
-      let html = '';
-      docs.forEach(doc => {
+
+      function folderOptions(currentFolderId) {
+        let opts = `<option value="">Unfiled</option>`;
+        folders.forEach(f => {
+          opts += `<option value="${f.id}"${currentFolderId === f.id ? ' selected' : ''}>${escapeHTML(f.name)}</option>`;
+        });
+        return opts;
+      }
+
+      function docRowHtml(doc) {
         const icon = _miscDocIcon(doc.mimeType, doc.filename);
         const size = _miscDocSize(doc.size);
         const date = new Date(doc.createdAt).toLocaleDateString();
-        html += `<div class="misc-doc-row">
+        const moveRow = folders.length ? `
+          <div class="misc-doc-move-row">
+            <span class="misc-doc-move-label">Move to:</span>
+            <select class="misc-doc-move-select" onchange="App.miscDocMove('${doc.id}', this.value)">
+              ${folderOptions(doc.miscFolderId || null)}
+            </select>
+          </div>` : '';
+        return `<div class="misc-doc-row">
           <div class="misc-doc-icon">${icon}</div>
           <div class="misc-doc-info">
             <div class="misc-doc-name" title="${escapeHTML(doc.filename)}">${escapeHTML(doc.filename)}</div>
             <div class="misc-doc-meta">${size} · ${date}</div>
+            ${moveRow}
           </div>
           <div class="misc-doc-actions">
             <button class="btn-card primary" onclick="App.miscDocOpen('${doc.id}')">Open</button>
             <button class="btn-card danger" onclick="App.miscDocDelete('${doc.id}')">Delete</button>
           </div>
         </div>`;
+      }
+
+      // No subfolders yet — show flat list (original behaviour)
+      if (!folders.length) {
+        listEl.innerHTML = docs.map(docRowHtml).join('');
+        return;
+      }
+
+      let html = '';
+      // Named subfolders
+      folders.forEach(folder => {
+        const folderDocs = docs.filter(d => d.miscFolderId === folder.id);
+        html += `<div class="misc-subfolder-section">
+          <div class="misc-subfolder-header">
+            <span class="misc-subfolder-title">📁 ${escapeHTML(folder.name)}</span>
+            <div class="misc-subfolder-actions">
+              <button class="btn-card" style="font-size:11px;padding:2px 8px;" onclick="App.miscFolderRename('${folder.id}')">Rename</button>
+              <button class="btn-card danger" style="font-size:11px;padding:2px 8px;" onclick="App.miscFolderDelete('${folder.id}')">Delete</button>
+            </div>
+          </div>
+          <div class="misc-subfolder-docs">
+            ${folderDocs.length
+              ? folderDocs.map(docRowHtml).join('')
+              : '<div class="misc-subfolder-empty">No documents in this subfolder.</div>'}
+          </div>
+        </div>`;
       });
+      // Unfiled
+      const unfiled = docs.filter(d => !d.miscFolderId);
+      html += `<div class="misc-subfolder-section">
+        <div class="misc-subfolder-header">
+          <span class="misc-subfolder-title">📂 Unfiled</span>
+        </div>
+        <div class="misc-subfolder-docs">
+          ${unfiled.length
+            ? unfiled.map(docRowHtml).join('')
+            : '<div class="misc-subfolder-empty">No unfiled documents.</div>'}
+        </div>
+      </div>`;
       listEl.innerHTML = html;
     }).catch(() => {
       const listEl = document.getElementById('misc-docs-list');
@@ -22937,7 +23033,8 @@ const App = (() => {
           mimeType: file.type || 'application/octet-stream',
           size: file.size,
           createdAt: Date.now(),
-          dataUrl: ev.target.result
+          dataUrl: ev.target.result,
+          miscFolderId: null
         };
         try {
           await MiscDocStore.putDoc(doc);
@@ -23004,6 +23101,50 @@ const App = (() => {
       if (_currentView === 'misc-docs') renderMiscDocPanel();
     } catch(err) {
       toast('Delete failed.', 2000);
+    }
+  }
+
+  function miscFolderCreate() {
+    const name = (prompt('New subfolder name:') || '').trim();
+    if (!name) return;
+    DB.upsertMiscDocFolder({ id: DB.uid(), name, createdAt: Date.now() });
+    if (_currentView === 'misc-docs') renderMiscDocPanel();
+  }
+
+  function miscFolderRename(id) {
+    const folder = DB.getMiscDocFolders().find(f => f.id === id);
+    if (!folder) return;
+    const name = (prompt('Rename subfolder:', folder.name) || '').trim();
+    if (!name || name === folder.name) return;
+    DB.upsertMiscDocFolder({ ...folder, name });
+    if (_currentView === 'misc-docs') renderMiscDocPanel();
+  }
+
+  async function miscFolderDelete(id) {
+    if (!confirm('Delete subfolder? Documents inside will move to Unfiled.')) return;
+    try {
+      const docs = await MiscDocStore.getAllDocs();
+      for (const doc of docs) {
+        if (doc.miscFolderId === id) {
+          await MiscDocStore.putDoc({ ...doc, miscFolderId: null });
+        }
+      }
+      DB.deleteMiscDocFolder(id);
+      if (_currentView === 'misc-docs') renderMiscDocPanel();
+    } catch(err) {
+      toast('Delete failed.', 2000);
+    }
+  }
+
+  async function miscDocMove(docId, folderId) {
+    try {
+      const docs = await MiscDocStore.getAllDocs();
+      const doc = docs.find(d => d.id === docId);
+      if (!doc) return;
+      await MiscDocStore.putDoc({ ...doc, miscFolderId: folderId || null });
+      if (_currentView === 'misc-docs') renderMiscDocPanel();
+    } catch(err) {
+      toast('Move failed.', 2000);
     }
   }
 
@@ -23151,6 +23292,10 @@ const App = (() => {
     miscDocUpload,
     miscDocOpen,
     miscDocDelete,
+    miscFolderCreate,
+    miscFolderRename,
+    miscFolderDelete,
+    miscDocMove,
     navBack,
     navForward,
     generatePearlFlashcardsFromIncorrects,
