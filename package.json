@@ -18,6 +18,13 @@
     "asar": false,
     "files": [
       "index.html",
+      "app.js",
+      "quiz.js",
+      "db.js",
+      "results.js",
+      "ocr.js",
+      "style.css",
+      "js/**",
       "electron/**",
       "package.json"
     ],
