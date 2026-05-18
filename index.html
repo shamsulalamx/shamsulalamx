@@ -1326,7 +1326,7 @@ body.quiz-fullscreen-mode .quiz-bottom-bar.no-sidebar {
               <button class="quiz-btn" id="btn-mark" onclick="Quiz.toggleMark(Quiz.getState()?.qIdx)">📌 Mark</button>
               <button class="quiz-btn btn-pause" onclick="Quiz.pauseTest()">⏸ Pause</button>
               <button id="btn-hint" class="quiz-btn" onclick="requestHint()">💡 Hint</button>
-              <button id="btn-quiz-fullscreen" class="quiz-btn" onclick="console.log('FULLSCREEN BUTTON CLICKED');Quiz.toggleQuizFullscreen()" title="Toggle focus mode">⛶ Focus</button>
+              <button id="btn-quiz-fullscreen" class="quiz-btn" onclick="Quiz.toggleQuizFullscreen()" title="Toggle focus mode">⛶ Focus</button>
             </div>
           </div>
           <div class="quiz-progress">
@@ -3727,17 +3727,6 @@ window.MiscDocStore = MiscDocStore;
       DB.save();
       await saveManifestToDrive(snapshot);
       await saveMiscDocsToDrive();
-      const _backupDb = DB.get();
-      console.log('[Drive Backup]', {
-        fileName: DRIVE_MANIFEST_NAME,
-        fileId: _manifestFileId,
-        modifiedTime: snapshot.updatedAt,
-        testCount: (_backupDb.tests || []).length,
-        folderCount: (_backupDb.folders || []).length,
-        sourceFolderCount: (_backupDb.sourceFolders || []).length,
-        origin: location.origin,
-        href: location.href
-      });
       _driveDirty = false;
       _driveSyncInProgress = false;
       setDriveStatus('Drive backup complete.', '#27ae60');
@@ -3758,37 +3747,11 @@ window.MiscDocStore = MiscDocStore;
       await ensureDriveAuth('');
       localStorage.setItem(DRIVE_ENABLED_KEY, '1');
       const manifestId = await ensureManifestFile();
-      console.log('[Drive Restore] manifest file id:', manifestId);
       const resp = await driveFetch(`https://www.googleapis.com/drive/v3/files/${manifestId}?alt=media`);
       const snapshot = await resp.json();
 
-      // ── Diagnostic log: what is in the manifest? ─────────────────────────
-      const snapTests    = Array.isArray(snapshot.tests)         ? snapshot.tests.length         : 'missing';
-      const snapFolders  = Array.isArray(snapshot.folders)       ? snapshot.folders.length       : 'missing';
-      const snapSources  = Array.isArray(snapshot.sourceFolders) ? snapshot.sourceFolders.length : 'missing';
-      const snapHistory  = Array.isArray(snapshot.history)       ? snapshot.history.length       : 'missing';
-      const snapPin      = snapshot.settings?.pinEnabled;
-      const snapGemini   = !!(snapshot.settings?.geminiApiKey);
-      const snapUpdated  = snapshot.updatedAt || '(no timestamp)';
-      console.group('[Drive Restore] Manifest content');
-      console.log('updatedAt:          ', snapUpdated);
-      console.log('tests:              ', snapTests);
-      console.log('folders:            ', snapFolders);
-      console.log('sourceFolders:      ', snapSources);
-      console.log('history:            ', snapHistory);
-      console.log('settings.pinEnabled:', snapPin);
-      console.log('geminiApiKey present:', snapGemini);
-      console.groupEnd();
-      console.log('[Drive Restore Candidate]', {
-        fileName: DRIVE_MANIFEST_NAME,
-        fileId: manifestId,
-        modifiedTime: snapshot.updatedAt,
-        testCount: snapTests,
-        folderCount: snapFolders,
-        sourceFolderCount: snapSources,
-        origin: location.origin,
-        href: location.href
-      });
+      const snapTests   = Array.isArray(snapshot.tests)   ? snapshot.tests.length   : 'missing';
+      const snapFolders = Array.isArray(snapshot.folders) ? snapshot.folders.length : 'missing';
 
       // Warn early if manifest looks empty — user can cancel before reload.
       if (snapTests === 0 && snapFolders === 0) {
@@ -3823,28 +3786,11 @@ window.MiscDocStore = MiscDocStore;
       if (Array.isArray(snapshot.history))       db.history       = snapshot.history;
       if (Array.isArray(snapshot.flashcards))       db.flashcards       = snapshot.flashcards;
       if (Array.isArray(snapshot.miscDocFolders))  db.miscDocFolders   = snapshot.miscDocFolders;
-      console.log('[Drive Restore Selected]', {
-        fileName: DRIVE_MANIFEST_NAME,
-        fileId: manifestId,
-        modifiedTime: snapshot.updatedAt,
-        testCount: (db.tests || []).length,
-        folderCount: (db.folders || []).length,
-        sourceFolderCount: (db.sourceFolders || []).length,
-        origin: location.origin,
-        href: location.href
-      });
       _skipNextSchedule = true;
       DB.save();
       // Flush to IndexedDB synchronously before reload — prevents quota errors
       // that occurred when the full payload was written to localStorage instead.
       await DB.flushAppState();
-
-      // ── Diagnostic log: what was written to IndexedDB? ───────────────────
-      console.group('[Drive Restore] After DB.save() + IndexedDB flush');
-      console.log('db.tests.length:  ', (db.tests   || []).length);
-      console.log('db.folders.length:', (db.folders || []).length);
-      console.log('db.settings.pinEnabled:', db.settings?.pinEnabled);
-      console.groupEnd();
 
       if (typeof window.checkGeminiApiKeyStatus === 'function') window.checkGeminiApiKeyStatus();
       const tc = (db.tests || []).length;
@@ -6150,10 +6096,8 @@ const Quiz = (() => {
     el.classList.toggle('q-timer-warning', warn);
     if (warn && !_qTimerWarnActive) {
       _qTimerWarnActive = true;
-      console.log('[QuestionTimer] warning active');
     } else if (!warn && _qTimerWarnActive) {
       _qTimerWarnActive = false;
-      console.log('[QuestionTimer] warning cleared');
     }
   }
 
@@ -6732,7 +6676,6 @@ const Quiz = (() => {
   function _applyFullscreenUI(active) {
     quizFullscreenMode = active;
     document.body.classList.toggle('quiz-fullscreen-mode', active);
-    console.log('FOCUS MODE ENABLED', document.body.className);
     const btn = document.getElementById('btn-quiz-fullscreen');
     if (btn) btn.textContent = active ? '✕ Exit Focus' : '⛶ Focus';
   }
@@ -6742,7 +6685,6 @@ const Quiz = (() => {
   });
 
   function enterQuizFullscreen() {
-    console.log('FULLSCREEN BUTTON CLICKED');
     _applyFullscreenUI(true);
     document.documentElement.requestFullscreen().catch(() => {});
   }
@@ -6769,25 +6711,6 @@ const Quiz = (() => {
   };
 })();
 window.Quiz = Quiz;
-console.log('ACTIVE QUIZ EXPORTS', Object.keys(window.Quiz || {}));
-
-// DEBUG ONLY — not auto-called
-window.forceTimerWarning = function() {
-  var el = document.getElementById('timer-q');
-  console.log('[forceTimerWarning]', el);
-  if (el) {
-    el.classList.add('q-timer-warning');
-    el.style.color = '#ff8a3d';
-    el.style.animation = 'timerBlink 1s linear infinite';
-  }
-};
-
-window.checkTimerWarningColor = function() {
-  var el = document.getElementById('timer-q');
-  if (!el) return 'NO_TIMER_ELEMENT';
-  el.classList.add('q-timer-warning');
-  return getComputedStyle(el).color;
-};
 // Expose explanation builder globally for use by Results review screen
 window.buildExplanationHTML = function(q, r, container) {
   container.innerHTML = '';
@@ -8848,13 +8771,11 @@ const App = (() => {
     if (!testId || !Array.isArray(results) || !Array.isArray(questions)) return;
     const test = DB.getTest(testId);
     if (!test) return;
-    console.log('[Flashcards] finishTest trigger', test.id, test.name);
     const folder = DB.getFolders().find(f => f.id === test.folderId);
     const sourceFolders = DB.getSourceFolders ? DB.getSourceFolders() : (DB.get().sourceFolders || []);
     const sourceFolder = folder ? sourceFolders.find(s => s.id === folder.sourceId) : null;
 
     const incorrectQuestions = results.filter(r => !r.correct);
-    console.log('[Flashcards] incorrect count', incorrectQuestions.length);
 
     results.forEach((r, idx) => {
       if (r.correct) return;
@@ -8874,7 +8795,6 @@ const App = (() => {
         q.correctBlurb       || m.correctBlurb       ||
         ''
       ).trim();
-      console.log('[Flashcards] candidate pearl', q.id || q.n || idx, pearl);
       if (!pearl) return;
       const cardId = _simpleHash(testId + ':' + idx + ':' + pearl);
       const existing = DB.getFlashcards().find(c => c.id === cardId);
@@ -8893,7 +8813,6 @@ const App = (() => {
         createdAt: Date.now()
       });
     });
-    console.log('[Flashcards] saved count', DB.getFlashcards().length);
   }
 
   function showFlashcards() {
@@ -23624,33 +23543,6 @@ function _applyQuestionFontSize(sz) {
   }));
 }
 
-window.compareStemChoiceFont = function() {
-  const stem    = document.getElementById('q-stem');
-  // .opt-text uses font-size:1em, so it purely inherits from #options-list.
-  // Use #options-list as the authoritative choice comparator — always present.
-  const optList = document.getElementById('options-list');
-  // Also try a live .opt-text if choices are currently rendered.
-  const optText = optList ? optList.querySelector('.opt-text') : null;
-  const choiceEl = optList || null;
-  const result = {
-    stemEl:            stem     ? '#q-stem'         : null,
-    choiceEl:          choiceEl ? '#options-list'   : null,
-    choiceTextEl:      optText  ? '.opt-text (live)': 'not rendered yet',
-    stemFontSize:      stem     ? getComputedStyle(stem).fontSize     : null,
-    choiceFontSize:    choiceEl ? getComputedStyle(choiceEl).fontSize : null,
-    optTextFontSize:   optText  ? getComputedStyle(optText).fontSize  : 'n/a',
-    stemLineHeight:    stem     ? getComputedStyle(stem).lineHeight   : null,
-    choiceLineHeight:  choiceEl ? getComputedStyle(choiceEl).lineHeight : null,
-    stemInlineStyle:   stem     ? stem.style.fontSize                 : null,
-    optionsListInline: choiceEl ? choiceEl.style.fontSize             : null,
-    match: stem && choiceEl
-      ? getComputedStyle(stem).fontSize === getComputedStyle(choiceEl).fontSize
-      : false,
-  };
-  console.table(result);
-  return result;
-};
-
 function adjFontSize(delta) {
   const current = parseInt(localStorage.getItem('question_font_size')) || 14;
   const next = Math.min(22, Math.max(10, current + delta * 2));
@@ -23776,11 +23668,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 })();
 </script>
 
-<script>
-window.APP_BUILD_MARKER = 'build-2026-05-18-timer-orange-v2';
-console.log('APP_BUILD_MARKER', window.APP_BUILD_MARKER);
-console.log('APP_BUILD_MARKER location.href', location.href);
-</script>
 
 </body>
 </html>
