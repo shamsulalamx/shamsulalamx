@@ -587,7 +587,9 @@ function resolveLocalPath(rawUrl) {
 }
 
 function serveIndexHtml(res) {
-  fs.readFile(path.join(PROJECT_ROOT, 'index.html'), (err, data) => {
+  const indexPath = path.join(PROJECT_ROOT, 'index.html');
+  console.log('[NBME] Serving index.html from:', indexPath);
+  fs.readFile(indexPath, (err, data) => {
     if (err) { res.writeHead(500); res.end(); return; }
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
     res.end(data);
