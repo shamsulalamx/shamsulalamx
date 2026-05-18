@@ -562,10 +562,11 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
   display: block; font-family: 'Courier New', monospace;
 }
 .timer-val.timer-warn { color: #ffd54f; }
-.timer-val.timer-red  { color: #ff6b6b; animation: blink .8s infinite; }
+.timer-val.timer-red  { color: #ff6b6b; }
 .timer-lbl { font-size: 9px; color: #7a9ab8; text-transform: uppercase; letter-spacing: .05em; }
 
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.4} }
+.q-timer-warning { color: #ff0000 !important; animation: timerBlink 1s linear infinite !important; }
+@keyframes timerBlink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0.15; } }
 
 .quiz-progress { height: 3px; background: rgba(255,255,255,.15); flex-shrink: 0; }
 .quiz-progress-fill { height: 100%; background: #4fc3f7; transition: width .4s; }
@@ -6107,6 +6108,7 @@ const Quiz = (() => {
     stopQTimer();
     state.qSecs = 0;
     state.qStart = Date.now();
+    renderQTimer(); // clear warning immediately on question change
     state.qTimerRef = setInterval(() => {
       state.qSecs = Math.floor((Date.now() - state.qStart) / 1000);
       renderQTimer();
@@ -6139,11 +6141,14 @@ const Quiz = (() => {
 
   function renderQTimer() {
     const el = document.getElementById('timer-q');
+    console.log('[QuestionTimer] element', el, el?.textContent, el?.className);
     if (!el) return;
     const s = state.qSecs || 0;
     el.textContent = fmtQTime(s);
-    el.classList.toggle('timer-warn', s >= 90);
-    el.classList.toggle('timer-red', s >= 120);
+    console.log('[QuestionTimer] elapsed', s);
+    const warn = s >= 90;
+    el.classList.toggle('q-timer-warning', warn);
+    if (warn) console.log('[QuestionTimer] warning active');
   }
 
   function fmtTime(s) {
@@ -6759,6 +6764,17 @@ const Quiz = (() => {
 })();
 window.Quiz = Quiz;
 console.log('ACTIVE QUIZ EXPORTS', Object.keys(window.Quiz || {}));
+
+window.forceTimerWarning = function() {
+  var el = document.getElementById('timer-q');
+  console.log('[forceTimerWarning]', el);
+  if (el) {
+    el.classList.add('q-timer-warning');
+    el.style.color = '#ff0000';
+    el.style.animation = 'timerBlink 1s linear infinite';
+  }
+};
+console.log('[forceTimerWarning installed]');
 // Expose explanation builder globally for use by Results review screen
 window.buildExplanationHTML = function(q, r, container) {
   container.innerHTML = '';
