@@ -3546,6 +3546,17 @@ window.MiscDocStore = MiscDocStore;
       DB.save();
       await saveManifestToDrive(snapshot);
       await saveMiscDocsToDrive();
+      const _backupDb = DB.get();
+      console.log('[Drive Backup]', {
+        fileName: DRIVE_MANIFEST_NAME,
+        fileId: _manifestFileId,
+        modifiedTime: snapshot.updatedAt,
+        testCount: (_backupDb.tests || []).length,
+        folderCount: (_backupDb.folders || []).length,
+        sourceFolderCount: (_backupDb.sourceFolders || []).length,
+        origin: location.origin,
+        href: location.href
+      });
       _driveDirty = false;
       _driveSyncInProgress = false;
       setDriveStatus('Drive backup complete.', '#27ae60');
@@ -3587,6 +3598,16 @@ window.MiscDocStore = MiscDocStore;
       console.log('settings.pinEnabled:', snapPin);
       console.log('geminiApiKey present:', snapGemini);
       console.groupEnd();
+      console.log('[Drive Restore Candidate]', {
+        fileName: DRIVE_MANIFEST_NAME,
+        fileId: manifestId,
+        modifiedTime: snapshot.updatedAt,
+        testCount: snapTests,
+        folderCount: snapFolders,
+        sourceFolderCount: snapSources,
+        origin: location.origin,
+        href: location.href
+      });
 
       // Warn early if manifest looks empty — user can cancel before reload.
       if (snapTests === 0 && snapFolders === 0) {
@@ -3619,6 +3640,16 @@ window.MiscDocStore = MiscDocStore;
       if (Array.isArray(snapshot.marks))         db.marks         = snapshot.marks;
       if (Array.isArray(snapshot.notes))         db.notes         = snapshot.notes;
       if (Array.isArray(snapshot.history))       db.history       = snapshot.history;
+      console.log('[Drive Restore Selected]', {
+        fileName: DRIVE_MANIFEST_NAME,
+        fileId: manifestId,
+        modifiedTime: snapshot.updatedAt,
+        testCount: (db.tests || []).length,
+        folderCount: (db.folders || []).length,
+        sourceFolderCount: (db.sourceFolders || []).length,
+        origin: location.origin,
+        href: location.href
+      });
       _skipNextSchedule = true;
       DB.save();
       // Flush to IndexedDB synchronously before reload — prevents quota errors
