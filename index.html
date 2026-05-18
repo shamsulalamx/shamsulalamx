@@ -2447,12 +2447,55 @@ const DB = (() => {
     };
   }
 
+  // ── AppStateStore: IndexedDB for full app state ──────────────
+  const AppStateStore = (() => {
+    const IDB_NAME   = 'nbme-main-db';
+    const STORE_NAME = 'appState';
+    const STATE_KEY  = 'main';
+    let _idb = null;
+
+    function open() {
+      if (_idb) return Promise.resolve(_idb);
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(IDB_NAME, 1);
+        req.onupgradeneeded = e => { e.target.result.createObjectStore(STORE_NAME); };
+        req.onsuccess = e => { _idb = e.target.result; resolve(_idb); };
+        req.onerror   = e => reject(e.target.error);
+      });
+    }
+
+    async function save(state) {
+      const db = await open();
+      return new Promise((resolve, reject) => {
+        const tx  = db.transaction(STORE_NAME, 'readwrite');
+        const st  = tx.objectStore(STORE_NAME);
+        const req = st.put(state, STATE_KEY);
+        req.onsuccess = () => resolve();
+        req.onerror   = e => reject(e.target.error);
+      });
+    }
+
+    async function load() {
+      const db = await open();
+      return new Promise((resolve, reject) => {
+        const tx  = db.transaction(STORE_NAME, 'readonly');
+        const st  = tx.objectStore(STORE_NAME);
+        const req = st.get(STATE_KEY);
+        req.onsuccess = e => resolve(e.target.result || null);
+        req.onerror   = e => reject(e.target.error);
+      });
+    }
+
+    return { save, load };
+  })();
+
+  // Only used for migration — reads legacy localStorage payload.
   function loadLocal() {
     try {
       const raw = localStorage.getItem(LOCAL_KEY);
-      if (!raw) return ensureSourceFolders(defaultDB());
+      if (!raw) return null;
       return ensureSourceFolders(Object.assign(defaultDB(), JSON.parse(raw)));
-    } catch(e) { return defaultDB(); }
+    } catch(e) { return null; }
   }
 
   function ensureSourceFolders(db) {
@@ -2551,13 +2594,69 @@ const DB = (() => {
     }
   }
 
+  async function saveAppState(state) {
+    // Apply housekeeping before persisting (mirrors saveLocal rules)
+    const histByCap = {};
+    state.history = (state.history || []).filter(h => {
+      histByCap[h.testId] = (histByCap[h.testId] || 0) + 1;
+      return histByCap[h.testId] <= 3;
+    });
+    const WEEK = 7 * 24 * 60 * 60 * 1000;
+    state.trash = (state.trash || []).filter(t => (Date.now() - (t.deletedAt || 0)) < WEEK);
+
+    const payload = storagePayload(state);
+    try {
+      await AppStateStore.save(payload);
+      console.log('Saved app state to IndexedDB');
+    } catch(e) {
+      // Fallback: write to localStorage if IndexedDB is unavailable
+      saveLocal(state);
+    }
+  }
+
+  // Called once at startup (DOMContentLoaded) before App.init().
+  // Loads _db from IndexedDB; migrates from localStorage if IndexedDB is empty.
+  async function initAsync() {
+    try {
+      const idbState = await AppStateStore.load();
+      if (idbState) {
+        _db = ensureSourceFolders(Object.assign(defaultDB(), idbState));
+        console.log('Loaded app state from IndexedDB');
+        return;
+      }
+    } catch(e) { /* fall through to localStorage migration */ }
+
+    const localState = loadLocal();
+    if (localState) {
+      _db = localState;
+      try {
+        await AppStateStore.save(storagePayload(_db));
+        localStorage.removeItem(LOCAL_KEY);
+        console.log('Migrated legacy localStorage DB');
+      } catch(e) {
+        // IndexedDB unavailable — localStorage remains as fallback
+      }
+    } else {
+      _db = defaultDB();
+    }
+  }
+
+  // Awaitable flush — call before page reload to guarantee the write completes.
+  async function flushAppState() {
+    if (_db) await saveAppState(_db);
+  }
+
   let _db = null;
-  function get() { if (!_db) _db = loadLocal(); return ensureSourceFolders(_db); }
+  function get() {
+    // sync fallback if initAsync() wasn't awaited (shouldn't happen in normal flow)
+    if (!_db) _db = loadLocal() || defaultDB();
+    return ensureSourceFolders(_db);
+  }
   function save() {
     if (_db) {
-      const ok = saveLocal(_db);
+      saveAppState(_db); // async, fire-and-forget — IndexedDB has no quota limit
       if (typeof window.scheduleGoogleDriveSave === 'function') window.scheduleGoogleDriveSave();
-      return ok;
+      return true;
     }
     return false;
   }
@@ -2745,7 +2844,7 @@ const DB = (() => {
     save();
   }
 
-  return { get, save, uid,
+  return { get, save, initAsync, flushAppState, saveAppState, uid,
     getSourceFolders, getSourceFolder, getDefaultSourceFolderWorkflows, createSourceFolder, renameSourceFolder,
     getFolders, createFolder, renameFolder, deleteFolder,
     getTests, getTest, createTest, updateTest, renameTest, trashTest, restoreTest, emptyTrash, permanentDelete,
@@ -3491,11 +3590,13 @@ window.MiscDocStore = MiscDocStore;
       if (Array.isArray(snapshot.notes))         db.notes         = snapshot.notes;
       if (Array.isArray(snapshot.history))       db.history       = snapshot.history;
       _skipNextSchedule = true;
-      const saveOk = DB.save();
+      DB.save();
+      // Flush to IndexedDB synchronously before reload — prevents quota errors
+      // that occurred when the full payload was written to localStorage instead.
+      await DB.flushAppState();
 
-      // ── Diagnostic log: what was written to localStorage? ────────────────
-      console.group('[Drive Restore] After DB.save()');
-      console.log('save() returned:', saveOk);
+      // ── Diagnostic log: what was written to IndexedDB? ───────────────────
+      console.group('[Drive Restore] After DB.save() + IndexedDB flush');
       console.log('db.tests.length:  ', (db.tests   || []).length);
       console.log('db.folders.length:', (db.folders || []).length);
       console.log('db.settings.pinEnabled:', db.settings?.pinEnabled);
@@ -22821,7 +22922,11 @@ function labTab(id, btn) {
   if (btn) btn.classList.add('active');
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  // Pre-load app state from IndexedDB before any App.init() calls.
+  // Migrates from localStorage automatically if IndexedDB is empty.
+  await DB.initAsync();
+
   // Detect and clear the post-restore guard flag set by restoreGoogleDriveNow()
   // before the page reloaded. When present, skip any startup DB.save() that could
   // immediately overwrite the just-restored Drive manifest with stale local state.
