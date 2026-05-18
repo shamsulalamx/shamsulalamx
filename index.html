@@ -6227,7 +6227,8 @@ const Quiz = (() => {
     });
     const entry = DB.finishAttempt(state.testId, resultsToSave, state.totSecs, state.mode);
     window.Results && window.Results.show(state.testId, entry, state.results, getTest().questions);
-    try { window.App && window.App.generatePearlFlashcardsFromIncorrects(state.testId, resultsToSave, getTest().questions); } catch(e) {}
+    console.log('[FinishTest ACTIVE PATH]', state.testId);
+    try { window.App && window.App.generatePearlFlashcardsFromIncorrects(state.testId, resultsToSave, getTest().questions); } catch(e) { console.error('[Flashcards] generator error', e); }
     state = null;
   }
 
@@ -23160,6 +23161,7 @@ const App = (() => {
   };
 })();
 
+window.App = App;
 window.showExplanationNoteToolbar = App.showExplanationNoteToolbar;
 
 
