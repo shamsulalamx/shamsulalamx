@@ -1059,6 +1059,59 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 .rev-all-exp  { margin: 0 16px 14px; }
 .rev-all-tags { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 16px 14px; }
 
+/* ── Pearl Flashcards ─────────────────────────────────────── */
+.flashcards-grid { display: flex; flex-direction: column; gap: 0; }
+.flashcards-source-group { margin-bottom: 24px; }
+.flashcards-source-title {
+  font-size: 13px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--muted); margin-bottom: 8px;
+  padding: 0 2px;
+}
+.flashcards-test-group { margin-bottom: 16px; }
+.flashcards-test-title {
+  font-size: 14px; font-weight: 600; color: var(--text);
+  margin-bottom: 8px; padding: 0 2px;
+}
+.pearl-card {
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  position: relative;
+}
+.pearl-card-text {
+  font-size: 14px; line-height: 1.65; color: var(--text);
+  margin-bottom: 8px;
+}
+.pearl-card-tag {
+  font-size: 12px; color: var(--muted);
+  font-style: italic; margin-bottom: 6px;
+}
+.pearl-card-meta {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.pearl-card-meta-label {
+  font-size: 11px; color: var(--muted);
+  background: var(--pill-bg, #f0f0f0);
+  border-radius: 4px; padding: 2px 6px;
+}
+.pearl-card-delete {
+  position: absolute; top: 10px; right: 12px;
+  background: none; border: none; cursor: pointer;
+  color: var(--muted); font-size: 16px; line-height: 1;
+  opacity: 0.5;
+}
+.pearl-card-delete:hover { opacity: 1; color: #c62828; }
+.flashcards-empty {
+  color: var(--muted); font-size: 14px; padding: 24px 0;
+  text-align: center;
+}
+.flashcards-header-actions {
+  display: flex; gap: 8px; justify-content: flex-end;
+  margin-bottom: 16px; flex-wrap: wrap;
+}
+
 /* ── Quiz Focus / Fullscreen Mode ─────────────────────────── */
 body.quiz-fullscreen-mode #topbar  { display: none !important; }
 body.quiz-fullscreen-mode #sidebar { display: none !important; }
@@ -1164,6 +1217,10 @@ body.quiz-fullscreen-mode .quiz-bottom-bar.no-sidebar {
         <div class="sidebar-item" onclick="App.showNotes()" id="nav-notes">
           <span class="item-icon">📝</span>
           <span class="item-label">Notes</span>
+        </div>
+        <div class="sidebar-item" onclick="App.showFlashcards()" id="nav-flashcards">
+          <span class="item-icon">🃏</span>
+          <span class="item-label">Flashcards</span>
         </div>
         <div class="sidebar-item" onclick="App.showTrash()" id="nav-trash">
           <span class="item-icon">🗑</span>
@@ -2473,7 +2530,8 @@ const DB = (() => {
       flags: [],
       marks: [],
       notes: [],
-      history: []
+      history: [],
+      flashcards: []
     };
   }
 
@@ -2874,13 +2932,34 @@ const DB = (() => {
     save();
   }
 
+  function getFlashcards() {
+    const db = get();
+    if (!db.flashcards) db.flashcards = [];
+    return db.flashcards;
+  }
+  function upsertFlashcard(card) {
+    const db = get();
+    if (!db.flashcards) db.flashcards = [];
+    const idx = db.flashcards.findIndex(c => c.id === card.id);
+    if (idx >= 0) db.flashcards[idx] = card;
+    else db.flashcards.push(card);
+    save();
+  }
+  function deleteFlashcard(id) {
+    const db = get();
+    if (!db.flashcards) db.flashcards = [];
+    db.flashcards = db.flashcards.filter(c => c.id !== id);
+    save();
+  }
+
   return { get, save, initAsync, flushAppState, saveAppState, uid,
     getSourceFolders, getSourceFolder, getDefaultSourceFolderWorkflows, createSourceFolder, renameSourceFolder,
     getFolders, createFolder, renameFolder, deleteFolder,
     getTests, getTest, createTest, updateTest, renameTest, trashTest, restoreTest, emptyTrash, permanentDelete,
     saveAttempt, finishAttempt, getHistory, getFlags, addFlag, removeFlag, isFlagged,
     getMarks, addMark, removeMark, isMarked, syncMarks,
-    getNotes, addNote, deleteNote };
+    getNotes, addNote, deleteNote,
+    getFlashcards, upsertFlashcard, deleteFlashcard };
 })();
 window.DB = DB;
 
@@ -3331,7 +3410,8 @@ window.MiscDocStore = MiscDocStore;
       flags: db.flags,
       marks: db.marks || [],
       notes: db.notes || [],
-      history: db.history
+      history: db.history,
+      flashcards: db.flashcards || []
     }, (key, value) => {
       if (key === 'dataUrl' || key === '_figureData' || key === 'highlights') return undefined;
       if (key === '_range' || key === 'blob' || key === 'base64') return undefined;
@@ -3640,6 +3720,7 @@ window.MiscDocStore = MiscDocStore;
       if (Array.isArray(snapshot.marks))         db.marks         = snapshot.marks;
       if (Array.isArray(snapshot.notes))         db.notes         = snapshot.notes;
       if (Array.isArray(snapshot.history))       db.history       = snapshot.history;
+      if (Array.isArray(snapshot.flashcards))    db.flashcards    = snapshot.flashcards;
       console.log('[Drive Restore Selected]', {
         fileName: DRIVE_MANIFEST_NAME,
         fileId: manifestId,
@@ -6146,6 +6227,7 @@ const Quiz = (() => {
     });
     const entry = DB.finishAttempt(state.testId, resultsToSave, state.totSecs, state.mode);
     window.Results && window.Results.show(state.testId, entry, state.results, getTest().questions);
+    try { window.App && window.App.generatePearlFlashcardsFromIncorrects(state.testId, resultsToSave, getTest().questions); } catch(e) {}
     state = null;
   }
 
@@ -8654,6 +8736,119 @@ const App = (() => {
     DB.deleteNote(id);
     showNotes();
     toast('Note deleted.');
+  }
+
+  // ── Pearl Flashcards ───────────────────────────────────────
+  function _simpleHash(str) {
+    let h = 0;
+    for (let i = 0; i < str.length; i++) { h = Math.imul(31, h) + str.charCodeAt(i) | 0; }
+    return (h >>> 0).toString(36);
+  }
+
+  function generatePearlFlashcardsFromIncorrects(testId, results, questions) {
+    if (!testId || !Array.isArray(results) || !Array.isArray(questions)) return;
+    const test = DB.getTest(testId);
+    if (!test) return;
+    const folder = DB.getFolders().find(f => f.id === test.folderId);
+    const sourceFolders = DB.getSourceFolders ? DB.getSourceFolders() : (DB.get().sourceFolders || []);
+    const sourceFolder = folder ? sourceFolders.find(s => s.id === folder.sourceId) : null;
+
+    results.forEach((r, idx) => {
+      if (r.correct) return;
+      const q = questions[idx];
+      if (!q) return;
+      const pearl = (q.reviewPearl || q.explanation || '').trim();
+      if (!pearl) return;
+      const cardId = _simpleHash(testId + ':' + idx + ':' + pearl);
+      const existing = DB.getFlashcards().find(c => c.id === cardId);
+      if (existing) return;
+      DB.upsertFlashcard({
+        id: cardId,
+        pearl,
+        retrievalTag: q.retrievalTag || '',
+        tags: q.tags || [],
+        questionNum: q.n || (idx + 1),
+        questionIdx: idx,
+        testId,
+        testName: test.name || 'Test',
+        folderName: folder ? folder.name : '',
+        sourceFolderName: sourceFolder ? sourceFolder.name : '',
+        createdAt: Date.now()
+      });
+    });
+  }
+
+  function showFlashcards() {
+    _pushNav();
+    _currentView = 'flashcards';
+    document.getElementById('screen-home').style.display    = 'flex';
+    document.getElementById('screen-quiz').style.display    = 'none';
+    document.getElementById('screen-results').style.display = 'none';
+    document.getElementById('screen-review').style.display  = 'none';
+    document.getElementById('home-title').textContent = 'Flashcards';
+    setActiveNav('nav-flashcards');
+    renderFlashcardsHome();
+  }
+
+  function renderFlashcardsHome() {
+    const content = document.getElementById('home-content');
+    const cards = DB.getFlashcards().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+    const headerActions = `<div class="flashcards-header-actions">
+      <button class="btn-card" onclick="App.clearAllFlashcards()">Clear All</button>
+    </div>`;
+
+    if (!cards.length) {
+      content.innerHTML = headerActions + '<div class="flashcards-empty">No flashcards yet. Complete a test to auto-generate pearl cards from incorrect answers.</div>';
+      return;
+    }
+
+    // Group by source folder name → test name
+    const groups = {};
+    cards.forEach(c => {
+      const src = c.sourceFolderName || c.folderName || 'Other';
+      const tst = c.testName || 'Test';
+      if (!groups[src]) groups[src] = {};
+      if (!groups[src][tst]) groups[src][tst] = [];
+      groups[src][tst].push(c);
+    });
+
+    let html = headerActions + '<div class="flashcards-grid">';
+    Object.keys(groups).sort().forEach(srcName => {
+      html += `<div class="flashcards-source-group">
+        <div class="flashcards-source-title">${escapeHTML(srcName)}</div>`;
+      Object.keys(groups[srcName]).sort().forEach(testName => {
+        html += `<div class="flashcards-test-group">
+          <div class="flashcards-test-title">${escapeHTML(testName)}</div>`;
+        groups[srcName][testName].forEach(c => {
+          html += `<div class="pearl-card">
+            <button class="pearl-card-delete" onclick="App.deleteFlashcard('${c.id}')" title="Remove">✕</button>
+            <div class="pearl-card-text">${escapeHTML(c.pearl)}</div>
+            ${c.retrievalTag ? `<div class="pearl-card-tag">${escapeHTML(c.retrievalTag)}</div>` : ''}
+            <div class="pearl-card-meta">
+              <span class="pearl-card-meta-label">Q${c.questionNum}</span>
+              ${c.tags && c.tags.length ? c.tags.map(t => `<span class="pearl-card-meta-label">${escapeHTML(t)}</span>`).join('') : ''}
+            </div>
+          </div>`;
+        });
+        html += '</div>';
+      });
+      html += '</div>';
+    });
+    html += '</div>';
+    content.innerHTML = html;
+  }
+
+  function deleteFlashcard(id) {
+    DB.deleteFlashcard(id);
+    renderFlashcardsHome();
+  }
+
+  function clearAllFlashcards() {
+    if (!confirm('Remove all flashcards? This cannot be undone.')) return;
+    const cards = DB.getFlashcards();
+    cards.forEach(c => DB.deleteFlashcard(c.id));
+    renderFlashcardsHome();
   }
 
   function openOmePdfImportPreview() {
@@ -22937,7 +23132,12 @@ const App = (() => {
     miscDocOpen,
     miscDocDelete,
     navBack,
-    navForward
+    navForward,
+    generatePearlFlashcardsFromIncorrects,
+    showFlashcards,
+    renderFlashcardsHome,
+    deleteFlashcard,
+    clearAllFlashcards
   };
 })();
 
