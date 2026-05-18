@@ -55,11 +55,11 @@ input, textarea, select { font-family: inherit; }
   font-weight: 900; font-size: 14px; letter-spacing: -.5px;
 }
 .topbar-brand-text { line-height: 1.2; }
-.topbar-brand-text strong { font-size: 13px; display: block; }
-.topbar-brand-text span   { font-size: 10px; color: #9ab0c8; }
+.topbar-brand-text strong { font-size: 15px; display: block; }
+.topbar-brand-text span   { font-size: 12px; color: #9ab0c8; }
 .topbar-right { display: flex; align-items: center; gap: 12px; }
 .topbar-btn {
-  padding: 5px 12px; font-size: 11px; font-weight: 600;
+  padding: 7px 14px; font-size: 13px; font-weight: 600;
   border-radius: 3px; border: 1px solid rgba(255,255,255,.25);
   background: rgba(255,255,255,.1); color: white;
   transition: background .15s;
@@ -117,7 +117,7 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 }
 .sidebar-item {
   display: flex; align-items: center; gap: 7px;
-  padding: 7px 14px; font-size: 12px; color: #9ab8d0;
+  padding: 8px 14px; font-size: 13px; color: #9ab8d0;
   cursor: pointer; transition: background .12s, color .12s;
   border-left: 3px solid transparent;
   position: relative;
@@ -128,13 +128,13 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 .sidebar-item .item-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar-item .item-count { font-size: 10px; background: rgba(255,255,255,.15); border-radius: 10px; padding: 1px 6px; flex-shrink: 0; }
 .sidebar-folder { }
-.sidebar-folder-header { display: flex; align-items: center; gap: 6px; padding: 7px 8px 7px 14px; font-size: 12px; font-weight: 600; color: #9ab8d0; cursor: pointer; }
+.sidebar-folder-header { display: flex; align-items: center; gap: 6px; padding: 8px 8px 8px 14px; font-size: 13px; font-weight: 600; color: #9ab8d0; cursor: pointer; }
 .sidebar-folder-header:hover { background: rgba(255,255,255,.05); color: #dde8f0; }
 .sidebar-folder-header .folder-arrow { font-size: 10px; transition: transform .15s; flex-shrink: 0; }
 .sidebar-folder-header.open .folder-arrow { transform: rotate(90deg); }
 .sidebar-folder-tests { padding-left: 10px; display: none; }
 .sidebar-folder-tests.open { display: block; }
-.sidebar-test-item { display: flex; align-items: center; gap: 6px; padding: 5px 8px 5px 14px; font-size: 11.5px; color: #7a9ab8; cursor: pointer; border-left: 3px solid transparent; }
+.sidebar-test-item { display: flex; align-items: center; gap: 6px; padding: 6px 8px 6px 14px; font-size: 12.5px; color: #7a9ab8; cursor: pointer; border-left: 3px solid transparent; }
 .sidebar-test-item:hover { background: rgba(255,255,255,.05); color: #c8d8e8; }
 .sidebar-test-item.active { color: #4fc3f7; border-left-color: #4fc3f7; background: rgba(79,195,247,.08); }
 .sidebar-test-item .test-status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
@@ -214,7 +214,7 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 .source-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.12); transform: translateY(-1px); border-color: #b7c9db; }
 .source-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .source-folder-icon {
-  width: 58px; height: 46px; border-radius: 5px;
+  width: 65px; height: 52px; border-radius: 5px;
   background: linear-gradient(180deg, #d9ecfb 0%, #b9d7ef 100%);
   border: 1px solid #9fc0dc;
   position: relative;
@@ -231,7 +231,7 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
   border-radius: 4px 4px 0 0;
 }
 .source-card-count { font-size: 11px; color: var(--muted); background: #eef3f7; border-radius: 10px; padding: 2px 8px; }
-.source-card-name { font-size: 16px; font-weight: 700; color: var(--navy); line-height: 1.25; word-break: break-word; }
+.source-card-name { font-size: 18px; font-weight: 700; color: var(--navy); line-height: 1.25; word-break: break-word; }
 .source-card-meta { font-size: 12px; color: var(--muted); }
 .source-card-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .source-card-rename {
@@ -285,7 +285,7 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 .status-not-started { background: #edf1f5; color: #5a6a7a; }
 .status-in-progress { background: #fff3cd; color: #856404; }
 .status-completed   { background: #d4edda; color: #155724; }
-.test-card-name { font-size: 13px; font-weight: 700; color: var(--navy); margin-bottom: 4px; margin-right: 60px; }
+.test-card-name { font-size: 15px; font-weight: 700; color: var(--navy); margin-bottom: 4px; margin-right: 60px; }
 .test-card-meta { font-size: 11px; color: var(--muted); margin-bottom: 10px; }
 .test-card-progress { height: 4px; background: #e8ecf0; border-radius: 2px; margin-bottom: 8px; overflow: hidden; }
 .test-card-progress-fill { height: 100%; border-radius: 2px; background: var(--blue); transition: width .3s; }
@@ -293,7 +293,7 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 .test-card-prog-label { font-size: 11px; color: var(--muted); }
 .test-card-score { font-size: 12px; font-weight: 700; color: var(--navy); }
 .test-card-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
-.btn-card { padding: 5px 10px; font-size: 11px; border-radius: 3px; border: 1px solid var(--border); background: white; color: var(--navy); transition: background .12s; }
+.btn-card { padding: 7px 12px; font-size: 12px; border-radius: 3px; border: 1px solid var(--border); background: white; color: var(--navy); transition: background .12s; }
 .btn-card:hover { background: #f5f7fa; }
 .btn-card.primary { background: var(--navy); color: white; border-color: var(--navy); }
 
@@ -543,22 +543,22 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
   background: var(--bg);
 }
 .quiz-topbar {
-  background: var(--navy); color: white; padding: 8px 16px;
+  background: var(--navy); color: white; padding: 10px 20px;
   display: flex; align-items: center; justify-content: space-between;
   flex-wrap: wrap; gap: 8px; flex-shrink: 0;
 }
 .quiz-topbar-left  { display: flex; align-items: center; gap: 14px; flex: 1; }
 .quiz-topbar-center { display: flex; align-items: center; justify-content: flex-start; flex-shrink: 0; padding-left: 32px; }
 .quiz-topbar-right { display: flex; align-items: center; gap: 8px; flex: 1; justify-content: flex-end; }
-.quiz-test-name  { font-size: 13px; font-weight: 700; color: white; }
-.quiz-q-counter  { font-size: 11px; color: #9ab0c8; }
-.quiz-score-live { font-size: 11px; color: #9ab0c8; }
-.hint-usage-counter { font-size: 11px; color: #9ab0c8; white-space: nowrap; }
+.quiz-test-name  { font-size: 15px; font-weight: 700; color: white; }
+.quiz-q-counter  { font-size: 13px; color: #9ab0c8; }
+.quiz-score-live { font-size: 13px; color: #9ab0c8; }
+.hint-usage-counter { font-size: 13px; color: #9ab0c8; white-space: nowrap; }
 .hint-usage-counter.warn { color: #ffd54f; }
 .hint-usage-counter.high { color: #ff9f43; }
 .timer-block { text-align: center; }
 .timer-val {
-  font-size: 14px; font-weight: 700; color: white;
+  font-size: 17px; font-weight: 700; color: white;
   display: block; font-family: 'Courier New', monospace;
 }
 .timer-val.timer-warn { color: #ffd54f; }
@@ -572,7 +572,7 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 .quiz-progress-fill { height: 100%; background: #4fc3f7; transition: width .4s; }
 
 .quiz-btn {
-  padding: 5px 12px; font-size: 11px; font-weight: 600;
+  padding: 7px 14px; font-size: 13px; font-weight: 600;
   border-radius: 3px; border: 1px solid rgba(255,255,255,.25);
   background: rgba(255,255,255,.1); color: white; transition: background .12s;
 }
@@ -696,15 +696,15 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 /* Quiz bottom nav */
 .quiz-bottom-bar {
   position: fixed; bottom: 0; left: var(--sidebar-w);
-  right: 0; background: var(--navy); padding: 8px 20px;
+  right: 0; background: var(--navy); padding: 10px 24px;
   display: flex; align-items: center; justify-content: space-between;
   z-index: 50; border-top: 1px solid rgba(255,255,255,.1);
   transition: left 200ms ease;
 }
 .quiz-bottom-bar.no-sidebar { left: 200px; transition: left .22s ease; }
-.score-info { font-size: 11px; color: #9ab0c8; }
+.score-info { font-size: 13px; color: #9ab0c8; }
 .block-timer-display {
-  font-size: 11px; font-weight: 700; color: #9ab0c8;
+  font-size: 13px; font-weight: 700; color: #9ab0c8;
   font-family: 'Courier New', monospace; letter-spacing: .04em;
 }
 
