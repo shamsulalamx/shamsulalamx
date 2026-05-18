@@ -1240,10 +1240,8 @@ body.quiz-fullscreen-mode .quiz-bottom-bar.no-sidebar {
               </div>
             </div>
             <div class="quiz-topbar-right">
-              <button class="quiz-btn btn-mode" id="btn-mode-toggle" onclick="App.toggleMode()">📖 Tutor</button>
               <button class="quiz-btn" id="btn-flag" onclick="Quiz.toggleFlag(Quiz.getState()?.qIdx)">🏳 Flag</button>
               <button class="quiz-btn" id="btn-mark" onclick="Quiz.toggleMark(Quiz.getState()?.qIdx)">📌 Mark</button>
-              <button class="quiz-btn" onclick="openLabValues()" title="Lab Values">🧪 Lab</button>
               <button class="quiz-btn btn-pause" onclick="Quiz.pauseTest()">⏸ Pause</button>
               <button id="btn-hint" class="quiz-btn" onclick="requestHint()">💡 Hint</button>
               <button id="btn-quiz-fullscreen" class="quiz-btn" onclick="console.log('FULLSCREEN BUTTON CLICKED');Quiz.toggleQuizFullscreen()" title="Toggle focus mode">⛶ Focus</button>
@@ -1297,6 +1295,8 @@ body.quiz-fullscreen-mode .quiz-bottom-bar.no-sidebar {
               <div class="score-info" id="bottom-score">Score: 0 / 0</div>
               <div class="block-timer-display" id="block-timer">00:00</div>
               <button class="quiz-btn" id="btn-calc-toggle" onclick="toggleCalc()" title="Calculator">🖩 Calc</button>
+              <button class="quiz-btn" onclick="openLabValues()" title="Lab Values">🧪 Lab</button>
+              <button class="quiz-btn btn-mode" id="btn-mode-toggle" onclick="App.toggleMode()">📖 Tutor</button>
             </div>
             <div style="display:flex;gap:8px;">
               <button class="quiz-btn" id="btn-prev" onclick="Quiz.prevQ()" disabled>◀ Prev</button>
