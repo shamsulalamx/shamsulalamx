@@ -565,7 +565,7 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 .timer-val.timer-red  { color: #ff6b6b; }
 .timer-lbl { font-size: 9px; color: #7a9ab8; text-transform: uppercase; letter-spacing: .05em; }
 
-.q-timer-warning { color: #ff6b6b !important; animation: timerBlink 1s linear infinite !important; }
+.q-timer-warning { color: #ff8a3d !important; animation: timerBlink 1s linear infinite !important; }
 @keyframes timerBlink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0.15; } }
 
 .quiz-progress { height: 3px; background: rgba(255,255,255,.15); flex-shrink: 0; }
@@ -6777,7 +6777,7 @@ window.forceTimerWarning = function() {
   console.log('[forceTimerWarning]', el);
   if (el) {
     el.classList.add('q-timer-warning');
-    el.style.color = '#ff6b6b';
+    el.style.color = '#ff8a3d';
     el.style.animation = 'timerBlink 1s linear infinite';
   }
 };
@@ -23755,7 +23755,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 </script>
 
 <script>
-window.APP_BUILD_MARKER = 'build-2026-05-18-focus-redo-clock';
+window.APP_BUILD_MARKER = 'build-2026-05-18-timer-orange-v2';
 console.log('APP_BUILD_MARKER', window.APP_BUILD_MARKER);
 console.log('APP_BUILD_MARKER location.href', location.href);
 </script>
