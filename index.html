@@ -23019,8 +23019,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!el) return;
     el.textContent = new Intl.DateTimeFormat('en-US', {
       timeZone: 'America/New_York',
-      hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true
-    }).format(new Date()) + ' ET';
+      weekday: 'short', month: 'short', day: 'numeric',
+      hour: 'numeric', minute: '2-digit', hour12: true
+    }).format(new Date());
   }
   updateETClock();
   setInterval(updateETClock, 1000);
