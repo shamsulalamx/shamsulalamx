@@ -1,9 +1,12 @@
 # NBME PDF → JSON Generator
 
-**Current: Milestone 2 — Deterministic Question Chunking**
+**Current: Milestone 3 — Normalized Scaffold (schema + prompt + dry-run)**
 
-Converts NBME-style PDF answer files into raw extracted text, then splits that
-text into per-question chunks ready for the next milestone (Gemini-based JSON generation).
+Staged pipeline for converting NBME-style PDF answer files into app-ready JSON.
+
+```
+PDF → raw text → chunks → normalized scaffold → (Milestone 4: app-ready JSON)
+```
 
 ---
 
@@ -11,14 +14,25 @@ text into per-question chunks ready for the next milestone (Gemini-based JSON ge
 
 ```
 tools/nbme-pdf-json-generator/
-├── Generate_NBME_JSONs.command   ← double-click this on macOS
-├── extract_pdfs.py               ← core script (M1 + M2)
-├── README.md                     ← this file
-├── input_pdfs/                   ← DROP YOUR PDFs HERE
+├── Generate_NBME_JSONs.command        ← double-click launcher (macOS)
+├── extract_pdfs.py                    ← core pipeline script
+├── README.md                          ← this file
+│
+├── schema/
+│   ├── normalized_question_schema.json  ← JSON Schema for one normalized question
+│   └── app_ready_schema_notes.md        ← mapping: normalized → app storage fields
+│
+├── prompts/
+│   └── chunk_to_normalized_question_prompt.txt  ← LLM prompt (Milestone 4)
+│
+├── input_pdfs/                        ← DROP YOUR PDFs HERE
+│
 ├── output_json/
-│   ├── raw_text/                 ← one _raw.txt per PDF  (M1 output)
-│   └── chunks/                   ← one _chunks.json per PDF  (M2 output)
-└── reports/                      ← timestamped JSON reports (auto-created)
+│   ├── raw_text/                      ← one _raw.txt per PDF          (M1)
+│   ├── chunks/                        ← one _chunks.json per PDF      (M2)
+│   └── normalized/                    ← one _normalized.json per PDF  (M3/M4)
+│
+└── reports/                           ← timestamped pipeline reports
 ```
 
 ---
@@ -27,73 +41,51 @@ tools/nbme-pdf-json-generator/
 
 ### Step 1 — Place your PDFs
 
-Copy your NBME answer PDF files into:
-
 ```
 tools/nbme-pdf-json-generator/input_pdfs/
 ```
 
-Any `.pdf` file in that folder will be processed. Subfolders are not scanned.
-
 ### Step 2 — Run
 
-**Option A — Double-click (macOS Finder)**
-
-Double-click `Generate_NBME_JSONs.command`.
-
-If macOS blocks it the first time: right-click → Open → click "Open" in the dialog.
-A Terminal window opens, runs the full pipeline, and prints a summary. Press Enter to close.
-
-**Option B — Terminal (full pipeline)**
+**Full pipeline (PDF → raw text → chunks):**
 
 ```bash
 cd tools/nbme-pdf-json-generator
 python3 extract_pdfs.py
 ```
 
-Extracts every PDF in `input_pdfs/` → raw text → question chunks.
-
-**Option C — Terminal (re-chunk only)**
+**Re-chunk only (skip PDF re-extraction):**
 
 ```bash
 python3 extract_pdfs.py --chunk-only
 ```
 
-Skips PDF extraction entirely. Re-reads existing `output_json/raw_text/*_raw.txt` files
-and re-runs chunking. Useful when you've already extracted PDFs and want to iterate on
-chunking logic without re-running pdfplumber.
+**Normalize dry run (create placeholder normalized JSON, no LLM):**
 
----
+```bash
+python3 extract_pdfs.py --normalize-dry-run
+```
 
-## Where outputs appear
+Reads all `output_json/chunks/*_chunks.json` files and writes one
+`output_json/normalized/*_normalized.json` per chunk file.
+Every question becomes a placeholder with all fields empty and
+`"warnings": ["normalize dry run only; LLM not called"]`.
+Gemini is **not** called.
 
-| Output | Location |
-|---|---|
-| Raw extracted text (M1) | `output_json/raw_text/<stem>_raw.txt` |
-| Question chunks (M2) | `output_json/chunks/<stem>_chunks.json` |
-| Pipeline report | `reports/extraction_report_<timestamp>.json` |
+**Double-click launcher (macOS Finder):**
+
+Double-click `Generate_NBME_JSONs.command`.
+Right-click → Open if macOS blocks it the first time.
 
 ---
 
 ## Output formats
 
-### Raw text (`_raw.txt`)
+### Raw text (`output_json/raw_text/<stem>_raw.txt`)
 
-Markdown-style document, one section per PDF page:
+Markdown-style, one `## Page N` section per PDF page.
 
-```
-## Page 1
-
-<page text>
-
----
-
-## Page 2
-
-<page text>
-```
-
-### Chunks JSON (`_chunks.json`)
+### Chunks JSON (`output_json/chunks/<stem>_chunks.json`)
 
 ```json
 {
@@ -106,7 +98,7 @@ Markdown-style document, one section per PDF page:
     {
       "chunkId": "q001",
       "questionNumber": 1,
-      "rawText": "1. A 28-year-old woman presents...",
+      "rawText": "1. A 28-year-old woman...",
       "startMarker": "1.",
       "endMarker": "2.",
       "confidence": "high",
@@ -116,73 +108,113 @@ Markdown-style document, one section per PDF page:
 }
 ```
 
-**Chunk confidence levels:**
-- `high` — answer choices detected AND text length ≥ 80 chars
-- `medium` — answer choices OR long enough text, but not both
-- `low` — no answer choices and very short
+### Normalized JSON (`output_json/normalized/<stem>_normalized.json`)
 
-**Per-chunk warnings (in `chunk.warnings`):**
-- Duplicate question number
-- Unusually short chunk (< 80 chars)
-- No answer choices detected
-- No explanation-like content detected
-- Contamination phrase found inside chunk
-
-**File-level warnings (in `fileWarnings`):**
-- Text skipped before first question (preamble)
-- Missing question numbers in sequence
-- Contamination phrases found in full text:
-  `"Here are the extracted questions"`, `"eftab720"`, `"tightenfactor0"`
-
-### Pipeline report (`extraction_report_<timestamp>.json`)
+One file per source PDF, containing one normalized question object per chunk.
+In dry-run mode all question fields are empty placeholders.
+In Milestone 4 (LLM mode) each question will be fully populated.
 
 ```json
 {
-  "schemaVersion": "nbme-pdf-extractor-report-v2",
-  "generatedAt": "2026-05-19T...",
-  "elapsedSeconds": 1.23,
-  "mode": "full",
-  "summary": {
-    "total": 2,
-    "extractionOk": 2,
-    "extractionWarning": 0,
-    "extractionError": 0,
-    "extractionSkipped": 0,
-    "chunkingOk": 1,
-    "chunkingWarning": 1,
-    "chunkingError": 0,
-    "chunkingSkipped": 0,
-    "totalChunks": 53,
-    "totalChunkWarnings": 2
-  },
-  "files": [
+  "schemaVersion": "nbme-normalized-file-v1",
+  "sourceChunkFile": "NBME_Psych_9_chunks.json",
+  "createdAt": "2026-05-19T...",
+  "isDryRun": true,
+  "questionCount": 50,
+  "fileWarnings": [],
+  "questions": [
     {
-      "filename": "NBME_Psych_9.pdf",
-      "pageCount": 62,
-      "extractionStatus": "ok",
-      "extractionWarnings": [],
-      "charCount": 84210,
-      "rawTextPath": "output_json/raw_text/NBME_Psych_9_raw.txt",
-      "chunkingStatus": "ok",
-      "chunkCount": 50,
-      "chunkWarningCount": 0,
-      "chunkPath": "output_json/chunks/NBME_Psych_9_chunks.json"
+      "schemaVersion": "nbme-normalized-question-v1",
+      "sourceFile": "NBME_Psych_9_chunks.json",
+      "sourceQuestionNumber": 1,
+      "questionId": "q001",
+      "stem": "",
+      "choices": [],
+      "correctAnswer": "",
+      "educationalObjective": "",
+      "correctExplanation": "",
+      "incorrectExplanations": [],
+      "reviewPearl": "",
+      "retrievalTag": "",
+      "tags": [],
+      "figures": [],
+      "tables": [],
+      "warnings": ["normalize dry run only; LLM not called"],
+      "confidence": "low"
     }
   ]
 }
 ```
 
-**Status values (extraction and chunking):**
-- `ok` — processed cleanly
-- `warning` — processed but issues found (see warnings fields)
-- `error` — could not process
-- `skipped` — step was not run (e.g. extraction skipped in `--chunk-only` mode)
+### Pipeline report (`reports/extraction_report_<timestamp>.json`)
+
+Report schema v3 — includes extraction, chunking, and normalization status per file:
+
+```json
+{
+  "schemaVersion": "nbme-pdf-extractor-report-v3",
+  "mode": "normalize-dry-run",
+  "summary": {
+    "total": 2,
+    "totalChunks": 53,
+    "normalizationOk": 1,
+    "normalizationWarning": 1,
+    "normalizationError": 0,
+    "normalizationSkipped": 0,
+    "totalNormalized": 53
+  },
+  "files": [
+    {
+      "filename": "NBME_Psych_9.pdf",
+      "chunkingStatus": "skipped",
+      "chunkPath": "output_json/chunks/NBME_Psych_9_chunks.json",
+      "normalizationStatus": "ok",
+      "normalizedCount": 50,
+      "normalizedOutputPath": "output_json/normalized/NBME_Psych_9_normalized.json"
+    }
+  ]
+}
+```
 
 ---
 
-## Question boundary detection
+## Schema reference
 
-The chunker recognises these patterns at the start of a line:
+### `schema/normalized_question_schema.json`
+
+JSON Schema (draft-07) describing one normalized question object.
+See the file for full field definitions including validation rules and descriptions.
+
+### `schema/app_ready_schema_notes.md`
+
+Documents how normalized fields map into the app's internal quiz schema:
+- `stem` → `q.t`
+- `choices` → `q.o` (rename `label`→`l`, `text`→`t`)
+- `correctAnswer` → `q.c`
+- `educationalObjective` → `q.educationalObjective`
+- `correctExplanation` + `incorrectExplanations` + `reviewPearl` → `q.correctBlurb`
+- `retrievalTag` → `q.retrievalTag` + `q.metadata.retrievalTag` + `q.tags[0]`
+- `figures` → `q.metadata.figureRefs`
+- `tables` → `q.metadata.tables`
+- `warnings` → `q.metadata.extractionWarnings`
+
+---
+
+## LLM prompt
+
+`prompts/chunk_to_normalized_question_prompt.txt` contains the prompt for
+Milestone 4 (Gemini call). It instructs the LLM to:
+
+- Convert exactly one raw chunk → exactly one normalized JSON object
+- Preserve all wording verbatim from source
+- Never invent answer choices or correct answers
+- Never add content not supported by source text
+- Detect and flag contamination phrases (`eftab720`, `tightenfactor0`, etc.)
+- Output JSON only — no markdown, no commentary
+
+---
+
+## Question boundary detection (M2)
 
 | Pattern | Example |
 |---|---|
@@ -191,17 +223,14 @@ The chunker recognises these patterns at the start of a line:
 | `Question N` | `Question 1 A 32-year-old man…` |
 | `Item N` | `Item 1 A 32-year-old man…` |
 
-Text before the first detected question is skipped and logged as a file-level warning.
-
 ---
 
 ## Requirements
 
 - macOS (Apple Silicon or Intel)
-- Python 3.9+  (`python3 --version`)
-- `pdfplumber` — installed automatically by `Generate_NBME_JSONs.command`
+- Python 3.9+
+- `pdfplumber` — auto-installed by `Generate_NBME_JSONs.command`
 
-To install manually:
 ```bash
 pip3 install pdfplumber
 ```
@@ -210,9 +239,8 @@ pip3 install pdfplumber
 
 ## Notes
 
-- **Milestone 2** produces raw question chunks only. No Gemini call, no app-ready JSON yet.
-- Image-only PDFs (scanned without embedded text) will produce `_raw.txt` files with
-  empty pages. The chunker will warn `No question boundaries found`. A future milestone
-  adds OCR support.
-- This tool does not touch or modify any app files (`index.html`, `js/`, etc.).
-- Each run appends a new timestamped report to `reports/` — previous reports are not deleted.
+- **Milestone 3** adds schema, prompt scaffolding, and dry-run normalization only.
+  No LLM is called at any point in the current pipeline.
+- Image-only PDFs produce empty raw text → no chunk boundaries found → 0 normalized placeholders.
+- This tool does not modify any app files (`index.html`, `js/`, etc.).
+- Each run appends a new timestamped report to `reports/`.

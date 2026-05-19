@@ -4,10 +4,12 @@ NBME PDF → JSON Generator
 
 Milestone 1: PDF → raw text extraction (pdfplumber)
 Milestone 2: raw text → question chunks (deterministic, no AI)
+Milestone 3: chunks → normalized scaffold (dry-run placeholder, no LLM)
 
 Usage:
-  python3 extract_pdfs.py              # full pipeline: extract PDFs + chunk
-  python3 extract_pdfs.py --chunk-only # skip extraction, re-chunk existing raw_text files
+  python3 extract_pdfs.py                  # full pipeline: extract + chunk
+  python3 extract_pdfs.py --chunk-only     # re-chunk existing raw_text files
+  python3 extract_pdfs.py --normalize-dry-run  # create placeholder normalized JSON (no LLM)
 """
 
 import argparse
@@ -29,12 +31,13 @@ except ImportError:
 # Paths
 # ---------------------------------------------------------------------------
 
-SCRIPT_DIR   = Path(__file__).parent.resolve()
-INPUT_DIR    = SCRIPT_DIR / "input_pdfs"
-OUTPUT_DIR   = SCRIPT_DIR / "output_json"
-RAW_TEXT_DIR = OUTPUT_DIR / "raw_text"
-CHUNKS_DIR   = OUTPUT_DIR / "chunks"
-REPORTS_DIR  = SCRIPT_DIR / "reports"
+SCRIPT_DIR      = Path(__file__).parent.resolve()
+INPUT_DIR       = SCRIPT_DIR / "input_pdfs"
+OUTPUT_DIR      = SCRIPT_DIR / "output_json"
+RAW_TEXT_DIR    = OUTPUT_DIR / "raw_text"
+CHUNKS_DIR      = OUTPUT_DIR / "chunks"
+NORMALIZED_DIR  = OUTPUT_DIR / "normalized"
+REPORTS_DIR     = SCRIPT_DIR / "reports"
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -78,7 +81,7 @@ _Q_BOUNDARY_RE = re.compile(
 # ---------------------------------------------------------------------------
 
 def ensure_dirs():
-    for d in (INPUT_DIR, OUTPUT_DIR, RAW_TEXT_DIR, CHUNKS_DIR, REPORTS_DIR):
+    for d in (INPUT_DIR, OUTPUT_DIR, RAW_TEXT_DIR, CHUNKS_DIR, NORMALIZED_DIR, REPORTS_DIR):
         d.mkdir(parents=True, exist_ok=True)
 
 
@@ -309,6 +312,113 @@ def _total_chunk_warnings(cr: dict) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Milestone 3: chunks → normalized scaffold (dry-run, no LLM)
+# ---------------------------------------------------------------------------
+
+_DRY_RUN_WARNING = "normalize dry run only; LLM not called"
+
+
+def normalize_dry_run(chunk_path: Path) -> dict:
+    """
+    Read a _chunks.json file and write a placeholder _normalized.json file.
+    Does NOT call Gemini or any LLM.  Every question gets an empty scaffold
+    with a warning flagging it as a dry-run placeholder.
+    """
+    stem = chunk_path.stem
+    if stem.endswith("_chunks"):
+        stem = stem[:-7]
+
+    result = {
+        "status":           "ok",
+        "warnings":         [],
+        "normalizedCount":  0,
+        "output_path":      None,
+    }
+
+    try:
+        payload = json.loads(chunk_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        result["status"] = "error"
+        result["warnings"].append(f"Could not read chunk file: {e}")
+        return result
+
+    chunks = payload.get("chunks", [])
+    source_file = payload.get("sourceFile", chunk_path.name)
+
+    if not chunks:
+        result["status"] = "warning"
+        result["warnings"].append("Chunk file contains 0 chunks — nothing to normalize")
+
+    # Check for contamination in fileWarnings from M2
+    file_warnings = payload.get("fileWarnings", [])
+    for w in file_warnings:
+        if any(p.lower() in w.lower() for p in CONTAMINATION_PHRASES):
+            result["warnings"].append(f"Contamination flagged by chunker: {w}")
+
+    questions = []
+    for chunk in chunks:
+        q_num    = chunk.get("questionNumber", 0)
+        chunk_id = chunk.get("chunkId", f"q{q_num:03d}")
+        raw_text = chunk.get("rawText", "")
+
+        # Inherit any per-chunk warnings from M2
+        inherited = [f"[from chunker] {w}" for w in chunk.get("warnings", [])]
+
+        # Detect contamination in this chunk's rawText
+        chunk_contaminated = any(
+            p.lower() in raw_text.lower() for p in CONTAMINATION_PHRASES
+        )
+        if chunk_contaminated:
+            inherited.append("Contamination phrase detected in chunk rawText")
+
+        questions.append({
+            "schemaVersion":         "nbme-normalized-question-v1",
+            "sourceFile":            source_file,
+            "sourceQuestionNumber":  q_num,
+            "questionId":            chunk_id,
+            "stem":                  "",
+            "choices":               [],
+            "correctAnswer":         "",
+            "educationalObjective":  "",
+            "correctExplanation":    "",
+            "incorrectExplanations": [],
+            "reviewPearl":           "",
+            "retrievalTag":          "",
+            "tags":                  [],
+            "figures":               [],
+            "tables":                [],
+            "warnings":              [_DRY_RUN_WARNING] + inherited,
+            "confidence":            "low",
+        })
+
+    result["normalizedCount"] = len(questions)
+    if result["status"] == "ok" and result["warnings"]:
+        result["status"] = "warning"
+
+    out_path = NORMALIZED_DIR / f"{stem}_normalized.json"
+    normalized_payload = {
+        "schemaVersion":    "nbme-normalized-file-v1",
+        "sourceChunkFile":  chunk_path.name,
+        "createdAt":        datetime.utcnow().isoformat() + "Z",
+        "isDryRun":         True,
+        "questionCount":    len(questions),
+        "fileWarnings":     result["warnings"],
+        "questions":        questions,
+    }
+    try:
+        out_path.write_text(
+            json.dumps(normalized_payload, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        result["output_path"] = str(out_path.relative_to(SCRIPT_DIR))
+    except Exception as e:
+        result["status"] = "warning"
+        result["warnings"].append(f"Could not write normalized file: {e}")
+
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Report
 # ---------------------------------------------------------------------------
 
@@ -317,38 +427,47 @@ def build_report(records: list, elapsed: float, mode: str) -> dict:
         return sum(1 for r in records if r.get(field) == val)
 
     return {
-        "schemaVersion":    "nbme-pdf-extractor-report-v2",
-        "generatedAt":      datetime.utcnow().isoformat() + "Z",
-        "elapsedSeconds":   round(elapsed, 2),
-        "mode":             mode,
-        "inputDirectory":   str(INPUT_DIR.relative_to(SCRIPT_DIR)),
-        "rawTextDirectory": str(RAW_TEXT_DIR.relative_to(SCRIPT_DIR)),
-        "chunksDirectory":  str(CHUNKS_DIR.relative_to(SCRIPT_DIR)),
+        "schemaVersion":       "nbme-pdf-extractor-report-v3",
+        "generatedAt":         datetime.utcnow().isoformat() + "Z",
+        "elapsedSeconds":      round(elapsed, 2),
+        "mode":                mode,
+        "inputDirectory":      str(INPUT_DIR.relative_to(SCRIPT_DIR)),
+        "rawTextDirectory":    str(RAW_TEXT_DIR.relative_to(SCRIPT_DIR)),
+        "chunksDirectory":     str(CHUNKS_DIR.relative_to(SCRIPT_DIR)),
+        "normalizedDirectory": str(NORMALIZED_DIR.relative_to(SCRIPT_DIR)),
         "summary": {
-            "total":              len(records),
-            "extractionOk":       cnt("extraction_status", "ok"),
-            "extractionWarning":  cnt("extraction_status", "warning"),
-            "extractionError":    cnt("extraction_status", "error"),
-            "extractionSkipped":  cnt("extraction_status", "skipped"),
-            "chunkingOk":         cnt("chunking_status", "ok"),
-            "chunkingWarning":    cnt("chunking_status", "warning"),
-            "chunkingError":      cnt("chunking_status", "error"),
-            "chunkingSkipped":    cnt("chunking_status", "skipped"),
-            "totalChunks":        sum(r.get("chunk_count", 0) for r in records),
-            "totalChunkWarnings": sum(r.get("chunk_warning_count", 0) for r in records),
+            "total":                len(records),
+            "extractionOk":         cnt("extraction_status", "ok"),
+            "extractionWarning":    cnt("extraction_status", "warning"),
+            "extractionError":      cnt("extraction_status", "error"),
+            "extractionSkipped":    cnt("extraction_status", "skipped"),
+            "chunkingOk":           cnt("chunking_status", "ok"),
+            "chunkingWarning":      cnt("chunking_status", "warning"),
+            "chunkingError":        cnt("chunking_status", "error"),
+            "chunkingSkipped":      cnt("chunking_status", "skipped"),
+            "totalChunks":          sum(r.get("chunk_count", 0) for r in records),
+            "totalChunkWarnings":   sum(r.get("chunk_warning_count", 0) for r in records),
+            "normalizationOk":      cnt("normalization_status", "ok"),
+            "normalizationWarning": cnt("normalization_status", "warning"),
+            "normalizationError":   cnt("normalization_status", "error"),
+            "normalizationSkipped": cnt("normalization_status", "skipped"),
+            "totalNormalized":      sum(r.get("normalized_count", 0) for r in records),
         },
         "files": [
             {
-                "filename":           r["filename"],
-                "pageCount":          r.get("page_count", 0),
-                "extractionStatus":   r.get("extraction_status", "skipped"),
-                "extractionWarnings": r.get("extraction_warnings", []),
-                "charCount":          r.get("char_count", 0),
-                "rawTextPath":        r.get("raw_text_path"),
-                "chunkingStatus":     r.get("chunking_status", "skipped"),
-                "chunkCount":         r.get("chunk_count", 0),
-                "chunkWarningCount":  r.get("chunk_warning_count", 0),
-                "chunkPath":          r.get("chunk_path"),
+                "filename":             r["filename"],
+                "pageCount":            r.get("page_count", 0),
+                "extractionStatus":     r.get("extraction_status", "skipped"),
+                "extractionWarnings":   r.get("extraction_warnings", []),
+                "charCount":            r.get("char_count", 0),
+                "rawTextPath":          r.get("raw_text_path"),
+                "chunkingStatus":       r.get("chunking_status", "skipped"),
+                "chunkCount":           r.get("chunk_count", 0),
+                "chunkWarningCount":    r.get("chunk_warning_count", 0),
+                "chunkPath":            r.get("chunk_path"),
+                "normalizationStatus":  r.get("normalization_status", "skipped"),
+                "normalizedCount":      r.get("normalized_count", 0),
+                "normalizedOutputPath": r.get("normalized_output_path"),
             }
             for r in records
         ],
@@ -362,17 +481,24 @@ def print_summary(report: dict):
     print(f"\n{'='*60}")
     print(f"  NBME PDF Extractor  [mode: {mode}]")
     print(f"{'='*60}")
-    print(f"  Files processed    : {s['total']}")
-    if mode != "chunk-only":
-        print(f"  Extraction  OK     : {s['extractionOk']}")
-        print(f"  Extraction  WARN   : {s['extractionWarning']}")
-        print(f"  Extraction  ERROR  : {s['extractionError']}")
-    print(f"  Chunking    OK     : {s['chunkingOk']}")
-    print(f"  Chunking    WARN   : {s['chunkingWarning']}")
-    print(f"  Chunking    ERROR  : {s['chunkingError']}")
-    print(f"  Total chunks       : {s['totalChunks']}")
-    print(f"  Total chunk warns  : {s['totalChunkWarnings']}")
-    print(f"  Elapsed            : {report['elapsedSeconds']}s")
+    print(f"  Files processed      : {s['total']}")
+    if mode not in ("chunk-only", "normalize-dry-run"):
+        print(f"  Extraction  OK       : {s['extractionOk']}")
+        print(f"  Extraction  WARN     : {s['extractionWarning']}")
+        print(f"  Extraction  ERROR    : {s['extractionError']}")
+    if mode != "normalize-dry-run":
+        print(f"  Chunking    OK       : {s['chunkingOk']}")
+        print(f"  Chunking    WARN     : {s['chunkingWarning']}")
+        print(f"  Chunking    ERROR    : {s['chunkingError']}")
+        print(f"  Total chunks         : {s['totalChunks']}")
+        print(f"  Total chunk warns    : {s['totalChunkWarnings']}")
+    if mode == "normalize-dry-run":
+        print(f"  Normalization OK     : {s['normalizationOk']}")
+        print(f"  Normalization WARN   : {s['normalizationWarning']}")
+        print(f"  Normalization ERROR  : {s['normalizationError']}")
+        print(f"  Total normalized     : {s['totalNormalized']}")
+        print(f"  NOTE: dry run only — no LLM called")
+    print(f"  Elapsed              : {report['elapsedSeconds']}s")
     print(f"{'='*60}")
 
     icons = {"ok": "✅", "warning": "⚠️ ", "error": "❌", "skipped": "⏭ "}
@@ -380,17 +506,23 @@ def print_summary(report: dict):
     for f in report["files"]:
         ei = icons.get(f["extractionStatus"], "?")
         ci = icons.get(f["chunkingStatus"], "?")
+        ni = icons.get(f["normalizationStatus"], "?")
         print(f"\n  {f['filename']}")
-        if mode != "chunk-only":
+        if mode not in ("chunk-only", "normalize-dry-run"):
             chars = f"{f['charCount']:,}" if f.get("charCount") else "0"
-            print(f"    extract {ei}  [{f['pageCount']} pages, {chars} chars]")
+            print(f"    extract   {ei}  [{f['pageCount']} pages, {chars} chars]")
             for w in f.get("extractionWarnings", []):
-                print(f"         ⚠  {w}")
+                print(f"           ⚠  {w}")
             if f.get("rawTextPath"):
-                print(f"         → {f['rawTextPath']}")
-        print(f"    chunk   {ci}  [{f['chunkCount']} chunks, {f['chunkWarningCount']} warnings]")
-        if f.get("chunkPath"):
-            print(f"         → {f['chunkPath']}")
+                print(f"           → {f['rawTextPath']}")
+        if mode != "normalize-dry-run":
+            print(f"    chunk     {ci}  [{f['chunkCount']} chunks, {f['chunkWarningCount']} warnings]")
+            if f.get("chunkPath"):
+                print(f"           → {f['chunkPath']}")
+        if mode == "normalize-dry-run":
+            print(f"    normalize {ni}  [{f['normalizedCount']} placeholders] (dry run)")
+            if f.get("normalizedOutputPath"):
+                print(f"           → {f['normalizedOutputPath']}")
     print()
 
 
@@ -402,18 +534,75 @@ def main():
     import time
 
     parser = argparse.ArgumentParser(
-        description="NBME PDF → JSON Generator (Milestones 1+2)"
+        description="NBME PDF → JSON Generator (Milestones 1+2+3)"
     )
     parser.add_argument(
         "--chunk-only",
         action="store_true",
         help="Skip PDF extraction; re-chunk existing raw_text files",
     )
+    parser.add_argument(
+        "--normalize-dry-run",
+        action="store_true",
+        help="Create placeholder normalized JSON from existing chunk files (no LLM called)",
+    )
     args = parser.parse_args()
 
     start = time.time()
     ensure_dirs()
-    mode = "chunk-only" if args.chunk_only else "full"
+
+    if args.normalize_dry_run:
+        mode = "normalize-dry-run"
+    elif args.chunk_only:
+        mode = "chunk-only"
+    else:
+        mode = "full"
+
+    # ------------------------------------------------------------------
+    # normalize-dry-run: create placeholder normalized JSON, no LLM
+    # ------------------------------------------------------------------
+    if args.normalize_dry_run:
+        chunk_files = sorted(CHUNKS_DIR.glob("*_chunks.json"))
+        if not chunk_files:
+            print(f"\nNo *_chunks.json files in {CHUNKS_DIR.relative_to(SCRIPT_DIR)}/")
+            print("Run without --normalize-dry-run first to generate chunk files.\n")
+            report = build_report([], elapsed=0.0, mode=mode)
+            _save_report(report)
+            return
+
+        print(f"\nFound {len(chunk_files)} chunk file(s) — normalize dry run (no LLM)...")
+        records = []
+        for chunk_path in chunk_files:
+            print(f"  Normalizing: {chunk_path.name} ...", end=" ", flush=True)
+            nr = normalize_dry_run(chunk_path)
+            icon = {"ok": "OK", "warning": "WARN", "error": "ERROR"}.get(nr["status"], "?")
+            print(f"[{icon}]  {nr['normalizedCount']} placeholders")
+
+            stem = chunk_path.stem
+            if stem.endswith("_chunks"):
+                stem = stem[:-7]
+
+            records.append({
+                "filename":              f"{stem}.pdf",
+                "page_count":            0,
+                "extraction_status":     "skipped",
+                "extraction_warnings":   [],
+                "char_count":            0,
+                "raw_text_path":         None,
+                "chunking_status":       "skipped",
+                "chunk_count":           0,
+                "chunk_warning_count":   0,
+                "chunk_path":            str(chunk_path.relative_to(SCRIPT_DIR)),
+                "normalization_status":  nr["status"],
+                "normalized_count":      nr["normalizedCount"],
+                "normalized_output_path": nr.get("output_path"),
+            })
+
+        elapsed = time.time() - start
+        report  = build_report(records, elapsed, mode)
+        print_summary(report)
+        _save_report(report)
+        return
 
     # ------------------------------------------------------------------
     # chunk-only: re-chunk existing raw_text files, skip PDF scanning
@@ -440,16 +629,19 @@ def main():
                 stem = stem[:-4]
 
             records.append({
-                "filename":            f"{stem}.pdf",
-                "page_count":          0,
-                "extraction_status":   "skipped",
-                "extraction_warnings": [],
-                "char_count":          cr.get("char_count", 0),
-                "raw_text_path":       str(raw_path.relative_to(SCRIPT_DIR)),
-                "chunking_status":     cr["status"],
-                "chunk_count":         cr["chunkCount"],
-                "chunk_warning_count": _total_chunk_warnings(cr),
-                "chunk_path":          cr.get("output_path"),
+                "filename":              f"{stem}.pdf",
+                "page_count":            0,
+                "extraction_status":     "skipped",
+                "extraction_warnings":   [],
+                "char_count":            cr.get("char_count", 0),
+                "raw_text_path":         str(raw_path.relative_to(SCRIPT_DIR)),
+                "chunking_status":       cr["status"],
+                "chunk_count":           cr["chunkCount"],
+                "chunk_warning_count":   _total_chunk_warnings(cr),
+                "chunk_path":            cr.get("output_path"),
+                "normalization_status":  "skipped",
+                "normalized_count":      0,
+                "normalized_output_path": None,
             })
 
         elapsed = time.time() - start
@@ -492,16 +684,19 @@ def main():
             cr["warnings"].append("Skipped chunking: extraction failed")
 
         records.append({
-            "filename":            ext["filename"],
-            "page_count":          ext.get("page_count", 0),
-            "extraction_status":   ext["status"],
-            "extraction_warnings": ext.get("warnings", []),
-            "char_count":          ext.get("char_count", 0),
-            "raw_text_path":       ext.get("output_path"),
-            "chunking_status":     cr["status"],
-            "chunk_count":         cr["chunkCount"],
-            "chunk_warning_count": _total_chunk_warnings(cr),
-            "chunk_path":          cr.get("output_path"),
+            "filename":              ext["filename"],
+            "page_count":            ext.get("page_count", 0),
+            "extraction_status":     ext["status"],
+            "extraction_warnings":   ext.get("warnings", []),
+            "char_count":            ext.get("char_count", 0),
+            "raw_text_path":         ext.get("output_path"),
+            "chunking_status":       cr["status"],
+            "chunk_count":           cr["chunkCount"],
+            "chunk_warning_count":   _total_chunk_warnings(cr),
+            "chunk_path":            cr.get("output_path"),
+            "normalization_status":  "skipped",
+            "normalized_count":      0,
+            "normalized_output_path": None,
         })
 
     elapsed = time.time() - start

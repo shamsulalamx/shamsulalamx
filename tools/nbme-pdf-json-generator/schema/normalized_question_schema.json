@@ -1,0 +1,186 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "nbme-normalized-question-v1",
+  "title": "NBME Normalized Question",
+  "description": "Intermediate normalized representation of one NBME question, produced by the LLM extraction stage. Not yet in final app storage format.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "sourceFile",
+    "sourceQuestionNumber",
+    "questionId",
+    "stem",
+    "choices",
+    "correctAnswer",
+    "educationalObjective",
+    "correctExplanation",
+    "incorrectExplanations",
+    "reviewPearl",
+    "retrievalTag",
+    "tags",
+    "figures",
+    "tables",
+    "warnings",
+    "confidence"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "nbme-normalized-question-v1",
+      "description": "Schema version identifier. Must always be 'nbme-normalized-question-v1'."
+    },
+    "sourceFile": {
+      "type": "string",
+      "description": "Filename of the source chunk JSON (e.g. 'NBME_Psych_9_chunks.json')."
+    },
+    "sourceQuestionNumber": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The question number as detected in the source raw text."
+    },
+    "questionId": {
+      "type": "string",
+      "pattern": "^q[0-9]{3}$",
+      "description": "Zero-padded question identifier matching the chunkId (e.g. 'q001')."
+    },
+    "stem": {
+      "type": "string",
+      "description": "The full clinical vignette and question text, verbatim from source. Must not be truncated, paraphrased, or rewritten."
+    },
+    "choices": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 10,
+      "description": "Answer choices extracted verbatim from source.",
+      "items": {
+        "type": "object",
+        "required": ["label", "text"],
+        "properties": {
+          "label": {
+            "type": "string",
+            "pattern": "^[A-F]$",
+            "description": "Choice letter (A through F)."
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Choice text, verbatim from source."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "correctAnswer": {
+      "type": "string",
+      "pattern": "^[A-F]$",
+      "description": "Letter of the correct answer. Must match one of the choice labels. Never invented — if absent from source, set to empty string and add a warning."
+    },
+    "educationalObjective": {
+      "type": "string",
+      "description": "The educational objective statement, verbatim from source if present. Empty string if absent."
+    },
+    "correctExplanation": {
+      "type": "string",
+      "description": "Explanation for why the correct answer is correct, verbatim from source. Empty string if absent."
+    },
+    "incorrectExplanations": {
+      "type": "array",
+      "description": "Per-choice explanations for incorrect answers.",
+      "items": {
+        "type": "object",
+        "required": ["label", "explanation"],
+        "properties": {
+          "label": {
+            "type": "string",
+            "pattern": "^[A-F]$",
+            "description": "The choice letter this explanation applies to."
+          },
+          "explanation": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Explanation text, verbatim from source."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "reviewPearl": {
+      "type": "string",
+      "description": "One-line high-yield memory anchor derived from the question. Empty string if not extractable."
+    },
+    "retrievalTag": {
+      "type": "string",
+      "description": "Short concept tag encoding the exact tested idea (e.g. 'PTSD duration threshold'). Empty string if not extractable."
+    },
+    "tags": {
+      "type": "array",
+      "description": "Additional topic/concept tags for this question. May be empty.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "figures": {
+      "type": "array",
+      "description": "Figure references found in the question. Empty array if none.",
+      "items": {
+        "type": "object",
+        "required": ["figureId", "location"],
+        "properties": {
+          "figureId": {
+            "type": "string",
+            "description": "Unique figure identifier within this question (e.g. 'Figure_Q25_Lab')."
+          },
+          "location": {
+            "type": "string",
+            "enum": ["stem", "choices", "explanation"],
+            "description": "Where the figure appears in the question."
+          },
+          "visibleText": {
+            "type": "array",
+            "description": "Text rows visible in the figure (lab values, table cells).",
+            "items": { "type": "string" }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "tables": {
+      "type": "array",
+      "description": "Structured tables extracted from the question. Empty array if none.",
+      "items": {
+        "type": "object",
+        "required": ["headers", "rows"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Optional table title (e.g. 'Laboratory studies')."
+          },
+          "headers": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "description": "Issues detected during extraction. Each entry is a plain-text warning string.",
+      "items": { "type": "string" }
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["high", "medium", "low"],
+      "description": "Extraction confidence. 'high': all required fields extracted cleanly. 'medium': minor gaps or ambiguities. 'low': significant missing content, ambiguous source, or contamination detected."
+    }
+  },
+  "additionalProperties": false
+}
