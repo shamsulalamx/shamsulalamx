@@ -6349,9 +6349,13 @@ const Quiz = (() => {
 
   function resumeTest(testId, saved) {
     const test = DB.getTest(testId);
+    const qLen = test.questions.length;
+    const blank = () => ({ answered: false, correct: false, chosen: null, time: 0, highlights: {}, strikethrough: [] });
+    const savedResults = Array.isArray(saved.results) ? saved.results : [];
     state = {
-      testId, mode: saved.mode || 'tutor', qIdx: saved.qIdx || 0,
-      results: saved.results || test.questions.map(() => ({ answered: false, correct: false, chosen: null, time: 0, highlights: {}, strikethrough: [] })),
+      testId, mode: saved.mode || 'tutor',
+      qIdx: Math.min(saved.qIdx || 0, qLen - 1),
+      results: Array.from({ length: qLen }, (_, i) => savedResults[i] || blank()),
       marks: new Set(saved.marks || []),
       totSecs: saved.totSecs || 0, qSecs: 0, qStart: Date.now(),
       qTimerRef: null,
@@ -6851,7 +6855,13 @@ const Quiz = (() => {
     if (!state) return;
     const list = document.getElementById('qns-list');
     if (!list) return;
-    if (!list.querySelector('.qns-item')) { _buildNavSidebar(); return; }
+    const test = getTest();
+    if (!test) return;
+    // Rebuild whenever item count doesn't match — handles test switches in either direction
+    if (list.querySelectorAll('.qns-item').length !== test.questions.length) {
+      _buildNavSidebar();
+      return;
+    }
     _applyNavStates();
   }
 
