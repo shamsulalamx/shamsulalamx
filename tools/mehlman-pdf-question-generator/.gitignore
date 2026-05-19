@@ -1,0 +1,24 @@
+# ── Mehlman PDF Question Generator — ignored paths ────────────────────────────
+#
+# Source code, prompts, and committed test fixtures are tracked.
+# Generated outputs, extracted files, and real PDFs are NOT tracked.
+
+# Input PDFs — potentially copyrighted Mehlman content
+# Exception: the committed synthetic fixture
+input_pdfs/*
+!input_pdfs/test_mehlman_cardiology_fixture.pdf
+
+# Extracted text — derived from PDFs (regenerable via --extract-only)
+extracted_text/
+
+# Extracted figures — derived from PDFs (regenerable via --extract-only --extract-assets)
+extracted_figures/
+
+# Extracted tables — derived from PDFs (regenerable via --extract-only --extract-assets)
+extracted_tables/
+
+# All pipeline output — regenerable
+output_json/
+
+# Run logs — timestamped, accumulate per-run
+reports/

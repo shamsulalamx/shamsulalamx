@@ -27,9 +27,9 @@ Reuses from tools/uworld-notes-question-generator/generate_uworld_questions.py:
   duplicate stem detection, question renumbering.
 
 New infrastructure in this script:
-  Gemini File API upload (multipart/related), file state polling,
-  audio-aware generateContent call, transcript cleaning (large output),
-  incremental stage resumption.
+  Gemini File API upload (resumable two-step: initiate session → upload bytes),
+  file state polling, audio-aware generateContent call,
+  transcript cleaning (large output), incremental stage resumption.
 
 Security:
   GEMINI_API_KEY read only from os.environ. Never logged, never stored.
@@ -42,7 +42,6 @@ import os
 import sys
 import textwrap
 import time
-import uuid
 import urllib.error
 import urllib.request
 from datetime import datetime
@@ -114,36 +113,73 @@ def _stem_from_cleaned(path: Path) -> str:
 
 def _upload_audio_file(filepath: Path, api_key: str) -> Dict:
     """
-    Upload audio to Gemini File API via multipart/related POST.
-    Returns the file metadata dict from the API response.
+    Upload audio to Gemini File API using the two-step resumable upload protocol.
 
-    Timeout: 600 seconds (large MP3s can take minutes to upload).
+    Step 1 — Initiate upload session:
+      POST metadata JSON to the upload endpoint with resumable-protocol headers.
+      Response header X-Goog-Upload-URL contains the per-session upload URL.
+
+    Step 2 — Transfer file bytes:
+      POST raw audio bytes to the upload URL with offset + finalize headers.
+      Response body contains file metadata JSON (name, uri, state).
+
+    Audio bytes are NEVER placed in the metadata JSON (that caused HTTP 400
+    "Metadata part is too large" with the previous multipart/related approach).
+
     Raises: ValueError on HTTP error, RuntimeError on malformed response.
     """
     mime_type = _detect_mime_type(filepath)
-    boundary = uuid.uuid4().hex
-    metadata_json = json.dumps({"file": {"display_name": filepath.name}}).encode("utf-8")
     file_bytes = filepath.read_bytes()
+    file_size = len(file_bytes)
 
-    body = (
-        f"--{boundary}\r\nContent-Type: application/json\r\n\r\n".encode("utf-8")
-        + metadata_json
-        + f"\r\n--{boundary}\r\nContent-Type: {mime_type}\r\n\r\n".encode("utf-8")
-        + file_bytes
-        + f"\r\n--{boundary}--\r\n".encode("utf-8")
-    )
+    _uw.log(f"    Size: {file_size / (1024 * 1024):.1f} MB  MIME: {mime_type}")
 
-    upload_url = f"{_GEMINI_FILES_BASE}/upload/v1beta/files?key={api_key}"
-    req = urllib.request.Request(
-        upload_url,
-        data=body,
+    # ── Step 1: Initiate resumable upload session ──────────────────────────────
+    metadata_json = json.dumps({"file": {"display_name": filepath.name}}).encode("utf-8")
+
+    start_url = f"{_GEMINI_FILES_BASE}/upload/v1beta/files?key={api_key}"
+    start_req = urllib.request.Request(
+        start_url,
+        data=metadata_json,
         method="POST",
-        headers={"Content-Type": f"multipart/related; boundary={boundary}"},
+        headers={
+            "X-Goog-Upload-Protocol": "resumable",
+            "X-Goog-Upload-Command": "start",
+            "X-Goog-Upload-Header-Content-Length": str(file_size),
+            "X-Goog-Upload-Header-Content-Type": mime_type,
+            "Content-Type": "application/json",
+        },
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=600) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
+        with urllib.request.urlopen(start_req, timeout=30) as start_resp:
+            upload_url = start_resp.headers.get("X-Goog-Upload-URL", "")
+            _uw.log(f"    Upload session initiated (HTTP {start_resp.status})")
+    except urllib.error.HTTPError as e:
+        body_text = e.read().decode("utf-8", errors="replace")
+        raise ValueError(f"File API start HTTP {e.code}: {body_text[:400]}")
+
+    if not upload_url:
+        raise RuntimeError(
+            "File API start response missing X-Goog-Upload-URL header"
+        )
+
+    # ── Step 2: Upload raw audio bytes to the resumable upload URL ─────────────
+    upload_req = urllib.request.Request(
+        upload_url,
+        data=file_bytes,
+        method="POST",
+        headers={
+            "Content-Length": str(file_size),
+            "X-Goog-Upload-Offset": "0",
+            "X-Goog-Upload-Command": "upload, finalize",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(upload_req, timeout=600) as upload_resp:
+            _uw.log(f"    Upload finalized (HTTP {upload_resp.status})")
+            data = json.loads(upload_resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         body_text = e.read().decode("utf-8", errors="replace")
         raise ValueError(f"File API upload HTTP {e.code}: {body_text[:400]}")
@@ -151,8 +187,13 @@ def _upload_audio_file(filepath: Path, api_key: str) -> Dict:
     file_meta = data.get("file", {})
     if not file_meta.get("name"):
         raise RuntimeError(
-            f"File API returned unexpected response (missing 'name'): {str(data)[:300]}"
+            f"File API upload response missing 'name': {str(data)[:300]}"
         )
+
+    _uw.log(f"    File name:  {file_meta['name']}")
+    _uw.log(f"    File URI:   {file_meta.get('uri', 'N/A')[:80]}")
+    _uw.log(f"    File state: {file_meta.get('state', 'UNKNOWN')}")
+
     return file_meta
 
 
