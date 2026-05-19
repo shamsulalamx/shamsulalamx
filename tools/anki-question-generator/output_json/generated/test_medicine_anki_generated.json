@@ -1,0 +1,272 @@
+[
+  {
+    "id": "q001",
+    "questionNumber": 1,
+    "sourceQuestionNumber": 1,
+    "retrievalTag": "Polycythemia vera first-line treatment",
+    "reviewPearl": "Phlebotomy is the first-line treatment for polycythemia vera to reduce red blood cell mass and prevent complications.",
+    "clinicalPearl": null,
+    "stem": "A 62-year-old man is diagnosed with polycythemia vera after presenting with symptoms of hyperviscosity. His hematocrit is significantly elevated. He has no other significant medical history. Which of the following is the most appropriate initial management for this patient?",
+    "hasEmbeddedFigure": false,
+    "figureRefs": [],
+    "answerChoices": [
+      {
+        "label": "A",
+        "text": "Phlebotomy"
+      },
+      {
+        "label": "B",
+        "text": "Hydroxyurea"
+      },
+      {
+        "label": "C",
+        "text": "Radiation therapy"
+      },
+      {
+        "label": "D",
+        "text": "Erythropoietin"
+      }
+    ],
+    "correctAnswer": "A",
+    "educationalObjective": "",
+    "explanationSections": [
+      {
+        "heading": "Correct Answer Explanation",
+        "body": [
+          "The first-line treatment for polycythemia vera is phlebotomy. This procedure reduces the red blood cell mass, which helps alleviate symptoms of hyperviscosity and lowers the risk of thrombotic events."
+        ]
+      },
+      {
+        "heading": "Incorrect Answer Explanation",
+        "body": [
+          "Hydroxyurea is a second-line agent. Radiation therapy is not a standard treatment for polycythemia vera. Erythropoietin would worsen the condition by stimulating red blood cell production."
+        ]
+      },
+      {
+        "heading": "Educational Objective",
+        "body": [
+          "Identify phlebotomy as the first-line treatment for polycythemia vera."
+        ]
+      }
+    ],
+    "tables": [],
+    "sharedGroup": null,
+    "extractionWarnings": []
+  },
+  {
+    "id": "q002",
+    "questionNumber": 2,
+    "sourceQuestionNumber": 2,
+    "retrievalTag": "Polycythemia vera hydroxyurea mechanism",
+    "reviewPearl": "Hydroxyurea, a second-line treatment for polycythemia vera, inhibits ribonucleotide reductase, reducing DNA precursors and cellular proliferation.",
+    "clinicalPearl": null,
+    "stem": "A 58-year-old woman with polycythemia vera has been undergoing regular phlebotomy, but her symptoms remain poorly controlled, and her cell counts are persistently elevated. Her physician decides to initiate a second-line pharmacologic therapy. Which of the following agents, and its mechanism of action, is most appropriate?",
+    "hasEmbeddedFigure": false,
+    "figureRefs": [],
+    "answerChoices": [
+      {
+        "label": "A",
+        "text": "Hydroxyurea, inhibition of ribonucleotide reductase"
+      },
+      {
+        "label": "B",
+        "text": "Phlebotomy, reduction of iron stores"
+      },
+      {
+        "label": "C",
+        "text": "Erythropoietin, stimulation of red blood cell production"
+      },
+      {
+        "label": "D",
+        "text": "Hydroxyurea, direct DNA alkylation"
+      }
+    ],
+    "correctAnswer": "A",
+    "educationalObjective": "",
+    "explanationSections": [
+      {
+        "heading": "Correct Answer Explanation",
+        "body": [
+          "Hydroxyurea is the second-line treatment for polycythemia vera. Its mechanism of action involves blocking ribonucleotide reductase, which decreases deoxyuridine diphosphate (dUDP) and subsequently reduces DNA precursors, thereby inhibiting cellular proliferation."
+        ]
+      },
+      {
+        "heading": "Incorrect Answer Explanation",
+        "body": [
+          "Phlebotomy is first-line therapy, and its primary mechanism is reducing red cell mass, not just iron stores for treatment purposes. Erythropoietin would worsen polycythemia vera. Hydroxyurea does not act via direct DNA alkylation."
+        ]
+      },
+      {
+        "heading": "Educational Objective",
+        "body": [
+          "Recall hydroxyurea as second-line therapy for polycythemia vera and its mechanism of action."
+        ]
+      }
+    ],
+    "tables": [],
+    "sharedGroup": null,
+    "extractionWarnings": []
+  },
+  {
+    "id": "q003",
+    "questionNumber": 3,
+    "sourceQuestionNumber": 3,
+    "retrievalTag": "Multiple myeloma CRAB mnemonic hypercalcemia",
+    "reviewPearl": "The CRAB mnemonic for multiple myeloma includes hyperCalcemia, Renal insufficiency, Anemia, and Bone lytic lesions/Back pain.",
+    "clinicalPearl": null,
+    "stem": "A 70-year-old man presents with chronic lower back pain that has worsened over several months. Imaging reveals multiple lytic bone lesions. Laboratory tests show anemia and elevated creatinine. Which of the following additional findings is most characteristic of multiple myeloma based on the CRAB mnemonic?",
+    "hasEmbeddedFigure": false,
+    "figureRefs": [],
+    "answerChoices": [
+      {
+        "label": "A",
+        "text": "Hypercalcemia"
+      },
+      {
+        "label": "B",
+        "text": "Hypoglycemia"
+      },
+      {
+        "label": "C",
+        "text": "Leukocytosis"
+      },
+      {
+        "label": "D",
+        "text": "Thrombocytopenia"
+      }
+    ],
+    "correctAnswer": "A",
+    "educationalObjective": "",
+    "explanationSections": [
+      {
+        "heading": "Correct Answer Explanation",
+        "body": [
+          "The CRAB mnemonic for multiple myeloma stands for hyperCalcemia, Renal insufficiency, Anemia, and Bone lytic lesions/Back pain. Given the patient's back pain, lytic lesions, anemia, and elevated creatinine (renal insufficiency), hypercalcemia completes the classic presentation."
+        ]
+      },
+      {
+        "heading": "Incorrect Answer Explanation",
+        "body": [
+          "Hypoglycemia, leukocytosis, and thrombocytopenia are not part of the CRAB criteria for multiple myeloma."
+        ]
+      },
+      {
+        "heading": "Educational Objective",
+        "body": [
+          "Recognize hypercalcemia as a key feature of multiple myeloma (CRAB mnemonic)."
+        ]
+      }
+    ],
+    "tables": [],
+    "sharedGroup": null,
+    "extractionWarnings": []
+  },
+  {
+    "id": "q004",
+    "questionNumber": 4,
+    "sourceQuestionNumber": 4,
+    "retrievalTag": "Multiple myeloma renal insufficiency mechanism",
+    "reviewPearl": "Renal insufficiency in multiple myeloma is primarily caused by light chain deposition in renal tubules and hypercalcemia-induced kidney damage.",
+    "clinicalPearl": null,
+    "stem": "A 65-year-old woman with a known history of multiple myeloma develops progressive renal insufficiency. Her serum creatinine has steadily increased over the past few months. Which of the following is the primary mechanism contributing to her kidney dysfunction?",
+    "hasEmbeddedFigure": false,
+    "figureRefs": [],
+    "answerChoices": [
+      {
+        "label": "A",
+        "text": "Deposition of excess light chains in the renal tubules"
+      },
+      {
+        "label": "B",
+        "text": "Direct invasion of the kidneys by plasma cells"
+      },
+      {
+        "label": "C",
+        "text": "Autoimmune glomerulonephritis secondary to paraproteinemia"
+      },
+      {
+        "label": "D",
+        "text": "Ischemic acute tubular necrosis from hyperviscosity"
+      }
+    ],
+    "correctAnswer": "A",
+    "educationalObjective": "",
+    "explanationSections": [
+      {
+        "heading": "Correct Answer Explanation",
+        "body": [
+          "Renal insufficiency in multiple myeloma is primarily caused by the excess light chains exceeding the kidney's reabsorption ability, leading to their deposition in renal tissue and damage. Hypercalcemia, also common in multiple myeloma, further contributes to kidney damage."
+        ]
+      },
+      {
+        "heading": "Incorrect Answer Explanation",
+        "body": [
+          "Direct invasion by plasma cells, autoimmune glomerulonephritis, and ischemic acute tubular necrosis are not listed as the primary mechanisms for renal insufficiency in multiple myeloma in the provided notes."
+        ]
+      },
+      {
+        "heading": "Educational Objective",
+        "body": [
+          "Understand that light chain deposition is a primary cause of renal insufficiency in multiple myeloma."
+        ]
+      }
+    ],
+    "tables": [],
+    "sharedGroup": null,
+    "extractionWarnings": []
+  },
+  {
+    "id": "q005",
+    "questionNumber": 5,
+    "sourceQuestionNumber": 5,
+    "retrievalTag": "Thyroid nodule low TSH next step",
+    "reviewPearl": "For a thyroid nodule with low TSH, the next diagnostic step is radioactive iodine uptake and scintigraphy.",
+    "clinicalPearl": null,
+    "stem": "A 45-year-old woman presents with a palpable thyroid nodule noted during a routine physical examination. Her thyroid stimulating hormone (TSH) level is found to be subnormal. She denies symptoms of hyperthyroidism or hypothyroidism. What is the most appropriate next step in the diagnostic evaluation of this patient's thyroid nodule?",
+    "hasEmbeddedFigure": false,
+    "figureRefs": [],
+    "answerChoices": [
+      {
+        "label": "A",
+        "text": "Radioactive iodine uptake (RAIU) with scintigraphy"
+      },
+      {
+        "label": "B",
+        "text": "Fine needle aspiration (FNA) of the nodule"
+      },
+      {
+        "label": "C",
+        "text": "Measurement of free T3 and free T4 levels"
+      },
+      {
+        "label": "D",
+        "text": "Repeat thyroid ultrasound in 6 months"
+      }
+    ],
+    "correctAnswer": "A",
+    "educationalObjective": "",
+    "explanationSections": [
+      {
+        "heading": "Correct Answer Explanation",
+        "body": [
+          "When a thyroid nodule is present with a subnormal (low) TSH, the next diagnostic step is radioactive iodine uptake (RAIU) with scintigraphy. This helps determine if the nodule is \"hot\" (hyperfunctioning) or \"cold\" (hypofunctioning), guiding further management."
+        ]
+      },
+      {
+        "heading": "Incorrect Answer Explanation",
+        "body": [
+          "FNA is typically reserved for \"cold\" nodules or those with suspicious features on ultrasound. Measuring T3/T4 would be done after identifying a hot nodule, not as the initial next step. Repeating ultrasound is for monitoring, not initial diagnosis in this setting."
+        ]
+      },
+      {
+        "heading": "Educational Objective",
+        "body": [
+          "Determine the next diagnostic step for a thyroid nodule with a low TSH level."
+        ]
+      }
+    ],
+    "tables": [],
+    "sharedGroup": null,
+    "extractionWarnings": []
+  }
+]

@@ -1,0 +1,40 @@
+{
+  "runTimestamp": "2026-05-19T14:55:57.574691",
+  "model": "gemini-2.5-flash",
+  "dryRun": false,
+  "questionsPerFile": 5,
+  "inputFiles": [
+    "test_medicine_anki.txt"
+  ],
+  "files": {
+    "test_medicine_anki.txt": {
+      "status": "ok",
+      "rawChars": 14120,
+      "chunksProcessed": 1,
+      "questionsGenerated": 5,
+      "validationFailures": 0,
+      "retries": 0,
+      "repairsSucceeded": 0,
+      "repairFailures": 0,
+      "validationWarnings": [],
+      "warnings": [],
+      "chunkStats": [
+        {
+          "chunk": 1,
+          "requested": 5,
+          "status": "ok",
+          "generated": 5
+        }
+      ],
+      "outputPaths": {
+        "appReady": "/Users/shamsulalam/Desktop/shamsulalamx/tools/anki-question-generator/output_json/app_ready/test_medicine_anki_app_ready.json",
+        "generated": "/Users/shamsulalam/Desktop/shamsulalamx/tools/anki-question-generator/output_json/generated/test_medicine_anki_generated.json",
+        "chunks": "/Users/shamsulalam/Desktop/shamsulalamx/tools/anki-question-generator/output_json/chunks/test_medicine_anki_chunks.json",
+        "rawText": "/Users/shamsulalam/Desktop/shamsulalamx/tools/anki-question-generator/output_json/raw_text/test_medicine_anki_raw.txt"
+      },
+      "elapsedSeconds": 29.1,
+      "dryRun": false
+    }
+  },
+  "totalElapsedSeconds": 29.1
+}
