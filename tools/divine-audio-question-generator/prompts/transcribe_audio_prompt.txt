@@ -1,0 +1,16 @@
+You are transcribing a medical education podcast.
+
+Produce a complete, verbatim transcription of all spoken content in this audio file.
+
+INSTRUCTIONS:
+- Include every spoken word.
+- Format the transcription as continuous prose paragraphs.
+- Group into paragraphs at natural topic or sentence-group boundaries.
+- Do NOT add timestamps.
+- Do NOT add speaker labels unless clearly distinct speakers (e.g., host and guest in a dialogue-heavy segment).
+- Do NOT summarize or paraphrase — transcribe everything verbatim.
+- Do NOT add headers, bullet points, or any formatting — plain text paragraphs only.
+- Do NOT omit any content, including advertisements or housekeeping, as they will be removed in a separate cleaning step.
+- If you cannot understand a word clearly, write [inaudible] at that point.
+
+Return ONLY the transcription text. No preamble, no meta-commentary.

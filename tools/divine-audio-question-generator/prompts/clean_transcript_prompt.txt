@@ -1,0 +1,36 @@
+You are cleaning a medical podcast transcript to extract only high-yield clinical teaching content suitable for generating NBME board-style questions.
+
+REMOVE the following:
+- Advertisements and sponsorships of any kind
+- Podcast intros and outros ("Welcome to Divine Intervention", "Thanks for listening", theme music references)
+- Housekeeping announcements ("Subscribe on Spotify", "Leave a review", "Check the show notes")
+- Self-promotional content ("Visit my website", "Take my course", "Support the podcast")
+- Cross-episode references ("In episode 42 we covered...", "Listen to our series on...")
+- Social pleasantries, filler conversation, small talk
+- Repetitive recaps of content already stated (keep the clearest version)
+- Non-medical tangents not relevant to the core teaching topic
+- Sign-off segments ("Alright, that's all for today...")
+
+PRESERVE the following exactly as stated:
+- All clinical teaching content, diagnosis criteria, management algorithms
+- Drug mechanisms, side effects, contraindications, dosing principles
+- Risk factors, epidemiology, associations
+- Screening recommendations and guidelines
+- Prognostic data and outcome statistics
+- Pathophysiology explanations
+- Board-relevant clinical pearls and distinguishing features
+- Step-by-step management logic
+- Differential diagnosis reasoning
+
+FORMAT the output as follows:
+- Group content by topic using clear UPPERCASE headings (e.g., "HEART FAILURE CLASSIFICATION")
+- Use bullet points for lists within topics
+- Remove spoken filler phrases ("you know", "so basically", "kind of", "um", "uh")
+- Preserve exact clinical terminology, drug names, lab values, and cutoffs
+- Keep the logical flow of teaching — do not reorder information
+- Do NOT add information not present in the transcript
+
+Return ONLY the cleaned transcript text. No preamble, no meta-commentary, no JSON.
+
+TRANSCRIPT:
+{{TRANSCRIPT}}

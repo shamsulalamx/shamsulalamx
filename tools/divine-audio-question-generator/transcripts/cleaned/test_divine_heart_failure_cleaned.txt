@@ -1,0 +1,145 @@
+HEART FAILURE — DIVINE INTERVENTION STUDY CONTENT
+
+CLASSIFICATION OF HEART FAILURE
+
+Heart failure with reduced ejection fraction (HFrEF):
+- EF < 40%
+- Causes: ischemic cardiomyopathy (most common in the US), dilated cardiomyopathy, myocarditis, alcohol cardiomyopathy
+- Mechanism: systolic dysfunction — ventricle cannot contract effectively
+
+Heart failure with preserved ejection fraction (HFpEF):
+- EF ≥ 50%
+- Causes: hypertension (most common), diabetes, obesity, atrial fibrillation, aging
+- Mechanism: diastolic dysfunction — ventricle cannot relax to fill properly
+- HFpEF is increasingly recognized as the more common form in elderly patients
+
+CLINICAL PRESENTATION
+
+Symptoms of heart failure (both HFrEF and HFpEF):
+- Dyspnea on exertion: earliest and most common symptom — volume overload increases pulmonary venous pressure
+- Orthopnea: dyspnea when lying flat — venous return increases, worsening pulmonary edema. Ask: "How many pillows do you sleep on?"
+- Paroxysmal nocturnal dyspnea (PND): waking up at night gasping — fluid redistributes from legs to thorax during recumbency
+- Peripheral edema: bilateral pitting edema in ankles and lower extremities
+- Fatigue and exercise intolerance: low cardiac output → poor skeletal muscle perfusion
+- Weight gain: 2-3 lbs/day from fluid retention is a reliable symptom
+
+Right-sided heart failure signs (elevated CVP):
+- JVD (jugular venous distension): CVP > 8 cm H2O
+- Hepatomegaly and RUQ tenderness: hepatic congestion
+- Ascites: portal hypertension from hepatic congestion
+- Lower extremity edema
+
+Left-sided heart failure signs (pulmonary congestion):
+- Crackles (rales): bilateral basal, from pulmonary edema
+- S3 gallop: most specific sign for systolic dysfunction — ventricular filling sound in volume-overloaded, dilated ventricle
+- Displaced point of maximal impulse (PMI): lateral and downward, from cardiomegaly
+
+DIAGNOSIS
+
+BNP and NT-proBNP (most important initial test):
+- BNP > 100 pg/mL: strongly supports heart failure
+- BNP < 100 pg/mL: makes heart failure UNLIKELY (high negative predictive value — use to rule out HF in undifferentiated dyspnea)
+- NT-proBNP thresholds: age-adjusted (> 125 pg/mL for < 75 years; > 1800 pg/mL for > 75 years)
+- Key clinical use: BNP distinguishes cardiac dyspnea (HF) from pulmonary dyspnea (COPD, asthma, PE)
+- BNP is also LOWER in obese patients — adjust interpretation
+
+Echocardiogram (required before treatment):
+- Defines EF → distinguishes HFrEF vs HFpEF
+- Assesses wall motion abnormalities, valvular disease, pericardial effusion
+- Must be performed before initiating evidence-based therapy
+
+Chest X-ray findings in decompensated heart failure:
+- Cardiomegaly: cardiothoracic ratio > 0.50 (most common finding)
+- Cephalization of pulmonary vasculature: upper lobe vein dilation (early finding)
+- Kerley B lines: interstitial edema (horizontal lines at lung bases)
+- Bat-wing / butterfly pulmonary edema: alveolar edema radiating from hila (late, severe finding)
+- Pleural effusions: typically bilateral, right > left
+
+TREATMENT OF HFrEF — GUIDELINE-DIRECTED MEDICAL THERAPY (GDMT)
+
+Four pillars of GDMT with proven mortality benefit:
+
+1. ARNI (angiotensin receptor-neprilysin inhibitor)
+   - Sacubitril/valsartan (Entresto) — first-line, superior to ACE inhibitor alone
+   - Alternative if ARNI not tolerated: ACE inhibitor (lisinopril, enalapril) or ARB (losartan)
+   - Mechanism: ARB blocks angiotensin II + neprilysin inhibitor prevents BNP degradation
+   - KEY PEARL: Do NOT use ARNI with ACE inhibitor (angioedema risk). Wait 36 hours after stopping ACE before starting ARNI.
+
+2. Beta-blocker
+   - Only three have evidence-based mortality benefit: carvedilol, metoprolol succinate (Toprol XL), bisoprolol
+   - Carvedilol: also has alpha-blocking activity (useful with hypertension)
+   - Metoprolol tartrate (immediate release) does NOT have the same evidence — use succinate (ER)
+   - PARADOX: contraindicated in acute decompensation, REQUIRED for chronic stable HFrEF
+   - Start only after patient is euvolemic — starting during fluid overload worsens prognosis
+
+3. Mineralocorticoid receptor antagonist (MRA)
+   - Spironolactone or eplerenone
+   - Eplerenone: fewer anti-androgenic side effects (gynecomastia, sexual dysfunction)
+   - CONTRAINDICATIONS: eGFR < 30, K+ > 5.0 mEq/L, creatinine > 2.5 (women) or > 2.0 (men)
+   - Monitor potassium carefully — hyperkalemia risk, especially with ACE/ARB
+
+4. SGLT2 inhibitor (newest pillar, added ~2019-2022)
+   - Dapagliflozin (Farxiga) or empagliflozin (Jardiance)
+   - Benefit in BOTH HFrEF and HFpEF (unlike beta-blockers which are HFrEF only)
+   - Mechanism in HF: osmotic diuresis, reduced preload/afterload, possible direct cardiac effects
+   - Also reduces HF hospitalization even in patients without diabetes
+   - CONTRAINDICATION: eGFR < 25 (dapagliflozin), eGFR < 20 (empagliflozin)
+
+Diuretics — symptomatic relief only (NO mortality benefit):
+- Furosemide (loop diuretic): first-line for volume overload
+- Goal: relieve congestion, achieve dry weight
+- Monitor: electrolytes (hypokalemia, hyponatremia), renal function, uric acid
+
+DEVICES FOR HFrEF
+
+ICD (implantable cardioverter-defibrillator):
+- Indication: EF ≤ 35% despite GDMT × 3 months, NYHA Class II-III
+- Rationale: HFrEF patients die of sudden cardiac death (ventricular arrhythmia)
+- 3-month waiting period required — EF may improve with GDMT before device placement
+
+CRT (cardiac resynchronization therapy) / CRT-D (with defibrillator):
+- Indication: EF ≤ 35% + QRS ≥ 150 ms (ideally ≥ 130 ms) + LBBB morphology, NYHA Class II-III
+- Mechanism: re-synchronizes LV and RV contractions, improves EF and symptoms
+- Most benefit when LBBB is present (versus RBBB or non-specific IVCD)
+
+TREATMENT OF HFpEF
+
+No single therapy proven to reduce mortality (unlike HFrEF):
+- Control underlying conditions: HTN (critical — goal SBP < 130 mmHg), diabetes, obesity, afib
+- Diuretics for symptomatic congestion
+- SGLT2 inhibitors: best current evidence (EMPEROR-Preserved trial — modest benefit)
+- Rate control for atrial fibrillation is crucial
+- Beta-blockers: NOT indicated in pure HFpEF (unlike HFrEF)
+
+ACUTE DECOMPENSATED HEART FAILURE (ADHF) MANAGEMENT
+
+Immediate priorities:
+- IV furosemide: double the oral home dose for IV equivalent (40mg oral → 40mg IV at minimum)
+- Supplemental oxygen; CPAP/BiPAP for respiratory distress
+- Fluid restriction
+- Position: sit upright (reduces preload)
+- Monitor: urine output, daily weights, BMP (renal function + electrolytes)
+
+Vasodilators in ADHF:
+- IV nitroglycerin: reduces preload (venodilation) — useful in hypertensive ADHF with pulmonary edema
+- IV nitroprusside: reduces both preload and afterload — use with caution (requires arterial line monitoring, risk of cyanide toxicity)
+
+Cardiogenic shock management:
+- Inotropes: dobutamine (first-line), milrinone (in beta-blocker users — bypasses beta receptors)
+- Vasopressors: norepinephrine for MAP support
+- Mechanical circulatory support: IABP, Impella, ECMO for refractory shock
+
+Beta-blocker management in ADHF:
+- DO NOT initiate new beta-blocker during acute decompensation
+- CONTINUE existing beta-blocker if patient not in cardiogenic shock — abrupt discontinuation worsens outcomes
+
+KEY DISTINGUISHING BOARD PEARLS
+
+- S3 gallop: most specific physical exam finding for HFrEF (low sensitivity, high specificity)
+- S4 gallop: found in HFpEF — stiff ventricle requiring forceful atrial kick; also in hypertrophic cardiomyopathy
+- BNP < 100: essentially rules out heart failure as cause of dyspnea
+- SGLT2 inhibitors: unique in treating BOTH HFrEF and HFpEF — frequently tested
+- Metoprolol tartrate vs succinate: only SUCCINATE (ER) has mortality benefit in HF
+- Sacubitril/valsartan vs ACE: never combine — 36-hour washout required when switching from ACE
+- ICD timing: 3-month window for GDMT optimization before device decision
+- HF and diuretics: furosemide treats symptoms but does NOT extend survival

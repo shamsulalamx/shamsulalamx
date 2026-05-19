@@ -1,0 +1,22 @@
+# ── Divine Audio Question Generator — ignored paths ───────────────────────────
+#
+# Source code, prompts, and committed test fixtures are tracked.
+# Generated outputs, run logs, audio files, and real transcripts are NOT tracked.
+
+# All pipeline output — regenerable
+output_json/
+
+# Run logs — timestamped, accumulate per-run
+reports/
+
+# Input audio files — large (30-100 MB) and potentially copyrighted
+# No synthetic audio fixture exists — audio test requires a real file and API key
+input_audio/
+
+# Raw transcriptions — derived from audio (large, regenerable via --transcribe-only)
+transcripts/raw/
+
+# Cleaned transcriptions — derived from audio (regenerable via --clean-only)
+# Exception: synthetic test fixture used for --dry-run (stays tracked)
+transcripts/cleaned/*
+!transcripts/cleaned/test_divine_heart_failure_cleaned.txt
