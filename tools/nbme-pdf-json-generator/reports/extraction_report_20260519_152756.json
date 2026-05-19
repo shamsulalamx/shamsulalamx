@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "nbme-pdf-extractor-report-v4",
+  "generatedAt": "2026-05-19T15:27:56.802999Z",
+  "elapsedSeconds": 0.0,
+  "mode": "normalize-gemini",
+  "inputDirectory": "input_pdfs",
+  "rawTextDirectory": "output_json/raw_text",
+  "chunksDirectory": "output_json/chunks",
+  "normalizedDirectory": "output_json/normalized",
+  "summary": {
+    "total": 0,
+    "extractionOk": 0,
+    "extractionWarning": 0,
+    "extractionError": 0,
+    "extractionSkipped": 0,
+    "chunkingOk": 0,
+    "chunkingWarning": 0,
+    "chunkingError": 0,
+    "chunkingSkipped": 0,
+    "totalChunks": 0,
+    "totalChunkWarnings": 0,
+    "normalizationOk": 0,
+    "normalizationWarning": 0,
+    "normalizationError": 0,
+    "normalizationSkipped": 0,
+    "totalNormalized": 0,
+    "totalFailed": 0,
+    "totalValidationErrors": 0
+  },
+  "files": []
+}

@@ -6,13 +6,19 @@ Milestone 1: PDF → raw text extraction (pdfplumber)
 Milestone 2: raw text → question chunks (deterministic, no AI)
 Milestone 3: chunks → normalized scaffold (dry-run placeholder, no LLM)
 Milestone 4: chunks → Gemini → validated normalized JSON
+Milestone 4.5: OCR fallback for image-based / scanned PDFs
 
 Usage:
   python3 extract_pdfs.py                      # full pipeline: extract + chunk
+  python3 extract_pdfs.py --force-ocr          # force OCR on every page (requires pymupdf + tesseract)
   python3 extract_pdfs.py --chunk-only         # re-chunk existing raw_text files
   python3 extract_pdfs.py --normalize-dry-run  # placeholder normalized JSON (no LLM)
   python3 extract_pdfs.py --normalize-gemini   # Gemini-powered normalization
                                                # requires: export GEMINI_API_KEY=...
+
+OCR dependencies (optional — needed for image-based PDFs):
+  pip3 install pymupdf pytesseract
+  brew install tesseract
 """
 
 import argparse
@@ -33,6 +39,20 @@ except ImportError:
     print("ERROR: pdfplumber is not installed.")
     print("Run:  pip3 install pdfplumber")
     sys.exit(1)
+
+# Optional OCR dependencies (M4.5) — graceful degradation if absent
+try:
+    import fitz  # PyMuPDF
+    HAS_FITZ = True
+except ImportError:
+    HAS_FITZ = False
+
+try:
+    import pytesseract
+    from PIL import Image as _PILImage
+    HAS_TESSERACT = True
+except ImportError:
+    HAS_TESSERACT = False
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -67,6 +87,20 @@ FORBIDDEN_OUTPUT_PHRASES = CONTAMINATION_PHRASES + [
 
 MIN_CHUNK_CHARS = 80
 
+# OCR heuristics (M4.5)
+OCR_MIN_USEFUL_CHARS = 50   # page text shorter than this → candidate for OCR
+OCR_DPI              = 200  # render DPI for pytesseract
+
+# Lines that look like watermarks, page numbers, or URL-only content
+_OCR_NOISE_LINE_RE = re.compile(
+    r'^[\s\d]+$'           # purely numeric / whitespace
+    r'|https?://\S+'       # http/https URLs
+    r'|t\.me/\S+'          # Telegram links
+    r'|www\.\S+'           # www links
+    r'|^\s*[-|]+\s*$',     # divider lines
+    re.IGNORECASE,
+)
+
 GEMINI_MODEL    = "gemini-2.5-flash"
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 
@@ -98,6 +132,7 @@ EXPLANATION_RE = re.compile(
 _Q_BOUNDARY_RE = re.compile(
     r'^(?:'
     r'(?:Question|Item)\s+(\d+)[.):\s]'
+    r'|\*\s*(\d+)[.)]\s'   # NBME interface prefix: "* 1. "
     r'|(\d+)[.)]\s'
     r')',
     re.MULTILINE | re.IGNORECASE,
@@ -121,18 +156,63 @@ def _save_report(report: dict):
 
 
 # ---------------------------------------------------------------------------
+# Milestone 4.5: OCR helpers
+# ---------------------------------------------------------------------------
+
+def _page_needs_ocr(text: str) -> bool:
+    """Return True if pdfplumber text looks like watermark/header only, not real content."""
+    stripped = text.strip()
+    if len(stripped) < OCR_MIN_USEFUL_CHARS:
+        return True
+    lines = [l.strip() for l in stripped.splitlines() if l.strip()]
+    if not lines:
+        return True
+    noise = sum(1 for l in lines if _OCR_NOISE_LINE_RE.search(l))
+    return (noise / len(lines)) > 0.6
+
+
+def _ocr_pdf_page(pdf_path: Path, page_index: int, dpi: int = OCR_DPI) -> str:
+    """Render one PDF page to a greyscale image and return OCR text."""
+    doc = fitz.open(str(pdf_path))
+    try:
+        page = doc[page_index]
+        mat  = fitz.Matrix(dpi / 72, dpi / 72)
+        pix  = page.get_pixmap(matrix=mat, colorspace=fitz.csGRAY)
+        img  = _PILImage.frombytes("L", [pix.width, pix.height], pix.samples)
+        return pytesseract.image_to_string(img)
+    finally:
+        doc.close()
+
+
+# ---------------------------------------------------------------------------
 # Milestone 1: PDF → raw text
 # ---------------------------------------------------------------------------
 
-def extract_pdf(pdf_path: Path) -> dict:
+def extract_pdf(pdf_path: Path, force_ocr: bool = False) -> dict:
     result = {
-        "filename":    pdf_path.name,
-        "page_count":  0,
-        "status":      "ok",
-        "warnings":    [],
-        "output_path": None,
-        "char_count":  0,
+        "filename":     pdf_path.name,
+        "page_count":   0,
+        "status":       "ok",
+        "warnings":     [],
+        "output_path":  None,
+        "char_count":   0,
+        "ocr_pages":    0,
+        "failed_pages": 0,
+        "page_methods": [],  # per-page: "text" | "ocr" | "text+ocr" | "failed"
     }
+
+    if force_ocr and not (HAS_FITZ and HAS_TESSERACT):
+        missing = []
+        if not HAS_FITZ:
+            missing.append("pymupdf  →  pip3 install pymupdf")
+        if not HAS_TESSERACT:
+            missing.append("pytesseract  →  pip3 install pytesseract  &&  brew install tesseract")
+        result["status"] = "error"
+        result["warnings"].append("--force-ocr requires: " + "  |  ".join(missing))
+        return result
+
+    _ocr_dep_warned = False
+
     try:
         with pdfplumber.open(pdf_path) as pdf:
             result["page_count"] = len(pdf.pages)
@@ -143,16 +223,68 @@ def extract_pdf(pdf_path: Path) -> dict:
 
             pages_text = []
             for i, page in enumerate(pdf.pages, start=1):
+                page_idx = i - 1
+
                 try:
-                    text = page.extract_text() or ""
-                    pages_text.append(text)
-                    if not text.strip():
+                    plumber_text = page.extract_text() or ""
+                except Exception as e:
+                    result["warnings"].append(f"Page {i}: pdfplumber error — {e}")
+                    plumber_text = ""
+
+                should_ocr = force_ocr or _page_needs_ocr(plumber_text)
+
+                if should_ocr and HAS_FITZ and HAS_TESSERACT:
+                    try:
+                        ocr_text = _ocr_pdf_page(pdf_path, page_idx)
+                        result["ocr_pages"] += 1
+                        # text+ocr: force_ocr AND pdfplumber had real content
+                        if force_ocr and plumber_text.strip() and not _page_needs_ocr(plumber_text):
+                            pages_text.append(plumber_text.rstrip() + "\n\n" + ocr_text.strip())
+                            result["page_methods"].append("text+ocr")
+                        else:
+                            pages_text.append(ocr_text)
+                            result["page_methods"].append("ocr")
+                    except Exception as e:
+                        result["warnings"].append(f"Page {i}: OCR failed — {e}")
+                        pages_text.append(plumber_text)
+                        if plumber_text.strip():
+                            result["page_methods"].append("text")
+                        else:
+                            result["page_methods"].append("failed")
+                            result["failed_pages"] += 1
+
+                elif should_ocr and not (HAS_FITZ and HAS_TESSERACT):
+                    if not _ocr_dep_warned:
+                        _ocr_dep_warned = True
+                        hints = []
+                        if not HAS_FITZ:
+                            hints.append("pymupdf  →  pip3 install pymupdf")
+                        if not HAS_TESSERACT:
+                            hints.append("pytesseract  →  pip3 install pytesseract  &&  brew install tesseract")
+                        result["warnings"].append(
+                            "Some pages need OCR but dependencies are missing — "
+                            "watermark/image pages will be empty.  Install: " + "  |  ".join(hints)
+                        )
+                    pages_text.append(plumber_text)
+                    if plumber_text.strip():
+                        result["page_methods"].append("text")
+                    else:
                         result["warnings"].append(
                             f"Page {i}: no extractable text (may be image-only)"
                         )
-                except Exception as e:
-                    result["warnings"].append(f"Page {i}: extraction error — {e}")
-                    pages_text.append("")
+                        result["page_methods"].append("failed")
+                        result["failed_pages"] += 1
+
+                else:
+                    pages_text.append(plumber_text)
+                    if plumber_text.strip():
+                        result["page_methods"].append("text")
+                    else:
+                        result["warnings"].append(
+                            f"Page {i}: no extractable text (may be image-only)"
+                        )
+                        result["page_methods"].append("failed")
+                        result["failed_pages"] += 1
 
     except Exception as e:
         result["status"] = "error"
@@ -194,7 +326,7 @@ def _strip_page_markers(text: str) -> str:
 
 
 def _parse_q_number(m: re.Match) -> int:
-    return int(m.group(1) if m.group(1) else m.group(2))
+    return int(next(g for g in m.groups() if g is not None))
 
 
 def _chunk_confidence(raw_text: str) -> str:
@@ -837,6 +969,8 @@ def build_report(records: list, elapsed: float, mode: str) -> dict:
             "totalNormalized":       sum(r.get("normalized_count", 0) for r in records),
             "totalFailed":           sum(r.get("failed_count", 0) for r in records),
             "totalValidationErrors": sum(r.get("validation_error_count", 0) for r in records),
+            "totalOcrPages":         sum(r.get("ocr_pages", 0) for r in records),
+            "totalFailedPages":      sum(r.get("failed_pages", 0) for r in records),
         },
         "files": [
             {
@@ -845,6 +979,9 @@ def build_report(records: list, elapsed: float, mode: str) -> dict:
                 "extractionStatus":      r.get("extraction_status", "skipped"),
                 "extractionWarnings":    r.get("extraction_warnings", []),
                 "charCount":             r.get("char_count", 0),
+                "ocrPages":              r.get("ocr_pages", 0),
+                "failedPages":           r.get("failed_pages", 0),
+                "pageMethodCounts":      r.get("page_method_counts", {}),
                 "rawTextPath":           r.get("raw_text_path"),
                 "chunkingStatus":        r.get("chunking_status", "skipped"),
                 "chunkCount":            r.get("chunk_count", 0),
@@ -876,6 +1013,10 @@ def print_summary(report: dict):
         print(f"  Extraction  OK         : {s['extractionOk']}")
         print(f"  Extraction  WARN       : {s['extractionWarning']}")
         print(f"  Extraction  ERROR      : {s['extractionError']}")
+        if s.get("totalOcrPages", 0) > 0:
+            print(f"  Pages via OCR          : {s['totalOcrPages']}")
+        if s.get("totalFailedPages", 0) > 0:
+            print(f"  Pages failed (no text) : {s['totalFailedPages']}")
 
     if not is_normalize:
         print(f"  Chunking    OK         : {s['chunkingOk']}")
@@ -908,7 +1049,12 @@ def print_summary(report: dict):
 
         if not is_normalize and mode != "chunk-only":
             chars = f"{f['charCount']:,}" if f.get("charCount") else "0"
-            print(f"    extract   {ei}  [{f['pageCount']} pages, {chars} chars]")
+            ocr_note = ""
+            if f.get("ocrPages", 0) > 0:
+                ocr_note = f", {f['ocrPages']} OCR'd"
+            if f.get("failedPages", 0) > 0:
+                ocr_note += f", {f['failedPages']} failed"
+            print(f"    extract   {ei}  [{f['pageCount']} pages, {chars} chars{ocr_note}]")
             for w in f.get("extractionWarnings", []):
                 print(f"           ⚠  {w}")
             if f.get("rawTextPath"):
@@ -937,7 +1083,14 @@ def print_summary(report: dict):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="NBME PDF → JSON Generator (Milestones 1–4)"
+        description="NBME PDF → JSON Generator (Milestones 1–4.5)"
+    )
+    parser.add_argument(
+        "--force-ocr", action="store_true",
+        help=(
+            "Force OCR on every PDF page regardless of extracted text content. "
+            "Requires: pip3 install pymupdf pytesseract  &&  brew install tesseract"
+        ),
     )
     parser.add_argument(
         "--chunk-only", action="store_true",
@@ -1132,9 +1285,10 @@ def main():
     for pdf_path in pdf_files:
         print(f"\n  [{pdf_path.name}]")
         print(f"    Extracting ...", end=" ", flush=True)
-        ext = extract_pdf(pdf_path)
+        ext = extract_pdf(pdf_path, force_ocr=args.force_ocr)
+        ocr_note = f", {ext['ocr_pages']} OCR'd" if ext.get("ocr_pages") else ""
         print(f"[{ext['status'].upper()}]  {ext['page_count']} pages, "
-              f"{ext['char_count']:,} chars")
+              f"{ext['char_count']:,} chars{ocr_note}")
 
         cr = {"status": "skipped", "chunkCount": 0, "warnings": [],
               "_per_chunk_warn_total": 0, "output_path": None}
@@ -1147,12 +1301,20 @@ def main():
         else:
             cr["warnings"].append("Skipped chunking: extraction failed")
 
+        page_methods = ext.get("page_methods", [])
+        method_counts = {
+            m: page_methods.count(m) for m in ("text", "ocr", "text+ocr", "failed")
+            if page_methods.count(m) > 0
+        }
         records.append({
             "filename":              ext["filename"],
             "page_count":            ext.get("page_count", 0),
             "extraction_status":     ext["status"],
             "extraction_warnings":   ext.get("warnings", []),
             "char_count":            ext.get("char_count", 0),
+            "ocr_pages":             ext.get("ocr_pages", 0),
+            "failed_pages":          ext.get("failed_pages", 0),
+            "page_method_counts":    method_counts,
             "raw_text_path":         ext.get("output_path"),
             "chunking_status":       cr["status"],
             "chunk_count":           cr["chunkCount"],

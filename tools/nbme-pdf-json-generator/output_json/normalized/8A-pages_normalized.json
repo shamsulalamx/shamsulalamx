@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "normalized-question-batch-v1",
+  "sourceFile": "8A-pages_raw.txt",
+  "sourceChunkFile": "8A-pages_chunks.json",
+  "createdAt": "2026-05-19T15:37:42.575514Z",
+  "normalizationMode": "gemini",
+  "normalizedCount": 0,
+  "failedCount": 0,
+  "items": [],
+  "failures": []
+}

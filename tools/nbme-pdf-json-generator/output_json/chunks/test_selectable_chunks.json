@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "nbme-chunk-v1",
+  "sourceFile": "test_selectable_raw.txt",
+  "createdAt": "2026-05-19T15:47:29.505026Z",
+  "chunkCount": 2,
+  "fileWarnings": [],
+  "chunks": [
+    {
+      "chunkId": "q001",
+      "questionNumber": 1,
+      "rawText": "1. A 28-year-old woman presents with 3 weeks of low mood, fatigue,\ninsomnia, and feelings of worthlessness. Which of the following is\nthe most likely diagnosis?\nA. Adjustment disorder\nB. Major depressive disorder\nC. Persistent depressive disorder\nD. Bipolar I disorder\nE. Grief reaction\nCorrect Answer: B\nEducational Objective: Diagnose major depressive disorder.\nCorrect Explanation: Patient meets DSM-5 criteria with 5+ SIGECAPS for 2 weeks.\nIncorrect Explanations:\nA. Adjustment disorder requires an identifiable stressor within 3 months.\nC. PDD requires 2+ years duration.\nD. No manic episodes reported.\nE. Grief is not a disorder.\nReview Pearl: MDD requires 5 of 9 SIGECAPS for at least 2 weeks.",
+      "startMarker": "1.",
+      "endMarker": "1.",
+      "confidence": "high",
+      "warnings": []
+    },
+    {
+      "chunkId": "q001",
+      "questionNumber": 1,
+      "rawText": "1. A 28-year-old woman presents with 3 weeks of low mood, fatigue,\ninsomnia, and feelings of worthlessness. Which of the following is\nthe most likely diagnosis?\n\nA. Adjustment disorder\n\nB. Major depressive disorder\n\nC. Persistent depressive disorder\nD. Bipolar | disorder\n\nE. Grief reaction\n\nCorrect Answer: B\n\nEducational Objective: Diagnose major depressive disorder.\n\nCorrect Explanation: Patient meets DSM-5 criteria with 5+ SIGECAPS for 2 weeks.\nIncorrect Explanations:\n\nA. Adjustment disorder requires an identifiable stressor within 3 months.\n\nC. PDD requires 2+ years duration.\n\nD. No manic episodes reported.\n\nE. Grief is not a disorder.\n\nReview Pearl: MDD requires 5 of 9 SIGECAPS for at least 2 weeks.",
+      "startMarker": "1.",
+      "endMarker": "EOF",
+      "confidence": "high",
+      "warnings": [
+        "Duplicate question number 1 (also at chunk index 0)"
+      ]
+    }
+  ]
+}

@@ -1,11 +1,11 @@
 # NBME PDF → JSON Generator
 
-**Current: Milestone 4 — Gemini-powered normalization with schema validation**
+**Current: Milestone 4.5 — OCR fallback for image-based / scanned PDFs**
 
 Staged pipeline for converting NBME-style PDF answer files into app-ready JSON.
 
 ```
-PDF → raw text → chunks → Gemini → normalized JSON → (Milestone 5: app-ready JSON)
+PDF → raw text (+ OCR fallback) → chunks → Gemini → normalized JSON → (Milestone 5: app-ready JSON)
 ```
 
 ---
@@ -77,6 +77,7 @@ python3 extract_pdfs.py --normalize-gemini
 | Command | What it does |
 |---|---|
 | `python3 extract_pdfs.py` | Extract PDFs → raw text → question chunks |
+| `python3 extract_pdfs.py --force-ocr` | Force OCR on every page (requires pymupdf + tesseract) |
 | `python3 extract_pdfs.py --chunk-only` | Re-chunk existing raw_text files (skip PDF re-extraction) |
 | `python3 extract_pdfs.py --normalize-dry-run` | Create empty placeholder normalized JSON (no LLM, no key needed) |
 | `python3 extract_pdfs.py --normalize-gemini` | Call Gemini to normalize chunks (requires `GEMINI_API_KEY`) |
@@ -231,7 +232,7 @@ Field mapping from normalized → app quiz schema (`q.t`, `q.o`, `q.c`, etc.).
 
 - macOS (Apple Silicon or Intel)
 - Python 3.9+ (standard library only for M4 HTTP calls — `urllib.request`)
-- `pdfplumber` — for PDF extraction only
+- `pdfplumber` — for PDF text extraction
 
 ```bash
 pip3 install pdfplumber
@@ -239,11 +240,57 @@ pip3 install pdfplumber
 
 No additional packages are needed for the Gemini API calls.
 
+### OCR dependencies (M4.5 — optional)
+
+Required only for image-based or scanned PDFs where pdfplumber finds no text:
+
+```bash
+brew install tesseract
+pip3 install pymupdf pytesseract
+```
+
+If these are not installed, pages that contain only watermarks or image content will produce empty raw text and 0 chunks. The pipeline will print a warning with the exact install commands rather than silently failing.
+
+---
+
+## OCR fallback (M4.5)
+
+For image-based or scanned PDFs where pdfplumber cannot extract text:
+
+### How it works
+
+1. Each page is first extracted with pdfplumber.
+2. If the extracted text is very short (< 50 chars) or dominated by watermarks/URLs, the page is flagged for OCR.
+3. PyMuPDF renders the page to a greyscale image at 200 DPI.
+4. pytesseract runs Tesseract OCR on the rendered image.
+5. The OCR text is saved under the same `## Page N` heading in the raw_text output.
+
+### Per-page extraction method
+
+The pipeline tracks one of four methods per page:
+
+| Method | Meaning |
+|---|---|
+| `text` | pdfplumber extracted usable text |
+| `ocr` | OCR used (pdfplumber text was empty/watermark-only) |
+| `text+ocr` | Both pdfplumber and OCR produced text (only with `--force-ocr`) |
+| `failed` | No text from either method |
+
+Method counts appear in the pipeline report under `pageMethodCounts` and are shown in the terminal summary.
+
+### `--force-ocr`
+
+Forces OCR on every page regardless of pdfplumber output. Useful for fully scanned PDFs or to verify OCR quality.
+
+### Graceful degradation
+
+If pymupdf or pytesseract are not installed, the pipeline prints one warning with exact install commands and continues with pdfplumber-only extraction. It never fakes success.
+
 ---
 
 ## Notes
 
 - Chunks are processed **sequentially** with a 0.5s delay between Gemini calls.
-- Image-only PDFs produce empty raw text → no chunks → 0 normalized questions.
+- Image-only PDFs produce empty raw text → no chunks → 0 normalized questions without OCR deps.
 - This tool does not touch any app files (`index.html`, `js/`, etc.).
 - Each run appends a new timestamped report to `reports/`.

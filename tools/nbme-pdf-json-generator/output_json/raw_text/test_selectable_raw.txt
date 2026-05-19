@@ -1,0 +1,49 @@
+## Page 1
+
+1. A 28-year-old woman presents with 3 weeks of low mood, fatigue,
+insomnia, and feelings of worthlessness. Which of the following is
+the most likely diagnosis?
+A. Adjustment disorder
+B. Major depressive disorder
+C. Persistent depressive disorder
+D. Bipolar I disorder
+E. Grief reaction
+Correct Answer: B
+Educational Objective: Diagnose major depressive disorder.
+Correct Explanation: Patient meets DSM-5 criteria with 5+ SIGECAPS for 2 weeks.
+Incorrect Explanations:
+A. Adjustment disorder requires an identifiable stressor within 3 months.
+C. PDD requires 2+ years duration.
+D. No manic episodes reported.
+E. Grief is not a disorder.
+Review Pearl: MDD requires 5 of 9 SIGECAPS for at least 2 weeks.
+
+1. A 28-year-old woman presents with 3 weeks of low mood, fatigue,
+insomnia, and feelings of worthlessness. Which of the following is
+the most likely diagnosis?
+
+A. Adjustment disorder
+
+B. Major depressive disorder
+
+C. Persistent depressive disorder
+D. Bipolar | disorder
+
+E. Grief reaction
+
+Correct Answer: B
+
+Educational Objective: Diagnose major depressive disorder.
+
+Correct Explanation: Patient meets DSM-5 criteria with 5+ SIGECAPS for 2 weeks.
+Incorrect Explanations:
+
+A. Adjustment disorder requires an identifiable stressor within 3 months.
+
+C. PDD requires 2+ years duration.
+
+D. No manic episodes reported.
+
+E. Grief is not a disorder.
+
+Review Pearl: MDD requires 5 of 9 SIGECAPS for at least 2 weeks.

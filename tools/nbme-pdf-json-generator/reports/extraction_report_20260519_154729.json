@@ -1,0 +1,78 @@
+{
+  "schemaVersion": "nbme-pdf-extractor-report-v4",
+  "generatedAt": "2026-05-19T15:47:29.505214Z",
+  "elapsedSeconds": 3.67,
+  "mode": "full",
+  "inputDirectory": "input_pdfs",
+  "rawTextDirectory": "output_json/raw_text",
+  "chunksDirectory": "output_json/chunks",
+  "normalizedDirectory": "output_json/normalized",
+  "summary": {
+    "total": 2,
+    "extractionOk": 2,
+    "extractionWarning": 0,
+    "extractionError": 0,
+    "extractionSkipped": 0,
+    "chunkingOk": 1,
+    "chunkingWarning": 1,
+    "chunkingError": 0,
+    "chunkingSkipped": 0,
+    "totalChunks": 3,
+    "totalChunkWarnings": 2,
+    "normalizationOk": 0,
+    "normalizationWarning": 0,
+    "normalizationError": 0,
+    "normalizationSkipped": 2,
+    "totalNormalized": 0,
+    "totalFailed": 0,
+    "totalValidationErrors": 0,
+    "totalOcrPages": 3,
+    "totalFailedPages": 0
+  },
+  "files": [
+    {
+      "filename": "8A-pages.pdf",
+      "pageCount": 2,
+      "extractionStatus": "ok",
+      "extractionWarnings": [],
+      "charCount": 5798,
+      "ocrPages": 2,
+      "failedPages": 0,
+      "pageMethodCounts": {
+        "ocr": 2
+      },
+      "rawTextPath": "output_json/raw_text/8A-pages_raw.txt",
+      "chunkingStatus": "warning",
+      "chunkCount": 1,
+      "chunkWarningCount": 1,
+      "chunkPath": "output_json/chunks/8A-pages_chunks.json",
+      "normalizationStatus": "skipped",
+      "normalizedCount": 0,
+      "failedCount": 0,
+      "validationErrorCount": 0,
+      "normalizedOutputPath": null
+    },
+    {
+      "filename": "test_selectable.pdf",
+      "pageCount": 1,
+      "extractionStatus": "ok",
+      "extractionWarnings": [],
+      "charCount": 1425,
+      "ocrPages": 1,
+      "failedPages": 0,
+      "pageMethodCounts": {
+        "text+ocr": 1
+      },
+      "rawTextPath": "output_json/raw_text/test_selectable_raw.txt",
+      "chunkingStatus": "ok",
+      "chunkCount": 2,
+      "chunkWarningCount": 1,
+      "chunkPath": "output_json/chunks/test_selectable_chunks.json",
+      "normalizationStatus": "skipped",
+      "normalizedCount": 0,
+      "failedCount": 0,
+      "validationErrorCount": 0,
+      "normalizedOutputPath": null
+    }
+  ]
+}

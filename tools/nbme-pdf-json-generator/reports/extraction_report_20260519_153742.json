@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "nbme-pdf-extractor-report-v4",
+  "generatedAt": "2026-05-19T15:37:42.575906Z",
+  "elapsedSeconds": 0.0,
+  "mode": "normalize-gemini",
+  "inputDirectory": "input_pdfs",
+  "rawTextDirectory": "output_json/raw_text",
+  "chunksDirectory": "output_json/chunks",
+  "normalizedDirectory": "output_json/normalized",
+  "summary": {
+    "total": 1,
+    "extractionOk": 0,
+    "extractionWarning": 0,
+    "extractionError": 0,
+    "extractionSkipped": 1,
+    "chunkingOk": 0,
+    "chunkingWarning": 0,
+    "chunkingError": 0,
+    "chunkingSkipped": 1,
+    "totalChunks": 0,
+    "totalChunkWarnings": 0,
+    "normalizationOk": 0,
+    "normalizationWarning": 1,
+    "normalizationError": 0,
+    "normalizationSkipped": 0,
+    "totalNormalized": 0,
+    "totalFailed": 0,
+    "totalValidationErrors": 0
+  },
+  "files": [
+    {
+      "filename": "8A-pages.pdf",
+      "pageCount": 0,
+      "extractionStatus": "skipped",
+      "extractionWarnings": [],
+      "charCount": 0,
+      "rawTextPath": null,
+      "chunkingStatus": "skipped",
+      "chunkCount": 0,
+      "chunkWarningCount": 0,
+      "chunkPath": "output_json/chunks/8A-pages_chunks.json",
+      "normalizationStatus": "warning",
+      "normalizedCount": 0,
+      "failedCount": 0,
+      "validationErrorCount": 0,
+      "normalizedOutputPath": "output_json/normalized/8A-pages_normalized.json"
+    }
+  ]
+}
