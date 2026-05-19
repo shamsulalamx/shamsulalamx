@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu } = require('electron');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
@@ -649,6 +649,75 @@ let _embeddedServer = null;
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── Application menu ─────────────────────────────────────────────────────────
+// Provides Cmd+R / Cmd+Shift+R reload shortcuts and a standard macOS menu bar.
+// Without this, Electron uses its default menu which has no reload shortcut and
+// may not wire Cmd+Q correctly when the window is in a custom state.
+function buildAppMenu(win) {
+  return Menu.buildFromTemplate([
+    {
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' }
+      ]
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' }
+      ]
+    },
+    {
+      label: 'View',
+      submenu: [
+        {
+          label: 'Reload',
+          accelerator: 'CmdOrCtrl+R',
+          click: () => {
+            const w = BrowserWindow.getFocusedWindow();
+            if (w) w.webContents.reload();
+          }
+        },
+        {
+          label: 'Hard Reload',
+          accelerator: 'CmdOrCtrl+Shift+R',
+          click: () => {
+            const w = BrowserWindow.getFocusedWindow();
+            if (w) w.webContents.reloadIgnoringCache();
+          }
+        },
+        { type: 'separator' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' }
+      ]
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        { type: 'separator' },
+        { role: 'close' }
+      ]
+    }
+  ]);
+}
+
 // Main process boundary:
 // Owns Electron window lifecycle and loading the existing HTTP-served app only.
 // App logic, parser/OCR/render behavior, Drive, and storage remain in index.html.
@@ -674,6 +743,47 @@ function createWindow() {
     win.show();
   });
 
+  // The renderer's Drive IIFE registers a beforeunload handler that calls
+  // e.preventDefault() while a Drive sync is pending.  In Electron this fires
+  // will-prevent-unload on the webContents; without overriding it the window
+  // close silently does nothing — the red X appears to do nothing at all.
+  // We override it here and handle state flushing ourselves in the close handler.
+  win.webContents.on('will-prevent-unload', (e) => {
+    e.preventDefault(); // allow the unload — flush already handled below
+  });
+
+  // Flush renderer state then close.  Two-pass pattern: first pass defers the
+  // close to run the flush; second pass (isClosing=true) lets it proceed.
+  let isClosing = false;
+  win.on('close', async (e) => {
+    if (isClosing) return;
+    e.preventDefault();
+    isClosing = true;
+
+    try {
+      // Give the renderer up to 3 s to flush Drive sync and localStorage.
+      // saveGoogleDriveNow() is a no-op when no Drive token is present.
+      await Promise.race([
+        win.webContents.executeJavaScript(`(async () => {
+          try {
+            if (typeof window.saveGoogleDriveNow === 'function') {
+              await window.saveGoogleDriveNow();
+            }
+            if (typeof DB !== 'undefined' && typeof DB.save === 'function') {
+              DB.save();
+            }
+          } catch (_) {}
+          return 'done';
+        })()`),
+        new Promise(resolve => setTimeout(resolve, 3000))
+      ]);
+    } catch (err) {
+      console.error('[NBME] State flush failed on close:', err.message);
+    }
+
+    win.close(); // second pass — isClosing is true, close proceeds
+  });
+
   win.loadURL(resolvedDevUrl);
 }
 
@@ -695,8 +805,12 @@ app.whenReady().then(async () => {
   });
 });
 
+// Always quit when all windows are closed.  This is a single-window app;
+// the standard macOS "keep app alive in dock" behavior is not appropriate here.
+// Without this, the embedded HTTP server keeps the process alive after the
+// window is closed, requiring a force-quit.
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  app.quit();
 });
 
 app.on('before-quit', () => {
@@ -704,4 +818,10 @@ app.on('before-quit', () => {
     _embeddedServer.close();
     _embeddedServer = null;
   }
+});
+
+// Set menu after app is ready (called from whenReady chain above via createWindow,
+// but Menu.setApplicationMenu can be called any time — set it once on first window).
+app.on('browser-window-created', (_e, win) => {
+  Menu.setApplicationMenu(buildAppMenu(win));
 });
