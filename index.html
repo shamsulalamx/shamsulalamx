@@ -2494,15 +2494,23 @@ body.quiz-fullscreen-mode .modal-overlay {
     <h3>Save Incorrects Test</h3>
     <div class="form-group">
       <label class="form-label">Test Name</label>
-      <input type="text" class="form-input" id="incorrects-save-name" placeholder="e.g. NBME - Psychiatry - Shelf 8" onkeydown="if(event.key==='Enter')App._confirmIncorrectsSave()">
+      <input type="text" class="form-input" id="incorrects-save-name" autocomplete="off" placeholder="e.g. NBME - Psychiatry - Shelf 8" onkeydown="if(event.key==='Enter')App._confirmIncorrectsSave()">
     </div>
     <div class="form-group">
       <label class="form-label">Save to</label>
       <select class="form-input" id="incorrects-save-folder" onchange="App._onIncorrectsSaveFolderChange()"></select>
     </div>
-    <div id="incorrects-save-new-row" style="display:none;" class="form-group">
+    <div id="incorrects-save-new-sub-row" style="display:none;" class="form-group">
       <label class="form-label">New Subfolder Name</label>
-      <input type="text" class="form-input" id="incorrects-save-new-folder-name" placeholder="e.g. Psychiatry">
+      <input type="text" class="form-input" id="incorrects-save-new-sub-name" autocomplete="off" placeholder="e.g. Psychiatry">
+    </div>
+    <div id="incorrects-save-new-main-row" style="display:none;" class="form-group">
+      <label class="form-label">New Main Folder Name</label>
+      <input type="text" class="form-input" id="incorrects-save-new-main-name" autocomplete="off" placeholder="e.g. My Custom Source">
+    </div>
+    <div id="incorrects-save-new-main-sub-row" style="display:none;" class="form-group">
+      <label class="form-label">Initial Subfolder</label>
+      <input type="text" class="form-input" id="incorrects-save-new-main-sub-name" autocomplete="off" placeholder="e.g. Incorrects">
     </div>
     <div class="modal-actions">
       <button class="btn-modal" onclick="App._cancelIncorrectsSave()">Cancel</button>
@@ -20796,35 +20804,80 @@ const App = (() => {
   function _openIncorrectsSaveModal(questions, defaultName) {
     if (!questions.length) { toast('No incorrect questions to save.', 2500); return; }
     _incorrectsPending = { questions };
-    const src = _getOrCreateIncorrectsSource();
-    const subfolders = DB.getFolders(src.id);
-    const sel = document.getElementById('incorrects-save-folder');
-    sel.innerHTML = '<option value="__unfiled__">Incorrects / Unfiled</option>';
-    subfolders.forEach(function(f) {
-      const opt = document.createElement('option');
-      opt.value = f.id;
-      opt.textContent = 'Incorrects / ' + f.name;
-      sel.appendChild(opt);
+
+    const allSources = DB.getSourceFolders();
+    const allFolders = DB.getFolders();
+    const incSrc     = _getOrCreateIncorrectsSource();
+    const sel        = document.getElementById('incorrects-save-folder');
+    sel.innerHTML    = '';
+
+    // Incorrects source first, then all others
+    const orderedSources = [incSrc].concat(allSources.filter(function(s) { return s.id !== incSrc.id; }));
+    orderedSources.forEach(function(src) {
+      const subs = allFolders.filter(function(f) { return (f.sourceId || 'src-nbme') === src.id; });
+      const grp = document.createElement('optgroup');
+      grp.label = src.name;
+      subs.forEach(function(f) {
+        const opt = document.createElement('option');
+        opt.value = 'fid:' + f.id;
+        opt.textContent = f.name;
+        grp.appendChild(opt);
+      });
+      const newSubOpt = document.createElement('option');
+      newSubOpt.value = 'newsub:' + src.id;
+      newSubOpt.textContent = '＋ New subfolder in “' + src.name + '”…';
+      grp.appendChild(newSubOpt);
+      sel.appendChild(grp);
     });
-    const newOpt = document.createElement('option');
-    newOpt.value = '__new__';
-    newOpt.textContent = '＋ New subfolder...';
-    sel.appendChild(newOpt);
-    document.getElementById('incorrects-save-name').value = defaultName;
-    document.getElementById('incorrects-save-new-row').style.display = 'none';
-    document.getElementById('incorrects-save-new-folder-name').value = '';
+
+    // New main folder at the bottom
+    const divOpt = document.createElement('option');
+    divOpt.disabled = true;
+    divOpt.textContent = '────────────────────';
+    sel.appendChild(divOpt);
+    const newMainOpt = document.createElement('option');
+    newMainOpt.value = '__newmain__';
+    newMainOpt.textContent = '＋ New main folder…';
+    sel.appendChild(newMainOpt);
+
+    // Default: first subfolder of Incorrects, or "newsub" if none exist yet
+    const incSubs = allFolders.filter(function(f) { return (f.sourceId || 'src-nbme') === incSrc.id; });
+    sel.value = incSubs.length ? 'fid:' + incSubs[0].id : 'newsub:' + incSrc.id;
+
+    // Reset name (clear first to bust any browser cache, then set)
+    const nameEl = document.getElementById('incorrects-save-name');
+    nameEl.value = '';
+    nameEl.value = defaultName;
+
+    // Reset all conditional rows
+    document.getElementById('incorrects-save-new-sub-row').style.display      = 'none';
+    document.getElementById('incorrects-save-new-sub-name').value              = '';
+    document.getElementById('incorrects-save-new-main-row').style.display     = 'none';
+    document.getElementById('incorrects-save-new-main-name').value            = '';
+    document.getElementById('incorrects-save-new-main-sub-row').style.display = 'none';
+    document.getElementById('incorrects-save-new-main-sub-name').value        = '';
+
+    // Reveal any row implied by the default selection
+    _onIncorrectsSaveFolderChange();
+
     document.getElementById('modal-incorrects-save').style.display = 'flex';
-    setTimeout(function() { document.getElementById('incorrects-save-name').focus(); }, 80);
+    setTimeout(function() { nameEl.focus(); }, 80);
   }
 
   function _onIncorrectsSaveFolderChange() {
-    const val = document.getElementById('incorrects-save-folder').value;
-    document.getElementById('incorrects-save-new-row').style.display = val === '__new__' ? 'block' : 'none';
-    if (val === '__new__') setTimeout(function() { document.getElementById('incorrects-save-new-folder-name').focus(); }, 80);
+    const val       = document.getElementById('incorrects-save-folder').value;
+    const isNewSub  = val.startsWith('newsub:');
+    const isNewMain = val === '__newmain__';
+    document.getElementById('incorrects-save-new-sub-row').style.display      = isNewSub  ? 'block' : 'none';
+    document.getElementById('incorrects-save-new-main-row').style.display     = isNewMain ? 'block' : 'none';
+    document.getElementById('incorrects-save-new-main-sub-row').style.display = isNewMain ? 'block' : 'none';
+    if (isNewSub)  setTimeout(function() { document.getElementById('incorrects-save-new-sub-name').focus(); }, 80);
+    if (isNewMain) setTimeout(function() { document.getElementById('incorrects-save-new-main-name').focus(); }, 80);
   }
 
   function _cancelIncorrectsSave() {
     _incorrectsPending = null;
+    document.getElementById('incorrects-save-name').value = '';
     document.getElementById('modal-incorrects-save').style.display = 'none';
   }
 
@@ -20832,25 +20885,38 @@ const App = (() => {
     if (!_incorrectsPending) return;
     const name = document.getElementById('incorrects-save-name').value.trim();
     if (!name) { toast('Please enter a test name.'); return; }
+
     const selVal = document.getElementById('incorrects-save-folder').value;
-    const src = _getOrCreateIncorrectsSource();
     let folderId;
-    if (selVal === '__new__') {
-      const newName = document.getElementById('incorrects-save-new-folder-name').value.trim();
-      if (!newName) { toast('Please enter a subfolder name.'); return; }
-      const newFolder = DB.createFolder(newName, src.id);
-      folderId = newFolder.id;
-    } else if (selVal === '__unfiled__') {
-      const existing = DB.getFolders(src.id).find(function(f) { return f.name === 'Unfiled'; });
-      folderId = existing ? existing.id : DB.createFolder('Unfiled', src.id).id;
+
+    if (selVal === '__newmain__') {
+      const mainName = document.getElementById('incorrects-save-new-main-name').value.trim();
+      if (!mainName) { toast('Please enter a name for the new main folder.'); return; }
+      const subName  = document.getElementById('incorrects-save-new-main-sub-name').value.trim();
+      if (!subName)  { toast('Please enter an initial subfolder name.'); return; }
+      const newSrc   = DB.createSourceFolder(mainName);
+      folderId = DB.createFolder(subName, newSrc.id).id;
+    } else if (selVal.startsWith('newsub:')) {
+      const srcId   = selVal.slice('newsub:'.length);
+      const subName = document.getElementById('incorrects-save-new-sub-name').value.trim();
+      if (!subName) { toast('Please enter a subfolder name.'); return; }
+      folderId = DB.createFolder(subName, srcId).id;
+    } else if (selVal.startsWith('fid:')) {
+      folderId = selVal.slice('fid:'.length);
     } else {
-      folderId = selVal;
+      toast('Please select a destination folder.'); return;
     }
+
     const questions = _incorrectsPending.questions;
     _incorrectsPending = null;
     document.getElementById('modal-incorrects-save').style.display = 'none';
+
     const newTest = DB.createTest(folderId, name, questions);
     if (!newTest) { toast('Could not create test — storage may be full.', 4000); return; }
+
+    // Point sidebar/home at the destination so the test is visible after the quiz
+    setSourceFromFolder(folderId);
+    _currentFolder = folderId;
     renderSidebar();
     renderHomeGrid();
     Quiz.startTest(newTest.id);
