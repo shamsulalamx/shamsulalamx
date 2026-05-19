@@ -3029,6 +3029,16 @@ const DB = (() => {
     db.notes = db.notes.filter(n => n.id !== id);
     save();
   }
+  function updateNote(id, newText) {
+    const db = get();
+    if (!db.notes) db.notes = [];
+    const note = db.notes.find(n => n.id === id);
+    if (!note) return false;
+    note.text = newText;
+    note.updatedAt = Date.now();
+    save();
+    return true;
+  }
 
   function getFlashcards() {
     const db = get();
@@ -3076,7 +3086,7 @@ const DB = (() => {
     getTests, getTest, createTest, updateTest, renameTest, trashTest, restoreTest, emptyTrash, permanentDelete,
     saveAttempt, finishAttempt, getHistory, getFlags, addFlag, removeFlag, isFlagged,
     getMarks, addMark, removeMark, isMarked, syncMarks,
-    getNotes, addNote, deleteNote,
+    getNotes, addNote, deleteNote, updateNote,
     getFlashcards, upsertFlashcard, deleteFlashcard,
     getMiscDocFolders, upsertMiscDocFolder, deleteMiscDocFolder };
 })();
@@ -7895,7 +7905,8 @@ const App = (() => {
   let _ocrIssues = [];
   let _ocrIssueIdx = 0;
 	  let _ocrUndoStack = [];
-  let _noteSelection = null;
+  let _noteSelection  = null;
+  let _editingNoteId  = null;
   let _noteHighlightSeq = 0;
   let _notesImportPreview = null;
   let _nbmeGeminiJsonImport = null;
@@ -8768,16 +8779,59 @@ const App = (() => {
     const groups = _buildSectionGroups(notes, n => n.testId);
     content.innerHTML = notesActions + _sectionGroupsHTML('notes', groups, (items) =>
       '<ul class="notes-list">' +
-      items.map(n =>
-        `<li>${escapeHTML(n.text)}<span class="notes-meta">Q${n.questionNum != null ? n.questionNum : (n.questionIdx != null ? n.questionIdx + 1 : '?')}` +
-        `<button class="btn-card" onclick="App.deleteNote('${n.id}')" style="margin-left:8px;">Delete</button></span></li>`
-      ).join('') +
+      items.map(n => {
+        const qLabel = 'Q' + (n.questionNum != null ? n.questionNum : (n.questionIdx != null ? n.questionIdx + 1 : '?'));
+        if (n.id === _editingNoteId) {
+          return `<li style="list-style:none;">` +
+            `<textarea id="note-edit-ta-${n.id}" style="width:100%;min-height:72px;font-size:13px;font-family:inherit;border:1px solid #c8d0da;border-radius:3px;padding:6px 8px;resize:vertical;box-sizing:border-box;">${escapeHTML(n.text)}</textarea>` +
+            `<span class="notes-meta">${escapeHTML(qLabel)}` +
+            `<button class="btn-card" onclick="App.saveNoteEdit('${n.id}')" style="margin-left:8px;">Save</button>` +
+            `<button class="btn-card" onclick="App.cancelNoteEdit()" style="margin-left:4px;">Cancel</button>` +
+            `</span></li>`;
+        }
+        return `<li>${escapeHTML(n.text)}` +
+          `<span class="notes-meta">${escapeHTML(qLabel)}` +
+          `<button class="btn-card" onclick="App.startNoteEdit('${n.id}')" style="margin-left:8px;">Edit</button>` +
+          `<button class="btn-card" onclick="App.deleteNote('${n.id}')" style="margin-left:4px;">Delete</button>` +
+          `</span></li>`;
+      }).join('') +
       '</ul>'
     );
+
+    // Focus the active edit textarea after render
+    if (_editingNoteId) {
+      const ta = document.getElementById('note-edit-ta-' + _editingNoteId);
+      if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+    }
+  }
+
+  function startNoteEdit(id) {
+    _editingNoteId = id;
+    showNotes();
+  }
+
+  function saveNoteEdit(id) {
+    const ta = document.getElementById('note-edit-ta-' + id);
+    const newText = (ta ? ta.value : '').trim();
+    if (!newText) {
+      toast('Note cannot be empty. Edit the text or click Cancel to keep the original.', 4000);
+      return;
+    }
+    const ok = DB.updateNote(id, newText);
+    if (!ok) { toast('Note not found — it may have been deleted.', 3000); }
+    _editingNoteId = null;
+    showNotes();
+    if (ok) toast('Note updated.');
+  }
+
+  function cancelNoteEdit() {
+    _editingNoteId = null;
+    showNotes();
   }
 
   function deleteNote(id) {
     DB.deleteNote(id);
+    if (_editingNoteId === id) _editingNoteId = null;
     showNotes();
     toast('Note deleted.');
   }
@@ -23530,6 +23584,9 @@ const App = (() => {
     createTestFromApprovedRefinedDrafts,
     updateApprovedDraftCreateTestButton,
     deleteNote,
+    startNoteEdit,
+    saveNoteEdit,
+    cancelNoteEdit,
     openOmePdfImportPreview,
     closeOmePdfImportPreview,
     clearOmePdfImportPreview,
