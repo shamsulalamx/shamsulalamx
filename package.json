@@ -2,7 +2,7 @@
   "name": "nbme-self-assessment-suite",
   "version": "0.1.0",
   "private": true,
-  "description": "Local Electron development wrapper for the existing NBME Self-Assessment Suite browser app.",
+  "description": "Personal medical board exam self-assessment tool.",
   "main": "electron/main.js",
   "scripts": {
     "electron:dev": "electron .",
@@ -14,7 +14,7 @@
   },
   "build": {
     "appId": "com.nbme.self-assessment-suite",
-    "productName": "NBME Self-Assessment Suite",
+    "productName": "shamsulalamx",
     "asar": false,
     "files": [
       "index.html",
