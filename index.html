@@ -23752,7 +23752,7 @@ const App = (() => {
     let html = '';
     allRefs.forEach(function(item) {
       const fr = item.ref;
-      const fid = fr.figureId || '';
+      const fid = fr.id || fr.figureId || '';
       const attached = !!attachments[fid];
       const hasVT = item.hasVisibleText;
       const escapedFid = fid.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -23852,7 +23852,7 @@ const App = (() => {
       // Collect figureAttachments for this question's figureRefs
       const qFigureAttachments = {};
       ((out.metadata && out.metadata.figureRefs) || []).forEach(fr => {
-        const fid = fr.figureId;
+        const fid = fr.id || fr.figureId;
         if (fid && figAttachGlobal[fid]) qFigureAttachments[fid] = figAttachGlobal[fid];
       });
       out.metadata = Object.assign({}, out.metadata || {}, {
@@ -23957,7 +23957,7 @@ const App = (() => {
       const out = Object.assign({}, q);
       const qFigureAttachments = {};
       ((out.metadata && out.metadata.figureRefs) || []).forEach(fr => {
-        const fid = fr.figureId;
+        const fid = fr.id || fr.figureId;
         if (fid && figAttachGlobal[fid]) qFigureAttachments[fid] = figAttachGlobal[fid];
       });
       out.metadata = Object.assign({}, out.metadata || {}, {

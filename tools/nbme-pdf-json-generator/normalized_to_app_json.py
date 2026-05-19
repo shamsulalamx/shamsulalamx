@@ -183,6 +183,86 @@ def _scan_for_contamination(q_norm):
 
 
 # ---------------------------------------------------------------------------
+# Pre-write figure consistency check
+# ---------------------------------------------------------------------------
+
+def _check_figure_consistency(questions):
+    """
+    Validate all figureRef / stem invariants across the full question list.
+    Returns a list of error strings.  Empty list = all clear.
+    Hard-fails the conversion if any check fails — do not write bad JSON.
+
+    Invariants checked:
+      1. figureRefs non-empty  →  hasEmbeddedFigure must be True
+      2. Every figureRef must have a non-empty id
+      3. Every figureRef must have a non-empty placeholder
+      4. Every placeholder must literally appear in its question's stem
+      5. Stem [FIGURE: x] markers must each have a matching figureRef
+      6. No figureRef id may appear in more than one question
+      7. No figureRef placeholder may appear in more than one question
+    """
+    errors = []
+    seen_ids = {}   # fig_id      → question_number
+    seen_phs = {}   # placeholder → question_number
+
+    for q in questions:
+        n    = q.get("questionNumber", "?")
+        stem = q.get("stem", "")
+        figs = q.get("figureRefs") or []
+        has  = q.get("hasEmbeddedFigure", False)
+
+        # 1. hasEmbeddedFigure consistency
+        if figs and not has:
+            errors.append(f"Q{n}: figureRefs non-empty but hasEmbeddedFigure=False")
+
+        for fig in figs:
+            fid = fig.get("id") or fig.get("figureId", "")
+            ph  = fig.get("placeholder", "")
+
+            # 2. id present
+            if not fid:
+                errors.append(f"Q{n}: figureRef missing id")
+            # 3. placeholder present
+            if not ph:
+                errors.append(f"Q{n}: figureRef missing placeholder")
+            # 4. placeholder in stem
+            if ph and ph not in stem:
+                errors.append(f"Q{n}: placeholder {ph!r} not found in stem")
+
+            # 6. cross-question id uniqueness
+            if fid:
+                if fid in seen_ids:
+                    errors.append(
+                        f"Q{n}: duplicate figure id {fid!r} "
+                        f"(already used in Q{seen_ids[fid]})"
+                    )
+                else:
+                    seen_ids[fid] = n
+
+            # 7. cross-question placeholder uniqueness
+            if ph:
+                if ph in seen_phs:
+                    errors.append(
+                        f"Q{n}: duplicate placeholder {ph!r} "
+                        f"(already used in Q{seen_phs[ph]})"
+                    )
+                else:
+                    seen_phs[ph] = n
+
+        # 5. every stem marker has a matching figureRef
+        existing_phs = {fig.get("placeholder", "") for fig in figs}
+        existing_ids = {fig.get("id", "") for fig in figs}
+        for marker in re.findall(r'\[FIGURE:\s*([^\]]+)\]', stem):
+            expected_ph = f"[FIGURE: {marker.strip()}]"
+            if expected_ph not in existing_phs and marker.strip() not in existing_ids:
+                errors.append(
+                    f"Q{n}: stem marker {expected_ph!r} has no matching figureRef"
+                )
+
+    return errors
+
+
+# ---------------------------------------------------------------------------
 # Per-question conversion
 # ---------------------------------------------------------------------------
 
@@ -203,7 +283,7 @@ def _convert_question(q_norm):
     retrieval    = _make_retrieval_tag(q_norm)
     figures      = q_norm.get("figures") or []
     tables       = q_norm.get("tables") or []
-    warnings     = q_norm.get("warnings") or []
+    warnings     = list(q_norm.get("warnings") or [])  # mutable copy
     q_num        = q_norm.get("sourceQuestionNumber") or 0
     q_id         = q_norm.get("questionId") or f"q{q_num:03d}"
 
@@ -228,15 +308,23 @@ def _convert_question(q_norm):
 
     # figureRefs: normalized uses {figureId, location, visibleText}
     # importer expects {id, placeholder, ...}
-    figure_refs = [
-        {
-            "id":          fig.get("figureId", ""),
-            "placeholder": f"[FIGURE: {fig.get('figureId', '')}]",
+    # Every figureRef must have its placeholder present in the stem so the
+    # importer can match each image upload to the correct question.
+    # If the placeholder is absent from the stem (PDF extractor didn't insert
+    # it), append it on a new line and record an extractionWarning.
+    figure_refs = []
+    for fig in figures:
+        fig_id      = fig.get("figureId", "")
+        placeholder = f"[FIGURE: {fig_id}]"
+        if placeholder not in stem:
+            stem = stem + "\n\n" + placeholder
+            warnings.append("Inserted missing figure placeholder into stem")
+        figure_refs.append({
+            "id":          fig_id,
+            "placeholder": placeholder,
             "location":    fig.get("location", "stem"),
             "visibleText": fig.get("visibleText") or [],
-        }
-        for fig in figures
-    ]
+        })
     has_figure = len(figure_refs) > 0
 
     explanation_sections = _build_explanation_sections(
@@ -321,6 +409,16 @@ def convert_normalized_file(norm_path, dry_run=False):
     if not questions:
         result["status"] = "error"
         result["warnings"].append("No valid questions after conversion — output not written")
+        return result
+
+    # Pre-write figure consistency check — hard-fail on any violation
+    fig_errors = _check_figure_consistency(questions)
+    if fig_errors:
+        result["status"] = "error"
+        for e in fig_errors:
+            print(f"         FIGURE ERROR: {e}")
+            result["warnings"].append(f"FIGURE CONSISTENCY: {e}")
+        result["warnings"].append("Output not written — figure consistency check failed")
         return result
 
     out_payload = {
