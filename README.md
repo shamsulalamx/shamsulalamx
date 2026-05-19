@@ -25,6 +25,11 @@ All three modes share the same `index.html`. Electron-only features (UWorld and 
 - Optionally refine drafts with Gemini AI (your API key, your machine, no third-party server).
 - Organize saved tests into a study library with folders, subfolders, notes, marks, and history.
 - Take timed or untimed self-assessments with hints, answer review, and score reports.
+- **Focus mode (fullscreen):** hide all app chrome during a quiz for distraction-free test-taking.
+- **Per-question timer with warning:** shows elapsed time per question with a visual warning at 90 seconds.
+- **Total test timer:** shows cumulative elapsed time, geometrically centered in the quiz chrome.
+- **Pearl flashcards:** auto-generates clinical pearl cards from incorrectly answered questions after each test; synced to Google Drive.
+- **Incorrects test generation:** generate a focused practice test from your wrong answers after any test.
 - Back up and restore your library across devices via Google Drive.
 
 ---
@@ -239,9 +244,9 @@ cp index.html "dist/mac-arm64/NBME Self-Assessment Suite.app/Contents/Resources/
 
 ## Current Limitations
 
-- **Browser (GitHub Pages):** UWorld and Divine Gemini refinement (Electron IPC) are unavailable. Drive OAuth requires the `https://shamsulalamx.github.io` origin to be registered in Google Cloud Console.
+- **Browser (GitHub Pages):** UWorld and Divine Gemini refinement (Electron IPC) are unavailable. Drive OAuth requires the `https://shamsulalamx.github.io` origin registered in Google Cloud Console as a Web application credential (not Desktop).
 - **NBME PDF:** PDF import uses OCR. Accuracy depends on screenshot or scan quality. Grouped/shared-stem questions are supported but may require review.
-- **NBME Gemini JSON:** Stable. All known bugs resolved as of 2026-05-12. Psych Shelf 3–8 validated. Figure rendering (VAL-002) and "save valid only" button (VAL-003) have not been end-to-end validated. See `BUGS_AND_NEXT_STEPS.md`.
+- **NBME Gemini JSON:** Stable. All bugs resolved as of 2026-05-13. Psych Shelf 3–8 and UWorld Notes validated. Figure rendering (VAL-002) and "save valid only" button (VAL-003) have not been end-to-end validated. See `BUGS_AND_NEXT_STEPS.md`.
 - **UWorld:** DOCX export only. Gemini refinement is one-at-a-time; batch queue can be paused or cancelled. Electron only.
 - **OME:** Short, high-quality PDFs only. No OCR fallback in v1.
 - **Anki:** Plain-text `.txt` export only. `.apkg` files are not supported.
@@ -260,6 +265,9 @@ cp index.html "dist/mac-arm64/NBME Self-Assessment Suite.app/Contents/Resources/
 - Perform major storage migrations before the exam unless absolutely necessary.
 - Implement Supabase, Firebase, or any external database.
 - Refactor into React or introduce a build system without clear need.
+- Move `_totTimerRef` inside `initState()` — causes cross-test timer leakage.
+- Reduce `.modal-overlay` z-index below 10000 when `body.quiz-fullscreen-mode` is active — modals become invisible.
+- Test against the packaged `.app` in `dist/` during development — it runs stale code from its own bundle.
 
 ---
 

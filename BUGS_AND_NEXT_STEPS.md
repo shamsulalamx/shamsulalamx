@@ -1,6 +1,6 @@
 # BUGS AND NEXT STEPS
 
-**Last updated:** 2026-05-13 (GitHub Pages deployment + Drive autosave hardening complete)  
+**Last updated:** 2026-05-18 (Focus mode, timer system, flashcards, incorrects generation, font sync)  
 **Purpose:** Active bug tracker and prioritized work queue. Contains all unresolved issues and pending validations. Update this file as items are resolved.
 
 ---
@@ -348,6 +348,126 @@ Gemini-powered "Generate Missing Tags & Pearls" is deferred until after the exam
 
 ---
 
+## COMPLETED — 2026-05-18: Focus mode, timer system, flashcards, incorrects generation
+
+### [FEAT-007] Quiz focus mode (fullscreen) — ✅ COMPLETE
+
+**Implemented:**
+- `toggleFocusMode()` exported from Quiz module
+- `body.quiz-fullscreen-mode` class controls fullscreen state
+- `#screen-quiz`: `position:fixed; z-index:9999` in focus mode — covers full viewport
+- App chrome (sidebar, header, nav bars) hidden via CSS
+- All `.modal-overlay` elements elevated to `z-index:10000` in focus mode — prevents modals from rendering invisibly behind the fullscreen screen
+
+**Commits:** `b1d1c09` (export), `678b97b` (hide chrome), `3cf94eb` (modal z-index fix)
+
+---
+
+### [BUG-008] Modal dialogs hidden behind focus-mode screen — ✅ FIXED
+
+**Status:** ✅ FIXED. Confirmed: clicking Finish in focus mode now shows the confirmation modal correctly.
+
+**Root cause:** `body.quiz-fullscreen-mode` sets `#screen-quiz` to `position:fixed; z-index:9999`, creating a stacking context covering the full viewport. `.modal-overlay` had `z-index:1000` and rendered behind the screen. Clicking Finish appeared to do nothing.
+
+**Fix:** CSS-only: `body.quiz-fullscreen-mode .modal-overlay { z-index: 10000; }` — elevates all modal overlays above the fullscreen screen.
+
+**Commit:** `3cf94eb`
+
+---
+
+### [FEAT-008] Pearl flashcard system — ✅ COMPLETE
+
+**Implemented:**
+- Auto-generates clinical pearl flashcards after each test from incorrectly answered questions
+- Source: `q.reviewPearl || q.explanation` for each incorrect answer
+- Deduplicated by content hash
+- Organized: source folder → test name hierarchy
+- Synced to Google Drive
+- Sidebar nav item added under "Notes"
+
+**Bug fixes same day:**
+- `d0e04a4`: Fixed extraction (was pulling from wrong field)
+- `92d6d2b`: Fixed trigger (was not firing reliably after test completion)
+
+**Commits:** `de50089`, `d0e04a4`, `92d6d2b`
+
+---
+
+### [FEAT-009] Incorrects test generation — ✅ COMPLETE
+
+**Implemented:**
+- "Generate Incorrects Test" button in score report / review mode
+- Creates focused practice test from all incorrect answers (or a review subsection)
+- Routes to dedicated "Incorrects" folder
+- Save destination selection UI
+- Test name input and naming fixed in `be965b2`
+
+**Commits:** `4e26061` (initial), `b769fc5` (subsection), `dfc80ee` (routing), `8685f5c` (destination), `be965b2` (naming fix)
+
+---
+
+### [BUG-009] Total timer cross-test leakage — ✅ FIXED
+
+**Status:** ✅ FIXED. Confirmed: starting a second test no longer inherits elapsed time from the first.
+
+**Root cause:** `_totTimerRef` was inside `initState()`. When a new test started, `initState()` replaced the state object with `totTimerRef: null`. The old interval reference was lost and never cleared. The orphaned interval continued writing to `state.totSecs` via the module-level `state` reference.
+
+**Fix:** Hoisted `_totTimerRef` to module level (outside `initState()`). Always cleared before any new interval is created.
+
+**Commit:** `b45b5ca`
+
+---
+
+### [BUG-010] Total timer visual jumping — ✅ FIXED
+
+**Root cause:** Interval fired at 500ms (twice per second). `textContent` changes on variable-width strings (e.g., `09:59` → `10:00`) caused layout reflow and visible jumping/seizing.
+
+**Fix:** Interval changed to 1000ms. `.block-timer-display` given `min-width`, `text-align:center`, `font-variant-numeric:tabular-nums`.
+
+**Commit:** `b45b5ca`
+
+---
+
+### [BUG-011] Total timer not centered — ✅ FIXED
+
+**Root cause:** Timer was in the left group of the bottom bar.
+
+**Fix:** Bottom bar restructured to 3-column flex: `left:flex:1 (score/controls)`, `center:flex:1 (timer)`, `right:flex:1 (nav buttons)`. Typography updated: font-size 13→17px, color white, min-width 52→70px.
+
+**Commits:** `b45b5ca` (layout), `1149aa1` (typography)
+
+---
+
+### [FEAT-010] Per-question timer warning — ✅ COMPLETE
+
+**Implemented:**
+- Warning state (amber color) fires when per-question elapsed time reaches ≤91 seconds (90-second mark)
+- Warning CSS class added to timer display
+- Warning clears on navigation to next question
+
+**Commits:** `94f1905` (initial), `09b49e2` (refinement), `b5aaf03` (color adjustment)
+
+---
+
+### [FEAT-011] Miscellaneous document subfolders — ✅ COMPLETE
+
+- Subfolder organization added to Miscellaneous Documents panel
+- `MiscDocStore` schema updated to include subfolder metadata
+- Files can be organized into user-created subfolders
+
+**Commit:** `8e01c5a`
+
+---
+
+### [FEAT-012] Stem + choice font-size synchronization — ✅ COMPLETE
+
+- `_applyQuestionFontSize()` synchronizes stem and choice font sizes together
+- `compareStemChoiceFont` fixed to use `#options-list` as canonical choice reference
+
+**Commits:** `dab7678`, `ab9c060`, `d11b66e`
+
+---
+
 ## CROSS-DEVICE RESTORE — KNOWN DEFERRED RISKS
 
 The following risks were audited but not fixed (deferred for post-exam stability):
@@ -362,7 +482,7 @@ Implement ETag/modifiedTime concurrency protection only after cross-device resto
 
 ---
 
-## PRIORITIZED NEXT STEPS (next session — week of 2026-05-19)
+## PRIORITIZED NEXT STEPS (as of 2026-05-18)
 
 ### Immediate — validate cross-device restore before studying
 
@@ -420,3 +540,6 @@ If the GitHub Pages browser mode is sufficient for school use, skip the Windows 
 - Perform major storage migrations (FigureStore, IndexedDB rewrite, localStorage restructure) before the exam.
 - Implement Supabase, Firebase, or any external database.
 - Refactor into React or add a build system without a clear need.
+- Move `_totTimerRef` inside `initState()` — causes cross-test timer leakage (BUG-009).
+- Reduce `.modal-overlay` z-index below 10000 when `body.quiz-fullscreen-mode` is active (BUG-008).
+- Call `scheduleGoogleDriveSave()` after `DB.save()` — `DB.save()` already schedules it (causes double-debounce delay).
