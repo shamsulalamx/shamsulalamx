@@ -1,0 +1,27 @@
+# Acute Coronary Syndrome
+
+ACS includes unstable angina (UA), NSTEMI, and STEMI. 
+The hallmark of STEMI is ST elevation in two or more contiguous leads plus new LBBB.
+Troponin I rises within 3-4 hours of myocardial injury and peaks at 24 hours; it remains elevated for up to 10 days.
+First-line management of STEMI is primary PCI within 90 minutes (door-to-balloon time).
+Aspirin 325 mg should be given immediately on presentation; add a P2Y12 inhibitor (clopidogrel, ticagrelor, or prasugrel).
+
+Reperfusion injury after PCI can cause ventricular arrhythmias; treat with lidocaine if hemodynamically unstable.
+Beta-blockers reduce mortality in post-MI patients with EF > 40%; avoid in acute decompensated heart failure.
+ACE inhibitors reduce remodeling and improve outcomes when started within 24 hours if EF < 40%.
+
+# Aortic Stenosis
+
+Aortic stenosis (AS) is most commonly calcific-degenerative in adults > 65 years.
+Classic triad: angina, syncope on exertion, heart failure (dyspnea).
+Survival after symptom onset without valve replacement: angina ~5 years, syncope ~3 years, heart failure ~1-2 years.
+Auscultation: harsh systolic ejection murmur at the right upper sternal border radiating to the carotids; paradoxically split S2; pulsus parvus et tardus.
+Severe AS defined as: valve area < 1 cm², mean gradient > 40 mmHg, jet velocity > 4 m/s.
+TAVR is preferred over surgical AVR in patients with high or intermediate surgical risk.
+
+# Heart Failure
+
+HFrEF (EF < 40%) mortality-reducing therapies: ACE inhibitor/ARB + beta-blocker + aldosterone antagonist + SGLT2 inhibitor.
+Loop diuretics (furosemide) are first-line for volume overload symptom relief; they do NOT reduce mortality.
+BNP > 100 pg/mL supports HF diagnosis; use for risk stratification and monitoring.
+Digoxin reduces hospitalizations but does NOT reduce mortality; used for rate control in AF with HF.

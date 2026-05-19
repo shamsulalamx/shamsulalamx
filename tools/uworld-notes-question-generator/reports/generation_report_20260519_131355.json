@@ -1,0 +1,20 @@
+{
+  "runTimestamp": "2026-05-19T13:13:55.581156",
+  "dryRun": true,
+  "questionsPerFile": 15,
+  "inputFiles": [
+    "test_cardiology.txt"
+  ],
+  "files": {
+    "test_cardiology.txt": {
+      "status": "ok",
+      "rawChars": 1872,
+      "chunks": 1,
+      "questionsGenerated": 15,
+      "warnings": [
+        "dry-run: questions are placeholders, not Gemini-generated"
+      ],
+      "dryRun": true
+    }
+  }
+}
