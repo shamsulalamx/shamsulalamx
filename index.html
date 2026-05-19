@@ -183,6 +183,7 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 .search-result-tag { display: inline-block; font-size: 10.5px; background: #e3f2fd; color: #0d47a1; border-radius: 10px; padding: 2px 8px; margin-bottom: 6px; font-weight: 700; }
 .search-result-meta { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
 .search-result-preview { font-size: 12.5px; color: var(--text); line-height: 1.55; }
+.search-hl { background: #fff176; color: inherit; border-radius: 2px; padding: 0 1px; }
 .btn-generate {
   display: flex; align-items: center; gap: 6px;
   padding: 8px 16px; font-size: 12px; font-weight: 700;
@@ -8633,12 +8634,94 @@ const App = (() => {
     contentEl.innerHTML = html;
   }
 
+  // Strip HTML tags and collapse whitespace — used before indexing/displaying text.
+  function _stripSearchHtml(s) {
+    return String(s || '').replace(/<[^>]*>/g, ' ').replace(/&[a-z#0-9]+;/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  // Returns an ordered array of {label, text} pairs covering all searchable fields.
+  // Priority order: stem → tags → pearls → choices → explanations.
+  // Does NOT mutate the question object.
+  function buildQuestionSearchFields(q) {
+    const choices = (typeof window.getQuestionChoices === 'function'
+      ? window.getQuestionChoices(q)
+      : (q.o || []));
+    const choiceText = choices.map(c => `${c.l || ''}) ${_stripSearchHtml(c.t || '')}`).join('  ');
+
+    const tagParts = [
+      q.retrievalTag,
+      q.metadata && q.metadata.retrievalTag,
+      q.reviewTag,
+      ...(Array.isArray(q.tags)         ? q.tags         : q.tags         ? [q.tags]         : []),
+      ...(Array.isArray(q.retrievalTags) ? q.retrievalTags : []),
+      ...(Array.isArray(q.reviewTags)    ? q.reviewTags    : q.reviewTags    ? [q.reviewTags]    : []),
+      q.metadata && q.metadata.tags
+    ].filter(Boolean).map(_stripSearchHtml).join('  ');
+
+    const pearlParts = [
+      q.reviewPearl, q.clinicalPearl, q.pearl,
+      Array.isArray(q.pearls) ? q.pearls.join('  ') : q.pearls,
+      q.metadata && q.metadata.reviewPearl,
+      q.metadata && q.metadata.clinicalPearl
+    ].filter(Boolean).map(_stripSearchHtml).join('  ');
+
+    const explParts = [];
+    if (q.educationalObjective) explParts.push(_stripSearchHtml(q.educationalObjective));
+    if (q.teachingPoint)        explParts.push(_stripSearchHtml(q.teachingPoint));
+    if (q.explanation)          explParts.push(_stripSearchHtml(q.explanation));
+    if (q.correctBlurb)         explParts.push(_stripSearchHtml(q.correctBlurb));
+    if (Array.isArray(q.explanationSections)) {
+      q.explanationSections.forEach(sec => {
+        ['title','text','body','content'].forEach(k => { if (sec[k]) explParts.push(_stripSearchHtml(sec[k])); });
+      });
+    }
+    if (q.choiceExplanations && typeof q.choiceExplanations === 'object') {
+      Object.values(q.choiceExplanations).forEach(v => { if (v) explParts.push(_stripSearchHtml(v)); });
+    }
+
+    return [
+      { label: 'Question stem',  text: _stripSearchHtml(q.stem) },
+      { label: 'Retrieval tag',  text: tagParts },
+      { label: 'Clinical pearl', text: pearlParts },
+      { label: 'Answer choices', text: choiceText },
+      { label: 'Explanation',    text: explParts.join('  ') },
+    ].filter(f => f.text);
+  }
+
+  // Returns a compact HTML snippet (~300 chars) with the query term wrapped in
+  // <mark class="search-hl"> for visible in-card highlighting.
+  // Regex-injection safe; does not mutate inputs.
+  function buildHighlightedSnippet(rawText, query) {
+    const text = String(rawText || '').replace(/\s+/g, ' ').trim();
+    if (!text) return '';
+    const lText  = text.toLowerCase();
+    const lQuery = query.toLowerCase();
+    const idx = lText.indexOf(lQuery);
+    if (idx === -1) return escapeHTML(text.slice(0, 200)) + (text.length > 200 ? '…' : '');
+
+    const BEFORE = 75, AFTER = 150;
+    const start   = Math.max(0, idx - BEFORE);
+    const end     = Math.min(text.length, idx + lQuery.length + AFTER);
+    const snippet = text.slice(start, end);
+    const prefix  = start > 0 ? '…' : '';
+    const suffix  = end < text.length ? '…' : '';
+
+    // Walk all case-insensitive matches: escape surrounding text, mark each hit.
+    const escRe = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(escRe, 'gi');
+    let result = prefix, last = 0, m;
+    while ((m = re.exec(snippet)) !== null) {
+      result += escapeHTML(snippet.slice(last, m.index));
+      result += `<mark class="search-hl">${escapeHTML(m[0])}</mark>`;
+      last = m.index + m[0].length;
+    }
+    result += escapeHTML(snippet.slice(last)) + suffix;
+    return result;
+  }
+
   function searchQuestionContent(query) {
     const qText = String(query || '').trim().toLowerCase();
-    if (!qText) {
-      renderHomeGrid();
-      return;
-    }
+    if (!qText) { renderHomeGrid(); return; }
 
     _currentView = 'search';
     document.getElementById('screen-home').style.display    = 'flex';
@@ -8650,19 +8733,20 @@ const App = (() => {
 
     const content = document.getElementById('home-content');
     const db = DB.get();
+    const seen = new Set();
     const matches = [];
+
     db.tests.forEach(test => {
       (test.questions || []).forEach((q, idx) => {
-	        const choices = (typeof window.getQuestionChoices === 'function' ? window.getQuestionChoices(q) : (q.o || [])).map(o => `${o.l}) ${o.t}`).join(' ');
-        const explanation = q.explanation || '';
-        const haystack = `${choices} ${explanation}`.toLowerCase();
-        if (!haystack.includes(qText)) return;
-        const source = choices.toLowerCase().includes(qText) ? 'Answer choices' : 'Explanation';
-        const fullText = source === 'Answer choices' ? choices : explanation;
-        const hitIdx = fullText.toLowerCase().indexOf(qText);
-        const start = Math.max(0, hitIdx - 90);
-        const preview = fullText.slice(start, start + 260).replace(/\s+/g, ' ').trim();
-        matches.push({ test, q, idx, source, preview });
+        const uid = `${test.id}__${idx}`;
+        if (seen.has(uid)) return;
+        const fields = buildQuestionSearchFields(q);
+        for (const { label, text } of fields) {
+          if (!text || !text.toLowerCase().includes(qText)) continue;
+          seen.add(uid);
+          matches.push({ test, q, idx, source: label, snippet: buildHighlightedSnippet(text, qText) });
+          break; // one result per question; first-priority-matching field wins
+        }
       });
     });
 
@@ -8672,13 +8756,15 @@ const App = (() => {
     }
 
     let html = '';
-    matches.forEach(({ test, q, idx, source, preview }) => {
-      const tag = (q.tags && q.tags.length) ? q.tags[0] : 'Untagged';
+    matches.forEach(({ test, q, idx, source, snippet }) => {
+      const tag = q.retrievalTag
+        || (Array.isArray(q.tags) ? q.tags[0] : q.tags)
+        || 'Untagged';
       html += `<div class="search-result" onclick="Quiz.startTestAt('${test.id}',${idx})" title="Open this question">
         <div class="search-result-title">${escapeHTML(test.name)} · Q${q.n || idx + 1}</div>
-        <div class="search-result-tag">${escapeHTML(tag)}</div>
-        <div class="search-result-meta">${source}</div>
-        <div class="search-result-preview">${escapeHTML(preview)}</div>
+        <div class="search-result-tag">${escapeHTML(String(tag))}</div>
+        <div class="search-result-meta">${escapeHTML(source)}</div>
+        <div class="search-result-preview">${snippet}</div>
       </div>`;
     });
     content.innerHTML = html;
