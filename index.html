@@ -269,6 +269,17 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 .subfolder-card-name { font-size: 13px; font-weight: 700; color: var(--navy); margin-bottom: 4px; }
 .subfolder-card-meta { font-size: 11px; color: var(--muted); }
 
+/* Performance analytics summary */
+.perf-summary { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.perf-stat {
+  background: white; border: 1px solid var(--border); border-radius: 6px;
+  padding: 10px 16px; min-width: 110px; flex: 1;
+  box-shadow: 0 1px 3px rgba(0,0,0,.05);
+}
+.perf-stat-value { font-size: 22px; font-weight: 800; color: var(--navy); line-height: 1.1; }
+.perf-stat-label { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; margin-top: 2px; }
+.perf-stat.accent .perf-stat-value { color: #1a7f50; }
+
 /* Test grid */
 .test-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
 .test-card {
@@ -8430,6 +8441,40 @@ const App = (() => {
     }
   }
 
+  function getPerformanceStatsForScope(tests) {
+    let testsCreated = tests.length;
+    let testsCompleted = 0, testsInProgress = 0;
+    let questionsGenerated = 0, questionsAnswered = 0;
+    let scorePcts = [];
+    tests.forEach(t => {
+      questionsGenerated += t.questions.length;
+      if (t.status === 'completed') testsCompleted++;
+      else if (t.status === 'in_progress') testsInProgress++;
+      const hist = DB.getHistory(t.id);
+      const latest = hist[0];
+      if (latest) {
+        questionsAnswered += latest.total || 0;
+        if (latest.total) scorePcts.push(latest.score / latest.total);
+      }
+    });
+    const avgScore = scorePcts.length
+      ? Math.round((scorePcts.reduce((a, b) => a + b, 0) / scorePcts.length) * 100)
+      : null;
+    return { testsCreated, testsCompleted, testsInProgress, questionsGenerated, questionsAnswered, avgScore };
+  }
+
+  function renderPerformanceSummary(stats) {
+    if (!stats.testsCreated) return '';
+    const avg = stats.avgScore !== null ? `${stats.avgScore}%` : '—';
+    return `<div class="perf-summary">
+      <div class="perf-stat"><div class="perf-stat-value">${stats.testsCreated}</div><div class="perf-stat-label">Tests Created</div></div>
+      <div class="perf-stat"><div class="perf-stat-value">${stats.testsCompleted}</div><div class="perf-stat-label">Completed</div></div>
+      <div class="perf-stat"><div class="perf-stat-value">${stats.testsInProgress}</div><div class="perf-stat-label">In Progress</div></div>
+      <div class="perf-stat"><div class="perf-stat-value">${stats.questionsGenerated}</div><div class="perf-stat-label">Questions</div></div>
+      <div class="perf-stat accent"><div class="perf-stat-value">${avg}</div><div class="perf-stat-label">Avg Score</div></div>
+    </div>`;
+  }
+
   function renderHomeGrid() {
     if (_currentView === 'misc-docs') { renderMiscDocPanel(); return; }
     const titleEl = document.getElementById('home-title');
@@ -8468,7 +8513,8 @@ const App = (() => {
       return;
     }
 
-    let html = '<div class="test-grid">';
+    const perfHtml = renderPerformanceSummary(getPerformanceStatsForScope(tests));
+    let html = perfHtml + '<div class="test-grid">';
     tests.forEach(test => {
       const history = DB.getHistory(test.id);
       const latest  = history[0];
@@ -8508,7 +8554,9 @@ const App = (() => {
   function renderSourceLanding(contentEl) {
     const sources = DB.getSourceFolders();
     const folders = DB.getFolders();
-    let html = '<div class="source-grid">';
+    const allTests = folders.reduce((acc, f) => acc.concat(DB.getTests(f.id)), []);
+    const perfHtml = renderPerformanceSummary(getPerformanceStatsForScope(allTests));
+    let html = perfHtml + '<div class="source-grid">';
     sources.forEach(src => {
       const subfolders = folders.filter(f => (f.sourceId || 'src-nbme') === src.id);
       const testCount = subfolders.reduce((sum, f) => sum + DB.getTests(f.id).length, 0);
@@ -8554,6 +8602,8 @@ const App = (() => {
 
   function renderSourceFolderPage(contentEl) {
     const folders = DB.getFolders(_currentSource);
+    const sourcedTests = folders.reduce((acc, f) => acc.concat(DB.getTests(f.id)), []);
+    const perfHtml = renderPerformanceSummary(getPerformanceStatsForScope(sourcedTests));
 
     // Import action button for non-NBME sources (shown regardless of subfolder count).
     const workflowLabel = getWorkflowActionLabel();
@@ -8562,12 +8612,12 @@ const App = (() => {
       : '';
 
     if (!folders.length) {
-      contentEl.innerHTML = `${importSection}<div class="no-tests">No subfolders in this library yet.<br><br>
+      contentEl.innerHTML = `${perfHtml}${importSection}<div class="no-tests">No subfolders in this library yet.<br><br>
         <button class="btn-generate" onclick="App.promptNewFolder()">＋ New Subfolder</button></div>`;
       return;
     }
 
-    let html = `${importSection}<div class="source-subfolder-grid">`;
+    let html = `${perfHtml}${importSection}<div class="source-subfolder-grid">`;
     folders.forEach(folder => {
       const tests = DB.getTests(folder.id);
       html += `<div class="subfolder-card" onclick="App.showFolderHome('${folder.id}')">
