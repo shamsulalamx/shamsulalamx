@@ -23118,6 +23118,112 @@ const App = (() => {
     toast(`✓ "${testName}" created with ${questions.length} questions (nbme-gemini-json).`);
   }
 
+  function saveValidNbmeGeminiJsonQuestionsOnly() {
+    console.log('[Block Validate Save] clicked');
+    const st = _nbmeGeminiJsonImport;
+    if (!st || !st.validation) { toast('No validation data. Upload and validate a JSON file first.', 4000); return; }
+
+    const testName = (document.getElementById('ngj-test-name')?.value || '').trim();
+    const folderId = document.getElementById('ngj-folder-select')?.value || '';
+    const confirmed = document.getElementById('ngj-confirm-check')?.checked || false;
+    const errEl = document.getElementById('ngj-save-error');
+
+    if (!testName) { toast('Enter a test name.'); return; }
+    if (!folderId) { toast('Select a target folder.'); return; }
+    if (!confirmed) { toast('Check the confirmation checkbox.'); return; }
+
+    // Build a set of valid question numbers from questionResults
+    const validNums = new Set(
+      (st.validation.questionResults || [])
+        .filter(r => r.isValid)
+        .map(r => r.questionNumber)
+    );
+
+    const allItems = st.normalizedItems || [];
+    const items = allItems.filter(q => validNums.has(q.n));
+
+    console.log('[Block Validate Save] handler found', typeof saveValidNbmeGeminiJsonQuestionsOnly);
+    console.log('[Block Validate Save] valid items:', items.length, '/', allItems.length);
+
+    if (!items.length) {
+      const msg = 'No valid questions to save. Fix blocking errors in the JSON first.';
+      if (errEl) { errEl.style.display = 'block'; errEl.textContent = msg; }
+      toast(msg, 4000);
+      return;
+    }
+
+    const figAttachGlobal = st.figureAttachments || {};
+    const figAttachKeys = Object.keys(figAttachGlobal);
+    if (figAttachKeys.length) {
+      const totalBytes = figAttachKeys.reduce((sum, k) => sum + (figAttachGlobal[k] || '').length, 0);
+      const totalMB = (totalBytes / 1024 / 1024).toFixed(1);
+      if (totalBytes > 3 * 1024 * 1024) {
+        if (!confirm(`Attached figure images total ${totalMB} MB. This may approach localStorage limits (typically ~5 MB). Continue saving?`)) return;
+      }
+    }
+
+    const payload = st.parsed || {};
+    const importedAt = new Date().toISOString();
+    const questions = items.map(q => {
+      const out = Object.assign({}, q);
+      const qFigureAttachments = {};
+      ((out.metadata && out.metadata.figureRefs) || []).forEach(fr => {
+        const fid = fr.figureId;
+        if (fid && figAttachGlobal[fid]) qFigureAttachments[fid] = figAttachGlobal[fid];
+      });
+      out.metadata = Object.assign({}, out.metadata || {}, {
+        sourceType: 'nbme-gemini-json',
+        sourceFormat: payload.sourceFormat || null,
+        importedAt,
+        originalTestTitle: payload.testTitle || null,
+        schemaVersion: 'nbme-gemini-json-v1',
+        figureAttachments: qFigureAttachments
+      });
+      return out;
+    });
+
+    const beforeCount = DB.get().tests.length;
+    const test = DB.createTest(folderId, testName, questions);
+    const afterCount = DB.get().tests.length;
+
+    if (!test || afterCount !== beforeCount + 1) {
+      const msg = test ? 'Test was not persisted (storage may be full).' : 'DB.createTest failed (storage may be full).';
+      st.lastSaveError = msg;
+      if (errEl) { errEl.style.display = 'block'; errEl.textContent = msg; }
+      toast(msg, 6000);
+      return;
+    }
+
+    const skippedCount = allItems.length - items.length;
+    DB.updateTest(test.id, {
+      sourceType: 'nbme-gemini-json',
+      importMetadata: {
+        sourceType: 'nbme-gemini-json',
+        sourceFormat: payload.sourceFormat || null,
+        importedAt,
+        originalTestTitle: payload.testTitle || null,
+        questionCount: questions.length,
+        skippedInvalidCount: skippedCount,
+        warningCount: st.validation.counts.warningCount,
+        unresolvedFigureCount: st.validation.counts.unresolvedFigureCount,
+        schemaVersion: 'nbme-gemini-json-v1',
+        topLevelExtractionWarnings: Array.isArray(payload.extractionWarnings) ? payload.extractionWarnings : [],
+        expectedQuestionCount: payload.expectedQuestionCount ?? null,
+        actualExtractedQuestionCount: payload.actualExtractedQuestionCount ?? null
+      }
+    });
+
+    st.lastSaveResult = test;
+    st.lastSaveError = null;
+    if (errEl) errEl.style.display = 'none';
+
+    closeNbmeGeminiJsonImportModal();
+    _currentFolder = folderId;
+    renderSidebar();
+    renderHomeGrid();
+    toast(`✓ "${testName}" created with ${questions.length} valid question(s). ${skippedCount} invalid question(s) skipped.`);
+  }
+
   // ── Miscellaneous Documents ────────────────────────────────
   function showMiscDocs() {
     _pushNav();
@@ -23528,6 +23634,7 @@ const App = (() => {
     parseNbmeGeminiJson,
     updateNbmeGeminiJsonSaveReadiness,
     createTestFromNbmeGeminiJsonImport,
+    saveValidNbmeGeminiJsonQuestionsOnly,
     ngjHandleFigureUpload,
     ngjRemoveFigureAttachment,
     showMiscDocs,
