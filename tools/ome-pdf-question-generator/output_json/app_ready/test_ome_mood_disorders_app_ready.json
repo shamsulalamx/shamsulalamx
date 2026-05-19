@@ -1,0 +1,852 @@
+{
+  "schemaVersion": "nbme-gemini-json-v3",
+  "testTitle": "test_ome_mood_disorders",
+  "sourceFormat": "ome-pdf",
+  "expectedQuestionCount": null,
+  "actualExtractedQuestionCount": 15,
+  "extractionWarnings": [
+    "dry-run: questions are placeholders, not Gemini-generated"
+  ],
+  "questions": [
+    {
+      "id": "q001",
+      "questionNumber": 1,
+      "sourceQuestionNumber": 1,
+      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
+      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
+      "clinicalPearl": null,
+      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Placeholder A"
+        },
+        {
+          "label": "B",
+          "text": "Placeholder B"
+        },
+        {
+          "label": "C",
+          "text": "Placeholder C"
+        },
+        {
+          "label": "D",
+          "text": "Placeholder D"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "[DRY-RUN placeholder]",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Educational Objective",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": [
+        "dry-run: question not generated"
+      ]
+    },
+    {
+      "id": "q002",
+      "questionNumber": 2,
+      "sourceQuestionNumber": 2,
+      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
+      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
+      "clinicalPearl": null,
+      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Placeholder A"
+        },
+        {
+          "label": "B",
+          "text": "Placeholder B"
+        },
+        {
+          "label": "C",
+          "text": "Placeholder C"
+        },
+        {
+          "label": "D",
+          "text": "Placeholder D"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "[DRY-RUN placeholder]",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Educational Objective",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": [
+        "dry-run: question not generated"
+      ]
+    },
+    {
+      "id": "q003",
+      "questionNumber": 3,
+      "sourceQuestionNumber": 3,
+      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
+      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
+      "clinicalPearl": null,
+      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Placeholder A"
+        },
+        {
+          "label": "B",
+          "text": "Placeholder B"
+        },
+        {
+          "label": "C",
+          "text": "Placeholder C"
+        },
+        {
+          "label": "D",
+          "text": "Placeholder D"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "[DRY-RUN placeholder]",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Educational Objective",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": [
+        "dry-run: question not generated"
+      ]
+    },
+    {
+      "id": "q004",
+      "questionNumber": 4,
+      "sourceQuestionNumber": 4,
+      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
+      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
+      "clinicalPearl": null,
+      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Placeholder A"
+        },
+        {
+          "label": "B",
+          "text": "Placeholder B"
+        },
+        {
+          "label": "C",
+          "text": "Placeholder C"
+        },
+        {
+          "label": "D",
+          "text": "Placeholder D"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "[DRY-RUN placeholder]",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Educational Objective",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": [
+        "dry-run: question not generated"
+      ]
+    },
+    {
+      "id": "q005",
+      "questionNumber": 5,
+      "sourceQuestionNumber": 5,
+      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
+      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
+      "clinicalPearl": null,
+      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Placeholder A"
+        },
+        {
+          "label": "B",
+          "text": "Placeholder B"
+        },
+        {
+          "label": "C",
+          "text": "Placeholder C"
+        },
+        {
+          "label": "D",
+          "text": "Placeholder D"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "[DRY-RUN placeholder]",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Educational Objective",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": [
+        "dry-run: question not generated"
+      ]
+    },
+    {
+      "id": "q006",
+      "questionNumber": 6,
+      "sourceQuestionNumber": 6,
+      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
+      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
+      "clinicalPearl": null,
+      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Placeholder A"
+        },
+        {
+          "label": "B",
+          "text": "Placeholder B"
+        },
+        {
+          "label": "C",
+          "text": "Placeholder C"
+        },
+        {
+          "label": "D",
+          "text": "Placeholder D"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "[DRY-RUN placeholder]",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Educational Objective",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": [
+        "dry-run: question not generated"
+      ]
+    },
+    {
+      "id": "q007",
+      "questionNumber": 7,
+      "sourceQuestionNumber": 7,
+      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
+      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
+      "clinicalPearl": null,
+      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Placeholder A"
+        },
+        {
+          "label": "B",
+          "text": "Placeholder B"
+        },
+        {
+          "label": "C",
+          "text": "Placeholder C"
+        },
+        {
+          "label": "D",
+          "text": "Placeholder D"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "[DRY-RUN placeholder]",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Educational Objective",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": [
+        "dry-run: question not generated"
+      ]
+    },
+    {
+      "id": "q008",
+      "questionNumber": 8,
+      "sourceQuestionNumber": 8,
+      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
+      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
+      "clinicalPearl": null,
+      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Placeholder A"
+        },
+        {
+          "label": "B",
+          "text": "Placeholder B"
+        },
+        {
+          "label": "C",
+          "text": "Placeholder C"
+        },
+        {
+          "label": "D",
+          "text": "Placeholder D"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "[DRY-RUN placeholder]",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Educational Objective",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": [
+        "dry-run: question not generated"
+      ]
+    },
+    {
+      "id": "q009",
+      "questionNumber": 9,
+      "sourceQuestionNumber": 9,
+      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
+      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
+      "clinicalPearl": null,
+      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Placeholder A"
+        },
+        {
+          "label": "B",
+          "text": "Placeholder B"
+        },
+        {
+          "label": "C",
+          "text": "Placeholder C"
+        },
+        {
+          "label": "D",
+          "text": "Placeholder D"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "[DRY-RUN placeholder]",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Educational Objective",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": [
+        "dry-run: question not generated"
+      ]
+    },
+    {
+      "id": "q010",
+      "questionNumber": 10,
+      "sourceQuestionNumber": 10,
+      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
+      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
+      "clinicalPearl": null,
+      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Placeholder A"
+        },
+        {
+          "label": "B",
+          "text": "Placeholder B"
+        },
+        {
+          "label": "C",
+          "text": "Placeholder C"
+        },
+        {
+          "label": "D",
+          "text": "Placeholder D"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "[DRY-RUN placeholder]",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Educational Objective",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": [
+        "dry-run: question not generated"
+      ]
+    },
+    {
+      "id": "q011",
+      "questionNumber": 11,
+      "sourceQuestionNumber": 11,
+      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
+      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
+      "clinicalPearl": null,
+      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Placeholder A"
+        },
+        {
+          "label": "B",
+          "text": "Placeholder B"
+        },
+        {
+          "label": "C",
+          "text": "Placeholder C"
+        },
+        {
+          "label": "D",
+          "text": "Placeholder D"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "[DRY-RUN placeholder]",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Educational Objective",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": [
+        "dry-run: question not generated"
+      ]
+    },
+    {
+      "id": "q012",
+      "questionNumber": 12,
+      "sourceQuestionNumber": 12,
+      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
+      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
+      "clinicalPearl": null,
+      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Placeholder A"
+        },
+        {
+          "label": "B",
+          "text": "Placeholder B"
+        },
+        {
+          "label": "C",
+          "text": "Placeholder C"
+        },
+        {
+          "label": "D",
+          "text": "Placeholder D"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "[DRY-RUN placeholder]",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Educational Objective",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": [
+        "dry-run: question not generated"
+      ]
+    },
+    {
+      "id": "q013",
+      "questionNumber": 13,
+      "sourceQuestionNumber": 13,
+      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
+      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
+      "clinicalPearl": null,
+      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Placeholder A"
+        },
+        {
+          "label": "B",
+          "text": "Placeholder B"
+        },
+        {
+          "label": "C",
+          "text": "Placeholder C"
+        },
+        {
+          "label": "D",
+          "text": "Placeholder D"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "[DRY-RUN placeholder]",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Educational Objective",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": [
+        "dry-run: question not generated"
+      ]
+    },
+    {
+      "id": "q014",
+      "questionNumber": 14,
+      "sourceQuestionNumber": 14,
+      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
+      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
+      "clinicalPearl": null,
+      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Placeholder A"
+        },
+        {
+          "label": "B",
+          "text": "Placeholder B"
+        },
+        {
+          "label": "C",
+          "text": "Placeholder C"
+        },
+        {
+          "label": "D",
+          "text": "Placeholder D"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "[DRY-RUN placeholder]",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Educational Objective",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": [
+        "dry-run: question not generated"
+      ]
+    },
+    {
+      "id": "q015",
+      "questionNumber": 15,
+      "sourceQuestionNumber": 15,
+      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
+      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
+      "clinicalPearl": null,
+      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Placeholder A"
+        },
+        {
+          "label": "B",
+          "text": "Placeholder B"
+        },
+        {
+          "label": "C",
+          "text": "Placeholder C"
+        },
+        {
+          "label": "D",
+          "text": "Placeholder D"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "[DRY-RUN placeholder]",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        },
+        {
+          "heading": "Educational Objective",
+          "body": [
+            "[DRY-RUN placeholder]"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": [
+        "dry-run: question not generated"
+      ]
+    }
+  ]
+}

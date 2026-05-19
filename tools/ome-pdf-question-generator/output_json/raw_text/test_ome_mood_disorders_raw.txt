@@ -1,0 +1,38 @@
+## Page 1
+
+MOOD DISORDERS - OME Lesson
+MAJOR DEPRESSIVE DISORDER (MDD)
+- Criteria: 5 of 9 SIGECAPS symptoms for >= 2 weeks
+- At least one of: depressed mood or anhedonia
+- SIGECAPS: Sleep, Interest, Guilt, Energy, Concentration, Appetite,
+Psychomotor changes, Suicidality
+- Prevalence: lifetime risk 15-20%, women 2x more than men
+- Pathophysiology: serotonin, norepinephrine, dopamine dysregulation
+
+## Page 2
+
+MDD - Treatment
+FIRST-LINE TREATMENT
+- SSRIs: fluoxetine, sertraline, escitalopram (preferred first-line)
+- SNRIs: venlafaxine, duloxetine (good for comorbid pain)
+- Bupropion: no sexual side effects, avoid in seizure/eating disorder
+- TCAs: amitriptyline (second-line, anticholinergic side effects)
+- MAOIs: phenelzine (last resort; tyramine diet restriction required)
+- Psychotherapy: CBT equally effective for mild-moderate MDD
+
+## Page 3
+
+BIPOLAR DISORDER
+BIPOLAR I vs BIPOLAR II
+- Bipolar I: full mania (>= 7 days) + depression
+- Bipolar II: hypomania (4-6 days) + depression, no full mania
+- Cyclothymia: subthreshold hypomania + depression >= 2 years
+MANIC EPISODE CRITERIA (DIG FAST)
+- Distractibility, Impulsivity, Grandiosity
+- Flight of ideas, Activity increase, Sleep decreased, Talkativeness
+MOOD STABILIZERS
+- Lithium: first-line, narrow therapeutic index (0.6-1.2 mEq/L)
+- Lithium toxicity: tremor, polyuria, nephrogenic DI, hypothyroidism
+- Valproate: teratogenic (neural tube defects), monitor LFTs
+- Lamotrigine: maintenance, risk Stevens-Johnson if titrated too fast
+- Atypical antipsychotics: quetiapine, aripiprazole for acute mania
