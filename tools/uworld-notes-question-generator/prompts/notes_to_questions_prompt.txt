@@ -18,8 +18,26 @@ STRICT RULES:
    GOOD: "Aortic stenosis causing syncope on exertion in elderly patient"
    GOOD: "Lateral medullary syndrome ipsilateral face contralateral body sensory loss"
 8. reviewPearl must be one sentence that captures the single most testable fact.
-9. Output raw valid JSON only — no markdown fences, no code blocks, no extra text.
+9. Output raw valid JSON only — no markdown fences, no code blocks, no extra text before or after.
 10. Produce exactly the number of questions requested.
+
+CRITICAL JSON RULE — explanationSections:
+explanationSections is a JSON ARRAY. Every element must be a plain object.
+
+WRONG (will break the parser — never do this):
+  "explanationSections": [
+    { "heading": "Correct Answer Explanation", "body": ["..."] },
+    "Educational Objective": { "heading": "Educational Objective", "body": ["..."] }
+  ]
+
+RIGHT (copy this form exactly):
+  "explanationSections": [
+    { "heading": "Correct Answer Explanation",   "body": ["..."] },
+    { "heading": "Incorrect Answer Explanation", "body": ["..."] },
+    { "heading": "Educational Objective",        "body": ["..."] }
+  ]
+
+The section name must ONLY appear as the value of "heading". Never use it as a JSON key.
 
 OUTPUT FORMAT:
 Return a JSON array of question objects. Each object must match this exact structure:

@@ -43,6 +43,7 @@ INPUT_DIR   = BASE_DIR / "input_notes"
 RAW_DIR     = BASE_DIR / "output_json" / "raw_text"
 CHUNK_DIR   = BASE_DIR / "output_json" / "chunks"
 GEN_DIR     = BASE_DIR / "output_json" / "generated"
+DEBUG_DIR   = BASE_DIR / "output_json" / "generated" / "debug"
 APP_DIR     = BASE_DIR / "output_json" / "app_ready"
 REPORT_DIR  = BASE_DIR / "reports"
 PROMPT_FILE = BASE_DIR / "prompts" / "notes_to_questions_prompt.txt"
@@ -263,11 +264,134 @@ def _placeholder_question(n: int) -> Dict:
 
 
 # ── Gemini API (raw HTTP — no SDK dependency, matches repo convention) ─────────
-def _strip_fences(text: str) -> str:
-    text = text.strip()
-    text = re.sub(r"^```(?:json)?\s*", "", text)
-    text = re.sub(r"\s*```\s*$", "", text)
+
+def _clean_llm_json(text: str) -> str:
+    # Clean common LLM formatting artifacts that break json.loads().
+    # All transforms are idempotent -- safe to call multiple times.
+
+    # Strip UTF-8 BOM (\ufeff)
+    text = text.lstrip(u'\ufeff')
+
+    # Remove all markdown code-fence variants: ``` ```json ```JSON
+    text = re.sub(r'```+(?:json|JSON)?\s*', '', text)
+
+    # Normalize curly/smart double-quotes (U+201C, U+201D) -> straight ASCII
+    text = text.replace(u'\u201c', '"').replace(u'\u201d', '"')
+    # Normalize curly/smart single-quotes (U+2018, U+2019) -> apostrophe
+    text = text.replace(u'\u2018', "'").replace(u'\u2019', "'")
+
+    # Fix Gemini keyed-object-in-array bug:
+    # Gemini sometimes writes  "SectionName": { ... }  inside a JSON array.
+    # That is illegal JSON. Strip the leading key to leave just { ... }.
+    # Matches all known section heading variants, case-insensitively.
+    text = re.sub(
+        r'"(?:Correct Answer Explanation|Incorrect Answer Explanation|'
+        r'Educational Objective|Clinical Pearl|Explanation|'
+        r'Correct|Incorrect)(?:\s+[A-Za-z]+)*"\s*:\s*(\{)',
+        r'\1',
+        text,
+        flags=re.IGNORECASE,
+    )
+
+    # Remove trailing commas before } or ] -- e.g. ,\n} and ,  ]
+    text = re.sub(r',(\s*[}\]])', r'\1', text)
+
     return text.strip()
+
+
+def _extract_json_payload(text: str) -> str:
+    """
+    Locate the first complete JSON array or object in text and return it.
+    Skips leading prose (e.g. 'Here are the questions:') and trailing prose.
+    Uses a bracket-depth counter that respects quoted strings and escape sequences.
+    Returns the original text unchanged if no JSON structure is found.
+    """
+    # Find first structural character
+    first = -1
+    open_ch = close_ch = ""
+    for i, ch in enumerate(text):
+        if ch == "[":
+            first, open_ch, close_ch = i, "[", "]"
+            break
+        if ch == "{":
+            first, open_ch, close_ch = i, "{", "}"
+            break
+
+    if first == -1:
+        return text  # no JSON structure visible
+
+    depth = 0
+    in_string = False
+    escape_next = False
+    last_close = first
+
+    for i in range(first, len(text)):
+        ch = text[i]
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == "\\" and in_string:
+            escape_next = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == open_ch:
+            depth += 1
+        elif ch == close_ch:
+            depth -= 1
+            if depth == 0:
+                last_close = i
+                break
+
+    return text[first : last_close + 1]
+
+
+def _parse_gemini_json(raw_text: str, chunk_index: int) -> list:
+    """
+    Three-stage JSON parse with progressive cleaning.
+    Stage 1 — minimal strip only.
+    Stage 2 — full _clean_llm_json().
+    Stage 3 — _extract_json_payload() on cleaned text.
+    On total failure: saves raw response to DEBUG_DIR, raises JSONDecodeError.
+    Never prints the full raw response to the terminal.
+    """
+    text = raw_text.strip().lstrip("﻿")
+
+    # Stage 1: try as-is (fast path — succeeds when Gemini behaves)
+    try:
+        result = json.loads(text)
+        return result if isinstance(result, list) else [result]
+    except json.JSONDecodeError:
+        pass
+
+    # Stage 2: clean fences, quotes, trailing commas
+    cleaned = _clean_llm_json(text)
+    try:
+        result = json.loads(cleaned)
+        log(f"  Chunk {chunk_index}: parsed after LLM JSON cleaning")
+        return result if isinstance(result, list) else [result]
+    except json.JSONDecodeError:
+        pass
+
+    # Stage 3: extract the bare JSON payload, stripping surrounding prose
+    payload = _extract_json_payload(cleaned)
+    try:
+        result = json.loads(payload)
+        log(f"  Chunk {chunk_index}: parsed after payload extraction")
+        return result if isinstance(result, list) else [result]
+    except json.JSONDecodeError as final_exc:
+        # Save raw for offline debugging; do NOT print it to the terminal
+        DEBUG_DIR.mkdir(parents=True, exist_ok=True)
+        debug_path = DEBUG_DIR / f"chunk{chunk_index}_raw_response.txt"
+        debug_path.write_text(raw_text, encoding="utf-8")
+        warn(
+            f"Chunk {chunk_index}: JSON parse failed after all 3 cleanup stages — "
+            f"raw response saved to debug/chunk{chunk_index}_raw_response.txt"
+        )
+        raise final_exc
 
 
 def load_prompt_template() -> str:
@@ -364,9 +488,8 @@ def call_gemini_with_retry(
     warnings: List[str] = []
 
     # ── Attempt 1 ─────────────────────────────────────────────────────────────
-    raw_text = _raw_gemini_call(api_key, prompt)
-    cleaned  = _strip_fences(raw_text)
-    questions = json.loads(cleaned)
+    raw_text  = _raw_gemini_call(api_key, prompt)
+    questions = _parse_gemini_json(raw_text, chunk_index)
     if not isinstance(questions, list):
         raise ValueError(f"Gemini returned non-list JSON ({type(questions).__name__})")
 
@@ -394,10 +517,9 @@ def call_gemini_with_retry(
     warnings.append(msg)
 
     try:
-        repair_prompt   = _build_repair_prompt(chunk_text, need_repair, repair_errors)
-        repair_raw      = _raw_gemini_call(api_key, repair_prompt)
-        repair_cleaned  = _strip_fences(repair_raw)
-        repaired        = json.loads(repair_cleaned)
+        repair_prompt = _build_repair_prompt(chunk_text, need_repair, repair_errors)
+        repair_raw    = _raw_gemini_call(api_key, repair_prompt)
+        repaired      = _parse_gemini_json(repair_raw, chunk_index)
         if not isinstance(repaired, list):
             raise ValueError("Repair response is not a JSON array")
 
@@ -653,7 +775,7 @@ def main() -> None:
     log(f"  Questions per file: {args.questions_per_file}")
     log("=" * 60)
 
-    for d in (RAW_DIR, CHUNK_DIR, GEN_DIR, APP_DIR, REPORT_DIR):
+    for d in (RAW_DIR, CHUNK_DIR, GEN_DIR, DEBUG_DIR, APP_DIR, REPORT_DIR):
         d.mkdir(parents=True, exist_ok=True)
 
     files = discover_input_files()

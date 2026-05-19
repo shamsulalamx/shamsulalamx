@@ -1,0 +1,42 @@
+{
+  "runTimestamp": "2026-05-19T13:33:07.828967",
+  "model": "gemini-2.5-flash",
+  "dryRun": false,
+  "questionsPerFile": 15,
+  "inputFiles": [
+    "test_cardiology.txt"
+  ],
+  "files": {
+    "test_cardiology.txt": {
+      "status": "ok",
+      "rawChars": 1872,
+      "chunksProcessed": 1,
+      "questionsGenerated": 0,
+      "validationFailures": 0,
+      "retries": 0,
+      "repairsSucceeded": 0,
+      "repairFailures": 0,
+      "validationWarnings": [],
+      "warnings": [
+        "Chunk 1 JSON parse error: Expecting value: line 1 column 2 (char 1)"
+      ],
+      "chunkStats": [
+        {
+          "chunk": 1,
+          "requested": 15,
+          "status": "json_error",
+          "error": "Expecting value: line 1 column 2 (char 1)"
+        }
+      ],
+      "outputPaths": {
+        "appReady": "/Users/shamsulalam/Desktop/shamsulalamx/tools/uworld-notes-question-generator/output_json/app_ready/test_cardiology_app_ready.json",
+        "generated": "/Users/shamsulalam/Desktop/shamsulalamx/tools/uworld-notes-question-generator/output_json/generated/test_cardiology_generated.json",
+        "chunks": "/Users/shamsulalam/Desktop/shamsulalamx/tools/uworld-notes-question-generator/output_json/chunks/test_cardiology_chunks.json",
+        "rawText": "/Users/shamsulalam/Desktop/shamsulalamx/tools/uworld-notes-question-generator/output_json/raw_text/test_cardiology_raw.txt"
+      },
+      "elapsedSeconds": 38.3,
+      "dryRun": false
+    }
+  },
+  "totalElapsedSeconds": 38.3
+}

@@ -3,850 +3,278 @@
   "testTitle": "test_cardiology",
   "sourceFormat": "uworld-notes",
   "expectedQuestionCount": null,
-  "actualExtractedQuestionCount": 15,
-  "extractionWarnings": [
-    "dry-run: questions are placeholders, not Gemini-generated"
-  ],
+  "actualExtractedQuestionCount": 5,
+  "extractionWarnings": [],
   "questions": [
     {
       "id": "q001",
       "questionNumber": 1,
       "sourceQuestionNumber": 1,
-      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
-      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
+      "retrievalTag": "Immediate STEMI management aspirin P2Y12 inhibitor",
+      "reviewPearl": "Aspirin 325 mg and a P2Y12 inhibitor should be given immediately on presentation for STEMI.",
       "clinicalPearl": null,
-      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
+      "stem": "A 62-year-old man presents to the emergency department with sudden onset of crushing substernal chest pain radiating to his left arm, which started 30 minutes ago. He is diaphoretic and anxious. His blood pressure is 130/80 mmHg, heart rate is 98/min, and respiratory rate is 20/min. An electrocardiogram shows ST-segment elevations in leads II, III, and aVF. The emergency physician is preparing for immediate reperfusion therapy.",
       "hasEmbeddedFigure": false,
       "figureRefs": [],
       "answerChoices": [
         {
           "label": "A",
-          "text": "Placeholder A"
+          "text": "Administer aspirin 325 mg"
         },
         {
           "label": "B",
-          "text": "Placeholder B"
+          "text": "Initiate intravenous metoprolol"
         },
         {
           "label": "C",
-          "text": "Placeholder C"
+          "text": "Start an ACE inhibitor"
         },
         {
           "label": "D",
-          "text": "Placeholder D"
+          "text": "Prepare for immediate defibrillation"
         }
       ],
       "correctAnswer": "A",
-      "educationalObjective": "[DRY-RUN placeholder]",
+      "educationalObjective": "Recognize the immediate pharmacologic management for a patient presenting with ST-elevation myocardial infarction (STEMI).",
       "explanationSections": [
         {
           "heading": "Correct Answer Explanation",
           "body": [
-            "[DRY-RUN placeholder]"
+            "This patient is presenting with an acute ST-elevation myocardial infarction (STEMI). The notes state that aspirin 325 mg should be given immediately on presentation for STEMI. This is a critical first step in reducing clot burden and improving outcomes while preparing for definitive reperfusion therapy like primary percutaneous coronary intervention (PCI)."
           ]
         },
         {
           "heading": "Incorrect Answer Explanation",
           "body": [
-            "[DRY-RUN placeholder]"
+            "Intravenous metoprolol (a beta-blocker) is beneficial in post-MI patients with EF >40% but should be avoided in acute decompensated heart failure and is not the immediate first-line medication. ACE inhibitors reduce remodeling and improve outcomes when started within 24 hours if EF <40%, but they are not the immediate priority. Immediate defibrillation is indicated for life-threatening ventricular arrhythmias like ventricular fibrillation or pulseless ventricular tachycardia, which are not described here."
           ]
         },
         {
           "heading": "Educational Objective",
           "body": [
-            "[DRY-RUN placeholder]"
+            "Identify aspirin as an immediate, first-line medication for patients presenting with ST-elevation myocardial infarction (STEMI)."
           ]
         }
       ],
       "tables": [],
       "sharedGroup": null,
-      "extractionWarnings": [
-        "dry-run: question not generated"
-      ]
+      "extractionWarnings": []
     },
     {
       "id": "q002",
       "questionNumber": 2,
       "sourceQuestionNumber": 2,
-      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
-      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
+      "retrievalTag": "Aortic stenosis heart failure prognosis",
+      "reviewPearl": "Patients with symptomatic aortic stenosis presenting with heart failure have the shortest survival without valve replacement, typically 1-2 years.",
       "clinicalPearl": null,
-      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
+      "stem": "An 80-year-old man presents with progressive dyspnea on exertion, orthopnea, and paroxysmal nocturnal dyspnea over the past 6 months. He denies chest pain or syncope. On physical examination, a harsh systolic ejection murmur is heard loudest at the right upper sternal border, radiating to the carotids. Echocardiography confirms severe aortic stenosis with a valve area of 0.8 cm\u00b2 and an ejection fraction of 35%.",
       "hasEmbeddedFigure": false,
       "figureRefs": [],
       "answerChoices": [
         {
           "label": "A",
-          "text": "Placeholder A"
+          "text": "1-2 years"
         },
         {
           "label": "B",
-          "text": "Placeholder B"
+          "text": "3 years"
         },
         {
           "label": "C",
-          "text": "Placeholder C"
+          "text": "5 years"
         },
         {
           "label": "D",
-          "text": "Placeholder D"
+          "text": "10 years"
         }
       ],
       "correctAnswer": "A",
-      "educationalObjective": "[DRY-RUN placeholder]",
+      "educationalObjective": "Recall the prognosis of severe aortic stenosis based on the presenting symptoms.",
       "explanationSections": [
         {
           "heading": "Correct Answer Explanation",
           "body": [
-            "[DRY-RUN placeholder]"
+            "This patient presents with symptoms of heart failure (dyspnea on exertion, orthopnea, PND) due to severe aortic stenosis. According to the notes, the survival after symptom onset without valve replacement for heart failure is approximately 1-2 years. This makes heart failure the most ominous symptom of severe AS."
           ]
         },
         {
           "heading": "Incorrect Answer Explanation",
           "body": [
-            "[DRY-RUN placeholder]"
+            "Survival for syncope is approximately 3 years, and for angina, it is approximately 5 years. A survival of 10 years is not consistent with symptomatic severe aortic stenosis without intervention."
           ]
         },
         {
           "heading": "Educational Objective",
           "body": [
-            "[DRY-RUN placeholder]"
+            "Identify the expected survival without valve replacement in patients with severe aortic stenosis presenting with heart failure symptoms."
           ]
         }
       ],
       "tables": [],
       "sharedGroup": null,
-      "extractionWarnings": [
-        "dry-run: question not generated"
-      ]
+      "extractionWarnings": []
     },
     {
       "id": "q003",
       "questionNumber": 3,
       "sourceQuestionNumber": 3,
-      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
-      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
+      "retrievalTag": "HFrEF volume overload symptom relief",
+      "reviewPearl": "Loop diuretics like furosemide are first-line for volume overload symptom relief in heart failure but do not reduce mortality.",
       "clinicalPearl": null,
-      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
+      "stem": "A 55-year-old woman with a history of heart failure with reduced ejection fraction (HFrEF, EF 30%) presents for a follow-up visit. She is currently on lisinopril, carvedilol, and spironolactone. Despite these medications, she reports persistent lower extremity edema and occasional shortness of breath, especially when lying flat. Her blood pressure is 118/72 mmHg, and heart rate is 68/min. Physical exam reveals bilateral pitting edema to the mid-shins.",
       "hasEmbeddedFigure": false,
       "figureRefs": [],
       "answerChoices": [
         {
           "label": "A",
-          "text": "Placeholder A"
+          "text": "Furosemide"
         },
         {
           "label": "B",
-          "text": "Placeholder B"
+          "text": "Digoxin"
         },
         {
           "label": "C",
-          "text": "Placeholder C"
+          "text": "Increase lisinopril dose"
         },
         {
           "label": "D",
-          "text": "Placeholder D"
+          "text": "Add an SGLT2 inhibitor"
         }
       ],
       "correctAnswer": "A",
-      "educationalObjective": "[DRY-RUN placeholder]",
+      "educationalObjective": "Identify the appropriate medication for symptomatic volume overload in heart failure that does not reduce mortality.",
       "explanationSections": [
         {
           "heading": "Correct Answer Explanation",
           "body": [
-            "[DRY-RUN placeholder]"
+            "This patient has HFrEF and is experiencing symptoms of volume overload (edema, shortness of breath, orthopnea) despite being on guideline-directed medical therapy. Loop diuretics, such as furosemide, are first-line for volume overload symptom relief in heart failure. The notes explicitly state that loop diuretics do NOT reduce mortality but are used for symptom relief."
           ]
         },
         {
           "heading": "Incorrect Answer Explanation",
           "body": [
-            "[DRY-RUN placeholder]"
+            "Digoxin reduces hospitalizations but does NOT reduce mortality; it is primarily used for rate control in AF with HF. Increasing the lisinopril dose or adding an SGLT2 inhibitor are mortality-reducing therapies for HFrEF, but the immediate concern here is symptomatic volume overload, which is best addressed with a loop diuretic. The patient is already on an ACE inhibitor (lisinopril) and beta-blocker (carvedilol), and an aldosterone antagonist (spironolactone), which are all mortality-reducing therapies."
           ]
         },
         {
           "heading": "Educational Objective",
           "body": [
-            "[DRY-RUN placeholder]"
+            "Recognize that loop diuretics are indicated for symptomatic relief of volume overload in heart failure, but they do not improve mortality."
           ]
         }
       ],
       "tables": [],
       "sharedGroup": null,
-      "extractionWarnings": [
-        "dry-run: question not generated"
-      ]
+      "extractionWarnings": []
     },
     {
       "id": "q004",
       "questionNumber": 4,
       "sourceQuestionNumber": 4,
-      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
-      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
+      "retrievalTag": "Reperfusion injury ventricular arrhythmia treatment",
+      "reviewPearl": "Ventricular arrhythmias due to reperfusion injury after PCI should be treated with lidocaine if the patient is hemodynamically unstable.",
       "clinicalPearl": null,
-      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
+      "stem": "A 70-year-old man undergoes primary percutaneous coronary intervention (PCI) for an anterior ST-elevation myocardial infarction. During the procedure, shortly after successful revascularization, he suddenly develops ventricular tachycardia with associated hypotension and altered mental status. The interventional cardiologist immediately recognizes this as a reperfusion arrhythmia.",
       "hasEmbeddedFigure": false,
       "figureRefs": [],
       "answerChoices": [
         {
           "label": "A",
-          "text": "Placeholder A"
+          "text": "Intravenous lidocaine"
         },
         {
           "label": "B",
-          "text": "Placeholder B"
+          "text": "Intravenous amiodarone"
         },
         {
           "label": "C",
-          "text": "Placeholder C"
+          "text": "Immediate synchronized cardioversion"
         },
         {
           "label": "D",
-          "text": "Placeholder D"
+          "text": "High-dose intravenous epinephrine"
         }
       ],
       "correctAnswer": "A",
-      "educationalObjective": "[DRY-RUN placeholder]",
+      "educationalObjective": "Identify the appropriate treatment for hemodynamically unstable ventricular arrhythmias occurring as a result of reperfusion injury after PCI.",
       "explanationSections": [
         {
           "heading": "Correct Answer Explanation",
           "body": [
-            "[DRY-RUN placeholder]"
+            "The patient is experiencing a hemodynamically unstable ventricular arrhythmia (ventricular tachycardia with hypotension and altered mental status) following PCI, consistent with reperfusion injury. The notes state that reperfusion injury after PCI can cause ventricular arrhythmias, which should be treated with lidocaine if hemodynamically unstable. Therefore, intravenous lidocaine is the most appropriate treatment."
           ]
         },
         {
           "heading": "Incorrect Answer Explanation",
           "body": [
-            "[DRY-RUN placeholder]"
+            "While amiodarone is an antiarrhythmic, lidocaine is specifically mentioned for reperfusion injury ventricular arrhythmias. Immediate synchronized cardioversion is indicated for unstable tachyarrhythmias, but the notes specifically point to lidocaine for this particular etiology. High-dose intravenous epinephrine is typically used in cardiac arrest scenarios, not for stable or unstable ventricular tachycardia where an antiarrhythmic or cardioversion is indicated."
           ]
         },
         {
           "heading": "Educational Objective",
           "body": [
-            "[DRY-RUN placeholder]"
+            "Recall that lidocaine is the treatment for hemodynamically unstable ventricular arrhythmias caused by reperfusion injury after PCI."
           ]
         }
       ],
       "tables": [],
       "sharedGroup": null,
-      "extractionWarnings": [
-        "dry-run: question not generated"
-      ]
+      "extractionWarnings": []
     },
     {
       "id": "q005",
       "questionNumber": 5,
       "sourceQuestionNumber": 5,
-      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
-      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
+      "retrievalTag": "Aortic stenosis auscultation pulsus parvus et tardus",
+      "reviewPearl": "Aortic stenosis is characterized by a harsh systolic ejection murmur at the RUSB radiating to the carotids, paradoxically split S2, and pulsus parvus et tardus.",
       "clinicalPearl": null,
-      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
+      "stem": "A 75-year-old man presents with a 9-month history of exertional chest pain and occasional lightheadedness with physical activity. On physical examination, his carotid pulses are noted to be diminished and delayed. Auscultation reveals a harsh, crescendo-decrescendo murmur heard best at the right upper sternal border, radiating to the neck. His blood pressure is 110/80 mmHg, and heart rate is 70/min. These findings are most consistent with severe aortic stenosis.",
       "hasEmbeddedFigure": false,
       "figureRefs": [],
       "answerChoices": [
         {
           "label": "A",
-          "text": "Placeholder A"
+          "text": "Pulsus parvus et tardus"
         },
         {
           "label": "B",
-          "text": "Placeholder B"
+          "text": "Wide, fixed splitting of S2"
         },
         {
           "label": "C",
-          "text": "Placeholder C"
+          "text": "Prominent 'a' wave in the jugular venous pulse"
         },
         {
           "label": "D",
-          "text": "Placeholder D"
+          "text": "Early diastolic decrescendo murmur"
         }
       ],
       "correctAnswer": "A",
-      "educationalObjective": "[DRY-RUN placeholder]",
+      "educationalObjective": "Identify the classic peripheral pulse finding associated with aortic stenosis.",
       "explanationSections": [
         {
           "heading": "Correct Answer Explanation",
           "body": [
-            "[DRY-RUN placeholder]"
+            "This patient's symptoms (exertional chest pain, lightheadedness) and murmur (harsh systolic ejection murmur at RUSB radiating to carotids) are classic for aortic stenosis. The notes explicitly state that 'pulsus parvus et tardus' (diminished and delayed carotid pulses) is an auscultatory/palpation finding associated with severe AS. This finding directly matches the clinical vignette."
           ]
         },
         {
           "heading": "Incorrect Answer Explanation",
           "body": [
-            "[DRY-RUN placeholder]"
+            "Wide, fixed splitting of S2 is characteristic of an atrial septal defect, not aortic stenosis (which can have paradoxical S2 splitting). A prominent 'a' wave in the jugular venous pulse indicates increased right atrial pressure, often seen in tricuspid stenosis or right ventricular hypertrophy, not typically AS. An early diastolic decrescendo murmur is characteristic of aortic regurgitation, not aortic stenosis."
           ]
         },
         {
           "heading": "Educational Objective",
           "body": [
-            "[DRY-RUN placeholder]"
+            "Recognize pulsus parvus et tardus as a characteristic peripheral pulse finding in patients with severe aortic stenosis."
           ]
         }
       ],
       "tables": [],
       "sharedGroup": null,
-      "extractionWarnings": [
-        "dry-run: question not generated"
-      ]
-    },
-    {
-      "id": "q006",
-      "questionNumber": 6,
-      "sourceQuestionNumber": 6,
-      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
-      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
-      "clinicalPearl": null,
-      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
-      "hasEmbeddedFigure": false,
-      "figureRefs": [],
-      "answerChoices": [
-        {
-          "label": "A",
-          "text": "Placeholder A"
-        },
-        {
-          "label": "B",
-          "text": "Placeholder B"
-        },
-        {
-          "label": "C",
-          "text": "Placeholder C"
-        },
-        {
-          "label": "D",
-          "text": "Placeholder D"
-        }
-      ],
-      "correctAnswer": "A",
-      "educationalObjective": "[DRY-RUN placeholder]",
-      "explanationSections": [
-        {
-          "heading": "Correct Answer Explanation",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        },
-        {
-          "heading": "Incorrect Answer Explanation",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        },
-        {
-          "heading": "Educational Objective",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        }
-      ],
-      "tables": [],
-      "sharedGroup": null,
-      "extractionWarnings": [
-        "dry-run: question not generated"
-      ]
-    },
-    {
-      "id": "q007",
-      "questionNumber": 7,
-      "sourceQuestionNumber": 7,
-      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
-      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
-      "clinicalPearl": null,
-      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
-      "hasEmbeddedFigure": false,
-      "figureRefs": [],
-      "answerChoices": [
-        {
-          "label": "A",
-          "text": "Placeholder A"
-        },
-        {
-          "label": "B",
-          "text": "Placeholder B"
-        },
-        {
-          "label": "C",
-          "text": "Placeholder C"
-        },
-        {
-          "label": "D",
-          "text": "Placeholder D"
-        }
-      ],
-      "correctAnswer": "A",
-      "educationalObjective": "[DRY-RUN placeholder]",
-      "explanationSections": [
-        {
-          "heading": "Correct Answer Explanation",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        },
-        {
-          "heading": "Incorrect Answer Explanation",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        },
-        {
-          "heading": "Educational Objective",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        }
-      ],
-      "tables": [],
-      "sharedGroup": null,
-      "extractionWarnings": [
-        "dry-run: question not generated"
-      ]
-    },
-    {
-      "id": "q008",
-      "questionNumber": 8,
-      "sourceQuestionNumber": 8,
-      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
-      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
-      "clinicalPearl": null,
-      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
-      "hasEmbeddedFigure": false,
-      "figureRefs": [],
-      "answerChoices": [
-        {
-          "label": "A",
-          "text": "Placeholder A"
-        },
-        {
-          "label": "B",
-          "text": "Placeholder B"
-        },
-        {
-          "label": "C",
-          "text": "Placeholder C"
-        },
-        {
-          "label": "D",
-          "text": "Placeholder D"
-        }
-      ],
-      "correctAnswer": "A",
-      "educationalObjective": "[DRY-RUN placeholder]",
-      "explanationSections": [
-        {
-          "heading": "Correct Answer Explanation",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        },
-        {
-          "heading": "Incorrect Answer Explanation",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        },
-        {
-          "heading": "Educational Objective",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        }
-      ],
-      "tables": [],
-      "sharedGroup": null,
-      "extractionWarnings": [
-        "dry-run: question not generated"
-      ]
-    },
-    {
-      "id": "q009",
-      "questionNumber": 9,
-      "sourceQuestionNumber": 9,
-      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
-      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
-      "clinicalPearl": null,
-      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
-      "hasEmbeddedFigure": false,
-      "figureRefs": [],
-      "answerChoices": [
-        {
-          "label": "A",
-          "text": "Placeholder A"
-        },
-        {
-          "label": "B",
-          "text": "Placeholder B"
-        },
-        {
-          "label": "C",
-          "text": "Placeholder C"
-        },
-        {
-          "label": "D",
-          "text": "Placeholder D"
-        }
-      ],
-      "correctAnswer": "A",
-      "educationalObjective": "[DRY-RUN placeholder]",
-      "explanationSections": [
-        {
-          "heading": "Correct Answer Explanation",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        },
-        {
-          "heading": "Incorrect Answer Explanation",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        },
-        {
-          "heading": "Educational Objective",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        }
-      ],
-      "tables": [],
-      "sharedGroup": null,
-      "extractionWarnings": [
-        "dry-run: question not generated"
-      ]
-    },
-    {
-      "id": "q010",
-      "questionNumber": 10,
-      "sourceQuestionNumber": 10,
-      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
-      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
-      "clinicalPearl": null,
-      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
-      "hasEmbeddedFigure": false,
-      "figureRefs": [],
-      "answerChoices": [
-        {
-          "label": "A",
-          "text": "Placeholder A"
-        },
-        {
-          "label": "B",
-          "text": "Placeholder B"
-        },
-        {
-          "label": "C",
-          "text": "Placeholder C"
-        },
-        {
-          "label": "D",
-          "text": "Placeholder D"
-        }
-      ],
-      "correctAnswer": "A",
-      "educationalObjective": "[DRY-RUN placeholder]",
-      "explanationSections": [
-        {
-          "heading": "Correct Answer Explanation",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        },
-        {
-          "heading": "Incorrect Answer Explanation",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        },
-        {
-          "heading": "Educational Objective",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        }
-      ],
-      "tables": [],
-      "sharedGroup": null,
-      "extractionWarnings": [
-        "dry-run: question not generated"
-      ]
-    },
-    {
-      "id": "q011",
-      "questionNumber": 11,
-      "sourceQuestionNumber": 11,
-      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
-      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
-      "clinicalPearl": null,
-      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
-      "hasEmbeddedFigure": false,
-      "figureRefs": [],
-      "answerChoices": [
-        {
-          "label": "A",
-          "text": "Placeholder A"
-        },
-        {
-          "label": "B",
-          "text": "Placeholder B"
-        },
-        {
-          "label": "C",
-          "text": "Placeholder C"
-        },
-        {
-          "label": "D",
-          "text": "Placeholder D"
-        }
-      ],
-      "correctAnswer": "A",
-      "educationalObjective": "[DRY-RUN placeholder]",
-      "explanationSections": [
-        {
-          "heading": "Correct Answer Explanation",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        },
-        {
-          "heading": "Incorrect Answer Explanation",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        },
-        {
-          "heading": "Educational Objective",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        }
-      ],
-      "tables": [],
-      "sharedGroup": null,
-      "extractionWarnings": [
-        "dry-run: question not generated"
-      ]
-    },
-    {
-      "id": "q012",
-      "questionNumber": 12,
-      "sourceQuestionNumber": 12,
-      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
-      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
-      "clinicalPearl": null,
-      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
-      "hasEmbeddedFigure": false,
-      "figureRefs": [],
-      "answerChoices": [
-        {
-          "label": "A",
-          "text": "Placeholder A"
-        },
-        {
-          "label": "B",
-          "text": "Placeholder B"
-        },
-        {
-          "label": "C",
-          "text": "Placeholder C"
-        },
-        {
-          "label": "D",
-          "text": "Placeholder D"
-        }
-      ],
-      "correctAnswer": "A",
-      "educationalObjective": "[DRY-RUN placeholder]",
-      "explanationSections": [
-        {
-          "heading": "Correct Answer Explanation",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        },
-        {
-          "heading": "Incorrect Answer Explanation",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        },
-        {
-          "heading": "Educational Objective",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        }
-      ],
-      "tables": [],
-      "sharedGroup": null,
-      "extractionWarnings": [
-        "dry-run: question not generated"
-      ]
-    },
-    {
-      "id": "q013",
-      "questionNumber": 13,
-      "sourceQuestionNumber": 13,
-      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
-      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
-      "clinicalPearl": null,
-      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
-      "hasEmbeddedFigure": false,
-      "figureRefs": [],
-      "answerChoices": [
-        {
-          "label": "A",
-          "text": "Placeholder A"
-        },
-        {
-          "label": "B",
-          "text": "Placeholder B"
-        },
-        {
-          "label": "C",
-          "text": "Placeholder C"
-        },
-        {
-          "label": "D",
-          "text": "Placeholder D"
-        }
-      ],
-      "correctAnswer": "A",
-      "educationalObjective": "[DRY-RUN placeholder]",
-      "explanationSections": [
-        {
-          "heading": "Correct Answer Explanation",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        },
-        {
-          "heading": "Incorrect Answer Explanation",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        },
-        {
-          "heading": "Educational Objective",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        }
-      ],
-      "tables": [],
-      "sharedGroup": null,
-      "extractionWarnings": [
-        "dry-run: question not generated"
-      ]
-    },
-    {
-      "id": "q014",
-      "questionNumber": 14,
-      "sourceQuestionNumber": 14,
-      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
-      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
-      "clinicalPearl": null,
-      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
-      "hasEmbeddedFigure": false,
-      "figureRefs": [],
-      "answerChoices": [
-        {
-          "label": "A",
-          "text": "Placeholder A"
-        },
-        {
-          "label": "B",
-          "text": "Placeholder B"
-        },
-        {
-          "label": "C",
-          "text": "Placeholder C"
-        },
-        {
-          "label": "D",
-          "text": "Placeholder D"
-        }
-      ],
-      "correctAnswer": "A",
-      "educationalObjective": "[DRY-RUN placeholder]",
-      "explanationSections": [
-        {
-          "heading": "Correct Answer Explanation",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        },
-        {
-          "heading": "Incorrect Answer Explanation",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        },
-        {
-          "heading": "Educational Objective",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        }
-      ],
-      "tables": [],
-      "sharedGroup": null,
-      "extractionWarnings": [
-        "dry-run: question not generated"
-      ]
-    },
-    {
-      "id": "q015",
-      "questionNumber": 15,
-      "sourceQuestionNumber": 15,
-      "retrievalTag": "[DRY-RUN placeholder \u2014 not generated]",
-      "reviewPearl": "[DRY-RUN placeholder \u2014 not generated]",
-      "clinicalPearl": null,
-      "stem": "[DRY-RUN] This question was not generated. Run without --dry-run to call Gemini.",
-      "hasEmbeddedFigure": false,
-      "figureRefs": [],
-      "answerChoices": [
-        {
-          "label": "A",
-          "text": "Placeholder A"
-        },
-        {
-          "label": "B",
-          "text": "Placeholder B"
-        },
-        {
-          "label": "C",
-          "text": "Placeholder C"
-        },
-        {
-          "label": "D",
-          "text": "Placeholder D"
-        }
-      ],
-      "correctAnswer": "A",
-      "educationalObjective": "[DRY-RUN placeholder]",
-      "explanationSections": [
-        {
-          "heading": "Correct Answer Explanation",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        },
-        {
-          "heading": "Incorrect Answer Explanation",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        },
-        {
-          "heading": "Educational Objective",
-          "body": [
-            "[DRY-RUN placeholder]"
-          ]
-        }
-      ],
-      "tables": [],
-      "sharedGroup": null,
-      "extractionWarnings": [
-        "dry-run: question not generated"
-      ]
+      "extractionWarnings": []
     }
   ]
 }
