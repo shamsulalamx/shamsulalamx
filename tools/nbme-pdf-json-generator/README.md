@@ -1,11 +1,11 @@
 # NBME PDF → JSON Generator
 
-**Current: Milestone 3 — Normalized Scaffold (schema + prompt + dry-run)**
+**Current: Milestone 4 — Gemini-powered normalization with schema validation**
 
 Staged pipeline for converting NBME-style PDF answer files into app-ready JSON.
 
 ```
-PDF → raw text → chunks → normalized scaffold → (Milestone 4: app-ready JSON)
+PDF → raw text → chunks → Gemini → normalized JSON → (Milestone 5: app-ready JSON)
 ```
 
 ---
@@ -15,7 +15,7 @@ PDF → raw text → chunks → normalized scaffold → (Milestone 4: app-ready 
 ```
 tools/nbme-pdf-json-generator/
 ├── Generate_NBME_JSONs.command        ← double-click launcher (macOS)
-├── extract_pdfs.py                    ← core pipeline script
+├── extract_pdfs.py                    ← core pipeline script (M1–M4)
 ├── README.md                          ← this file
 │
 ├── schema/
@@ -23,7 +23,7 @@ tools/nbme-pdf-json-generator/
 │   └── app_ready_schema_notes.md        ← mapping: normalized → app storage fields
 │
 ├── prompts/
-│   └── chunk_to_normalized_question_prompt.txt  ← LLM prompt (Milestone 4)
+│   └── chunk_to_normalized_question_prompt.txt  ← Gemini prompt
 │
 ├── input_pdfs/                        ← DROP YOUR PDFs HERE
 │
@@ -37,45 +37,53 @@ tools/nbme-pdf-json-generator/
 
 ---
 
+## API key setup
+
+The Gemini normalization step requires a Google Gemini API key.
+**The key is never stored in files or printed to the terminal.**
+
+Set it in your shell before running:
+
+```bash
+export GEMINI_API_KEY='your-api-key-here'
+```
+
+Or prefix it inline:
+
+```bash
+GEMINI_API_KEY='your-api-key-here' python3 extract_pdfs.py --normalize-gemini
+```
+
+If the key is missing, the script exits immediately with a clear error message.
+
+---
+
 ## How to use
 
-### Step 1 — Place your PDFs
-
-```
-tools/nbme-pdf-json-generator/input_pdfs/
-```
-
-### Step 2 — Run
-
-**Full pipeline (PDF → raw text → chunks):**
+### Full staged workflow
 
 ```bash
 cd tools/nbme-pdf-json-generator
+
+# Step 1: extract PDFs → raw text + chunks
 python3 extract_pdfs.py
+
+# Step 2: normalize chunks via Gemini (requires GEMINI_API_KEY)
+python3 extract_pdfs.py --normalize-gemini
 ```
 
-**Re-chunk only (skip PDF re-extraction):**
+### Individual commands
 
-```bash
-python3 extract_pdfs.py --chunk-only
-```
+| Command | What it does |
+|---|---|
+| `python3 extract_pdfs.py` | Extract PDFs → raw text → question chunks |
+| `python3 extract_pdfs.py --chunk-only` | Re-chunk existing raw_text files (skip PDF re-extraction) |
+| `python3 extract_pdfs.py --normalize-dry-run` | Create empty placeholder normalized JSON (no LLM, no key needed) |
+| `python3 extract_pdfs.py --normalize-gemini` | Call Gemini to normalize chunks (requires `GEMINI_API_KEY`) |
 
-**Normalize dry run (create placeholder normalized JSON, no LLM):**
+### Double-click launcher
 
-```bash
-python3 extract_pdfs.py --normalize-dry-run
-```
-
-Reads all `output_json/chunks/*_chunks.json` files and writes one
-`output_json/normalized/*_normalized.json` per chunk file.
-Every question becomes a placeholder with all fields empty and
-`"warnings": ["normalize dry run only; LLM not called"]`.
-Gemini is **not** called.
-
-**Double-click launcher (macOS Finder):**
-
-Double-click `Generate_NBME_JSONs.command`.
-Right-click → Open if macOS blocks it the first time.
+Double-click `Generate_NBME_JSONs.command` in Finder. Right-click → Open if macOS blocks it.
 
 ---
 
@@ -108,39 +116,50 @@ Markdown-style, one `## Page N` section per PDF page.
 }
 ```
 
-### Normalized JSON (`output_json/normalized/<stem>_normalized.json`)
-
-One file per source PDF, containing one normalized question object per chunk.
-In dry-run mode all question fields are empty placeholders.
-In Milestone 4 (LLM mode) each question will be fully populated.
+### Normalized JSON — Gemini mode (`output_json/normalized/<stem>_normalized.json`)
 
 ```json
 {
-  "schemaVersion": "nbme-normalized-file-v1",
+  "schemaVersion": "normalized-question-batch-v1",
+  "sourceFile": "NBME_Psych_9_raw.txt",
   "sourceChunkFile": "NBME_Psych_9_chunks.json",
   "createdAt": "2026-05-19T...",
-  "isDryRun": true,
-  "questionCount": 50,
-  "fileWarnings": [],
-  "questions": [
+  "normalizationMode": "gemini",
+  "normalizedCount": 49,
+  "failedCount": 1,
+  "items": [
     {
       "schemaVersion": "nbme-normalized-question-v1",
-      "sourceFile": "NBME_Psych_9_chunks.json",
+      "sourceFile": "NBME_Psych_9_raw.txt",
       "sourceQuestionNumber": 1,
       "questionId": "q001",
-      "stem": "",
-      "choices": [],
-      "correctAnswer": "",
-      "educationalObjective": "",
-      "correctExplanation": "",
-      "incorrectExplanations": [],
-      "reviewPearl": "",
-      "retrievalTag": "",
-      "tags": [],
+      "stem": "A 28-year-old woman presents with...",
+      "choices": [
+        { "label": "A", "text": "Adjustment disorder" },
+        { "label": "B", "text": "Major depressive disorder" }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Diagnose major depressive disorder...",
+      "correctExplanation": "The patient meets criteria because...",
+      "incorrectExplanations": [
+        { "label": "A", "explanation": "Adjustment disorder requires..." }
+      ],
+      "reviewPearl": "MDD requires 5 of 9 SIGECAPS symptoms for 2 weeks.",
+      "retrievalTag": "MDD diagnostic criteria",
+      "tags": ["MDD diagnostic criteria"],
       "figures": [],
       "tables": [],
-      "warnings": ["normalize dry run only; LLM not called"],
-      "confidence": "low"
+      "warnings": [],
+      "confidence": "high"
+    }
+  ],
+  "failures": [
+    {
+      "chunkId": "q012",
+      "questionNumber": 12,
+      "error": "correctAnswer not found in choices",
+      "rawResponsePreview": "...",
+      "attempts": 2
     }
   ]
 }
@@ -148,33 +167,51 @@ In Milestone 4 (LLM mode) each question will be fully populated.
 
 ### Pipeline report (`reports/extraction_report_<timestamp>.json`)
 
-Report schema v3 — includes extraction, chunking, and normalization status per file:
+Report schema v4 — includes per-file `failedCount` and `validationErrorCount`:
 
 ```json
 {
-  "schemaVersion": "nbme-pdf-extractor-report-v3",
-  "mode": "normalize-dry-run",
+  "schemaVersion": "nbme-pdf-extractor-report-v4",
+  "mode": "normalize-gemini",
   "summary": {
-    "total": 2,
-    "totalChunks": 53,
-    "normalizationOk": 1,
-    "normalizationWarning": 1,
-    "normalizationError": 0,
-    "normalizationSkipped": 0,
-    "totalNormalized": 53
-  },
-  "files": [
-    {
-      "filename": "NBME_Psych_9.pdf",
-      "chunkingStatus": "skipped",
-      "chunkPath": "output_json/chunks/NBME_Psych_9_chunks.json",
-      "normalizationStatus": "ok",
-      "normalizedCount": 50,
-      "normalizedOutputPath": "output_json/normalized/NBME_Psych_9_normalized.json"
-    }
-  ]
+    "totalNormalized": 49,
+    "totalFailed": 1,
+    "totalValidationErrors": 3
+  }
 }
 ```
+
+---
+
+## Gemini model
+
+Uses `gemini-2.5-flash` — the same model used throughout the app.
+
+---
+
+## Validation (M4)
+
+Each Gemini response is validated before being written. Checks:
+
+- All 17 required fields present
+- `choices` is an array; each entry has `label` (A–F) and `text`
+- `correctAnswer` is a single letter A–F or empty string
+- `confidence` is `high`, `medium`, or `low`
+- `warnings`, `tags`, `figures`, `tables`, `incorrectExplanations` are arrays
+- No forbidden phrases in text fields:
+  `Here are the extracted questions`, `eftab720`, `tightenfactor0`,
+  `Below is the JSON`, ```` ```json ````, ```` ``` ````
+
+On validation failure: one automatic retry with a repair prompt.
+After 2 failed attempts: chunk recorded in `failures[]`, pipeline continues.
+
+---
+
+## Security note
+
+- `GEMINI_API_KEY` is read from the environment only.
+- It is **never** printed, logged, or written to any file.
+- Never commit your key to git.
 
 ---
 
@@ -182,65 +219,31 @@ Report schema v3 — includes extraction, chunking, and normalization status per
 
 ### `schema/normalized_question_schema.json`
 
-JSON Schema (draft-07) describing one normalized question object.
-See the file for full field definitions including validation rules and descriptions.
+JSON Schema (draft-07) for one normalized question.
 
 ### `schema/app_ready_schema_notes.md`
 
-Documents how normalized fields map into the app's internal quiz schema:
-- `stem` → `q.t`
-- `choices` → `q.o` (rename `label`→`l`, `text`→`t`)
-- `correctAnswer` → `q.c`
-- `educationalObjective` → `q.educationalObjective`
-- `correctExplanation` + `incorrectExplanations` + `reviewPearl` → `q.correctBlurb`
-- `retrievalTag` → `q.retrievalTag` + `q.metadata.retrievalTag` + `q.tags[0]`
-- `figures` → `q.metadata.figureRefs`
-- `tables` → `q.metadata.tables`
-- `warnings` → `q.metadata.extractionWarnings`
-
----
-
-## LLM prompt
-
-`prompts/chunk_to_normalized_question_prompt.txt` contains the prompt for
-Milestone 4 (Gemini call). It instructs the LLM to:
-
-- Convert exactly one raw chunk → exactly one normalized JSON object
-- Preserve all wording verbatim from source
-- Never invent answer choices or correct answers
-- Never add content not supported by source text
-- Detect and flag contamination phrases (`eftab720`, `tightenfactor0`, etc.)
-- Output JSON only — no markdown, no commentary
-
----
-
-## Question boundary detection (M2)
-
-| Pattern | Example |
-|---|---|
-| `N. ` | `1. A 32-year-old man…` |
-| `N) ` | `1) A 32-year-old man…` |
-| `Question N` | `Question 1 A 32-year-old man…` |
-| `Item N` | `Item 1 A 32-year-old man…` |
+Field mapping from normalized → app quiz schema (`q.t`, `q.o`, `q.c`, etc.).
 
 ---
 
 ## Requirements
 
 - macOS (Apple Silicon or Intel)
-- Python 3.9+
-- `pdfplumber` — auto-installed by `Generate_NBME_JSONs.command`
+- Python 3.9+ (standard library only for M4 HTTP calls — `urllib.request`)
+- `pdfplumber` — for PDF extraction only
 
 ```bash
 pip3 install pdfplumber
 ```
 
+No additional packages are needed for the Gemini API calls.
+
 ---
 
 ## Notes
 
-- **Milestone 3** adds schema, prompt scaffolding, and dry-run normalization only.
-  No LLM is called at any point in the current pipeline.
-- Image-only PDFs produce empty raw text → no chunk boundaries found → 0 normalized placeholders.
-- This tool does not modify any app files (`index.html`, `js/`, etc.).
+- Chunks are processed **sequentially** with a 0.5s delay between Gemini calls.
+- Image-only PDFs produce empty raw text → no chunks → 0 normalized questions.
+- This tool does not touch any app files (`index.html`, `js/`, etc.).
 - Each run appends a new timestamped report to `reports/`.
