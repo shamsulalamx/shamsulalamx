@@ -1,0 +1,1282 @@
+{
+  "schemaVersion": "nbme-gemini-json-v2",
+  "testTitle": "OME Personality",
+  "sourceFormat": "rtf",
+  "expectedQuestionCount": 24,
+  "actualExtractedQuestionCount": 24,
+  "extractionWarnings": [],
+  "questions": [
+    {
+      "id": "q001",
+      "questionNumber": 1,
+      "sourceQuestionNumber": 1,
+      "retrievalTag": "DID $$ 2 distinct identity states",
+      "reviewPearl": "DID develops to protect the primary self from intense trauma and requires intense psychotherapy with hypnosis to align the personalities.",
+      "stem": "A 32-year-old woman presents with recurring \"blackouts\" where she loses hours of time. Her husband reports she sometimes acts like a completely different, aggressive person. She has a history of severe childhood trauma.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Dissociative amnesia"
+        },
+        {
+          "label": "B",
+          "text": "Dissociative identity disorder"
+        },
+        {
+          "label": "C",
+          "text": "Borderline personality disorder"
+        },
+        {
+          "label": "D",
+          "text": "Schizophrenia"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Identify dissociative identity disorder based on blackouts and paradoxical distinct identity behaviors witnessed by others.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Dissociative identity disorder presents with 2 or more distinct personality states and memory gaps, often following severe prolonged trauma."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Dissociative amnesia involves memory loss of an event but strictly lacks distinct personality states and paradoxical behaviors."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "DID develops to protect the primary self from intense trauma and requires intense psychotherapy with hypnosis to align the personalities."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q002",
+      "questionNumber": 2,
+      "sourceQuestionNumber": 2,
+      "retrievalTag": "Dissociative fugue wandering travel",
+      "reviewPearl": "Fugue is a specific subtype of dissociative amnesia triggered by major stressors that involves travel.",
+      "stem": "A 45-year-old man is found wandering in another state with no memory of his past or identity. He recently survived a horrific house fire.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Dissociative amnesia with fugue"
+        },
+        {
+          "label": "B",
+          "text": "Depersonalization disorder"
+        },
+        {
+          "label": "C",
+          "text": "Schizophrenia"
+        },
+        {
+          "label": "D",
+          "text": "Malingering"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Recognize dissociative amnesia with fugue in a patient with stress-induced memory loss and physical travel.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Dissociative amnesia with purposeful travel or bewildered wandering specifically constitutes a dissociative fugue."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Depersonalization involves an out-of-body experience but maintains intact memory and autobiographical self without travel."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Fugue is a specific subtype of dissociative amnesia triggered by major stressors that involves travel."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q003",
+      "questionNumber": 3,
+      "sourceQuestionNumber": 3,
+      "retrievalTag": "Depersonalization intact reality testing",
+      "reviewPearl": "Patients with depersonalization often describe their experience as living in a dream, yet their reality testing is completely intact.",
+      "stem": "A 17-year-old boy reports feeling as though he is watching a movie of himself from the outside. He knows this feeling isn't reality.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Dissociative identity disorder"
+        },
+        {
+          "label": "B",
+          "text": "Depersonalization derealization disorder"
+        },
+        {
+          "label": "C",
+          "text": "Brief psychotic disorder"
+        },
+        {
+          "label": "D",
+          "text": "Schizophrenia"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Diagnose depersonalization derealization disorder based on out-of-body feelings with strictly intact reality testing.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Depersonalization is characterized by out-of-body experiences while reality testing remains intact, commonly seen in adolescents."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Psychotic disorders like schizophrenia feature impaired reality testing, unlike depersonalization disorder."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Patients with depersonalization often describe their experience as living in a dream, yet their reality testing is completely intact."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q004",
+      "questionNumber": 4,
+      "sourceQuestionNumber": 4,
+      "retrievalTag": "Dissociative amnesia trauma memory loss",
+      "reviewPearl": "Dissociative amnesia can involve memory loss isolated solely to the traumatic event, but severe forms can erase the complete autobiographical self.\neftab720\ntightenfactor0\neftab720\ntightenfactor0\nDocument 2: Somatic Symptom Disorders",
+      "stem": "A 28-year-old woman cannot recall the details of a severe car crash she survived two weeks ago, but remembers everything else about her life.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Dissociative identity disorder"
+        },
+        {
+          "label": "B",
+          "text": "Depersonalization disorder"
+        },
+        {
+          "label": "C",
+          "text": "Dissociative amnesia"
+        },
+        {
+          "label": "D",
+          "text": "Factitious disorder"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Identify dissociative amnesia presenting as isolated memory loss for a traumatic stressor.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Dissociative amnesia involves memory loss of a specific traumatic event without physical travel or altered identity."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Factitious disorder involves intentional symptom production, whereas this is stress-induced subconscious memory loss."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Dissociative amnesia can involve memory loss isolated solely to the traumatic event, but severe forms can erase the complete autobiographical self.\neftab720\ntightenfactor0\neftab720\ntightenfactor0\nDocument 2: Somatic Symptom Disorders"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q005",
+      "questionNumber": 5,
+      "sourceQuestionNumber": 5,
+      "retrievalTag": "IAD excessive illness preoccupation no symptoms",
+      "reviewPearl": "The anxiety in illness anxiety disorder focuses on potentially acquiring a disease rather than a specific physical pain.",
+      "stem": "A 40-year-old man fears he has colon cancer. He has absolutely no somatic symptoms, but obsessively seeks reassurance from multiple providers despite negative workups.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Somatic symptom disorder"
+        },
+        {
+          "label": "B",
+          "text": "Illness anxiety disorder"
+        },
+        {
+          "label": "C",
+          "text": "Factitious disorder"
+        },
+        {
+          "label": "D",
+          "text": "Malingering"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Differentiate illness anxiety disorder (no somatic symptoms) from somatic symptom disorder.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Excessive preoccupation with acquiring a serious illness for 6 months without actual somatic symptoms defines illness anxiety disorder."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Somatic symptom disorder strictly requires the presence of a distressing somatic complaint, which is absent here."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "The anxiety in illness anxiety disorder focuses on potentially acquiring a disease rather than a specific physical pain."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q006",
+      "questionNumber": 6,
+      "sourceQuestionNumber": 6,
+      "retrievalTag": "SSD somatic complaint 6 months",
+      "reviewPearl": "Patients with somatic symptom disorder experience real distress and should have regular follow-ups with a single dedicated provider.",
+      "stem": "A 35-year-old woman complains of persistent chronic back pain for 8 months. Extensive workups are negative, but she spends excessive time seeking explanations for her symptoms.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Illness anxiety disorder"
+        },
+        {
+          "label": "B",
+          "text": "Factitious disorder"
+        },
+        {
+          "label": "C",
+          "text": "Conversion disorder"
+        },
+        {
+          "label": "D",
+          "text": "Somatic symptom disorder"
+        }
+      ],
+      "correctAnswer": "D",
+      "educationalObjective": "Recognize somatic symptom disorder driven by subconscious motivation and excessive symptom preoccupation.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Presence of $$ 1 somatic symptom lasting $$ 6 months with disproportionate preoccupation despite no medical cause is somatic symptom disorder."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Factitious disorder involves intentional symptom fabrication to fulfill a sick role, whereas this patient's motivation is subconscious."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Patients with somatic symptom disorder experience real distress and should have regular follow-ups with a single dedicated provider."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q007",
+      "questionNumber": 7,
+      "sourceQuestionNumber": 7,
+      "retrievalTag": "Conversion disorder neurologic symptom stressor",
+      "reviewPearl": "Treating the disease as its neurologic correlate (e.g., physical rehab) often allows the psyche an escape to return to normal.",
+      "stem": "A 25-year-old woman presents with sudden blindness after witnessing a violent crime. Neurological exam is normal and she seems unconcerned about the deficit.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Functional neurologic symptom (conversion) disorder"
+        },
+        {
+          "label": "B",
+          "text": "Malingering"
+        },
+        {
+          "label": "C",
+          "text": "Illness anxiety disorder"
+        },
+        {
+          "label": "D",
+          "text": "Somatic symptom disorder"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Diagnose conversion disorder in the setting of stress-induced neurological deficits with subconscious motivation.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "A neurologic complaint without organic cause following an emotional stressor, often with \"la belle indifference\", defines conversion disorder."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Malingering features intentional symptom fabrication for secondary material gain, not an unconscious neurologic deficit."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Treating the disease as its neurologic correlate (e.g., physical rehab) often allows the psyche an escape to return to normal."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q008",
+      "questionNumber": 8,
+      "sourceQuestionNumber": 8,
+      "retrievalTag": "Factitious disorder intentional sick role",
+      "reviewPearl": "Factitious disorder involves purposeful deceit without material gain and generally requires confrontation and psychotherapy.\neftab720\ntightenfactor0\neftab720\ntightenfactor0\nDocument 3: Antipsychotic Medications",
+      "stem": "A nurse is caught secretly manipulating her lab tests to appear sick. She admits she enjoys the attention of being a patient but denies financial motivation.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Malingering"
+        },
+        {
+          "label": "B",
+          "text": "Somatic symptom disorder"
+        },
+        {
+          "label": "C",
+          "text": "Factitious disorder"
+        },
+        {
+          "label": "D",
+          "text": "Conversion disorder"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Differentiate factitious disorder (sick role motivation) from malingering (material gain motivation).",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Intentional symptom fabrication solely to assume the \"sick role\" (attention) is the hallmark of factitious disorder."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Malingering involves intentional deceit driven by secondary material gain (e.g., insurance money), not simply attention."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Factitious disorder involves purposeful deceit without material gain and generally requires confrontation and psychotherapy.\neftab720\ntightenfactor0\neftab720\ntightenfactor0\nDocument 3: Antipsychotic Medications"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q009",
+      "questionNumber": 9,
+      "sourceQuestionNumber": 9,
+      "retrievalTag": "Akathisia subjective restlessness beta blockers",
+      "reviewPearl": "Treatment for akathisia involves decreasing the antipsychotic dose, or adding beta-blockers or anti-ACh medications like benztropine.",
+      "stem": "A 28-year-old man treated with haloperidol begins pacing the room constantly. He states he has an intense urge to move.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Acute dystonia"
+        },
+        {
+          "label": "B",
+          "text": "Akathisia"
+        },
+        {
+          "label": "C",
+          "text": "Tardive dyskinesia"
+        },
+        {
+          "label": "D",
+          "text": "Parkinsonism"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Identify akathisia as a medication-induced restlessness treatable by decreasing the dose or adding beta-blockers.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Akathisia is an extrapyramidal side effect characterized by a subjective feeling of restlessness and an urge to move."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Acute dystonia involves involuntary muscle contractions (e.g., torticollis), not a subjective feeling of restlessness."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Treatment for akathisia involves decreasing the antipsychotic dose, or adding beta-blockers or anti-ACh medications like benztropine."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q010",
+      "questionNumber": 10,
+      "sourceQuestionNumber": 10,
+      "retrievalTag": "Mesolimbic pathway positive symptoms D2",
+      "reviewPearl": "Dopamine antagonism in the tuberoinfundibular tract leads to disinhibition of prolactin, causing hyperprolactinemia and gynecomastia.",
+      "stem": "A 25-year-old man with schizophrenia is started on a typical antipsychotic. The medication treats his hallucinations primarily through action on which pathway?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Nigrostriatal pathway"
+        },
+        {
+          "label": "B",
+          "text": "Tuberoinfundibular pathway"
+        },
+        {
+          "label": "C",
+          "text": "Mesolimbic pathway"
+        },
+        {
+          "label": "D",
+          "text": "Corticospinal tract"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Understand the mesolimbic pathway is the target for controlling positive psychotic symptoms.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "First-generation antipsychotics treat positive symptoms by antagonizing D2 receptors in the mesolimbic pathway."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Antagonism in the nigrostriatal pathway causes extrapyramidal side effects, not positive symptom relief."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Dopamine antagonism in the tuberoinfundibular tract leads to disinhibition of prolactin, causing hyperprolactinemia and gynecomastia."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q011",
+      "questionNumber": 11,
+      "sourceQuestionNumber": 11,
+      "retrievalTag": "Clozapine agranulocytosis weekly CBC",
+      "reviewPearl": "Clozapine is the best and most effective antipsychotic but remains a drug of last resort due to lethal agranulocytosis.",
+      "stem": "A 35-year-old man with refractory schizophrenia is started on clozapine after failing all other medications. What monitoring is legally required?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Weekly ECGs"
+        },
+        {
+          "label": "B",
+          "text": "Weekly complete blood counts"
+        },
+        {
+          "label": "C",
+          "text": "Daily fasting glucose"
+        },
+        {
+          "label": "D",
+          "text": "Monthly lipid panels"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Recognize agranulocytosis risk and the need for weekly CBC monitoring when prescribing clozapine.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Clozapine carries a life-threatening risk of agranulocytosis, explicitly requiring weekly complete blood counts."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "While atypical antipsychotics can prolong QTc, weekly ECGs are not the federally required monitoring standard for clozapine."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Clozapine is the best and most effective antipsychotic but remains a drug of last resort due to lethal agranulocytosis."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q012",
+      "questionNumber": 12,
+      "sourceQuestionNumber": 12,
+      "retrievalTag": "Tardive dyskinesia hypersensitization dopamine",
+      "reviewPearl": "Stopping the offending drug is the only management for tardive dyskinesia, though symptoms will initially worsen upon cessation.\neftab720\ntightenfactor0\neftab720\ntightenfactor0\nDocument 4: Personality Disorders",
+      "stem": "A 55-year-old woman on long-term typical antipsychotics develops continuous, involuntary lip-smacking movements.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Dopamine receptor hypersensitization"
+        },
+        {
+          "label": "B",
+          "text": "Serotonin syndrome"
+        },
+        {
+          "label": "C",
+          "text": "Acetylcholine excess"
+        },
+        {
+          "label": "D",
+          "text": "Dopamine depletion"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Identify dopamine receptor hypersensitization as the core mechanism behind late-onset tardive dyskinesia.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Tardive dyskinesia is an irreversible condition caused by dopamine receptor hypersensitization leading to suppressible oral-facial movements."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Dopamine depletion leads to parkinsonism (bradykinesia), not the hyperkinetic oral-facial movements of tardive dyskinesia."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Stopping the offending drug is the only management for tardive dyskinesia, though symptoms will initially worsen upon cessation.\neftab720\ntightenfactor0\neftab720\ntightenfactor0\nDocument 4: Personality Disorders"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q013",
+      "questionNumber": 13,
+      "sourceQuestionNumber": 13,
+      "retrievalTag": "Borderline PD splitting DBT",
+      "reviewPearl": "Dialectical behavior therapy (DBT) is heavily test-associated as the specific treatment of choice for borderline personality disorder.",
+      "stem": "A 22-year-old woman presents with superficial wrist cuts. She has unstable relationships and rapidly shifts between idealizing and despising her therapist.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Borderline personality disorder"
+        },
+        {
+          "label": "B",
+          "text": "Histrionic personality disorder"
+        },
+        {
+          "label": "C",
+          "text": "Narcissistic personality disorder"
+        },
+        {
+          "label": "D",
+          "text": "Antisocial personality disorder"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Diagnose borderline personality disorder based on self-harm gestures, mood instability, and splitting.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Borderline PD features impulsivity, suicidal gestures, emotional numbness, and splitting."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Histrionic PD patients are theatrical and hypersexual but lack the severe emotional emptiness, self-harm, and splitting seen here."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Dialectical behavior therapy (DBT) is heavily test-associated as the specific treatment of choice for borderline personality disorder."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q014",
+      "questionNumber": 14,
+      "sourceQuestionNumber": 14,
+      "retrievalTag": "Antisocial PD conduct disorder >18",
+      "reviewPearl": "Antisocial personality disorder is the only personality disorder that absolutely cannot be diagnosed prior to 18 years of age.",
+      "stem": "A 25-year-old man is arrested for fraud. He lacks remorse, acts impulsively, and has a confirmed history of conduct disorder prior to age 18.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Narcissistic personality disorder"
+        },
+        {
+          "label": "B",
+          "text": "Antisocial personality disorder"
+        },
+        {
+          "label": "C",
+          "text": "Paranoid personality disorder"
+        },
+        {
+          "label": "D",
+          "text": "Borderline personality disorder"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Identify antisocial personality disorder using the criteria of adult criminality and prior childhood conduct disorder.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Antisocial PD is characterized by criminality, impulsivity, lack of remorse, and a prerequisite history of conduct disorder."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Narcissistic PD patients demand special treatment but do not inherently show criminal disregard for others' rights."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Antisocial personality disorder is the only personality disorder that absolutely cannot be diagnosed prior to 18 years of age."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q015",
+      "questionNumber": 15,
+      "sourceQuestionNumber": 15,
+      "retrievalTag": "Avoidant PD fears rejection desires friends",
+      "reviewPearl": "When interacting with avoidant personality disorder patients, physicians should avoid power struggles and make the patients choose.",
+      "stem": "A 30-year-old man desires friends but avoids them out of intense fear of rejection. He turns down promotions to avoid criticism.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Schizoid personality disorder"
+        },
+        {
+          "label": "B",
+          "text": "Social anxiety disorder"
+        },
+        {
+          "label": "C",
+          "text": "Avoidant personality disorder"
+        },
+        {
+          "label": "D",
+          "text": "Dependent personality disorder"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Differentiate avoidant personality disorder (desires relationships, fears rejection) from schizoid personality disorder.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Avoidant PD involves extreme shyness, fear of criticism, and avoidance of interaction despite desperately wanting relationships."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Schizoid PD patients also isolate themselves but are completely content being alone and desire absolutely no relationships."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "When interacting with avoidant personality disorder patients, physicians should avoid power struggles and make the patients choose."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q016",
+      "questionNumber": 16,
+      "sourceQuestionNumber": 16,
+      "retrievalTag": "Dependent PD submissive fear of alone",
+      "reviewPearl": "Patients with dependent PD will generally obey a stronger voice and may even self-sabotage treatment if it threatens their dependent relationship.\neftab720\ntightenfactor0\neftab720\ntightenfactor0\nDocument 5: Schizophrenia and Other Psychotic Disorders",
+      "stem": "A 35-year-old woman stays in an abusive relationship because she fears isolation. She submissively relies on others to make decisions.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Dependent personality disorder"
+        },
+        {
+          "label": "B",
+          "text": "Avoidant personality disorder"
+        },
+        {
+          "label": "C",
+          "text": "Borderline personality disorder"
+        },
+        {
+          "label": "D",
+          "text": "Histrionic personality disorder"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Recognize dependent personality disorder presenting as profound submissiveness and reliance on others.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Dependent PD is defined by submissive, clingy behavior and a need to be taken care of due to unrealistic fears of isolation."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Borderline PD features volatile instability rather than the profound, passive submissiveness seen in dependent patients."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Patients with dependent PD will generally obey a stronger voice and may even self-sabotage treatment if it threatens their dependent relationship.\neftab720\ntightenfactor0\neftab720\ntightenfactor0\nDocument 5: Schizophrenia and Other Psychotic Disorders"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q017",
+      "questionNumber": 17,
+      "sourceQuestionNumber": 17,
+      "retrievalTag": "Brief psychotic disorder <1 month stressor",
+      "reviewPearl": "Post-partum psychosis is considered a variant of brief psychotic disorder that occurs directly in response to pregnancy.",
+      "stem": "A 20-year-old develops auditory hallucinations following college finals. The symptoms last for exactly 2 weeks and then fully resolve.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Schizophreniform disorder"
+        },
+        {
+          "label": "B",
+          "text": "Brief psychotic disorder"
+        },
+        {
+          "label": "C",
+          "text": "Schizophrenia"
+        },
+        {
+          "label": "D",
+          "text": "Schizoaffective disorder"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Diagnose brief psychotic disorder based on the strict timeline of symptom duration (< 1 month).",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Psychotic symptoms lasting greater than 1 day but less than 1 month following a stressor is strictly diagnostic of brief psychotic disorder."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Schizophreniform disorder requires psychotic symptoms lasting between 1 and 6 months."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Post-partum psychosis is considered a variant of brief psychotic disorder that occurs directly in response to pregnancy."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q018",
+      "questionNumber": 18,
+      "sourceQuestionNumber": 18,
+      "retrievalTag": "Schizophreniform 1 to 6 months duration",
+      "reviewPearl": "Treatment for schizophreniform disorder generally lasts 3-6 months until the symptoms ideally remit.",
+      "stem": "A 24-year-old man presents with disorganized speech and delusions for exactly 3 months. He has never had a mood episode.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Schizophrenia"
+        },
+        {
+          "label": "B",
+          "text": "Brief psychotic disorder"
+        },
+        {
+          "label": "C",
+          "text": "Schizophreniform disorder"
+        },
+        {
+          "label": "D",
+          "text": "Delusional disorder"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Differentiate schizophreniform disorder from schizophrenia purely based on the 1-to-6 month symptom timeframe.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Psychosis lasting between 1 month and 6 months fits the exact time criteria for schizophreniform disorder."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Schizophrenia specifically requires symptoms persisting for greater than 6 months."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Treatment for schizophreniform disorder generally lasts 3-6 months until the symptoms ideally remit."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q019",
+      "questionNumber": 19,
+      "sourceQuestionNumber": 19,
+      "retrievalTag": "Schizoaffective psychosis independent of mood",
+      "reviewPearl": "Differentiating schizoaffective from a mood disorder with psychotic features relies on finding isolated psychosis when mood symptoms are entirely absent.",
+      "stem": "A 30-year-old woman has ongoing hallucinations for 6 months. She also had a distinct 3-week manic episode, but psychosis persists when her mood is normal.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Major depressive disorder with psychotic features"
+        },
+        {
+          "label": "B",
+          "text": "Schizoaffective disorder"
+        },
+        {
+          "label": "C",
+          "text": "Bipolar disorder"
+        },
+        {
+          "label": "D",
+          "text": "Schizophrenia"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Identify schizoaffective disorder by recognizing persistent psychosis independent of mood episode exacerbations.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Schizoaffective disorder features a primary psychotic disorder (psychosis without mood changes) with superimposed distinct mood episodes."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "In mood disorders with psychotic features, the psychosis is only present when the active mood symptoms predominate."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Differentiating schizoaffective from a mood disorder with psychotic features relies on finding isolated psychosis when mood symptoms are entirely absent."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q020",
+      "questionNumber": 20,
+      "sourceQuestionNumber": 20,
+      "retrievalTag": "Delusional disorder non bizarre functional",
+      "reviewPearl": "Treatment for delusional disorder requires gentle confrontation over years of psychotherapy, as drugs generally will not work.\neftab720\ntightenfactor0\neftab720\ntightenfactor0\nDocument 6: Catatonia",
+      "stem": "A 45-year-old man functions normally at work but holds a fixed, non-bizarre belief that his neighbor is an undercover spy.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Delusional disorder"
+        },
+        {
+          "label": "B",
+          "text": "Schizophrenia"
+        },
+        {
+          "label": "C",
+          "text": "Schizotypal personality disorder"
+        },
+        {
+          "label": "D",
+          "text": "Paranoid personality disorder"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Diagnose delusional disorder in a high-functioning patient with isolated, non-bizarre delusions.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Delusional disorder is defined by fixed, non-bizarre delusions without other severe psychotic symptoms or functional decline."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Paranoid personality disorder involves pervasive distrust but lacks fixed, undeniable delusions."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Treatment for delusional disorder requires gentle confrontation over years of psychotherapy, as drugs generally will not work.\neftab720\ntightenfactor0\neftab720\ntightenfactor0\nDocument 6: Catatonia"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q021",
+      "questionNumber": 21,
+      "sourceQuestionNumber": 21,
+      "retrievalTag": "Catatonia lorazepam waxy flexibility",
+      "reviewPearl": "Catatonic patients are at high risk for DVT and rhabdomyolysis due to prolonged immobility and poor nutritional intake.",
+      "stem": "A 35-year-old man with bipolar disorder sits completely motionless. If his arm is raised, he holds the awkward posture (waxy flexibility). Best initial treatment?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Lorazepam"
+        },
+        {
+          "label": "B",
+          "text": "Haloperidol"
+        },
+        {
+          "label": "C",
+          "text": "Fluoxetine"
+        },
+        {
+          "label": "D",
+          "text": "Dantrolene"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Recognize catatonia (mutism, catalepsy, waxy flexibility) and identify lorazepam as the first-line treatment.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Lorazepam is the treatment of choice for catatonia, acting as both a diagnostic and therapeutic agent."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Haloperidol is a typical antipsychotic that can precipitate neuroleptic malignant syndrome and worsen catatonic rigidity."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Catatonic patients are at high risk for DVT and rhabdomyolysis due to prolonged immobility and poor nutritional intake."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q022",
+      "questionNumber": 22,
+      "sourceQuestionNumber": 22,
+      "retrievalTag": "NMS haloperidol lead pipe rigidity",
+      "reviewPearl": "Lead-pipe rigidity (generalized stiffness and bradyreflexia) is the key physical finding distinguishing NMS from serotonin syndrome.",
+      "stem": "A 28-year-old man on haloperidol develops delirium, autonomic instability, high fever, and extreme \"lead-pipe\" rigidity.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Serotonin syndrome"
+        },
+        {
+          "label": "B",
+          "text": "Malignant catatonia"
+        },
+        {
+          "label": "C",
+          "text": "Malignant hyperthermia"
+        },
+        {
+          "label": "D",
+          "text": "Neuroleptic malignant syndrome"
+        }
+      ],
+      "correctAnswer": "D",
+      "educationalObjective": "Differentiate NMS from other hyperthermic emergencies by the use of antipsychotics and lead-pipe rigidity.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "NMS is an antipsychotic-induced emergency presenting with fever, autonomic instability, elevated CK, and lead-pipe rigidity."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Serotonin syndrome features hyperreflexia and clonus, not lead-pipe rigidity, and is specifically caused by SSRIs."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Lead-pipe rigidity (generalized stiffness and bradyreflexia) is the key physical finding distinguishing NMS from serotonin syndrome."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q023",
+      "questionNumber": 23,
+      "sourceQuestionNumber": 23,
+      "retrievalTag": "Serotonin syndrome hyperreflexia clonus SSRI",
+      "reviewPearl": "Clonus and hyperreflexia strongly differentiate serotonin syndrome from the rigid, bradyreflexic state seen in neuroleptic malignant syndrome.",
+      "stem": "A 24-year-old on fluoxetine develops delirium, autonomic instability, fever, bilateral hyperreflexia, and ankle clonus.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Neuroleptic malignant syndrome"
+        },
+        {
+          "label": "B",
+          "text": "Serotonin syndrome"
+        },
+        {
+          "label": "C",
+          "text": "Malignant hyperthermia"
+        },
+        {
+          "label": "D",
+          "text": "Excitative catatonia"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Identify serotonin syndrome based on hyperreflexia, clonus, and recent SSRI use.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Serotonin syndrome presents with fever, autonomic instability, and distinct hyperreflexia/clonus triggered by serotonergic agents."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Malignant hyperthermia is triggered specifically by inhaled anesthetics, not serotonergic antidepressants."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Clonus and hyperreflexia strongly differentiate serotonin syndrome from the rigid, bradyreflexic state seen in neuroleptic malignant syndrome."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q024",
+      "questionNumber": 24,
+      "sourceQuestionNumber": 24,
+      "retrievalTag": "Malignant hyperthermia halothane anesthesia",
+      "reviewPearl": "Malignant hyperthermia is treated with dantrolene and classically lacks a psychiatric context, though family history may be present.",
+      "stem": "A 40-year-old man receives inhaled halothane for surgery. He rapidly develops autonomic instability, high fever, and elevated CK.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Malignant hyperthermia"
+        },
+        {
+          "label": "B",
+          "text": "Neuroleptic malignant syndrome"
+        },
+        {
+          "label": "C",
+          "text": "Serotonin syndrome"
+        },
+        {
+          "label": "D",
+          "text": "Malignant catatonia"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Recognize malignant hyperthermia as a severe hyperthermic and rigid reaction to specific anesthetic gases.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Malignant hyperthermia is a hypermetabolic reaction characterized by rapid fever and rigidity following exposure to inhaled anesthetics."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Malignant catatonia occurs in the context of untreated severe psychiatric illness, lacking distinct drug or anesthesia triggers."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Malignant hyperthermia is treated with dantrolene and classically lacks a psychiatric context, though family history may be present."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    }
+  ]
+}

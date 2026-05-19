@@ -1,0 +1,2562 @@
+{
+  "testTitle": "UWorld Notes Psych Questions - Enhanced",
+  "sourceFormat": "rtf",
+  "expectedQuestionCount": 50,
+  "actualExtractedQuestionCount": 50,
+  "extractionWarnings": [
+    "Source was Gemini-generated RTF study questions rather than original question-bank text.",
+    "Questions, explanations, educational objectives, retrievalTags, and reviewPearls were educationally improved from the provided RTF content rather than preserved verbatim."
+  ],
+  "questions": [
+    {
+      "id": "q001",
+      "questionNumber": 1,
+      "sourceQuestionNumber": 1,
+      "retrievalTag": "Psychotic depression ECT emergency",
+      "reviewPearl": "ECT is first-line emergency treatment for psychotic depression with refusal to eat/drink or imminent suicide risk.",
+      "stem": "A 68-year-old woman is brought to the emergency department by her daughter because she has refused to eat or drink for 3 days. She says her stomach has rotted away and that she is being punished for sins she committed decades ago. She has a history of major depressive disorder. She appears cachectic, has dry mucous membranes, and says she wishes she were dead. Pulse is 48/min. Which of the following is the most appropriate next step in management?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Start sertraline and risperidone"
+        },
+        {
+          "label": "B",
+          "text": "Start phenelzine monotherapy"
+        },
+        {
+          "label": "C",
+          "text": "Emergent electroconvulsive therapy"
+        },
+        {
+          "label": "D",
+          "text": "Referral for psychodynamic psychotherapy"
+        },
+        {
+          "label": "E",
+          "text": "Admit for observation and start intravenous fluids only"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Recognize electroconvulsive therapy as rapid emergency treatment for severe major depressive disorder with psychotic features when there is refusal to eat/drink, severe medical compromise, catatonia, or imminent suicide risk.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient has severe major depressive disorder with psychotic features, shown by nihilistic delusions, refusal to eat or drink, dehydration, bradycardia, cachexia, and passive suicidal wishes. ECT produces a faster response than antidepressant/antipsychotic therapy and is appropriate when depression is life-threatening."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "An SSRI plus antipsychotic can treat psychotic depression but is too slow for medically unstable patients. Phenelzine is not acute first-line therapy. Psychodynamic therapy is not appropriate for emergency psychotic depression. IV fluids are supportive but do not treat the underlying psychiatric emergency."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q002",
+      "questionNumber": 2,
+      "sourceQuestionNumber": 2,
+      "retrievalTag": "Borderline splitting defense",
+      "reviewPearl": "Splitting labels people as all good or all bad and is common in borderline personality disorder.",
+      "stem": "A 22-year-old woman is admitted to a psychiatric unit after an intentional ibuprofen overdose following a breakup. During her first 2 days on the unit, she tells the day-shift nurse that she is the only person who truly understands her but calls the night-shift nurse incompetent and evil. Which defense mechanism is this patient demonstrating?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Projection"
+        },
+        {
+          "label": "B",
+          "text": "Reaction formation"
+        },
+        {
+          "label": "C",
+          "text": "Displacement"
+        },
+        {
+          "label": "D",
+          "text": "Splitting"
+        },
+        {
+          "label": "E",
+          "text": "Sublimation"
+        }
+      ],
+      "correctAnswer": "D",
+      "educationalObjective": "Identify splitting as an immature defense mechanism in which others are viewed as entirely good or entirely bad.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Splitting is the inability to integrate positive and negative qualities into a stable whole. It is classically associated with borderline personality disorder and causes rapid shifts between idealization and devaluation."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Projection attributes unacceptable feelings to others. Reaction formation expresses the opposite of an unacceptable impulse. Displacement redirects emotion to a safer target. Sublimation channels unacceptable impulses into socially acceptable activity."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q003",
+      "questionNumber": 3,
+      "sourceQuestionNumber": 3,
+      "retrievalTag": "Bipolar I manic episode",
+      "reviewPearl": "Bipolar I disorder requires at least one manic episode lasting ≥1 week or requiring hospitalization.",
+      "stem": "A 32-year-old man is brought to the clinic by his wife because of a change in personality over the last 10 days. He has been staying up until 4 AM working on a groundbreaking business plan, spending large amounts of money on unnecessary office equipment, and speaking so rapidly that she cannot interrupt him. He denies prior psychiatric history. Which of the following is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Bipolar I disorder"
+        },
+        {
+          "label": "B",
+          "text": "Bipolar II disorder"
+        },
+        {
+          "label": "C",
+          "text": "Cyclothymic disorder"
+        },
+        {
+          "label": "D",
+          "text": "Schizoaffective disorder"
+        },
+        {
+          "label": "E",
+          "text": "Major depressive disorder with atypical features"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Diagnose bipolar I disorder when a patient has a manic episode characterized by elevated/irritable mood, increased energy, decreased need for sleep, grandiosity, pressured speech, and risky behavior.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient has mania lasting >1 week, with decreased need for sleep, grandiosity, pressured speech, increased goal-directed activity, and excessive spending. One manic episode is sufficient for bipolar I disorder."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Bipolar II requires hypomania and major depression without mania. Cyclothymic disorder is chronic subthreshold mood cycling. Schizoaffective disorder requires psychosis for ≥2 weeks without mood symptoms. Mania excludes unipolar major depressive disorder."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q004",
+      "questionNumber": 4,
+      "sourceQuestionNumber": 4,
+      "retrievalTag": "Clozapine ANC monitoring",
+      "reviewPearl": "Clozapine can cause agranulocytosis and requires routine ANC monitoring.",
+      "stem": "A 45-year-old man with treatment-resistant schizophrenia has failed risperidone, aripiprazole, and haloperidol. He is started on clozapine. Which laboratory parameter must be monitored weekly during the first 6 months of therapy?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Serum creatinine"
+        },
+        {
+          "label": "B",
+          "text": "Liver function tests"
+        },
+        {
+          "label": "C",
+          "text": "Complete blood count"
+        },
+        {
+          "label": "D",
+          "text": "Thyroid-stimulating hormone"
+        },
+        {
+          "label": "E",
+          "text": "Serum potassium"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Recall that clozapine requires absolute neutrophil count monitoring because of the risk for severe neutropenia/agranulocytosis.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Clozapine is effective for treatment-resistant schizophrenia but can cause severe neutropenia and agranulocytosis. Monitoring is performed with CBC/ANC, especially early in treatment."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Creatinine and TSH are monitored with lithium. Liver function tests are monitored with valproate and other hepatotoxic drugs. Potassium is not the required clozapine safety-monitoring parameter."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q005",
+      "questionNumber": 5,
+      "sourceQuestionNumber": 5,
+      "retrievalTag": "Sleep terrors reassurance",
+      "reviewPearl": "Sleep terrors are NREM parasomnias in children and are managed initially with reassurance and safety measures.",
+      "stem": "A 4-year-old boy is brought to the pediatrician because he screams in the middle of the night. Episodes occur about 90 minutes after he falls asleep; he sits up with his eyes open, screams, sweats, and is unresponsive to comfort. In the morning, he has no memory of the event. What is the most appropriate management?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Start low-dose lorazepam"
+        },
+        {
+          "label": "B",
+          "text": "Referral for polysomnography"
+        },
+        {
+          "label": "C",
+          "text": "Reassurance and education"
+        },
+        {
+          "label": "D",
+          "text": "Start fluoxetine"
+        },
+        {
+          "label": "E",
+          "text": "Scheduled awakenings 30 minutes before the expected episode"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Recognize sleep terrors as benign NREM arousal parasomnias that occur in the first third of sleep and are treated initially with reassurance.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Sleep terrors occur during N3 non-REM sleep, often within the first few hours after sleep onset. Children have autonomic arousal, are difficult to awaken, and have amnesia for the event. Reassurance and safety counseling are appropriate."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Benzodiazepines and scheduled awakenings are reserved for severe or refractory cases. Sleep study is unnecessary unless seizures or sleep apnea are suspected. SSRIs are not used for sleep terrors."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q006",
+      "questionNumber": 6,
+      "sourceQuestionNumber": 6,
+      "retrievalTag": "Conversion disorder intact reflexes",
+      "reviewPearl": "Conversion disorder causes neurologic symptoms inconsistent with disease after stress, with intact objective findings.",
+      "stem": "A 26-year-old woman has sudden bilateral vision loss after witnessing her brother being arrested. Pupillary light reflexes are intact, funduscopic examination is normal, and she appears unusually calm about the deficit. Which of the following is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Somatic symptom disorder"
+        },
+        {
+          "label": "B",
+          "text": "Illness anxiety disorder"
+        },
+        {
+          "label": "C",
+          "text": "Factitious disorder"
+        },
+        {
+          "label": "D",
+          "text": "Conversion disorder"
+        },
+        {
+          "label": "E",
+          "text": "Malingering"
+        }
+      ],
+      "correctAnswer": "D",
+      "educationalObjective": "Identify conversion disorder as a functional neurologic symptom disorder with neurologic symptoms inconsistent with known disease, often after psychological stress.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient has acute blindness with intact pupillary reflexes and normal funduscopic findings, making structural visual pathway disease unlikely. The symptom follows a stressor and is consistent with conversion disorder."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Somatic symptom disorder involves excessive thoughts/behaviors about symptoms. Illness anxiety disorder involves fear of illness with minimal symptoms. Factitious disorder involves intentional falsification without external reward. Malingering involves intentional symptoms for external gain."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q007",
+      "questionNumber": 7,
+      "sourceQuestionNumber": 7,
+      "retrievalTag": "Anorexia first-line treatment",
+      "reviewPearl": "Anorexia nervosa treatment centers on nutritional rehabilitation plus psychotherapy.",
+      "stem": "A 16-year-old girl is 5 ft 4 in and weighs 98 lb (BMI 16.8 kg/m2). She has intense fear of weight gain, says she looks fat, has fine downy hair on her back, and has a heart rate of 48/min. What is the most appropriate first-line treatment?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Fluoxetine"
+        },
+        {
+          "label": "B",
+          "text": "Olanzapine"
+        },
+        {
+          "label": "C",
+          "text": "Nutritional rehabilitation and cognitive behavioral therapy"
+        },
+        {
+          "label": "D",
+          "text": "Bupropion"
+        },
+        {
+          "label": "E",
+          "text": "Family therapy alone"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Treat anorexia nervosa with nutritional rehabilitation and psychotherapy; hospitalize if medically unstable.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient has anorexia nervosa with low BMI, distorted body image, lanugo, and bradycardia. Core treatment is weight restoration through nutritional rehabilitation plus psychotherapy, including family-based therapy in adolescents."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Fluoxetine is not effective for acute weight restoration. Olanzapine may be adjunctive but is not primary treatment. Bupropion is contraindicated due to seizure risk. Family therapy is helpful but not alone without nutritional rehabilitation."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q008",
+      "questionNumber": 8,
+      "sourceQuestionNumber": 8,
+      "retrievalTag": "ADHD two settings",
+      "reviewPearl": "ADHD requires symptoms for ≥6 months in at least two settings with onset before age 12.",
+      "stem": "An 8-year-old boy is evaluated for difficulty in school. He fidgets constantly, interrupts others, cannot finish assignments, struggles to follow instructions at home, and often loses toys. These behaviors have been present since age 5. Which of the following is required to confirm the diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Symptoms must be present in at least two settings"
+        },
+        {
+          "label": "B",
+          "text": "Symptoms must be present for at least 12 months"
+        },
+        {
+          "label": "C",
+          "text": "Formal neuropsychological testing"
+        },
+        {
+          "label": "D",
+          "text": "A trial of methylphenidate"
+        },
+        {
+          "label": "E",
+          "text": "Documentation of academic failure"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Recall that ADHD requires persistent symptoms in more than one setting with functional impairment.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "ADHD is diagnosed clinically when inattentive and/or hyperactive-impulsive symptoms persist for at least 6 months, begin before age 12, cause impairment, and occur in at least two settings such as home and school."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Symptoms need ≥6 months, not 12 months. Neuropsychological testing may evaluate learning disorders but is not required. A stimulant trial is not diagnostic. Academic failure is not required if functional impairment exists."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q009",
+      "questionNumber": 9,
+      "sourceQuestionNumber": 9,
+      "retrievalTag": "Lewy body dementia triad",
+      "reviewPearl": "Dementia with Lewy bodies causes fluctuating cognition, visual hallucinations, and parkinsonism within 1 year.",
+      "stem": "A 72-year-old man is brought by his wife because he sees small children playing in the garden who are not there. Over the last year, his alertness has fluctuated, and he has developed a resting tremor and shuffling gait. Which of the following is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Alzheimer disease"
+        },
+        {
+          "label": "B",
+          "text": "Vascular dementia"
+        },
+        {
+          "label": "C",
+          "text": "Dementia with Lewy bodies"
+        },
+        {
+          "label": "D",
+          "text": "Frontotemporal dementia"
+        },
+        {
+          "label": "E",
+          "text": "Parkinson disease with late-onset dementia"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Distinguish dementia with Lewy bodies from Parkinson disease dementia by early dementia/visual hallucinations occurring within 1 year of parkinsonism.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Dementia with Lewy bodies presents with fluctuating cognition, recurrent well-formed visual hallucinations, and spontaneous parkinsonism. Dementia and parkinsonism occur close together in time."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Alzheimer disease begins with episodic memory loss. Vascular dementia has stepwise decline. Frontotemporal dementia has early personality/language changes. Parkinson disease dementia occurs after established motor Parkinson disease, typically years later."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q010",
+      "questionNumber": 10,
+      "sourceQuestionNumber": 10,
+      "retrievalTag": "PCP nystagmus agitation",
+      "reviewPearl": "PCP intoxication causes violent agitation plus horizontal/vertical nystagmus and is treated initially with benzodiazepines.",
+      "stem": "A 24-year-old man is brought to the emergency department by police after yelling at invisible people and trying to fight a mailbox. He is combative, tachycardic, hypertensive, and has prominent horizontal and vertical nystagmus. Which of the following is the most appropriate initial pharmacologic treatment?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Haloperidol"
+        },
+        {
+          "label": "B",
+          "text": "Lorazepam"
+        },
+        {
+          "label": "C",
+          "text": "Naloxone"
+        },
+        {
+          "label": "D",
+          "text": "Flumazenil"
+        },
+        {
+          "label": "E",
+          "text": "Propranolol"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Identify PCP intoxication by severe agitation with nystagmus and treat agitation initially with benzodiazepines.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "PCP intoxication causes violent agitation, psychosis, hypertension, tachycardia, analgesia, and multidirectional nystagmus. Benzodiazepines are first-line for agitation and autonomic arousal."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Haloperidol may be adjunctive but can lower seizure threshold. Naloxone treats opioid toxicity. Flumazenil reverses benzodiazepines. Propranolol is not first-line and may worsen stimulant physiology in some intoxications."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q011",
+      "questionNumber": 11,
+      "sourceQuestionNumber": 11,
+      "retrievalTag": "SSRI sexual dysfunction bupropion",
+      "reviewPearl": "SSRI-induced sexual dysfunction can be managed by switching to bupropion or mirtazapine.",
+      "stem": "A 30-year-old man with major depressive disorder has taken fluoxetine 20 mg daily for 2 months. His mood has improved significantly, but he now has difficulty achieving orgasm. Which of the following is the most appropriate next step?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Switch to paroxetine"
+        },
+        {
+          "label": "B",
+          "text": "Switch to bupropion"
+        },
+        {
+          "label": "C",
+          "text": "Switch to venlafaxine"
+        },
+        {
+          "label": "D",
+          "text": "Add low-dose risperidone"
+        },
+        {
+          "label": "E",
+          "text": "Discontinue fluoxetine and monitor for relapse"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Manage intolerable SSRI-induced sexual dysfunction by switching to an antidepressant with lower sexual adverse effects, such as bupropion or mirtazapine.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "SSRIs commonly cause decreased libido, delayed ejaculation, and anorgasmia. Bupropion has minimal serotonergic activity and is less likely to cause sexual dysfunction."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Paroxetine and venlafaxine can also cause sexual dysfunction. Risperidone may worsen sexual function via hyperprolactinemia. Stopping antidepressant therapy risks relapse."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q012",
+      "questionNumber": 12,
+      "sourceQuestionNumber": 12,
+      "retrievalTag": "Acute dystonia benztropine",
+      "reviewPearl": "Acute dystonia after antipsychotics is treated with benztropine or diphenhydramine.",
+      "stem": "A 28-year-old man recently started haloperidol. Two days later, his head is painfully tilted to the right and his eyes are stuck looking upward. He is alert but distressed. Which medication should be administered immediately?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Propranolol"
+        },
+        {
+          "label": "B",
+          "text": "Benztropine"
+        },
+        {
+          "label": "C",
+          "text": "Dantrolene"
+        },
+        {
+          "label": "D",
+          "text": "Valbenazine"
+        },
+        {
+          "label": "E",
+          "text": "Lorazepam"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Treat acute dystonic reactions from dopamine-blocking medications with anticholinergics or antihistamines.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient has acute dystonia with torticollis and oculogyric crisis shortly after haloperidol initiation. Benztropine or diphenhydramine rapidly treats this extrapyramidal symptom."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Propranolol treats akathisia. Dantrolene treats malignant hyperthermia and may be used in NMS. Valbenazine treats tardive dyskinesia. Lorazepam is not first-line for acute dystonia."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q013",
+      "questionNumber": 13,
+      "sourceQuestionNumber": 13,
+      "retrievalTag": "NSAIDs increase lithium",
+      "reviewPearl": "NSAIDs, ACE inhibitors, and thiazides decrease lithium clearance and can precipitate lithium toxicity.",
+      "stem": "A 34-year-old woman with bipolar I disorder has been stable on lithium for 3 years. She recently started an over-the-counter medication for back pain. She now has nausea, vomiting, coarse tremor, and ataxia. Lithium level is 2.1 mEq/L. Which medication is most likely responsible?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Acetaminophen"
+        },
+        {
+          "label": "B",
+          "text": "Ibuprofen"
+        },
+        {
+          "label": "C",
+          "text": "Diphenhydramine"
+        },
+        {
+          "label": "D",
+          "text": "Vitamin C"
+        },
+        {
+          "label": "E",
+          "text": "Guaifenesin"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Recognize medications that increase lithium levels by decreasing renal clearance, especially NSAIDs, ACE inhibitors, and thiazide diuretics.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Lithium is renally excreted. NSAIDs reduce renal prostaglandin synthesis and decrease lithium clearance, increasing the risk of toxicity."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Acetaminophen is preferred for pain in patients taking lithium. Diphenhydramine causes anticholinergic effects but does not raise lithium levels. Vitamin C and guaifenesin do not affect lithium clearance."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q014",
+      "questionNumber": 14,
+      "sourceQuestionNumber": 14,
+      "retrievalTag": "Conduct disorder under 18",
+      "reviewPearl": "Conduct disorder is diagnosed before age 18 when behavior violates rights of others or major societal norms.",
+      "stem": "A 16-year-old boy is brought to clinic after stealing a car and setting fire to a neighbor's trash can. His parents report repeated suspensions for fighting and no remorse. These behaviors have been present since age 12. Which of the following is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Antisocial personality disorder"
+        },
+        {
+          "label": "B",
+          "text": "Conduct disorder"
+        },
+        {
+          "label": "C",
+          "text": "Oppositional defiant disorder"
+        },
+        {
+          "label": "D",
+          "text": "Intermittent explosive disorder"
+        },
+        {
+          "label": "E",
+          "text": "Pyromania"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Diagnose conduct disorder in children/adolescents with repetitive violation of others' rights, aggression, theft, property destruction, or serious rule violations.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This adolescent has stealing, fighting, property destruction, and lack of remorse, consistent with conduct disorder. Antisocial personality disorder cannot be diagnosed before age 18."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Oppositional defiant disorder lacks severe rights violations. Intermittent explosive disorder involves impulsive outbursts. Pyromania does not explain the broader pattern."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q015",
+      "questionNumber": 15,
+      "sourceQuestionNumber": 15,
+      "retrievalTag": "Postpartum blues reassurance",
+      "reviewPearl": "Postpartum blues peaks around day 5 and resolves within 2 weeks with reassurance and monitoring.",
+      "stem": "A 29-year-old woman gave birth 6 days ago and has crying spells and irritability. She feels overwhelmed but can care for her baby and enjoys interacting with the infant. She has no thoughts of harming herself or the baby. What is the most appropriate management?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Start sertraline"
+        },
+        {
+          "label": "B",
+          "text": "Hospitalization for safety"
+        },
+        {
+          "label": "C",
+          "text": "Reassurance and monitoring"
+        },
+        {
+          "label": "D",
+          "text": "Start risperidone"
+        },
+        {
+          "label": "E",
+          "text": "Referral for dialectical behavior therapy"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Distinguish postpartum blues from postpartum depression and psychosis by mild symptoms within 2 weeks postpartum without functional impairment or safety concerns.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Postpartum blues is common, peaks around postpartum day 5, and resolves within 2 weeks. Management is reassurance, support, and monitoring for worsening symptoms."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Sertraline treats postpartum depression. Hospitalization and antipsychotics are used for postpartum psychosis or safety risk. DBT treats borderline personality disorder."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q016",
+      "questionNumber": 16,
+      "sourceQuestionNumber": 16,
+      "retrievalTag": "TCA overdose sodium bicarbonate",
+      "reviewPearl": "QRS >100 msec in TCA overdose requires sodium bicarbonate to prevent ventricular arrhythmias.",
+      "stem": "A 19-year-old woman is found unresponsive. Heart rate is 130/min, blood pressure is 90/60 mm Hg, skin is flushed and dry, and ECG shows QRS duration of 140 msec. Which of the following is the most appropriate initial treatment?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Lorazepam"
+        },
+        {
+          "label": "B",
+          "text": "Sodium bicarbonate"
+        },
+        {
+          "label": "C",
+          "text": "Flumazenil"
+        },
+        {
+          "label": "D",
+          "text": "Physostigmine"
+        },
+        {
+          "label": "E",
+          "text": "N-acetylcysteine"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Treat tricyclic antidepressant overdose with sodium bicarbonate when there is QRS widening or ventricular dysrhythmia risk.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "TCA overdose causes anticholinergic toxicity, hypotension, seizures, and sodium-channel blockade with QRS widening. Sodium bicarbonate narrows the QRS and reduces arrhythmia risk."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Lorazepam treats seizures but not conduction delay. Flumazenil reverses benzodiazepines. Physostigmine is contraindicated in TCA overdose. N-acetylcysteine treats acetaminophen toxicity."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q017",
+      "questionNumber": 17,
+      "sourceQuestionNumber": 17,
+      "retrievalTag": "NMS lead-pipe rigidity",
+      "reviewPearl": "NMS presents with fever, lead-pipe rigidity, autonomic instability, altered mental status, and elevated CK.",
+      "stem": "A 38-year-old man with schizophrenia is brought to the emergency department with fever to 104°F, confusion, and extreme muscle stiffness described as moving like a robot. Creatine kinase is markedly elevated. Which of the following is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Serotonin syndrome"
+        },
+        {
+          "label": "B",
+          "text": "Neuroleptic malignant syndrome"
+        },
+        {
+          "label": "C",
+          "text": "Malignant hyperthermia"
+        },
+        {
+          "label": "D",
+          "text": "Acute dystonia"
+        },
+        {
+          "label": "E",
+          "text": "Anticholinergic toxicity"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Recognize neuroleptic malignant syndrome after dopamine blockade by lead-pipe rigidity, fever, autonomic instability, altered mental status, and elevated CK.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "NMS is a life-threatening dopamine antagonist reaction, classically from antipsychotics. It causes hyperthermia, lead-pipe rigidity, autonomic instability, altered mental status, leukocytosis, and elevated CK."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Serotonin syndrome causes hyperreflexia and clonus. Malignant hyperthermia follows anesthetics/succinylcholine. Acute dystonia causes focal spasm. Anticholinergic toxicity causes dry skin, mydriasis, and delirium."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q018",
+      "questionNumber": 18,
+      "sourceQuestionNumber": 18,
+      "retrievalTag": "GAD SSRI first-line",
+      "reviewPearl": "GAD is treated first-line with SSRIs or SNRIs.",
+      "stem": "A 25-year-old graduate student has excessive worry about grades, health, and finances for 8 months. She feels restless and easily fatigued and has difficulty concentrating. What is the first-line pharmacologic treatment?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Diazepam"
+        },
+        {
+          "label": "B",
+          "text": "Buspirone"
+        },
+        {
+          "label": "C",
+          "text": "Sertraline"
+        },
+        {
+          "label": "D",
+          "text": "Propranolol"
+        },
+        {
+          "label": "E",
+          "text": "Quetiapine"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Treat generalized anxiety disorder with SSRIs or SNRIs as first-line pharmacotherapy.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Generalized anxiety disorder involves excessive worry about multiple domains for at least 6 months plus associated symptoms. SSRIs/SNRIs are first-line medications."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Benzodiazepines are limited by dependence and sedation. Buspirone is second-line/adjunctive. Propranolol is useful for performance anxiety. Quetiapine is not first-line for GAD."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q019",
+      "questionNumber": 19,
+      "sourceQuestionNumber": 19,
+      "retrievalTag": "Performance anxiety propranolol",
+      "reviewPearl": "Performance-only social anxiety can be treated as-needed with propranolol for autonomic symptoms.",
+      "stem": "A 22-year-old musician has intense anxiety only before performing. His hands shake and his heart pounds, making it difficult to play. He has no anxiety in other social settings. Which treatment is most appropriate?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Sertraline"
+        },
+        {
+          "label": "B",
+          "text": "Propranolol"
+        },
+        {
+          "label": "C",
+          "text": "Lorazepam"
+        },
+        {
+          "label": "D",
+          "text": "Cognitive behavioral therapy alone"
+        },
+        {
+          "label": "E",
+          "text": "Phenelzine"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Use beta blockers such as propranolol for performance-only social anxiety when tremor and tachycardia impair performance.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Performance-only social anxiety is limited to discrete performance situations. Propranolol can be taken before performance to reduce peripheral adrenergic symptoms."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "SSRIs are used for generalized social anxiety. Benzodiazepines may impair performance. CBT is effective but propranolol provides targeted relief. MAOIs are not first-line."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q020",
+      "questionNumber": 20,
+      "sourceQuestionNumber": 20,
+      "retrievalTag": "Schizophrenia six months",
+      "reviewPearl": "Schizophrenia requires psychotic symptoms with functional decline for ≥6 months.",
+      "stem": "A 23-year-old man has stopped going to classes and has been talking to voices in the walls for the last 7 months. He appears unkempt and has a flat affect. Which of the following is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Schizophreniform disorder"
+        },
+        {
+          "label": "B",
+          "text": "Schizoaffective disorder"
+        },
+        {
+          "label": "C",
+          "text": "Schizophrenia"
+        },
+        {
+          "label": "D",
+          "text": "Brief psychotic disorder"
+        },
+        {
+          "label": "E",
+          "text": "Delusional disorder"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Use the ≥6-month duration threshold plus functional decline to diagnose schizophrenia.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient has hallucinations, negative symptoms, poor self-care, and functional decline for >6 months, consistent with schizophrenia."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Schizophreniform disorder lasts 1–6 months. Schizoaffective disorder requires mood episodes plus psychosis without mood symptoms. Brief psychotic disorder lasts <1 month. Delusional disorder lacks prominent hallucinations/negative symptoms."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q021",
+      "questionNumber": 21,
+      "sourceQuestionNumber": 21,
+      "retrievalTag": "Panic disorder avoidance",
+      "reviewPearl": "Panic disorder requires recurrent unexpected panic attacks plus ≥1 month of worry or maladaptive avoidance.",
+      "stem": "A 30-year-old woman has sudden waves of intense fear with smothering sensation, chest pain, and tingling in her fingers. She has had five episodes in the last month and now avoids going to the grocery store alone because she fears another attack. What is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Generalized anxiety disorder"
+        },
+        {
+          "label": "B",
+          "text": "Panic disorder"
+        },
+        {
+          "label": "C",
+          "text": "Specific phobia"
+        },
+        {
+          "label": "D",
+          "text": "Social anxiety disorder"
+        },
+        {
+          "label": "E",
+          "text": "Somatic symptom disorder"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Diagnose panic disorder when recurrent unexpected panic attacks are followed by persistent worry or avoidance.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Panic disorder causes recurrent unexpected panic attacks with physical symptoms and at least 1 month of worry about additional attacks or maladaptive behavior."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "GAD causes chronic worry. Specific phobia is triggered by a specific object/situation. Social anxiety involves fear of scrutiny. Somatic symptom disorder involves excessive concern about physical symptoms."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q022",
+      "questionNumber": 22,
+      "sourceQuestionNumber": 22,
+      "retrievalTag": "Opioid withdrawal buprenorphine",
+      "reviewPearl": "Opioid withdrawal causes mydriasis, piloerection, GI distress, myalgias, and is treated with buprenorphine or methadone.",
+      "stem": "A 28-year-old man with heroin use has nausea, vomiting, abdominal cramping, muscle aches, agitation, dilated pupils, and piloerection. Which medication is most appropriate to manage his symptoms?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Naloxone"
+        },
+        {
+          "label": "B",
+          "text": "Buprenorphine"
+        },
+        {
+          "label": "C",
+          "text": "Lorazepam"
+        },
+        {
+          "label": "D",
+          "text": "Haloperidol"
+        },
+        {
+          "label": "E",
+          "text": "Flumazenil"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Manage opioid withdrawal with opioid agonist/partial agonist therapy such as buprenorphine or methadone.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Opioid withdrawal causes lacrimation, rhinorrhea, yawning, myalgias, abdominal cramps, diarrhea, mydriasis, piloerection, and agitation. Buprenorphine reduces withdrawal and cravings."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Naloxone reverses overdose and worsens withdrawal. Lorazepam may reduce anxiety but does not treat opioid withdrawal. Haloperidol and flumazenil are not indicated."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q023",
+      "questionNumber": 23,
+      "sourceQuestionNumber": 23,
+      "retrievalTag": "MDMA hyponatremia empathy",
+      "reviewPearl": "MDMA intoxication causes sympathomimetic signs, increased empathy, and hyponatremia.",
+      "stem": "A 19-year-old woman is brought to the emergency department with severe agitation after attending a music festival. She is diaphoretic, tachycardic, has dilated pupils, says she feels incredibly close to everyone, and then becomes paranoid. Serum sodium is 128 mEq/L. Which substance did she most likely ingest?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Cocaine"
+        },
+        {
+          "label": "B",
+          "text": "Methamphetamine"
+        },
+        {
+          "label": "C",
+          "text": "MDMA"
+        },
+        {
+          "label": "D",
+          "text": "PCP"
+        },
+        {
+          "label": "E",
+          "text": "LSD"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Recognize MDMA intoxication by sympathomimetic activation, increased empathy/intimacy, hyperthermia risk, and hyponatremia.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "MDMA produces euphoria, emotional closeness, sympathomimetic signs, and risk of hyponatremia due to excess water intake and SIADH-like effects."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Cocaine and methamphetamine cause sympathomimetic toxicity but not characteristic empathy/hyponatremia. PCP causes nystagmus and violent agitation. LSD causes perceptual disturbances."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q024",
+      "questionNumber": 24,
+      "sourceQuestionNumber": 24,
+      "retrievalTag": "Persistent depressive disorder duration",
+      "reviewPearl": "Persistent depressive disorder requires depressed mood for ≥2 years without symptom-free periods >2 months.",
+      "stem": "A 40-year-old woman has felt down most days for 2 years with poor concentration, low energy, and low self-esteem. She has never been without symptoms for more than 1 month at a time. Which of the following is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Major depressive disorder"
+        },
+        {
+          "label": "B",
+          "text": "Cyclothymic disorder"
+        },
+        {
+          "label": "C",
+          "text": "Persistent depressive disorder"
+        },
+        {
+          "label": "D",
+          "text": "Adjustment disorder"
+        },
+        {
+          "label": "E",
+          "text": "Schizoaffective disorder"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Diagnose persistent depressive disorder by chronic depressed mood for at least 2 years with no symptom-free interval longer than 2 months.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Persistent depressive disorder is chronic low mood for ≥2 years plus depressive symptoms such as low energy, poor concentration, low self-esteem, appetite/sleep changes, or hopelessness."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "MDD is episodic with ≥5 symptoms for ≥2 weeks. Cyclothymic disorder involves chronic hypomanic and depressive symptoms. Adjustment disorder follows a stressor. Schizoaffective disorder requires psychosis."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q025",
+      "questionNumber": 25,
+      "sourceQuestionNumber": 25,
+      "retrievalTag": "Vascular dementia stepwise",
+      "reviewPearl": "Vascular dementia causes stepwise cognitive decline with executive dysfunction and focal neurologic findings.",
+      "stem": "A 75-year-old man with hypertension has worsening forgetfulness. His daughter says his cognition worsened in steps after two minor strokes over 3 years. He has executive dysfunction and difficulty walking. Which diagnosis is most likely?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Alzheimer disease"
+        },
+        {
+          "label": "B",
+          "text": "Vascular dementia"
+        },
+        {
+          "label": "C",
+          "text": "Dementia with Lewy bodies"
+        },
+        {
+          "label": "D",
+          "text": "Creutzfeldt-Jakob disease"
+        },
+        {
+          "label": "E",
+          "text": "Normal aging"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Identify vascular dementia by stepwise decline after strokes, executive dysfunction, gait disturbance, and vascular risk factors.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Vascular dementia results from cumulative ischemic injury and classically causes stepwise decline with executive dysfunction and focal neurologic or gait findings."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Alzheimer disease is gradual and memory-predominant. Lewy body dementia has fluctuating cognition, hallucinations, and parkinsonism. CJD is rapidly progressive with myoclonus. Normal aging does not impair function stepwise."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q026",
+      "questionNumber": 26,
+      "sourceQuestionNumber": 26,
+      "retrievalTag": "Clozapine seizure risk",
+      "reviewPearl": "Clozapine lowers seizure threshold in a dose-dependent manner.",
+      "stem": "A 50-year-old man with treatment-resistant schizophrenia takes clozapine 400 mg daily and has a new generalized tonic-clonic seizure. He has no history of epilepsy. Which is the most likely cause?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Clozapine-induced agranulocytosis"
+        },
+        {
+          "label": "B",
+          "text": "Clozapine side effect"
+        },
+        {
+          "label": "C",
+          "text": "New-onset idiopathic epilepsy"
+        },
+        {
+          "label": "D",
+          "text": "Hyponatremia from psychogenic polydipsia"
+        },
+        {
+          "label": "E",
+          "text": "Neuroleptic malignant syndrome"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Recall that clozapine has the highest seizure risk among antipsychotics and lowers seizure threshold in a dose-related manner.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Clozapine can cause seizures, especially with higher doses, rapid titration, or predisposing factors. A new seizure in a patient taking clozapine should prompt consideration of clozapine-induced seizure risk."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Agranulocytosis presents with neutropenia/infection. New idiopathic epilepsy is less likely than medication effect. Psychogenic polydipsia can cause hyponatremic seizures but is not indicated. NMS presents with fever, rigidity, autonomic instability, and elevated CK."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q027",
+      "questionNumber": 27,
+      "sourceQuestionNumber": 27,
+      "retrievalTag": "Lithium Ebstein anomaly",
+      "reviewPearl": "First-trimester lithium exposure is associated with Ebstein anomaly.",
+      "stem": "A 32-year-old woman with bipolar I disorder is 10 weeks pregnant and stable on lithium. Which fetal complication is most associated with first-trimester lithium exposure?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Neural tube defects"
+        },
+        {
+          "label": "B",
+          "text": "Cleft lip and palate"
+        },
+        {
+          "label": "C",
+          "text": "Renal agenesis"
+        },
+        {
+          "label": "D",
+          "text": "Ebstein anomaly"
+        },
+        {
+          "label": "E",
+          "text": "Fetal alcohol syndrome"
+        }
+      ],
+      "correctAnswer": "D",
+      "educationalObjective": "Recall the association between first-trimester lithium exposure and Ebstein anomaly of the tricuspid valve.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Lithium during the first trimester is associated with a small increased risk of Ebstein anomaly, a congenital malformation involving downward displacement of the tricuspid valve."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Neural tube defects are associated with valproate/carbamazepine. Cleft lip/palate has other medication associations. Lithium does not classically cause fetal renal agenesis. Fetal alcohol syndrome is due to alcohol exposure."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q028",
+      "questionNumber": 28,
+      "sourceQuestionNumber": 28,
+      "retrievalTag": "Acute mania antipsychotic",
+      "reviewPearl": "Acute mania is treated with antipsychotics, lithium, or valproate; antipsychotics provide rapid control.",
+      "stem": "A 24-year-old woman is found shoveling snow in a bikini at 3 AM. She is laughing, singing, says she is the queen of the neighborhood, has not slept in 3 days, and speaks so quickly she is hard to follow. What is the most appropriate initial treatment for acute symptoms?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Fluoxetine"
+        },
+        {
+          "label": "B",
+          "text": "Valbenazine"
+        },
+        {
+          "label": "C",
+          "text": "Risperidone"
+        },
+        {
+          "label": "D",
+          "text": "Lamotrigine"
+        },
+        {
+          "label": "E",
+          "text": "Lorazepam monotherapy"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Treat acute mania with an antipsychotic, lithium, or valproate; antipsychotics are useful for rapid control of agitation/psychosis.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient has acute mania with grandiosity, decreased need for sleep, pressured speech, disinhibition, and impaired judgment. Risperidone is an appropriate acute antipsychotic treatment."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Fluoxetine can worsen mania. Valbenazine treats tardive dyskinesia. Lamotrigine is for bipolar depression/maintenance, not acute mania. Lorazepam can be adjunctive but is insufficient as monotherapy."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q029",
+      "questionNumber": 29,
+      "sourceQuestionNumber": 29,
+      "retrievalTag": "Depersonalization intact reality",
+      "reviewPearl": "Depersonalization/derealization disorder causes detachment from self/surroundings with intact reality testing.",
+      "stem": "A 35-year-old man has felt for 6 months as if he is watching himself from outside his body and that his surroundings are fake, like a movie set. He remains oriented and knows these perceptions are not literally true. The symptoms cause distress. Which diagnosis is most likely?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Dissociative identity disorder"
+        },
+        {
+          "label": "B",
+          "text": "Dissociative amnesia"
+        },
+        {
+          "label": "C",
+          "text": "Depersonalization/derealization disorder"
+        },
+        {
+          "label": "D",
+          "text": "Schizophrenia"
+        },
+        {
+          "label": "E",
+          "text": "Temporal lobe epilepsy"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Identify depersonalization/derealization disorder by persistent detachment from self or surroundings with intact reality testing.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Depersonalization is detachment from oneself; derealization is detachment from surroundings. Reality testing remains intact, distinguishing this from psychotic disorders."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Dissociative identity disorder involves distinct identity states. Dissociative amnesia involves inability to recall autobiographical information. Schizophrenia has impaired reality testing. Temporal lobe seizures are usually brief, episodic events."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q030",
+      "questionNumber": 30,
+      "sourceQuestionNumber": 30,
+      "retrievalTag": "Korsakoff confabulation",
+      "reviewPearl": "Korsakoff syndrome causes anterograde amnesia and confabulation after chronic thiamine deficiency.",
+      "stem": "A 45-year-old man with long-standing alcohol use disorder tells the doctor he just returned from a wonderful vacation in Hawaii with his wife. His daughter says he has not left his apartment in 2 years and his wife died 5 years ago. He seems unconcerned when corrected. What is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Alzheimer disease"
+        },
+        {
+          "label": "B",
+          "text": "Wernicke encephalopathy"
+        },
+        {
+          "label": "C",
+          "text": "Korsakoff syndrome"
+        },
+        {
+          "label": "D",
+          "text": "Malingering"
+        },
+        {
+          "label": "E",
+          "text": "Delusional disorder"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Recognize Korsakoff syndrome by chronic amnesia with confabulation in the setting of thiamine deficiency and alcohol use disorder.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Korsakoff syndrome is a chronic amnestic disorder due to thiamine deficiency. Patients have anterograde/retrograde amnesia and confabulate to fill memory gaps, often without insight."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Alzheimer disease is progressive memory decline without classic confabulation. Wernicke encephalopathy is acute confusion, ataxia, and ophthalmoplegia. Malingering is intentional for gain. Delusional disorder lacks profound amnesia."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q031",
+      "questionNumber": 31,
+      "sourceQuestionNumber": 31,
+      "retrievalTag": "Bipolar maintenance lifelong",
+      "reviewPearl": "Severe or recurrent bipolar I disorder often requires long-term or lifelong maintenance therapy.",
+      "stem": "A 26-year-old woman with bipolar I disorder has had four manic episodes requiring hospitalization in 3 years. She is stable on lithium and quetiapine and wants to stop all medications because she feels fine. What is the most appropriate advice?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Stop quetiapine but continue lithium"
+        },
+        {
+          "label": "B",
+          "text": "Discontinue all medications because she is in remission"
+        },
+        {
+          "label": "C",
+          "text": "Continue long-term maintenance therapy"
+        },
+        {
+          "label": "D",
+          "text": "Switch to antidepressant monotherapy"
+        },
+        {
+          "label": "E",
+          "text": "Taper medications over 2 weeks and stop"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Recommend long-term maintenance pharmacotherapy for bipolar I disorder with severe or recurrent manic episodes.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Bipolar I disorder is highly recurrent, especially after multiple hospitalizations. Maintenance mood stabilizers/antipsychotics reduce risk of relapse, hospitalization, and suicide."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Stopping medications risks relapse. Antidepressant monotherapy can precipitate mania. Reducing to monotherapy may be considered in selected patients but is not safest here."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q032",
+      "questionNumber": 32,
+      "sourceQuestionNumber": 32,
+      "retrievalTag": "Acute stress disorder timing",
+      "reviewPearl": "Trauma symptoms lasting 3 days to 1 month indicate acute stress disorder; >1 month indicates PTSD.",
+      "stem": "A 20-year-old college student has severe insomnia after witnessing a fatal car accident 3 weeks ago. He has intrusive images of the event, avoids the street where it happened, and feels on edge all the time. Which diagnosis is most likely?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Post-traumatic stress disorder"
+        },
+        {
+          "label": "B",
+          "text": "Acute stress disorder"
+        },
+        {
+          "label": "C",
+          "text": "Adjustment disorder"
+        },
+        {
+          "label": "D",
+          "text": "Generalized anxiety disorder"
+        },
+        {
+          "label": "E",
+          "text": "Brief psychotic disorder"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Use duration to distinguish acute stress disorder from PTSD after trauma exposure.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Acute stress disorder involves intrusion, avoidance, negative mood, dissociation, and/or arousal symptoms lasting 3 days to 1 month after trauma. PTSD requires symptoms lasting >1 month."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "PTSD requires >1 month. Adjustment disorder does not require life-threatening trauma or re-experiencing. GAD is diffuse worry. Brief psychotic disorder involves psychosis."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q033",
+      "questionNumber": 33,
+      "sourceQuestionNumber": 33,
+      "retrievalTag": "MDD continuation six months",
+      "reviewPearl": "After remission from a first MDD episode, continue antidepressants for about 6 additional months.",
+      "stem": "A 55-year-old man started sertraline 6 months ago for a first episode of major depressive disorder and has been in full remission for 4 months. He asks how much longer he needs to take the medication. What is the most appropriate recommendation?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Discontinue the medication today"
+        },
+        {
+          "label": "B",
+          "text": "Continue for 2 weeks and stop"
+        },
+        {
+          "label": "C",
+          "text": "Continue for an additional 6 months"
+        },
+        {
+          "label": "D",
+          "text": "Continue for 1–3 years"
+        },
+        {
+          "label": "E",
+          "text": "Continue indefinitely"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Continue antidepressant therapy for approximately 6 months after remission of a first major depressive episode to prevent relapse.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Continuation-phase antidepressant therapy after remission decreases relapse risk. A first uncomplicated episode generally requires about 6 months of continuation treatment after remission."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Stopping now is premature. Maintenance for 1–3 years or indefinitely is reserved for recurrent, chronic, severe, psychotic, or high-suicide-risk depression."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q034",
+      "questionNumber": 34,
+      "sourceQuestionNumber": 34,
+      "retrievalTag": "Steroid induced mania",
+      "reviewPearl": "High-dose corticosteroids can cause secondary mania or psychosis within days.",
+      "stem": "A 27-year-old man is brought to the emergency department after acting strange for 3 days. He started high-dose prednisone for asthma 5 days ago and now talks about saving the world and has not slept in 2 nights. He has no psychiatric history. What is the most likely cause?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "New-onset bipolar I disorder"
+        },
+        {
+          "label": "B",
+          "text": "Medication-induced mood disorder"
+        },
+        {
+          "label": "C",
+          "text": "Schizophreniform disorder"
+        },
+        {
+          "label": "D",
+          "text": "Brief psychotic disorder"
+        },
+        {
+          "label": "E",
+          "text": "Delusional disorder"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Identify corticosteroids as a common cause of medication-induced mania or psychosis.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The close temporal relationship between high-dose prednisone and new manic/psychotic symptoms strongly suggests a medication-induced mood disorder rather than primary bipolar disorder."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Primary bipolar or psychotic disorders are diagnoses of exclusion when medication/substance causes are present. Schizophreniform lasts 1–6 months. Delusional disorder has isolated delusions without manic syndrome."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q035",
+      "questionNumber": 35,
+      "sourceQuestionNumber": 35,
+      "retrievalTag": "Bulimia purging alkalosis",
+      "reviewPearl": "Bulimia nervosa often has normal BMI plus purging signs and hypokalemic metabolic alkalosis.",
+      "stem": "A 23-year-old woman is evaluated after a fainting spell. BMI is 19.5 kg/m2. Examination shows dental caries and calluses on the knuckles of her right hand. Potassium is 2.8 mEq/L and bicarbonate is 32 mEq/L. Which diagnosis is most likely?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Anorexia nervosa, restricting type"
+        },
+        {
+          "label": "B",
+          "text": "Bulimia nervosa"
+        },
+        {
+          "label": "C",
+          "text": "Binge eating disorder"
+        },
+        {
+          "label": "D",
+          "text": "Gastroparesis"
+        },
+        {
+          "label": "E",
+          "text": "Somatic symptom disorder"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Recognize bulimia nervosa by binge/purge behavior, normal or high BMI, dental enamel erosion, Russell sign, and hypokalemic metabolic alkalosis.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Self-induced vomiting causes dental erosion, Russell sign, hypokalemia, and metabolic alkalosis. Normal BMI favors bulimia nervosa over anorexia nervosa."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Anorexia requires significantly low body weight. Binge eating disorder lacks compensatory purging. Gastroparesis does not cause knuckle calluses. Somatic symptom disorder does not explain purging findings."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q036",
+      "questionNumber": 36,
+      "sourceQuestionNumber": 36,
+      "retrievalTag": "Selective mutism school",
+      "reviewPearl": "Selective mutism is speaking normally in some settings but consistently not speaking in others such as school.",
+      "stem": "A 14-year-old girl refuses to speak at school. Her parents report she is very talkative at home but has not said a word in class for the entire semester. Which diagnosis is most likely?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Autism spectrum disorder"
+        },
+        {
+          "label": "B",
+          "text": "Social anxiety disorder"
+        },
+        {
+          "label": "C",
+          "text": "Selective mutism"
+        },
+        {
+          "label": "D",
+          "text": "Language disorder"
+        },
+        {
+          "label": "E",
+          "text": "Oppositional defiant disorder"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Diagnose selective mutism when a child consistently fails to speak in specific social settings despite speaking in other settings.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Selective mutism is an anxiety disorder characterized by failure to speak in settings where speech is expected, despite normal speech in other settings."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Autism has broader social-communication deficits and restricted/repetitive behavior. Social anxiety may be comorbid but does not specifically require mutism. Language disorder occurs across settings. ODD involves defiance."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q037",
+      "questionNumber": 37,
+      "sourceQuestionNumber": 37,
+      "retrievalTag": "OCD ERP SSRI",
+      "reviewPearl": "OCD is treated first-line with SSRIs plus exposure and response prevention.",
+      "stem": "A 30-year-old man has spent 1 year rechecking the stove 20 times before leaving home. He knows the stove is off but fears the house will burn down unless he checks. Checking briefly reduces his anxiety. What is the first-line treatment?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Alprazolam"
+        },
+        {
+          "label": "B",
+          "text": "SSRI and exposure and response prevention"
+        },
+        {
+          "label": "C",
+          "text": "Psychodynamic psychotherapy"
+        },
+        {
+          "label": "D",
+          "text": "Risperidone"
+        },
+        {
+          "label": "E",
+          "text": "Electroconvulsive therapy"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Treat obsessive-compulsive disorder with an SSRI and cognitive behavioral therapy using exposure and response prevention.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient has obsessions about harm and compulsive checking rituals that reduce anxiety. First-line treatment is SSRIs plus exposure and response prevention."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Benzodiazepines do not treat core OCD. Psychodynamic therapy is not first-line. Antipsychotics may augment refractory OCD. ECT is not standard first-line treatment."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q038",
+      "questionNumber": 38,
+      "sourceQuestionNumber": 38,
+      "retrievalTag": "Brief psychotic disorder duration",
+      "reviewPearl": "Brief psychotic disorder lasts >1 day and <1 month with eventual return to baseline.",
+      "stem": "A 28-year-old man suddenly believes he is an intergalactic prince and that cars bow to him. The behavior began 5 days ago after he lost his job. He has no prior psychiatric history. What is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Schizophrenia"
+        },
+        {
+          "label": "B",
+          "text": "Schizophreniform disorder"
+        },
+        {
+          "label": "C",
+          "text": "Brief psychotic disorder"
+        },
+        {
+          "label": "D",
+          "text": "Delusional disorder"
+        },
+        {
+          "label": "E",
+          "text": "Adjustment disorder"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Diagnose brief psychotic disorder when psychotic symptoms last at least 1 day but less than 1 month.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Brief psychotic disorder involves acute delusions, hallucinations, disorganized speech, or disorganized/catatonic behavior lasting >1 day and <1 month, often after a stressor."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Schizophrenia requires ≥6 months. Schizophreniform disorder requires 1–6 months. Delusional disorder lasts ≥1 month and lacks broader psychosis. Adjustment disorder does not include psychosis."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q039",
+      "questionNumber": 39,
+      "sourceQuestionNumber": 39,
+      "retrievalTag": "Lithium nephrogenic DI",
+      "reviewPearl": "Lithium causes nephrogenic diabetes insipidus with dilute urine unresponsive to desmopressin.",
+      "stem": "A patient taking lithium has increased thirst and polyuria. Serum sodium is high, urine osmolality is low, and urine osmolality does not increase after desmopressin. Which is the cause?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Psychogenic polydipsia"
+        },
+        {
+          "label": "B",
+          "text": "Central diabetes insipidus"
+        },
+        {
+          "label": "C",
+          "text": "Nephrogenic diabetes insipidus"
+        },
+        {
+          "label": "D",
+          "text": "Syndrome of inappropriate ADH secretion"
+        },
+        {
+          "label": "E",
+          "text": "Acute lithium toxicity"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Identify lithium-induced nephrogenic diabetes insipidus by polyuria, hypernatremia, dilute urine, and absent response to desmopressin.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Chronic lithium can impair renal response to ADH, causing nephrogenic diabetes insipidus. Desmopressin does not correct urine concentration because the kidney is resistant to ADH."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Psychogenic polydipsia causes low/normal sodium. Central DI responds to desmopressin. SIADH causes hyponatremia with concentrated urine. This can occur without acute lithium toxicity."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q040",
+      "questionNumber": 40,
+      "sourceQuestionNumber": 40,
+      "retrievalTag": "Body dysmorphic mirror checking",
+      "reviewPearl": "Body dysmorphic disorder is preoccupation with perceived appearance defects plus repetitive checking/grooming.",
+      "stem": "A 22-year-old woman believes her nose is hideous and deformed despite others saying it looks normal. She spends hours daily looking in the mirror and has had three plastic surgeries in 2 years. Which diagnosis is most likely?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Anorexia nervosa"
+        },
+        {
+          "label": "B",
+          "text": "Somatic symptom disorder"
+        },
+        {
+          "label": "C",
+          "text": "Body dysmorphic disorder"
+        },
+        {
+          "label": "D",
+          "text": "Obsessive-compulsive disorder"
+        },
+        {
+          "label": "E",
+          "text": "Narcissistic personality disorder"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Recognize body dysmorphic disorder by distressing preoccupation with perceived physical flaws and repetitive behaviors such as mirror checking.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "BDD involves preoccupation with one or more perceived appearance defects not observable or slight to others, plus repetitive behaviors or mental acts."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Anorexia focuses on weight/shape. Somatic symptom disorder focuses on physical symptoms. OCD has broader obsessions. Narcissistic personality disorder involves grandiosity."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q041",
+      "questionNumber": 41,
+      "sourceQuestionNumber": 41,
+      "retrievalTag": "Binge eating no purging",
+      "reviewPearl": "Binge eating disorder has recurrent binge eating without compensatory purging.",
+      "stem": "A 30-year-old man with BMI 32 kg/m2 eats excessively large amounts of food once weekly for 6 months. He feels loss of control and guilt but does not vomit, use laxatives, or exercise excessively. Which diagnosis is most likely?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Bulimia nervosa"
+        },
+        {
+          "label": "B",
+          "text": "Binge eating disorder"
+        },
+        {
+          "label": "C",
+          "text": "Night eating syndrome"
+        },
+        {
+          "label": "D",
+          "text": "Obesity"
+        },
+        {
+          "label": "E",
+          "text": "Anorexia nervosa, binge-eating type"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Distinguish binge eating disorder from bulimia nervosa by the absence of compensatory behaviors.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Binge eating disorder involves recurrent binge eating with loss of control and distress without inappropriate compensatory behavior such as vomiting, laxatives, or excessive exercise."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Bulimia requires compensatory behaviors. Night eating syndrome centers on eating after awakening or excessive evening intake. Obesity is not a psychiatric diagnosis. Anorexia requires significantly low body weight."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q042",
+      "questionNumber": 42,
+      "sourceQuestionNumber": 42,
+      "retrievalTag": "Schizoid social detachment",
+      "reviewPearl": "Schizoid personality disorder features voluntary social detachment and restricted emotional expression.",
+      "stem": "A 28-year-old man prefers to spend all his time alone working on computer code. He has no close friends, rarely expresses emotion even when a relative is ill, and is indifferent to praise or criticism. Which diagnosis is most likely?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Schizotypal personality disorder"
+        },
+        {
+          "label": "B",
+          "text": "Schizoid personality disorder"
+        },
+        {
+          "label": "C",
+          "text": "Avoidant personality disorder"
+        },
+        {
+          "label": "D",
+          "text": "Antisocial personality disorder"
+        },
+        {
+          "label": "E",
+          "text": "Paranoid personality disorder"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Identify schizoid personality disorder by detachment from relationships and restricted emotional expression.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Schizoid personality disorder involves limited desire for close relationships, preference for solitary activities, emotional coldness, and indifference to praise or criticism."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Schizotypal personality disorder includes odd beliefs/perceptual distortions. Avoidant patients want relationships but fear rejection. Antisocial PD violates rights. Paranoid PD involves pervasive distrust."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q043",
+      "questionNumber": 43,
+      "sourceQuestionNumber": 43,
+      "retrievalTag": "Antiemetic D2 NMS",
+      "reviewPearl": "D2-blocking antiemetics such as prochlorperazine and metoclopramide can cause NMS.",
+      "stem": "A 65-year-old man develops fever to 103.5°F, tachycardia, and lead-pipe rigidity after starting a new medication for nausea. Which medication was most likely prescribed?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Ondansetron"
+        },
+        {
+          "label": "B",
+          "text": "Prochlorperazine"
+        },
+        {
+          "label": "C",
+          "text": "Scopolamine"
+        },
+        {
+          "label": "D",
+          "text": "Docusate"
+        },
+        {
+          "label": "E",
+          "text": "Meclizine"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Recognize that dopamine antagonist antiemetics can trigger neuroleptic malignant syndrome.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Prochlorperazine is a dopamine D2 receptor antagonist used for nausea and can cause extrapyramidal symptoms and NMS, similar to antipsychotics."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Ondansetron is a 5-HT3 antagonist. Scopolamine is anticholinergic. Docusate is a stool softener. Meclizine is an antihistamine and does not strongly block D2 receptors."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q044",
+      "questionNumber": 44,
+      "sourceQuestionNumber": 44,
+      "retrievalTag": "PNES normal EEG",
+      "reviewPearl": "Psychogenic nonepileptic seizures have seizure-like events without epileptiform activity on video EEG.",
+      "stem": "A 24-year-old man has episodes of shaking all over for 10 minutes with eyes closed. He never loses consciousness and is alert immediately afterward. Video EEG during an event shows no abnormal activity. Which diagnosis is most likely?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Generalized tonic-clonic seizure"
+        },
+        {
+          "label": "B",
+          "text": "Complex partial seizure"
+        },
+        {
+          "label": "C",
+          "text": "Psychogenic nonepileptic seizures"
+        },
+        {
+          "label": "D",
+          "text": "Malingering"
+        },
+        {
+          "label": "E",
+          "text": "Conversion disorder"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Identify psychogenic nonepileptic seizures by seizure-like activity without epileptiform EEG changes during an event.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "PNES presents with seizure-like movements, often prolonged/asynchronous, with closed eyes, preserved awareness, or lack of postictal confusion. Video EEG during the event shows no epileptiform activity."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Epileptic seizures usually show EEG correlates and often impaired consciousness/postictal state. Malingering requires intentional feigning for gain. Conversion disorder is broader; PNES is the specific presentation."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q045",
+      "questionNumber": 45,
+      "sourceQuestionNumber": 45,
+      "retrievalTag": "Frontotemporal dementia disinhibition",
+      "reviewPearl": "Frontotemporal dementia causes early personality change, disinhibition, apathy, and relatively preserved memory.",
+      "stem": "A 72-year-old man becomes impulsive, spends his savings on lottery tickets, and makes inappropriate sexual comments to strangers. Memory for recent events is relatively fair. Which diagnosis is most likely?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Alzheimer disease"
+        },
+        {
+          "label": "B",
+          "text": "Vascular dementia"
+        },
+        {
+          "label": "C",
+          "text": "Frontotemporal dementia"
+        },
+        {
+          "label": "D",
+          "text": "Normal aging"
+        },
+        {
+          "label": "E",
+          "text": "Late-onset bipolar disorder"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Recognize behavioral variant frontotemporal dementia by early disinhibition and personality change with relatively preserved memory.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Frontotemporal dementia causes early changes in behavior, personality, social conduct, executive function, and disinhibition. Memory may be relatively preserved early."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Alzheimer disease begins with episodic memory loss. Vascular dementia is stepwise with focal deficits. Normal aging does not cause disinhibition. Late-onset mania is possible but neurodegeneration is more likely."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q046",
+      "questionNumber": 46,
+      "sourceQuestionNumber": 46,
+      "retrievalTag": "SLE psychosis medical cause",
+      "reviewPearl": "New psychosis with systemic findings such as malar rash and positive ANA suggests SLE-related psychosis.",
+      "stem": "A 20-year-old man suddenly believes neighbors are poisoning his water. Examination shows a malar rash and joint swelling. ANA is positive. What is the cause of his psychosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Schizophrenia"
+        },
+        {
+          "label": "B",
+          "text": "Brief psychotic disorder"
+        },
+        {
+          "label": "C",
+          "text": "Systemic lupus erythematosus"
+        },
+        {
+          "label": "D",
+          "text": "Cocaine intoxication"
+        },
+        {
+          "label": "E",
+          "text": "Delusional disorder"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Evaluate new-onset psychosis for medical causes when systemic signs are present.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "SLE can cause neuropsychiatric symptoms, including psychosis. Malar rash, arthritis, and positive ANA indicate a systemic autoimmune cause rather than a primary psychiatric disorder."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Primary psychotic disorders require exclusion of medical/substance causes. Cocaine intoxication would cause sympathomimetic signs, not malar rash and positive ANA."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q047",
+      "questionNumber": 47,
+      "sourceQuestionNumber": 47,
+      "retrievalTag": "Agoraphobia escape difficult",
+      "reviewPearl": "Agoraphobia is fear of situations where escape may be difficult or help unavailable during panic-like symptoms.",
+      "stem": "A man avoids crowded malls because he is terrified he will have a panic attack and will not be able to escape. He now rarely leaves his house. Which diagnosis is most likely?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Social anxiety disorder"
+        },
+        {
+          "label": "B",
+          "text": "Panic disorder"
+        },
+        {
+          "label": "C",
+          "text": "Agoraphobia"
+        },
+        {
+          "label": "D",
+          "text": "Specific phobia"
+        },
+        {
+          "label": "E",
+          "text": "Adjustment disorder"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Diagnose agoraphobia when fear centers on being unable to escape or obtain help in certain places or situations.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Agoraphobia involves fear/anxiety about places such as crowds, public transportation, enclosed/open spaces, or being outside alone because escape may be difficult or help unavailable."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Social anxiety involves fear of scrutiny. Panic disorder involves recurrent unexpected attacks but does not define feared locations. Specific phobia is fear of a specific object/situation. Adjustment disorder is stressor-related distress."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q048",
+      "questionNumber": 48,
+      "sourceQuestionNumber": 48,
+      "retrievalTag": "MAOI tyramine crisis",
+      "reviewPearl": "MAOIs plus tyramine-rich foods can cause hypertensive crisis.",
+      "stem": "A patient taking phenelzine eats aged cheese and drinks red wine. Which life-threatening complication is possible?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Serotonin syndrome"
+        },
+        {
+          "label": "B",
+          "text": "Hypertensive crisis"
+        },
+        {
+          "label": "C",
+          "text": "Hypotensive crisis"
+        },
+        {
+          "label": "D",
+          "text": "Neuroleptic malignant syndrome"
+        },
+        {
+          "label": "E",
+          "text": "Agranulocytosis"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Warn patients taking MAOIs to avoid tyramine-rich foods to prevent hypertensive crisis.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "MAOIs prevent tyramine metabolism. Tyramine-rich foods such as aged cheese and wine can cause catecholamine release and severe hypertension."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Serotonin syndrome occurs when MAOIs are combined with serotonergic drugs. NMS follows dopamine blockade. Agranulocytosis is associated with clozapine, not tyramine ingestion."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q049",
+      "questionNumber": 49,
+      "sourceQuestionNumber": 49,
+      "retrievalTag": "Tardive dyskinesia chronic",
+      "reviewPearl": "Tardive dyskinesia causes late-onset orofacial choreiform movements after chronic antipsychotic exposure.",
+      "stem": "A man treated with risperidone for 2 years has rhythmic tongue movements and lip smacking. Which diagnosis is most likely?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Acute dystonia"
+        },
+        {
+          "label": "B",
+          "text": "Akathisia"
+        },
+        {
+          "label": "C",
+          "text": "Parkinsonism"
+        },
+        {
+          "label": "D",
+          "text": "Tardive dyskinesia"
+        },
+        {
+          "label": "E",
+          "text": "Tourette syndrome"
+        }
+      ],
+      "correctAnswer": "D",
+      "educationalObjective": "Identify tardive dyskinesia by involuntary orofacial movements after months to years of dopamine-blocking medication.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Tardive dyskinesia is a late extrapyramidal adverse effect of chronic antipsychotic use, causing choreiform movements of the tongue, lips, face, trunk, or extremities."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Acute dystonia occurs within hours to days. Akathisia is inner restlessness. Parkinsonism causes tremor, rigidity, and bradykinesia. Tourette syndrome begins in childhood with motor and vocal tics."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q050",
+      "questionNumber": 50,
+      "sourceQuestionNumber": 50,
+      "retrievalTag": "Autism accelerated head growth",
+      "reviewPearl": "Autism spectrum disorder is associated with early accelerated head growth and increased brain volume.",
+      "stem": "A 3-year-old boy has delayed speech, poor eye contact, and insists on a strict daily routine. Which neuroimaging or developmental finding is associated with this condition?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Caudate atrophy"
+        },
+        {
+          "label": "B",
+          "text": "Enlarged lateral ventricles"
+        },
+        {
+          "label": "C",
+          "text": "Accelerated head growth"
+        },
+        {
+          "label": "D",
+          "text": "Atrophy of mammillary bodies"
+        },
+        {
+          "label": "E",
+          "text": "White matter plaques"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Recall that autism spectrum disorder is associated with early accelerated head growth and increased brain volume.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Autism spectrum disorder involves social communication deficits and restricted/repetitive behaviors. It has been associated with increased brain volume and accelerated head growth early in life."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanations",
+          "body": [
+            "Caudate atrophy is associated with Huntington disease. Enlarged ventricles are associated with schizophrenia. Mammillary body atrophy occurs in Wernicke-Korsakoff syndrome. White matter plaques occur in multiple sclerosis."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    }
+  ]
+}

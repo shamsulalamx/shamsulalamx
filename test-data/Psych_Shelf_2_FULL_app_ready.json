@@ -1,0 +1,3112 @@
+{
+  "schemaVersion": "nbme-gemini-json-v2",
+  "testTitle": "Psych Shelf 2",
+  "sourceFormat": "rtf",
+  "expectedQuestionCount": 51,
+  "actualExtractedQuestionCount": 51,
+  "extractionWarnings": [],
+  "questions": [
+    {
+      "id": "q001",
+      "questionNumber": 1,
+      "sourceQuestionNumber": 1,
+      "retrievalTag": "GAD excessive worry finances normal TSH buspirone\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0",
+      "reviewPearl": "Buspirone (a 5-HT1A receptor partial agonist) is an effective maintenance therapy for GAD, particularly useful for avoiding the sexual dysfunction and weight gain associated with SSRIs.\\\neftab720-720\ntightenfactor0\n\\\neftab720\ntightenfactor0\n--------------------------------------------------------------------------------\\\neftab720\ntightenfactor0",
+      "stem": "A 25-year-old woman comes to the physician at her husband’s request because of increasing irritability and tense mood over the past year. Her husband would like to start a family and he is concerned about her ability to handle the added responsibility. She says that she worries about her finances despite the fact that they have no debt and she and her husband have jobs that pay well. Her pulse is 84/min, and blood pressure is 120/70 mm Hg. Physical examination shows no abnormalities except for sweaty palms. Mental status examination shows tension and anxiety. She admits to occasional difficulty sleeping and periods of mild depression but does not think that this is out of ordinary. Laboratory studies show: Hematocrit 38% Erythrocyte count 4 million/mm3 Leukocyte count 5500/mm3 Serum Thyroid-stimulating hormone 0.5 µU/mL Thyroxine (T4) 12 µg/dL Toxicology screening is negative. Which of the following is the most appropriate pharmacotherapy for this patient?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Bupropion"
+        },
+        {
+          "label": "B",
+          "text": "Buspirone"
+        },
+        {
+          "label": "C",
+          "text": "Levothyroxine"
+        },
+        {
+          "label": "D",
+          "text": "Methimazole"
+        },
+        {
+          "label": "E",
+          "text": "Quetiapine\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Identify GAD and select buspirone as an appropriate pharmacotherapy.\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient exhibits Generalized Anxiety Disorder (GAD), marked by excessive, irrational worry (finances) lasting >6 months, irritability, sleep difficulty, and physical symptoms (sweaty palms). Buspirone is a non-sedating anxiolytic indicated for GAD.\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Her thyroid labs are normal, ruling out levothyroxine (C) and methimazole (D). Bupropion (A) is an activating antidepressant that can exacerbate anxiety. Quetiapine (E) is an antipsychotic not used first-line here.\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Buspirone (a 5-HT1A receptor partial agonist) is an effective maintenance therapy for GAD, particularly useful for avoiding the sexual dysfunction and weight gain associated with SSRIs.\\\neftab720-720\ntightenfactor0\n\\\neftab720\ntightenfactor0\n--------------------------------------------------------------------------------\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q002",
+      "questionNumber": 2,
+      "sourceQuestionNumber": 2,
+      "retrievalTag": "Normal adolescent development healthy weight reassure\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0",
+      "reviewPearl": "Normal adolescent development frequently includes an increased need for privacy, minor oppositional behavior (eye-rolling), and diet experimentation, which should be reassured if growth and functioning remain stable.\\\neftab720-720\ntightenfactor0\n\\\neftab720\ntightenfactor0\n--------------------------------------------------------------------------------\\\neftab720\ntightenfactor0",
+      "stem": "A 13-year-old girl is brought to the physician by her father for a well-child examination. He is concerned about her weight and eating habits. He says that she is always “on the go” and never sits down for a full meal. She will often just grab a piece of fruit when she is on her way to an activity. She will eat a full meal when the family has dinner together every Sunday. She has talked about wanting to become a vegetarian because of her concern for animals. She has had the same group of friends since elementary school. She is the captain of her soccer team and practices 4 days weekly. She is active in an after-school drama program 3 days weekly and is the lead in this season’s play. She maintains a B grade average. Her father says that she talks on the telephone “constantly” and is animated and cheerful most of the time. When she is in her bedroom. She prefers to keep the door closed and stops talking if she is on the telephone and her father walks into the room. She has a disorganized bedroom and often falls fast asleep on a bed covered with piles of clothes. Menarche has not occurred. She appears thin and muscular. She is at the 50th percentile for height and 35th percentile for weight, which is unchanged from last year. Vital signs are within normal limits. Breast and pubic hair development are Tanner stage 2. Physical examination shows no abnormalities. When interviewed alone, she is animated. She shrugs and rolls her eyes when asked her diet and weight. She thinks she is fine and does not understand why her father is so upset. Which of the following is most appropriate next step?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Reassure the father that this is normal development"
+        },
+        {
+          "label": "B",
+          "text": "Recommend individual psychotherapy"
+        },
+        {
+          "label": "C",
+          "text": "Recommend nutritional counseling"
+        },
+        {
+          "label": "D",
+          "text": "Recommend that the father keep a log of what his daughter eats"
+        },
+        {
+          "label": "E",
+          "text": "Schedule weekly examination and weighing\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Distinguish normal adolescent psychosocial development from eating disorders.\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient's behaviors—desiring privacy, exploring vegetarianism, eating on the go, rolling eyes—are normal features of early adolescence. Her height and weight percentiles are stable, and her physical exam is normal, ruling out an eating disorder.\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Psychotherapy (B), nutritional counseling (C), logging food (D), and weekly weigh-ins (E) unnecessarily pathologize normal teenage development and could inadvertently trigger eating anxieties.\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Normal adolescent development frequently includes an increased need for privacy, minor oppositional behavior (eye-rolling), and diet experimentation, which should be reassured if growth and functioning remain stable.\\\neftab720-720\ntightenfactor0\n\\\neftab720\ntightenfactor0\n--------------------------------------------------------------------------------\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q003",
+      "questionNumber": 3,
+      "sourceQuestionNumber": 3,
+      "retrievalTag": "PTSD fear of flying CBT exposure\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0",
+      "reviewPearl": "Avoidance is a core symptom of PTSD; exposure-based CBT directly addresses and extinguishes these maladaptive avoidance behaviors.\\\neftab720-720\ntightenfactor0\n\\\neftab720\ntightenfactor0\n--------------------------------------------------------------------------------\\\neftab720\ntightenfactor0",
+      "stem": "A 32-year-old woman comes to the physician for a follow-up examination 6 months after she was a passenger on an airplane that skidded off the runway into the harbor. Two people were killed; she escaped without serious injury. After the crash, she had insomnia, a depressed mood, nightmares about plan crashes, and daytime flashbacks that have been treated with clonazepam and paroxetine. Overall, her symptoms have improved, but she is still too anxious to fly. She works as a buyer for a large department store and was told by her manager that her job is in jeopardy because she is required to travel to Europe monthly. Physical examination shows no abnormalities. Mental status examination shows mild anxiety. Her thoughts are organized and goal directed. She has difficulty completing serial seven subtraction. In addition to continuing clonazepam and paroxetine therapy, which of the following is the most appropriate next step in management?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Recommend that the patient should switch to a job that does not require air travel"
+        },
+        {
+          "label": "B",
+          "text": "Begin cognitive behavioral therapy"
+        },
+        {
+          "label": "C",
+          "text": "Begin group therapy"
+        },
+        {
+          "label": "D",
+          "text": "Begin psychodynamic psychotherapy"
+        },
+        {
+          "label": "E",
+          "text": "Add quetiapine to the current regimen\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Recognize that CBT (exposure therapy) is the treatment of choice for phobic avoidance in PTSD.\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient has PTSD with a specific phobic avoidance (fear of flying) that severely impacts her occupation. Trauma-focused cognitive behavioral therapy (CBT) with exposure therapy is the first-line non-pharmacologic treatment to extinguish specific avoidance behaviors.\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Telling her to switch jobs (A) reinforces maladaptive avoidance. Group (C) and psychodynamic (D) therapies are less targeted for specific phobias/avoidance than CBT. Quetiapine (E) is unnecessary polypharmacy.\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Avoidance is a core symptom of PTSD; exposure-based CBT directly addresses and extinguishes these maladaptive avoidance behaviors.\\\neftab720-720\ntightenfactor0\n\\\neftab720\ntightenfactor0\n--------------------------------------------------------------------------------\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q004",
+      "questionNumber": 4,
+      "sourceQuestionNumber": 4,
+      "retrievalTag": "Delayed sleep phase circadian rhythm weekends\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0",
+      "reviewPearl": "Patients with delayed sleep phase syndrome have a shifted biological clock but normal sleep architecture; they sleep well when allowed to adhere to their preferred schedule.\\\neftab720-720\ntightenfactor0\n\\\neftab720\ntightenfactor0\n--------------------------------------------------------------------------------\\\neftab720\ntightenfactor0",
+      "stem": "A 27-year-old teacher comes to the physician requesting a prescription for sleep medication. She has been unable to fall asleep until 2 or 3 am since the start of the school year 3 months ago. When she awakens at 6 am, she feels drowsy and remains tired throughout the morning. Last week, she fell asleep at her desk while her students were watching a movie. She believes that her job is in jeopardy. Drinking one glass of wine before going to bed has not helped her fall asleep. She recently took one of her mother’s zolpidem tablets; she only slept for 2 hours and was then awaken until 3 or 4 am. During vacations and on weekends, she typically sleeps from 3 am until noon and feels energetic and well rested. She currently does not take any medications or drink alcohol. Physical examination shows no abnormalities. On mental status examination, she appears tired and is teary. She can recall two of three objects after 5 minutes. Which of the following is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Adjustment disorder with depressed mood"
+        },
+        {
+          "label": "B",
+          "text": "Circadian rhythm sleep disorder"
+        },
+        {
+          "label": "C",
+          "text": "Dysthymic disorder"
+        },
+        {
+          "label": "D",
+          "text": "Major depressive disorder"
+        },
+        {
+          "label": "E",
+          "text": "Narcolepsy"
+        },
+        {
+          "label": "F",
+          "text": "Primary insomnia"
+        },
+        {
+          "label": "G",
+          "text": "REM sleep behavior disorder\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Differentiate delayed sleep phase disorder from primary insomnia by evaluating sleep quality on weekends/vacations.\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This is circadian rhythm sleep-wake disorder, delayed sleep phase type. When allowed to sleep on her own schedule (3 AM to noon), she gets restorative, normal sleep, distinguishing it from general insomnia.\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Primary insomnia (F) would involve poor sleep regardless of the schedule. MDD (D) and Adjustment disorder (A) are incorrect because her tearfulness is secondary to sleep deprivation. Narcolepsy (E) involves sleep attacks, not a shifted circadian phase.\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Patients with delayed sleep phase syndrome have a shifted biological clock but normal sleep architecture; they sleep well when allowed to adhere to their preferred schedule.\\\neftab720-720\ntightenfactor0\n\\\neftab720\ntightenfactor0\n--------------------------------------------------------------------------------\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q005",
+      "questionNumber": 5,
+      "sourceQuestionNumber": 5,
+      "retrievalTag": "Chronic pelvic pain negative laparoscopies psychiatric assessment\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0",
+      "reviewPearl": "To prevent iatrogenic injury, stop ordering invasive diagnostic procedures in patients with recurrent physical complaints who have already had extensive, negative evaluations.\\\neftab720-720\ntightenfactor0\n\\\neftab720\ntightenfactor0\n--------------------------------------------------------------------------------\\\neftab720\ntightenfactor0",
+      "stem": "A 42-year-old woman, gravida 1, para 1, comes to the physician because of a 5-month history of increasingly severe episodes of lower abdominal pain. The pain is exacerbated during bowel movements, sexual intercourse, and menses. Treatment with several analgesics has not controlled the pain. Laparoscopy 4 years ago and a second laparoscopy 2 years ago for evaluation of pain showed no abnormalities. She is sexually active with one male partner, and they use condoms for contraception. She is a single parent and lost her job 6 months ago. She now has difficulty sleeping 1 to 3 nights each week because she worries about finding a job. Abdominal examination shows tenderness in both lower quadrants. Pelvic examination shows a mobile, nontender uterus and normal, nontender adnexa. A complete blood count, erythrocyte sedimentation rate, Pap smear, and urine and cervical cultures show no abnormalities. Which of the following is the most appropriate next step to determine the cause of this patient’s pain?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "MRI of the pelvis"
+        },
+        {
+          "label": "B",
+          "text": "Psychiatric assessment"
+        },
+        {
+          "label": "C",
+          "text": "Hysteroscopy"
+        },
+        {
+          "label": "D",
+          "text": "Laparoscopy"
+        },
+        {
+          "label": "E",
+          "text": "Endometrial biopsy\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Prioritize psychiatric evaluation in patients with chronic pain and exhaustive negative medical workups.\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient has chronic pelvic pain with an extensive negative medical workup (two prior negative laparoscopies, normal labs, normal pelvic exam) and concurrent psychosocial stressors. Psychiatric assessment is needed to evaluate for somatic symptom disorder or psychological factors affecting a medical condition.\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Further invasive testing like hysteroscopy (C), laparoscopy (D), or endometrial biopsy (E) are unindicated and risk iatrogenic harm. MRI (A) is unnecessary given the previously definitively negative structural evaluations.\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "To prevent iatrogenic injury, stop ordering invasive diagnostic procedures in patients with recurrent physical complaints who have already had extensive, negative evaluations.\\\neftab720-720\ntightenfactor0\n\\\neftab720\ntightenfactor0\n--------------------------------------------------------------------------------\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q006",
+      "questionNumber": 6,
+      "sourceQuestionNumber": 6,
+      "retrievalTag": "Acute situational anxiety insomnia clonazepam breast cancer\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0",
+      "reviewPearl": "Short courses of benzodiazepines are highly effective and appropriate for severe, acute distress and insomnia following a major stressor, provided they are strictly time-limited.\\\neftab720-720\ntightenfactor0\n\\\neftab720\ntightenfactor0\n--------------------------------------------------------------------------------\\\neftab720\ntightenfactor0",
+      "stem": "A 57-year-old woman comes to the physician because of difficulty sleeping, tearfulness, and restlessness since her daughter was diagnosed with metastatic breast cancer 3 days ago. She reports that when she goes to bed at night, she is unable to fall asleep for several hours and lays in bed worrying her daughter’s situation. The patient underwent a mastectomy for breast cancer 7 years ago. She takes acetaminophen/butalbital for occasional migraines. Her vital signs are within normal limits. Physical examination shows no abnormalities. On mental status examination, she is tearful and tense but calms during conversation. There is no evidence of suicidal ideation. Which of the following is the most appropriate next step in management?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Biofeedback"
+        },
+        {
+          "label": "B",
+          "text": "Carbamazepine therapy"
+        },
+        {
+          "label": "C",
+          "text": "Clonazepam therapy"
+        },
+        {
+          "label": "D",
+          "text": "Clonidine therapy"
+        },
+        {
+          "label": "E",
+          "text": "Imipramine therapy"
+        },
+        {
+          "label": "F",
+          "text": "Olanzapine therapy"
+        },
+        {
+          "label": "G",
+          "text": "Pentobarbital therapy"
+        },
+        {
+          "label": "H",
+          "text": "Sertraline therapy\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Identify the role of short-term benzodiazepines in treating severe acute situational anxiety and insomnia.\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient is experiencing severe, acute situational anxiety and insomnia triggered by her daughter's recent cancer diagnosis (a trauma echoing her own history). A short-term prescription of a benzodiazepine (clonazepam) is appropriate for rapid relief of severe acute stress-related insomnia.\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "SSRIs like sertraline (H) take weeks to become effective. Imipramine (E), carbamazepine (B), and olanzapine (F) are inappropriate for simple acute situational distress. Pentobarbital (G) is dangerous and obsolete for insomnia.\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Short courses of benzodiazepines are highly effective and appropriate for severe, acute distress and insomnia following a major stressor, provided they are strictly time-limited.\\\neftab720-720\ntightenfactor0\n\\\neftab720\ntightenfactor0\n--------------------------------------------------------------------------------\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q007",
+      "questionNumber": 7,
+      "sourceQuestionNumber": 7,
+      "retrievalTag": "Schizophrenia prodrome negative symptoms timeline horses\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0",
+      "reviewPearl": "A sudden psychotic break is often preceded by years of subtle negative symptoms (social withdrawal, academic/occupational decline), which counts toward the 6-month diagnostic criteria for schizophrenia.\\\neftab720-720\ntightenfactor0\n\\\neftab720\ntightenfactor0\n--------------------------------------------------------------------------------\\\neftab720\ntightenfactor0",
+      "stem": "A 25-year-old woman is brought to the physician by the owner of the stable where she works because she has been talking to the horses for 7 days. She dropped out of high school at age of 17 years and has worked at the stable since that time. She lives alone and has no friends. On questioning, she states that the horses tell her how to lead her life and that they have been given special powers by a god. Which of the following is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Autistic disorder"
+        },
+        {
+          "label": "B",
+          "text": "Avoidant personality disorder"
+        },
+        {
+          "label": "C",
+          "text": "Delusional disorder"
+        },
+        {
+          "label": "D",
+          "text": "Schizoid personality disorder"
+        },
+        {
+          "label": "E",
+          "text": "Schizophrenia\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "E",
+      "educationalObjective": "Recognize that the >6-month timeline required for schizophrenia includes prodromal and residual phases, not just active psychosis.\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "While her florid psychosis (auditory hallucinations/delusions) has only been present for 7 days, she has an 8-year history of functional decline and profound social isolation (negative/prodromal symptoms) since age 17. Because total symptom duration (including prodromal phase) exceeds 6 months, the diagnosis is schizophrenia.\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Delusional disorder (C) lacks prominent hallucinations like talking to horses. Schizoid PD (D) features isolation but not acute psychosis. Brief psychotic disorder requires symptoms <1 month without the lengthy prodromal functional decline.\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "A sudden psychotic break is often preceded by years of subtle negative symptoms (social withdrawal, academic/occupational decline), which counts toward the 6-month diagnostic criteria for schizophrenia.\\\neftab720-720\ntightenfactor0\n\\\neftab720\ntightenfactor0\n--------------------------------------------------------------------------------\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q008",
+      "questionNumber": 8,
+      "sourceQuestionNumber": 8,
+      "retrievalTag": "Fetal alcohol syndrome smooth philtrum growth retardation\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0",
+      "reviewPearl": "The defining facial features of FAS are a smooth philtrum, thin vermilion border (upper lip), and short palpebral fissures.\\\neftab720-720\ntightenfactor0\n\\\neftab720\ntightenfactor0\n--------------------------------------------------------------------------------\\\neftab720\ntightenfactor0",
+      "stem": "A 7-year-old boy is brought to the physician by his adoptive parents because of ongoing concern about his behavior and academic performance. He is two grade levels behind his peers in reading and frequently has flights with other children. He has no history of serious illness and takes no medications. His biological mother abused multiple substances before and during pregnancy. On adoption at age of 15 months, there was some evidence that she may have physically abused him. He is at the 10th percentile for height and 5th percentile for weight. His pulse is 82/min, and blood pressure is 116/78 mm Hg. Examination shows a flattened nasal bridge, a long philtrum, and prominent ears. During the interview, he is friendly but becomes frustrated and distracted and is unable to sit still. Which of the following is most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Angelman syndrome"
+        },
+        {
+          "label": "B",
+          "text": "Fetal alcohol syndrome"
+        },
+        {
+          "label": "C",
+          "text": "Fragile X syndrome"
+        },
+        {
+          "label": "D",
+          "text": "Rett disorder"
+        },
+        {
+          "label": "E",
+          "text": "Shaken baby syndrome\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Identify the hallmark physical and neurodevelopmental signs of Fetal Alcohol Syndrome.\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient presents with the classic triad of Fetal Alcohol Syndrome (FAS): growth restriction (<10th percentile), CNS neurodevelopmental deficits (ADHD-like behavior, academic delay), and characteristic facial dysmorphology (smooth/long philtrum, flattened nasal bridge).\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Fragile X syndrome (C) causes intellectual disability but features a long face, large ears, and macroorchidism, without the specific philtrum changes. Angelman (A) is characterized by severe intellectual disability, ataxia, and inappropriate laughter.\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "The defining facial features of FAS are a smooth philtrum, thin vermilion border (upper lip), and short palpebral fissures.\\\neftab720-720\ntightenfactor0\n\\\neftab720\ntightenfactor0\n--------------------------------------------------------------------------------\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q009",
+      "questionNumber": 9,
+      "sourceQuestionNumber": 9,
+      "retrievalTag": "Panic disorder recurrent attacks behavioral avoidance quitting football\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0",
+      "reviewPearl": "The diagnosis of panic disorder requires not just the attacks themselves, but at least 1 month of persistent worry about future attacks or a maladaptive change in behavior to avoid them.\\\neftab720-720\ntightenfactor0\n\\\neftab720\ntightenfactor0\nI apologize for the confusion. The previous outputs were incomplete and out of order because I misinterpreted the document's start page (skipping Questions 1 and 2) and attempted to break the output into smaller chunks to accommodate your request to save tokens and time.\\\nHere is the freshly regenerated",
+      "stem": "A 17-year-old boy is brought to the emergency department by his mother because of a 20-minute episode of severe chest pain and sweating that started 1 hour ago while he was watching television. On arrival, he is alert and repeatedly expresses concern that something is “very wrong.” He reports that during the episode, his heart was “pounding,” he felt short of breath, and he was sure he was having a heart attack and was going to die. One month ago, he had a similar episode that occurred in the evening approximately 30 minutes after his high school football practice. At that time, results of laboratory studies and an ECG obtained in the emergency department showed no abnormalities. After the initial episode, he quit the football team, and he was continued to limit his physical activity because he is afraid of bringing on another episode. He reports no insomnia or changes in appetite. His mother states that he was diagnosed with an innocent heart murmur at the age of 6 months, but it has not been noted on examinations since the age of 1 year. His paternal grandfather died of a myocardial infarction 3 years ago at the age of 68 years. The patient takes no medications. He does not smoke cigarettes, drink alcohol, or use illicit drugs. He performs well in school. He is 180 cm (5 ft 11 in) tall and weighs 73 kg (161 lb); BMI is 23 kg/m2. His temperature is 37°C (98.6°F), pulse is 98/min, respirations are 20/min, and blood pressure is 130/83 mm Hg. Cardiac examination shows a normal S1 and S2 with variation of S2 on respiration. The remainder of the examination shows no abnormalities. Which of the following is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Acute stress disorder"
+        },
+        {
+          "label": "B",
+          "text": "Delusional disorder"
+        },
+        {
+          "label": "C",
+          "text": "Generalized anxiety disorder"
+        },
+        {
+          "label": "D",
+          "text": "Hypertrophic cardiomyopathy"
+        },
+        {
+          "label": "E",
+          "text": "Idiopathic recurrent pericarditis"
+        },
+        {
+          "label": "F",
+          "text": "Panic disorder"
+        },
+        {
+          "label": "G",
+          "text": "Paroxysmal supraventricular tachycardia\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "F",
+      "educationalObjective": "Diagnose panic disorder based on recurrent unexpected attacks and subsequent avoidance behaviors.\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient has experienced recurrent, unexpected panic attacks (palpitations, sweating, fear of dying) followed by >1 month of maladaptive behavioral changes (quitting football to avoid triggering another attack), diagnosing panic disorder.\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "A normal ECG and exam rule out structural heart disease like HCM (D) and pericarditis (E). GAD (C) features chronic worry rather than acute episodic panic. Acute stress disorder (A) requires a preceding specific severe traumatic event.\\\neftab720-720\ntightenfactor0\n\\\neftab720-720\ntightenfactor0"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "The diagnosis of panic disorder requires not just the attacks themselves, but at least 1 month of persistent worry about future attacks or a maladaptive change in behavior to avoid them.\\\neftab720-720\ntightenfactor0\n\\\neftab720\ntightenfactor0\nI apologize for the confusion. The previous outputs were incomplete and out of order because I misinterpreted the document's start page (skipping Questions 1 and 2) and attempted to break the output into smaller chunks to accommodate your request to save tokens and time.\\\nHere is the freshly regenerated"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q010",
+      "questionNumber": 10,
+      "sourceQuestionNumber": 10,
+      "retrievalTag": "",
+      "reviewPearl": "",
+      "stem": "as you requested in your previous message. If you would still like me to generate the full batch of Questions 1–10 in a single response, please let me know!\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [],
+      "correctAnswer": "",
+      "educationalObjective": "",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            ""
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            ""
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            ""
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q010",
+      "questionNumber": 10,
+      "sourceQuestionNumber": 10,
+      "retrievalTag": "2-month history crying spells hypersomnia weight gain MDD\\",
+      "reviewPearl": "When a patient meets the full criteria for a Major Depressive Episode, the diagnosis is Major Depressive Disorder, regardless of whether a clear precipitating stressor (like a recent breakup) is identified.\\\neftab720-720\ntightenfactor0\n\\\n\\\neftab720\ntightenfactor0\nI apologize for the frustration. Large language models sometimes experience strict output token limits that can cut off responses during high-volume generation tasks. To bypass this, here are Questions 11 through 20 completely generated in one batch as you requested.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "\\\nA previously healthy 27-year-old woman comes to the physician because of a 2-month history of crying spells, poor concentration, fatigue, and lethargy. She says that she sleeps at least 12 hours daily and is no longer interested in socializing. She recently broke up with her boyfriend of 10 months, and her work performance has begun to decline; she is afraid that she will lose her job if it does not improve. She does not drink alcohol or use illicit drugs. Menses occur at regular 28- to 30-day intervals. Her last menstrual period was 2 weeks ago. She has had 9-kg (20-lb) weight gain over the past 9 months. She is 168 cm (5 ft 6 in) tall and weighs 66 kg (145 lb); BMI is 23 kg/m2. Physical examination shows no abnormalities. Mental status examination shows a sad mood and restricted affect. Which of the following is the most likely diagnosis?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Adjustment disorder with depressed mood"
+        },
+        {
+          "label": "B",
+          "text": "Dysthymic disorder"
+        },
+        {
+          "label": "C",
+          "text": "Generalized anxiety disorder"
+        },
+        {
+          "label": "D",
+          "text": "Major depressive disorder"
+        },
+        {
+          "label": "E",
+          "text": "Premenstrual dysphoric disorder\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "D",
+      "educationalObjective": "Diagnose Major Depressive Disorder by identifying 5 or more symptoms of depression (SIGECAPS) lasting at least 2 weeks, recognizing that an MDD diagnosis supersedes Adjustment Disorder even when a clear psychosocial stressor is present.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient presents with multiple SIGECAPS symptoms (depressed mood, hypersomnia, anhedonia, fatigue, poor concentration, and weight gain) that have been present for 2 months. This clinical picture fully satisfies the diagnostic criteria for Major Depressive Disorder (MDD), which requires at least 5 symptoms (including depressed mood or anhedonia) lasting for 2 or more weeks.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Adjustment disorder (A) is triggered by a stressor but cannot be diagnosed if the symptoms meet the criteria for another major psychiatric disorder, such as MDD. Dysthymic disorder (B) requires chronic depressive symptoms lasting for at least 2 years. Generalized anxiety disorder (C) is characterized by excessive worry rather than dominant depressive symptoms. Premenstrual dysphoric disorder (E) requires symptoms to arise in the final week before menses and resolve shortly after; her last menses was 2 weeks ago.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "When a patient meets the full criteria for a Major Depressive Episode, the diagnosis is Major Depressive Disorder, regardless of whether a clear precipitating stressor (like a recent breakup) is identified.\\\neftab720-720\ntightenfactor0\n\\\n\\\neftab720\ntightenfactor0\nI apologize for the frustration. Large language models sometimes experience strict output token limits that can cut off responses during high-volume generation tasks. To bypass this, here are Questions 11 through 20 completely generated in one batch as you requested.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q011",
+      "questionNumber": 11,
+      "sourceQuestionNumber": 11,
+      "retrievalTag": "MDD pregnancy risks benefits antidepressants\\",
+      "reviewPearl": "Antidepressants can and should be used during pregnancy when the maternal and fetal risks of untreated severe depression outweigh the risks of medication exposure.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 25-year-old primigravid woman at 16 weeks’ gestation has had increased episodes of crying, difficulty falling asleep, decreased energy, and loss of appetite over the past 6 weeks. She has a history of recurrent major depressive disorder. Her family is concerned that she might in inadvertently harm herself or her fetus. Her husband reports that she has lost interest in daily activities. She states that she has no suicidal thoughts. She is concerned about her ability to take care of a newborn and is questioning her decision not to terminate the pregnancy. Which of the following is the most appropriate next step in management?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Reassurance with return visit in 2 weeks"
+        },
+        {
+          "label": "B",
+          "text": "Explanation of the risks and benefits of antidepressant therapy"
+        },
+        {
+          "label": "C",
+          "text": "Explanation of the risks and benefits of therapeutic abortion"
+        },
+        {
+          "label": "D",
+          "text": "Support group therapy"
+        },
+        {
+          "label": "E",
+          "text": "Admission to the hospital\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Manage severe major depressive disorder in a pregnant patient by counseling on the risks and benefits of antidepressant therapy.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient has severe recurrent major depressive disorder during pregnancy. Given the risk that untreated severe depression poses to both the mother and fetus, the first-line management is to discuss the risks and benefits of initiating antidepressant therapy.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Reassurance (A) or just support groups (D) are insufficient for an active severe depressive episode. Hospital admission (E) is unnecessary as she currently denies active suicidal ideation.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Antidepressants can and should be used during pregnancy when the maternal and fetal risks of untreated severe depression outweigh the risks of medication exposure.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q012",
+      "questionNumber": 12,
+      "sourceQuestionNumber": 12,
+      "retrievalTag": "Depressed mood loud snoring high BMI OSA\\",
+      "reviewPearl": "Always rule out underlying medical conditions like Obstructive Sleep Apnea in obese patients presenting with chronic fatigue and depressive symptoms.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "For each patient with depressed mood, select the most likely diagnosis",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Adjustment disorder with depressed mood"
+        },
+        {
+          "label": "B",
+          "text": "Bereavement"
+        },
+        {
+          "label": "C",
+          "text": "Bipolar disorder, depressed"
+        },
+        {
+          "label": "D",
+          "text": "Cyclothymic disorder"
+        },
+        {
+          "label": "E",
+          "text": "Dysthymic disorder"
+        },
+        {
+          "label": "F",
+          "text": "Major depressive disorder"
+        },
+        {
+          "label": "G",
+          "text": "Mood disorder due to a general medical condition"
+        },
+        {
+          "label": "H",
+          "text": "Substance-induced mood disorder\\\nA previously healthy 37-year-old man comes to the physician because of a 6-month history of depressed mood, fatigue, poor concentration, and difficulty sleeping. He works as an accountant and has had difficulty staying awake at work, particularly in the afternoon. He says that his wife sleeps in a separate room because of his loud snoring. He drinks alcohol at social functions only. He is 175 cm (5 ft 9 in) tall and weighs 109 kg (240 lb); BMI is 35 kg/m2. Physical examination shows no other abnormalities. Mental status examination shows a mildly depressed mood.\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "G",
+      "educationalObjective": "Identify secondary causes of depression, such as obstructive sleep apnea, in patients with high BMI and severe daytime somnolence.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient's depressed mood, daytime fatigue, loud snoring, and obesity (BMI 35) strongly point to obstructive sleep apnea (OSA). Mood symptoms secondary to untreated sleep apnea fall under a mood disorder due to a general medical condition.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "While he has depressive symptoms, the underlying etiology is physiological (apnea), making F (Major Depressive Disorder) incorrect. The symptoms are not tied to a specific stressor (A) or substances (H).\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Always rule out underlying medical conditions like Obstructive Sleep Apnea in obese patients presenting with chronic fatigue and depressive symptoms.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q013",
+      "questionNumber": 13,
+      "sourceQuestionNumber": 13,
+      "retrievalTag": "1 week breakup tearful isolated adjustment disorder\\",
+      "reviewPearl": "Adjustment disorder features clinically significant emotional distress in response to a stressor occurring within 3 months, but the diagnosis is superseded if criteria for another specific disorder (like MDD) are met.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "For each patient with depressed mood, select the most likely diagnosis",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Adjustment disorder with depressed mood"
+        },
+        {
+          "label": "B",
+          "text": "Bereavement"
+        },
+        {
+          "label": "C",
+          "text": "Bipolar disorder, depressed"
+        },
+        {
+          "label": "D",
+          "text": "Cyclothymic disorder"
+        },
+        {
+          "label": "E",
+          "text": "Dysthymic disorder"
+        },
+        {
+          "label": "F",
+          "text": "Major depressive disorder"
+        },
+        {
+          "label": "G",
+          "text": "Mood disorder due to a general medical condition"
+        },
+        {
+          "label": "H",
+          "text": "Substance-induced mood disorder\\\nA 23-year-old graduate student comes to the physician because of depressed mood and feelings of hopelessness since breaking up with her boyfriend 1 week ago. During this period, she has rarely left her apartment, has only eaten a small amount of food, and has isolated herself from her friends and family. She has been drinking more alcohol than normal during this period. Physical examination shows no abnormalities. On mental status examination, she becomes tearful when she describes the breakup. When asked about her mood, she says, \"I'm miserable. He was my life!\" There is no evidence of suicidal ideation.\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Diagnose Adjustment Disorder when mood symptoms occur out of proportion to a psychosocial stressor and do not meet full criteria for Major Depressive Disorder.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient has significant depressive symptoms causing functional impairment that began specifically in response to an identifiable stressor (breakup) just 1 week ago. Because symptoms have not lasted at least 2 weeks, she does not yet meet the criteria for MDD.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "F (MDD) is incorrect because symptoms have only been present for 1 week (2 weeks required). B (Bereavement) applies to the death of a loved one, not a breakup.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Adjustment disorder features clinically significant emotional distress in response to a stressor occurring within 3 months, but the diagnosis is superseded if criteria for another specific disorder (like MDD) are met.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q014",
+      "questionNumber": 14,
+      "sourceQuestionNumber": 14,
+      "retrievalTag": "1 week post trauma police officer debriefing education\\",
+      "reviewPearl": "Psychological debriefing immediately following a trauma is no longer recommended due to evidence that it may worsen outcomes; providing education on normal trauma reactions is preferred.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 37-year-old male police officer comes to the physician at the request of his superiors 1 week after he witnessed a terrorist bombing during which several civilians and three fellow police officers were killed. He sustained only minor injuries and assisted in rescuing survivors and gathering body parts. Since the bombing, he has felt emotionally numb and has been unable to enjoy activities he used to find pleasurable. He has continued to work but has requested assignments far removed from the site of the attack. He describes his sleep as fitful. Two years ago, he sustained a bullet wound to the right calf, which left him with a slight limp. He has no other history of medical or psychiatric illness. He says he used to drink one to two beers nightly but has been drinking two to three beers nightly for the past week. Physical examination confirms the previous gunshot injury to the calf and shows no other abnormalities. On mental status examination, he is irritable and says he is not depressed. He tells the physician, \"They made me come. I'm not interested in talking with anyone. I just want to spend time with my buddies and be left alone.\" Which of the following is the most appropriate initial step in management?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Encourage the patient to discuss the trauma in detail"
+        },
+        {
+          "label": "B",
+          "text": "Provide information about the range of reactions to trauma"
+        },
+        {
+          "label": "C",
+          "text": "Recommend group therapy with other trauma survivors"
+        },
+        {
+          "label": "D",
+          "text": "Recommend a 1-month medical leave of absence from active duty"
+        },
+        {
+          "label": "E",
+          "text": "Recommend a physician-led trauma debriefing series"
+        },
+        {
+          "label": "F",
+          "text": "Recommend a 12-step program"
+        },
+        {
+          "label": "G",
+          "text": "Begin clonazepam therapy"
+        },
+        {
+          "label": "H",
+          "text": "Begin fluoxetine therapy\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Recognize that psychoeducation and support, rather than forced debriefing, are the most appropriate initial management steps for acute trauma responses.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient is experiencing acute stress symptoms 1 week after a severe trauma. The standard of care in the acute aftermath of trauma is providing supportive care and psychoeducation regarding the normal range of stress reactions.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Forced trauma debriefing or making him discuss the trauma in detail (A, E) are contraindicated as they can interfere with natural coping mechanisms and actually increase the risk of PTSD. Medications (G, H) are not indicated 1 week post-trauma.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Psychological debriefing immediately following a trauma is no longer recommended due to evidence that it may worsen outcomes; providing education on normal trauma reactions is preferred.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q015",
+      "questionNumber": 15,
+      "sourceQuestionNumber": 15,
+      "retrievalTag": "Preoccupation multiple sclerosis mole cancer hypochondriasis\\",
+      "reviewPearl": "In Illness Anxiety Disorder, the primary dysfunction is an overwhelming anxiety regarding the \nmeaning\n of physical symptoms, not the severity of the symptoms themselves.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 21-year-old man comes to the physician because of a 3-week history of muscle aches and fatigue associated with exercise. He is worried that he might have multiple sclerosis. Two months ago, he was concerned that a mole on his right arm may be cancerous. The physician reassured him that the mole was nonmalignant. One month ago, he had lateral chest pain while jogging. An ECG at that time showed no abnormalities. He appeared relieved once he heard the results. Today, his temperature is 36.7°C (98°F), pulse is 70/min, respirations are 20/min, and blood pressure is 130/84 mm Hg. Physical examination shows no abnormalities. On mental status examination, he appears tense but makes full eye contact and is cooperative. He spears clearly and at a normal rate, and his thought process is goal directed. Which of the following is the most likely diagnosis?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Conversion disorder"
+        },
+        {
+          "label": "B",
+          "text": "Delusional disorder, somatic type"
+        },
+        {
+          "label": "C",
+          "text": "Factitious disorder"
+        },
+        {
+          "label": "D",
+          "text": "Hypochondriasis"
+        },
+        {
+          "label": "E",
+          "text": "Somatization disorder\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "D",
+      "educationalObjective": "Differentiate hypochondriasis (illness anxiety disorder) from other somatic symptom disorders based on the primary fear of having a severe disease.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient has an excessive fear of having a serious, life-threatening illness based on misinterpretation of mild or normal bodily symptoms (e.g., exercise fatigue as MS, a mole as cancer) despite repeated medical evaluation and reassurance. (Note: Under modern DSM-5 criteria, this aligns with Illness Anxiety Disorder).\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Conversion disorder (A) involves specific neurological deficits. Delusional disorder (B) involves fixed false beliefs, but this patient's fears are responsive to reassurance (he was relieved after the ECG). Somatization disorder (E) requires multiple specific pain, GI, sexual, and pseudoneurological complaints over years.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "In Illness Anxiety Disorder, the primary dysfunction is an overwhelming anxiety regarding the \nmeaning\n of physical symptoms, not the severity of the symptoms themselves.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q016",
+      "questionNumber": 16,
+      "sourceQuestionNumber": 16,
+      "retrievalTag": "2 year old day care crying settles down normal reaction\\",
+      "reviewPearl": "Normal separation anxiety peaks around 18-24 months and is characterized by rapid calming and engagement in activities once the primary caregiver is out of sight.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 2½-year-old boy is brought by his parents for a well-child examination. He recently started attending day care. The father reports that his son protests and hangs on his coat sleeves each morning so the day-care provider cannot take him. He sometimes says he has a stomachache. The day-care provider reports that after the father drives away, the child settles down and plays happily with other children. He eats well and takes a 90-minute nap. When his mother comes to pick him up, he whines, stamps his feet, clings to the day-care provider, and demands cookies. Physical examination shows no abnormalities. Which of the following is the most likely diagnosis?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Adjustment disorder with anxiety"
+        },
+        {
+          "label": "B",
+          "text": "Adjustment disorder with depressed mood"
+        },
+        {
+          "label": "C",
+          "text": "Dysthymic disorder"
+        },
+        {
+          "label": "D",
+          "text": "Factitious disorder"
+        },
+        {
+          "label": "E",
+          "text": "Generalized anxiety disorder"
+        },
+        {
+          "label": "F",
+          "text": "Major depressive disorder"
+        },
+        {
+          "label": "G",
+          "text": "Oppositional defiant disorder"
+        },
+        {
+          "label": "H",
+          "text": "Panic disorder"
+        },
+        {
+          "label": "I",
+          "text": "Parent-child relational problem"
+        },
+        {
+          "label": "J",
+          "text": "Post-traumatic stress disorder"
+        },
+        {
+          "label": "K",
+          "text": "Separation anxiety disorder"
+        },
+        {
+          "label": "L",
+          "text": "Sleep terror disorder"
+        },
+        {
+          "label": "M",
+          "text": "Normal reaction\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "M",
+      "educationalObjective": "Distinguish developmentally normal separation protest from pathological separation anxiety disorder.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Protest at separation (clinging, crying) is a normal developmental stage for a toddler. Crucially, the child quickly calms down and functions normally (playing, eating, napping) after the parent departs, ruling out a pathological disorder.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Separation anxiety disorder (K) involves severe, excessive anxiety that does not resolve quickly after the parent leaves and impairs overall functioning. Adjustment disorder (A) requires an excessive response to a stressor.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Normal separation anxiety peaks around 18-24 months and is characterized by rapid calming and engagement in activities once the primary caregiver is out of sight.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q017",
+      "questionNumber": 17,
+      "sourceQuestionNumber": 17,
+      "retrievalTag": "Homeless alcoholic oxalate crystals ethylene glycol\\",
+      "reviewPearl": "Ethylene glycol metabolism produces oxalic acid, which binds with calcium to precipitate as calcium oxalate crystals in the renal tubules, leading to acute kidney injury.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 52-year-old homeless man with alcoholism is brought to the emergency department by police after being found agitated and confused. He says he feels nervous and could use a drink. His temperature is 37°C (98.6°F), pulse is 120/min, respirations are 20/min, and blood pressure is 138/86 mm Hg. He is trembling. His hematocrit is 30%. Urinalysis shows 7 WBC/hpf and many oxalate crystals. Which of the following is the most likely cause of this patient’s symptoms?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Ethylene glycol toxicity"
+        },
+        {
+          "label": "B",
+          "text": "Lactic acidosis"
+        },
+        {
+          "label": "C",
+          "text": "Methanol toxicity"
+        },
+        {
+          "label": "D",
+          "text": "Paraldehyde toxicity"
+        },
+        {
+          "label": "E",
+          "text": "Sepsis\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Identify ethylene glycol toxicity based on central nervous system changes and the classic finding of calcium oxalate crystals in the urine.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The presence of calcium oxalate crystals in the urine of an agitated, trembling patient with alcoholism is highly pathognomonic for ethylene glycol ingestion. Homeless individuals with alcohol use disorder may consume antifreeze (ethylene glycol) as a substitute for alcohol.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Methanol toxicity (C) presents similarly with acidosis and altered mental status but typically causes visual disturbances (e.g., \"snowfield\" vision) and does not produce urinary oxalate crystals.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Ethylene glycol metabolism produces oxalic acid, which binds with calcium to precipitate as calcium oxalate crystals in the renal tubules, leading to acute kidney injury.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q018",
+      "questionNumber": 18,
+      "sourceQuestionNumber": 18,
+      "retrievalTag": "Hand flapping twirling avoids eye contact neologism PDD\\",
+      "reviewPearl": "Stereotypic motor movements and lack of joint attention (e.g., poor eye contact) are classic, highly recognizable signs of Autism Spectrum Disorder in young children.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 5-year-old girl is brought to the physician for a well-child examination. Her mother is concerned because she uses nonsensical and repetitive words. Her teacher reports that other children do not like to play with her, and they laugh at her because she often flaps her hands when she speaks. She frequently spends time alone in her room twirling on her toes. Her mother drank two beers daily and used cocaine occasionally during the pregnancy. The patient is at the 60th percentile for height and 55th percentile for weight. Her pulse is 76/min, and blood pressure is 100/80 mm Hg. Physical examination show eczema and bruising over the knees. Mental status examinations shows a neutral mood. She avoids eye contact and refers to the physician as a \"minzer.\" Which of the following is the most likely explanation for these findings?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Attention-deficit/hyperactivity disorder"
+        },
+        {
+          "label": "B",
+          "text": "Fetal alcohol syndrome"
+        },
+        {
+          "label": "C",
+          "text": "Pervasive developmental disorder"
+        },
+        {
+          "label": "D",
+          "text": "Phenylketonuria"
+        },
+        {
+          "label": "E",
+          "text": "Normal development\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Recognize the triad of impaired social communication, restricted/repetitive behaviors (hand-flapping), and delayed language/neologisms as hallmarks of Autism Spectrum Disorder.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient's presentation of neologisms (\"minzer\"), poor eye contact, impaired social interaction with peers, and stereotypic motor behaviors (hand flapping, twirling) strongly indicate a Pervasive Developmental Disorder (Autism Spectrum Disorder).\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "While her mother drank alcohol during pregnancy, Fetal alcohol syndrome (B) typically presents with distinct facial dysmorphisms, microcephaly, and growth restriction (she is at the 60th/55th percentiles). ADHD (A) does not explain the neologisms or stereotypic motor behaviors.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Stereotypic motor movements and lack of joint attention (e.g., poor eye contact) are classic, highly recognizable signs of Autism Spectrum Disorder in young children.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q019",
+      "questionNumber": 19,
+      "sourceQuestionNumber": 19,
+      "retrievalTag": "Bipolar ibuprofen exercise tremor nystagmus lithium toxicity\\",
+      "reviewPearl": "NSAIDs reduce renal blood flow and dramatically decrease lithium clearance, quickly leading to severe neurological toxicity in bipolar patients.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 47-year-old woman is brought to the emergency department by her husband because of increasing confusion during the past 2 days. On arrival, she has a generalized tonic-clonic seizure lasting 4 minutes. She has bipolar disorder treated with several medications, but her husband is unsure of their names. He knows that she sometimes takes ibuprofen for mild arthritis pain caused by exercise. He says that she has been active and exercising more lately, but he cannot think of other changes in her routine. She has no history of seizure disorder. She is oriented to person but not to place and time. Her pulse is 90/min, and blood pressure is 140/90 mm Hg. On physical examination, she is tremulous and somnolent. There is bilateral nystagmus. An ECG shows a second-degree atrioventricular block. The most likely cause of this patient’s symptoms is an adverse effect of which of the following medications?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Bupropion"
+        },
+        {
+          "label": "B",
+          "text": "Haloperidol"
+        },
+        {
+          "label": "C",
+          "text": "Lithium"
+        },
+        {
+          "label": "D",
+          "text": "Risperidone"
+        },
+        {
+          "label": "E",
+          "text": "Valproic acid\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Identify medications (NSAIDs, thiazides, ACE inhibitors) and physical states (volume depletion) that decrease renal lithium clearance and precipitate toxicity.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient has a history of bipolar disorder and presents with classic signs of lithium toxicity: confusion, seizures, tremor, and bilateral nystagmus. Her recent heavy exercise (leading to volume depletion) and use of ibuprofen (an NSAID) significantly impaired her renal lithium clearance, precipitating the toxic state.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "While bupropion (A) lowers the seizure threshold, it does not typically cause this constellation of severe tremor, nystagmus, and AV block. Valproic acid (E) toxicity typically causes hepatotoxicity or hyperammonemic encephalopathy, not this classical presentation.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "NSAIDs reduce renal blood flow and dramatically decrease lithium clearance, quickly leading to severe neurological toxicity in bipolar patients.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q020",
+      "questionNumber": 20,
+      "sourceQuestionNumber": 20,
+      "retrievalTag": "Clozapine flu-like symptoms low leukocyte count discontinue\\",
+      "reviewPearl": "Clozapine therapy mandates strict, protocolized monitoring of absolute neutrophil counts (ANC); if a patient develops fever or signs of infection, a stat CBC must be drawn and the drug immediately stopped if severe neutropenia is present.\\\neftab720-720\ntightenfactor0\n\\\neftab720\ntightenfactor0\nHere are Questions 21 through 30 extracted and formatted as you requested.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 28-year-old man is brought to the emergency department because of flu-like symptoms and cough productive of clear sputum for 24 hours. He has been hospitalized eight times over the past 5 years because of bizarre delusions and hallucinations during which a voice tells him what to do. He has a 9-year history of type 1 diabetes mellitus. In addition to insulin, he is receiving clozapine therapy (400 mg daily) for his psychotic condition. During mental status examination, he is hallucinating and says that he is being pursued by special agents of the government. Leukocyte count is 2750/mm3, and serum glucose concentration is 140 mg/d",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "L",
+          "text": "Urinalysis is within normal limits. Which of the following is the most appropriate next step in management?\\"
+        },
+        {
+          "label": "A",
+          "text": "Add lithium carbonate therapy"
+        },
+        {
+          "label": "B",
+          "text": "Add penicillin therapy"
+        },
+        {
+          "label": "C",
+          "text": "Decrease the dose of clozapine"
+        },
+        {
+          "label": "D",
+          "text": "Discontinue clozapine therapy"
+        },
+        {
+          "label": "E",
+          "text": "Increase the dose of clozapine\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "D",
+      "educationalObjective": "Recognize clozapine-induced agranulocytosis and understand that immediate discontinuation of the medication is required.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient is on clozapine and presents with flu-like symptoms and a dangerously low leukocyte count (2750/mm3) indicating clozapine-induced neutropenia/agranulocytosis. The immediate and most critical next step is the total discontinuation of clozapine.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Decreasing the dose (C) is insufficient; life-threatening agranulocytosis requires absolute cessation of the offending agent. Increasing the dose (E) would worsen the bone marrow suppression.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Clozapine therapy mandates strict, protocolized monitoring of absolute neutrophil counts (ANC); if a patient develops fever or signs of infection, a stat CBC must be drawn and the drug immediately stopped if severe neutropenia is present.\\\neftab720-720\ntightenfactor0\n\\\neftab720\ntightenfactor0\nHere are Questions 21 through 30 extracted and formatted as you requested.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q021",
+      "questionNumber": 21,
+      "sourceQuestionNumber": 21,
+      "retrievalTag": "7-year-old stomachaches quit carpool separation anxiety\\",
+      "reviewPearl": "School refusal in young children, accompanied by morning somatic complaints that resolve if the child is allowed to stay home, is a classic presentation of Separation Anxiety Disorder.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 7-year-old boy is brought to the physician by his mother because of difficulty at school since beginning first grade 6 weeks ago. His teachers state that he has been daydreaming frequently, does not complete his work, and does not participate in classroom discussions. His mother reports that he is very shy, will not go to sleepovers, and has stomachaches every weekday morning. He played on a soccer team, but he quit when his mother could not drive him to games and he had to carpool with another family. Physical examination shows no abnormalities. On mental status examination, the boy sits on his mother’s lap, does not make eye contact with the physician, and is hesitant to answer questions but seems eager to please. Which of the following is the most likely explanation for these findings?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Attention-deficit/hyperactivity disorder"
+        },
+        {
+          "label": "B",
+          "text": "Dysthymic disorder"
+        },
+        {
+          "label": "C",
+          "text": "Generalized anxiety disorder"
+        },
+        {
+          "label": "D",
+          "text": "Separation anxiety disorder"
+        },
+        {
+          "label": "E",
+          "text": "Social phobia"
+        },
+        {
+          "label": "F",
+          "text": "Age-appropriate behavior\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "D",
+      "educationalObjective": "Identify Separation Anxiety Disorder by recognizing somatic symptoms and avoidance behaviors triggered specifically by separation from a major attachment figure.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The child displays excessive distress upon separation from his mother, manifested by physical symptoms (stomachaches), avoidance of activities without his mother (quitting soccer, avoiding sleepovers), and clinging behavior. This is characteristic of Separation Anxiety Disorder, which often presents with school refusal.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "While he daydreams, ADHD (A) does not explain the somatic symptoms or the specific refusal to carpool without his mother. Social phobia (E) involves fear of scrutiny, whereas this child's anxiety is linked purely to maternal separation.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "School refusal in young children, accompanied by morning somatic complaints that resolve if the child is allowed to stay home, is a classic presentation of Separation Anxiety Disorder.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q022",
+      "questionNumber": 22,
+      "sourceQuestionNumber": 22,
+      "retrievalTag": "Fluoxetine tranylcypromine 1 week Serotonin Syndrome\\",
+      "reviewPearl": "Always wait at least 5 weeks after discontinuing fluoxetine before initiating an MAOI due to fluoxetine's exceptionally long half-life.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 27-year-old man is brought to the emergency department 30 minutes after his brother found him agitated, tremulous, and complaining of a headache. He had eaten a peanut butter sandwich 12 hours before his symptoms began. He has a 10-year history of severe major depressive disorder. During this period, he has attempted suicide three times despite treatment with both selective serotonin reuptake inhibitors and tricyclic antidepressants. Eight days ago, he went to a new physician because of increasing despondency. This physician immediately discontinued the fluoxetine and substituted tranylcypromine to start 1 week later. He also instructed the patient to start a monoamine oxidase inhibitor diet immediately. Current medications also include diphenhydramine as needed for seasonal allergies. He has no history of hypertension, diabetes mellitus, or migraine. On arrival, he is agitated. His temperature is 40.6°C (105°F), pulse is 130/min, respirations are 26/min, and blood pressure is 180/120 mm Hg. Physical examination shows diaphoresis and tremor of the upper extremities. Deep tendon reflexes are 3+ bilaterally; there are no pathologic reflexes. On mental status examination, he is complaining of occipital headache. He is oriented to person but not to place or time. Which of the following is the most likely cause of these findings?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Acute anxiety attack"
+        },
+        {
+          "label": "B",
+          "text": "Acute fluoxetine withdrawal"
+        },
+        {
+          "label": "C",
+          "text": "Drug-drug interaction"
+        },
+        {
+          "label": "D",
+          "text": "Ingestion of peanut butter"
+        },
+        {
+          "label": "E",
+          "text": "Use of diphenhydramine\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Recognize Serotonin Syndrome resulting from an inadequate washout period between an SSRI with a long half-life (fluoxetine) and an MAOI.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient has Serotonin Syndrome caused by a drug-drug interaction between fluoxetine and the MAOI tranylcypromine. Fluoxetine has a very long half-life, and at least 5 weeks must elapse before starting an MAOI to prevent this life-threatening interaction.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Ingestion of tyramine-rich foods causes a hypertensive crisis, but peanut butter (D) is not high in tyramine. Fluoxetine withdrawal (B) does not cause severe autonomic instability and hyperreflexia.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Always wait at least 5 weeks after discontinuing fluoxetine before initiating an MAOI due to fluoxetine's exceptionally long half-life.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q023",
+      "questionNumber": 23,
+      "sourceQuestionNumber": 23,
+      "retrievalTag": "Alzheimer amitriptyline visual hallucinations tiny man\\",
+      "reviewPearl": "Avoid TCAs like amitriptyline in elderly patients, especially those with pre-existing dementia, due to their profound anticholinergic side effects and risk of precipitating delirium.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "An 82-year-old man with dementia, Alzheimer type, is brought to the physician because of a 4-day history of visual hallucinations and irritability. He has osteoarthritis, hypertension, and hypothyroidism. His medications are rivastigmine, ibuprofen, atenolol, levothyroxine, and amitriptyline. His blood pressure is 128/88 mm Hg. Physical examination shows no abnormalities. On mental status examination, he recalls zero of the three objects after 5 minutes. During the examination, he points his finger and sternly says, \"You need to stop doing that right this minute.\" When asked whom he is addressing, he says, \"that tiny little man shouting over in the corner.\" Results of a complete blood count, measurement of serum glucose concentration, and kidney and liver function tests are within the reference ranges. Urinalysis shows no abnormalities. Discontinuation of which of the following of this patient's medications is most appropriate at this time?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Amitriptyline"
+        },
+        {
+          "label": "B",
+          "text": "Atenolol"
+        },
+        {
+          "label": "C",
+          "text": "Ibuprofen"
+        },
+        {
+          "label": "D",
+          "text": "Levothyroxine"
+        },
+        {
+          "label": "E",
+          "text": "Rivastigmine\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Identify amitriptyline and other highly anticholinergic medications as common iatrogenic causes of delirium in the elderly.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Amitriptyline is a tricyclic antidepressant with potent anticholinergic properties. Elderly patients with dementia are highly sensitive to anticholinergic medications, which frequently precipitate delirium and visual hallucinations.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Rivastigmine (E) is a cholinesterase inhibitor used to treat Alzheimer's and would not cause anticholinergic delirium. Ibuprofen, atenolol, and levothyroxine (B, C, D) are much less likely to cause acute psychiatric changes.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Avoid TCAs like amitriptyline in elderly patients, especially those with pre-existing dementia, due to their profound anticholinergic side effects and risk of precipitating delirium.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q024",
+      "questionNumber": 24,
+      "sourceQuestionNumber": 24,
+      "retrievalTag": "2-year-old isolated slap no impact\\",
+      "reviewPearl": "Though corporal punishment is discouraged, isolated and minor instances without a pattern of ongoing abuse do not typically derail normal psychological development or cause PTSD.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "In a fit of anger, a 22-year-old woman slaps her 2-year-old child across the face. There is no other history of abuse. Which of the following is the most likely outcome of this experience for the child?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Brief psychotic disorder"
+        },
+        {
+          "label": "B",
+          "text": "Dysthymic disorder"
+        },
+        {
+          "label": "C",
+          "text": "Pain disorder"
+        },
+        {
+          "label": "D",
+          "text": "Post-traumatic stress disorder"
+        },
+        {
+          "label": "E",
+          "text": "No impact on development\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "E",
+      "educationalObjective": "Recognize that an isolated incident of minor physical trauma without chronic abuse is unlikely to cause a permanent psychiatric disorder in a child.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "While the mother's action is inappropriate and concerning, a single, isolated incident of physical discipline/slapping without a chronic pattern of abuse or severe trauma is unlikely to result in a long-term psychiatric disorder.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "PTSD (D) requires exposure to actual or threatened death, serious injury, or sexual violence. Brief psychotic (A), dysthymic (B), and pain disorders (C) are not directly caused by a single isolated slap.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Though corporal punishment is discouraged, isolated and minor instances without a pattern of ongoing abuse do not typically derail normal psychological development or cause PTSD.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q025",
+      "questionNumber": 25,
+      "sourceQuestionNumber": 25,
+      "retrievalTag": "Vivid dream physical threat wakes up nightmare disorder\\",
+      "reviewPearl": "Nightmares occur during REM sleep and are remembered vividly, whereas sleep terrors occur during non-REM sleep and leave the patient with amnesia of the event.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 20-year-old woman comes to student health services because of a 6-week history of difficulty sleeping. She says that two to three times weekly, she wakes up during the night in the middle of a vivid dream that usually involves the need to escape from a physical threat such as a rapist. When she tries to run in her dreams, her legs feel progressively heavier until she is barely able to move; it is at this point that she wakes up. She says that she has difficulty falling back to sleep; during the past 2 weeks, she has been drinking a glass of wine to aid her in falling back to sleep. She feels tired throughout the day and is concerned that her grades will begin to decline. Three months ago, she broke up with her boyfriend of 1 year because he refused to stop using marijuana. She has not dated since the breakup, but she spends time with friends. Physical examination shows no abnormalities. On mental status examination, she is friendly and cooperative. She appears mildly anxious, but she smiles and laughs on occasion. She says she is tired. Her thought process is logical and goal directed. She is oriented to person, place, and time. There is no evidence of auditory or visual hallucinations. Which of the following is the most likely diagnosis?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Adjustment disorder with anxiety"
+        },
+        {
+          "label": "B",
+          "text": "Dysthymic disorder"
+        },
+        {
+          "label": "C",
+          "text": "Generalized anxiety disorder"
+        },
+        {
+          "label": "D",
+          "text": "Nightmare disorder"
+        },
+        {
+          "label": "E",
+          "text": "Primary insomnia"
+        },
+        {
+          "label": "F",
+          "text": "Sleep terror disorder\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "D",
+      "educationalObjective": "Differentiate nightmare disorder from sleep terror disorder based on detailed dream recall and full wakefulness upon arousal.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient's primary issue is recurrent, highly detailed, frightening dreams (nightmares) that awaken her, followed by difficulty returning to sleep and subsequent daytime fatigue. This meets the criteria for Nightmare disorder.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Sleep terror disorder (F) involves abrupt incomplete awakenings (often with a panicky scream), severe autonomic arousal, and importantly, lack of detailed dream recall. Her distress centers directly on the dreams, making Primary insomnia (E) incorrect.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Nightmares occur during REM sleep and are remembered vividly, whereas sleep terrors occur during non-REM sleep and leave the patient with amnesia of the event.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q026",
+      "questionNumber": 26,
+      "sourceQuestionNumber": 26,
+      "retrievalTag": "Forgetful pot unattended stove next step MMSE\\",
+      "reviewPearl": "Always objectively quantify cognitive deficits with standardized tools like the MMSE or MoCA before pursuing expensive imaging or neurocognitive medications.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "An 82-year-old man is brought to the physician by his daughter because he has been forgetful during the past 6 weeks. She is particularly concerned because a small fire started recently when he left a pot unattended on the stove. The patient's wife died 1 year ago, and he says he has been distracted recently and cannot stop thinking about her. He lives alone and pays his bills, does routine household chores, and drives short distances for errands. His daughter says he was doing well on his own until recently. He is 168 cm (5 ft 6 in) tall and weighs 63 kg (140 lb); BMI is 23 kg/m2. His temperature is 37°C (98.6°F), pulse is 78/min and regular, respirations are 18/min, and blood pressure is 130/80 mm Hg. Physical examination shows no abnormalities. On mental status examination, he is alert and cooperative. He becomes very sad when he talks about his wife's death. Which of the following is the most appropriate next step in management?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Follow-up examination in 3 months"
+        },
+        {
+          "label": "B",
+          "text": "Mini-Mental State Examination"
+        },
+        {
+          "label": "C",
+          "text": "Recommend assisted living"
+        },
+        {
+          "label": "D",
+          "text": "CT scan of the head"
+        },
+        {
+          "label": "E",
+          "text": "Begin donepezil therapy\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Utilize the MMSE as the initial objective assessment tool for elderly patients presenting with new-onset memory impairment.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "In an elderly patient presenting with acute or subacute cognitive decline and functional impairment (leaving a pot on the stove), an objective bedside cognitive assessment, such as the Mini-Mental State Examination (MMSE), is the essential first step before ordering imaging or starting medications.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Recommending assisted living (C) or starting donepezil (E) is premature before characterizing the deficit. A CT scan (D) might be indicated later to rule out reversible causes, but only after initial cognitive screening. Delaying evaluation by 3 months (A) is unsafe due to the fire risk.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Always objectively quantify cognitive deficits with standardized tools like the MMSE or MoCA before pursuing expensive imaging or neurocognitive medications.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q027",
+      "questionNumber": 27,
+      "sourceQuestionNumber": 27,
+      "retrievalTag": "6-year-old no friends eye contact drawings haystacks Asperger\\",
+      "reviewPearl": "Children with Asperger syndrome typically have preserved cognitive and language development but show severe deficits in nonverbal social communication and exhibit highly restricted, repetitive interests.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 6-year-old boy is brought to the physician because of difficulty in school since he began first grade 2 months ago. He tells his parents that he hates school and does not want to go. He did not attend preschool. His first-grade teacher describes him as a daydreamer who does not pay attention and will not read or write. She reports that he has no friends and does not listen to her. She admits that she is getting quite frustrated with him because he will not look at her when she speaks to him. She states that he is good with numbers and prefers math to reading and spelling. She has noticed that he fills his notebook with drawings of haystacks that look identical. She says that he does not seem to be happy in school. Recent psychoeducational testing showed a performance IQ of 90 and a verbal IQ of 90. Physical examination shows no abnormalities. Mental status examination shows no evidence of psychosis, mania, or depression. Which of the following is the most likely diagnosis?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Asperger disorder"
+        },
+        {
+          "label": "B",
+          "text": "Expressive language disorder"
+        },
+        {
+          "label": "C",
+          "text": "Mild mental retardation"
+        },
+        {
+          "label": "D",
+          "text": "Reading disorder"
+        },
+        {
+          "label": "E",
+          "text": "Separation anxiety disorder"
+        },
+        {
+          "label": "F",
+          "text": "Normal development\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Recognize Asperger disorder (Autism Spectrum Disorder without language or cognitive impairment) by identifying social deficits, poor eye contact, and intensely restricted interests in the setting of normal intelligence.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This child has impaired social interactions (no friends, poor eye contact), restricted/repetitive behaviors (drawing identical haystacks), and normal intelligence (IQ 90), which classically points to Asperger disorder (now classified under Autism Spectrum Disorder).\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Mild mental retardation (C) is ruled out by his normal IQ scores. Reading disorder (D) does not account for his profound social deficits and fixations. Separation anxiety (E) causes school refusal but does not explain poor eye contact and repetitive behaviors.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Children with Asperger syndrome typically have preserved cognitive and language development but show severe deficits in nonverbal social communication and exhibit highly restricted, repetitive interests.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q028",
+      "questionNumber": 28,
+      "sourceQuestionNumber": 28,
+      "retrievalTag": "Loss of libido guilty husband died hypoactive sexual desire\\",
+      "reviewPearl": "Psychological factors, such as unresolved grief or guilt, are frequent primary drivers of Hypoactive Sexual Desire Disorder, even in post-menopausal women on hormone replacement therapy.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 62-year-old woman comes to the physician because of loss of libido for 9 months. She was sexually active with her husband until he died 3 years ago. Since meeting her 58-year-old male friend 3 months ago, she has had consistent excuses for not engaging in sexual intercourse. She feels guilty about starting a new relationship so soon after her husband's death and has had recurrent dreams over the past 6 months about her husband and their happy marriage. She has not had crying spells or difficulty with sleep or appetite. She has been receiving hormone replacement therapy since undergoing a total abdominal hysterectomy and bilateral salpingo-oophorectomy 5 years ago. Physical examination shows no abnormalities. Which of the following is the most likely diagnosis?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Hypoactive sexual desire disorder"
+        },
+        {
+          "label": "B",
+          "text": "Sexual arousal disorder"
+        },
+        {
+          "label": "C",
+          "text": "Substance-induced sexual dysfunction"
+        },
+        {
+          "label": "D",
+          "text": "Vaginismus"
+        },
+        {
+          "label": "E",
+          "text": "Normal aging\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Diagnose Hypoactive Sexual Desire Disorder in patients with a persistent deficit in sexual desire causing marked distress or interpersonal difficulty.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient lacks sexual desire/libido despite an opportunity for a relationship, causing significant personal distress/avoidance, which fulfills the criteria for Hypoactive Sexual Desire Disorder. Her symptoms are heavily influenced by psychological factors (guilt over her deceased husband).\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Normal aging (E) shouldn't completely eradicate libido or cause distress and active avoidance. Sexual arousal disorder (B) involves the inability to attain physiological arousal (e.g., lubrication), whereas this is a primary lack of desire. Vaginismus (D) is painful involuntary muscle spasm during penetration.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Psychological factors, such as unresolved grief or guilt, are frequent primary drivers of Hypoactive Sexual Desire Disorder, even in post-menopausal women on hormone replacement therapy.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q029",
+      "questionNumber": 29,
+      "sourceQuestionNumber": 29,
+      "retrievalTag": "Synthetic heroin stiffness drooling substantia nigra MPTP\\",
+      "reviewPearl": "MPTP toxicity provides a human model for Parkinson's disease because it irreversibly and acutely destroys the dopaminergic neurons in the substantia nigra pars compacta.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "An 18-year-old man is brought to the emergency department by friends 1 hour after they found him on the couch at a party unable to move. Earlier that evening, he had been using synthetic heroin. On arrival, his pulse is 85/min, respirations are 18/min, and blood pressure is 130/80 mm Hg. Examination shows stiffness in all extremities, drooling, and slow response to questions. Which of the following brain regions is most likely affected?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Cerebellar vermis"
+        },
+        {
+          "label": "B",
+          "text": "Globus pallidus"
+        },
+        {
+          "label": "C",
+          "text": "Locus ceruleus"
+        },
+        {
+          "label": "D",
+          "text": "Mammillary bodies"
+        },
+        {
+          "label": "E",
+          "text": "Nucleus accumbens"
+        },
+        {
+          "label": "F",
+          "text": "Substantia nigra\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "F",
+      "educationalObjective": "Associate synthetic heroin (MPTP) use with the rapid onset of parkinsonian symptoms due to the destruction of the substantia nigra.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient exhibits sudden, severe parkinsonian symptoms (rigidity, bradykinesia, drooling) after using synthetic heroin. This is pathognomonic for MPTP toxicity, a byproduct of synthetic heroin manufacturing that selectively destroys dopaminergic neurons in the substantia nigra.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "The locus ceruleus (C) produces norepinephrine. Mammillary bodies (D) are affected in Wernicke encephalopathy (thiamine deficiency). The cerebellum (A) controls coordination, not extrapyramidal rigidity.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "MPTP toxicity provides a human model for Parkinson's disease because it irreversibly and acutely destroys the dopaminergic neurons in the substantia nigra pars compacta.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q030",
+      "questionNumber": 30,
+      "sourceQuestionNumber": 30,
+      "retrievalTag": "Chronic pain tired of all this like this forever giving up\\",
+      "reviewPearl": "Always directly inquire about suicidal thoughts when a patient expresses profound hopelessness or despair, particularly in high-risk populations like those suffering from debilitating chronic pain.\\\neftab720\ntightenfactor0\nHere are Questions 31 through 40 extracted and formatted as you requested.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 32-year-old woman comes to the physician because of increasingly severe pain that originates in her left shoulder and radiates to her elbow. She describes the pain as constant and burning, rating her current pain as a 7 on a 10-point scale. Eighteen months ago, she sustained a nerve injury of the left upper extremity in a motor vehicle collision. Since that time, she has been unable to return to work. Muscle strength in the left forearm and finger flexors is 3/5. On sensory examination, there is severe pain with light stroking of the anterolateral aspect of the left arm. Further sensory testing is deferred. During the examination she tells her physician, \"I'm tired of all this. My medication is not strong enough. It only takes the edge off my pain, which is only getting worse. I'm realizing I'll be like this forever.\" Which of the following is the most appropriate response by the physician?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "\"Are you worried about more nerve damage developing?\""
+        },
+        {
+          "label": "B",
+          "text": "\"Do you ever use more pain medication than is prescribed?\""
+        },
+        {
+          "label": "C",
+          "text": "\"Have you been feeling like just giving up?\""
+        },
+        {
+          "label": "D",
+          "text": "\"Is the pain caused by touch socially limiting?\""
+        },
+        {
+          "label": "E",
+          "text": "\"Let's review your medical concerns.\"\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Recognize statements of hopelessness in chronic pain patients as red flags requiring immediate assessment for depression and suicidal ideation.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient's statements (\"I'm tired of all this,\" \"I'll be like this forever\") express profound hopelessness, a key indicator of severe depression. Patients with chronic pain syndromes are at a significantly elevated risk for suicide. The physician must directly screen for suicidal ideation.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Options A, B, and D explore specific symptom details but ignore the immediate psychological distress and safety risk. Option E is dismissive of her emotional statement and fails to address the underlying despair.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Always directly inquire about suicidal thoughts when a patient expresses profound hopelessness or despair, particularly in high-risk populations like those suffering from debilitating chronic pain.\\\neftab720\ntightenfactor0\nHere are Questions 31 through 40 extracted and formatted as you requested.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q031",
+      "questionNumber": 31,
+      "sourceQuestionNumber": 31,
+      "retrievalTag": "8-year-old stomachaches worry band soccer GAD\\",
+      "reviewPearl": "In children, GAD frequently presents as a \"perfectionist\" profile with excessive worry about competence and performance, often leading to somatic complaints like stomachaches.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "An 8-year-old girl is brought to the physician by her mother because of frequent stomachaches over the past 3 months. She has a 1-year history of difficulty falling asleep and poor concentration. She has always been a good student and excels in extracurricular activities. Her parents divorced 6 months ago. Physical examination shows no abnormalities. Mental status examination shows an anxious affect and coherent thought process. She says that she is worried about her classes and about her performance in the school band and on the soccer team. Which of the following is the most likely diagnosis?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Generalized anxiety disorder"
+        },
+        {
+          "label": "B",
+          "text": "Obsessive-compulsive disorder"
+        },
+        {
+          "label": "C",
+          "text": "Panic disorder"
+        },
+        {
+          "label": "D",
+          "text": "Post-traumatic stress disorder"
+        },
+        {
+          "label": "E",
+          "text": "Separation anxiety disorder\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Diagnose Generalized Anxiety Disorder in a pediatric patient presenting with excessive worry across multiple performance areas accompanied by somatic symptoms.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient has excessive, out-of-proportion anxiety regarding multiple domains (school, band, soccer) accompanied by somatic symptoms (stomachaches, insomnia, poor concentration) lasting over 6 months, which characterizes Generalized Anxiety Disorder (GAD).\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Her anxiety is focused on performance, not separation from her parents (E). There is no mention of obsessions/compulsions (B), panic attacks (C), or a qualifying trauma like abuse or violence (D; divorce does not qualify).\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "In children, GAD frequently presents as a \"perfectionist\" profile with excessive worry about competence and performance, often leading to somatic complaints like stomachaches.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q032",
+      "questionNumber": 32,
+      "sourceQuestionNumber": 32,
+      "retrievalTag": "Anxiety major speech family history alcohol propranolol\\",
+      "reviewPearl": "Beta-blockers are the treatment of choice for acute performance anxiety to suppress autonomic symptoms (tremor, tachycardia) without causing cognitive impairment.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "For this patient with anxiety, select the most appropriate pharmacotherapy.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Bupropion"
+        },
+        {
+          "label": "B",
+          "text": "Buspirone"
+        },
+        {
+          "label": "C",
+          "text": "Chlorpromazine"
+        },
+        {
+          "label": "D",
+          "text": "Fluoxetine"
+        },
+        {
+          "label": "E",
+          "text": "Haloperidol"
+        },
+        {
+          "label": "F",
+          "text": "Imipramine"
+        },
+        {
+          "label": "G",
+          "text": "Lorazepam"
+        },
+        {
+          "label": "H",
+          "text": "Perphenazine"
+        },
+        {
+          "label": "I",
+          "text": "Propranolol\\\nA 27-year-old man comes to the physician because of anxiety about a major speech that he must deliver in 3 days. He is excited about the opportunity for his career but is concerned that his apprehension and great fear of public speaking will affect his performance. He requests a tranquilizer to help with his anxiety. He has no history of medical problems. He has a family history of alcohol dependence. He does not drink alcohol or use drugs. His pulse is 76/min, respirations are 12/min, and blood pressure is 130/82 mm Hg. Examination shows normal findings.\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "I",
+      "educationalObjective": "Select propranolol as the first-line pharmacotherapy for isolated performance anxiety in an otherwise healthy patient.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient has performance-only social anxiety disorder (fear of public speaking). Given his lack of medical contraindications (no asthma or cardiac issues) and his family history of alcohol dependence (making benzodiazepines a riskier choice), a beta-blocker like propranolol is the most appropriate treatment to control autonomic symptoms.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Lorazepam (G) is a benzodiazepine that carries a risk of dependence, especially given his family history, and can cause cognitive blunting during his speech. Fluoxetine (D) and Buspirone (B) require weeks to take effect, making them useless for an event in 3 days.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Beta-blockers are the treatment of choice for acute performance anxiety to suppress autonomic symptoms (tremor, tachycardia) without causing cognitive impairment.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q033",
+      "questionNumber": 33,
+      "sourceQuestionNumber": 33,
+      "retrievalTag": "Anxiety major speech asthma theophylline lorazepam\\",
+      "reviewPearl": "Always check for a history of asthma or reactive airway disease before prescribing non-selective beta-blockers for performance anxiety.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "For this patient with anxiety, select the most appropriate pharmacotherapy.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Bupropion"
+        },
+        {
+          "label": "B",
+          "text": "Buspirone"
+        },
+        {
+          "label": "C",
+          "text": "Chlorpromazine"
+        },
+        {
+          "label": "D",
+          "text": "Fluoxetine"
+        },
+        {
+          "label": "E",
+          "text": "Haloperidol"
+        },
+        {
+          "label": "F",
+          "text": "Imipramine"
+        },
+        {
+          "label": "G",
+          "text": "Lorazepam"
+        },
+        {
+          "label": "H",
+          "text": "Perphenazine"
+        },
+        {
+          "label": "I",
+          "text": "Propranolol\\\nA 27-year-old man comes to the physician because of anxiety about a major speech that he must deliver in 3 days. He has a great fear of public speaking and is convinced that his apprehension and tremulous delivery will damage his performance. He requests a tranquilizer to help with his anxiety. He takes theophylline and uses corticosteroid and albuterol inhalers for asthma. He has a family history of alcohol dependence. He does not drink alcohol or use drugs. His pulse is 66/min, respirations are 12/min, and blood pressure is 132/80 mm Hg. Examination shows normal findings.\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "G",
+      "educationalObjective": "Recognize that beta-blockers are contraindicated for performance anxiety in patients with reactive airway disease, necessitating cautious use of an alternative like a short-acting benzodiazepine.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "While propranolol is normally the drug of choice for performance anxiety, it is strictly contraindicated in this patient due to his active asthma (he takes theophylline and albuterol). Therefore, a short course of a benzodiazepine like lorazepam is the best available option for rapid anxiolysis, despite his family history of alcohol dependence.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Propranolol (I) can trigger fatal bronchospasm in asthmatic patients. Buspirone (B) and Fluoxetine (D) take several weeks to work, making them ineffective for an event 3 days away.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Always check for a history of asthma or reactive airway disease before prescribing non-selective beta-blockers for performance anxiety.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q034",
+      "questionNumber": 34,
+      "sourceQuestionNumber": 34,
+      "retrievalTag": "Inventions new RV God talking to me Bipolar\\",
+      "reviewPearl": "Co-occurring substance use (like cannabis) is extremely common during manic episodes, but a primary diagnosis of Bipolar I should be made if the patient has a long-standing history of episodic mood disturbances.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 47-year-old man is brought to the physician by his wife because of “unbearable” behavior during the past 2 weeks. His wife reports that he has been talking about his various inventions constantly and recently bought a new recreational vehicle, even though they do not travel long distances. He repeatedly tells his wife that “the time to make and enjoy money has come.” He has been openly critical of the pastor’s prayers during church services. He claims that the pastor does not know what he is talking about because “God is talking to me, not him.” His wife says that he has had episodes of similar behavior during the past 10 years that have been more tolerable. He has peptic ulcer disease treated with ranitidine and hypertension treated with triamterene. He does not smoke or drink alcohol. He is 170 cm (5 ft 7 in) tall and weighs 82 kg (180 lb); BMI is 28 kg/m2. His pulse is 80/min, and blood pressure is 150/95 mm Hg. Physical examination shows no other abnormalities. On mental status examination, he is relaxed and talkative, jumping from one topic to another. He claims that his wife does not understand him and that she has been plotting with the pastor against him. He denies any problems and says that he feels great and is capable of great things. Laboratory findings are within the reference range. Urine toxicology screening is positive for marijuana. Which of the following is the most likely diagnosis?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Bipolar disorder"
+        },
+        {
+          "label": "B",
+          "text": "Delusional disorder"
+        },
+        {
+          "label": "C",
+          "text": "Mood disorder due to a general medical condition"
+        },
+        {
+          "label": "D",
+          "text": "Schizophrenia"
+        },
+        {
+          "label": "E",
+          "text": "Substance-induced mood disorder\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Diagnose Bipolar I disorder in a patient with a long-term history of episodic manic symptoms, recognizing that a positive drug screen does not override a primary psychiatric diagnosis when the longitudinal history is classic.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient presents with a classic manic episode featuring grandiosity (\"God is talking to me\"), impulsivity (buying an RV), flight of ideas, and elevated mood. His 10-year history of similar episodic behavior confirms Bipolar I disorder.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Marijuana use is a common comorbidity, but cannabis does not typically cause a full-blown manic episode lasting 2 weeks, making a substance-induced mood disorder (E) incorrect. Delusional disorder (B) does not encompass the expansive mood, flight of ideas, or impulsive financial behavior.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Co-occurring substance use (like cannabis) is extremely common during manic episodes, but a primary diagnosis of Bipolar I should be made if the patient has a long-standing history of episodic mood disturbances.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q035",
+      "questionNumber": 35,
+      "sourceQuestionNumber": 35,
+      "retrievalTag": "Aphonia cholecystectomy appendectomy hysterectomy somatization\\",
+      "reviewPearl": "A patient under 30 presenting with a \"thick chart\" of negative diagnostic tests and multiple abdominal surgeries for chronic pain should immediately raise suspicion for a somatic symptom disorder.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 32-year-old woman is hospitalized for evaluation of a 5-month history of headaches. While recovering from sedation with lorazepam for cerebral angiography, she has dull, aching abdominal pain that is localized to the right upper quadrant of the abdomen without radiation. It has occurred several times over the past week after meals. She has had no nausea or vomiting. Following a CT scan 3 months ago, she had aphonia for 48 hours. She has a history of cholecystectomy, appendectomy, hysterectomy, and exploratory laparoscopy for endometriosis. Cerebral angiography shows normal findings. Repeat neurologic examinations and CT scan of the head are negative. Her temperature is 36.4ºC (97.6ºF), pulse is 68/min, respirations are 12/min, and blood pressure is 122/76 mm Hg. During examination, she complains of unbearable pain, although the abdomen is tender to light palpation without guarding or rebound. No masses are palpated. Bowel sounds are normal. Pelvic examination shows normal findings. Test of the stool for occult blood is negative. Which of the following is the most likely diagnosis?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Acute intermittent porphyria"
+        },
+        {
+          "label": "B",
+          "text": "Acute pancreatitis"
+        },
+        {
+          "label": "C",
+          "text": "Conversion disorder"
+        },
+        {
+          "label": "D",
+          "text": "Small-bowel obstruction"
+        },
+        {
+          "label": "E",
+          "text": "Somatization disorder\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "E",
+      "educationalObjective": "Identify Somatization disorder based on a long history of seeking treatment for multiple unexplained somatic complaints resulting in numerous negative invasive procedures and surgeries.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient has a profound history of multiple unexplained physical symptoms (headaches, abdominal pain, pseudoneurological aphonia) that have resulted in extensive, negative medical workups and multiple surgical organ removals (cholecystectomy, appendectomy, hysterectomy). This chronic, multi-organ pattern is the hallmark of Somatization Disorder (currently classified as Somatic Symptom Disorder).\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Conversion disorder (C) applies strictly to isolated neurological symptoms (like the aphonia), not the extensive multi-system pain and gastrointestinal complaints. Acute intermittent porphyria (A) can cause abdominal pain and neurological symptoms but would not typically explain decades of purely functional pain leading to multiple organ removals without other metabolic signs.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "A patient under 30 presenting with a \"thick chart\" of negative diagnostic tests and multiple abdominal surgeries for chronic pain should immediately raise suspicion for a somatic symptom disorder.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q036",
+      "questionNumber": 36,
+      "sourceQuestionNumber": 36,
+      "retrievalTag": "Haloperidol rigid temperature 103 elevated CK drug reaction\\",
+      "reviewPearl": "Elevated creatine kinase (CK) and leukocytosis are critical laboratory markers that help differentiate NMS from a primary psychiatric catatonic state.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 24-year-old man is brought to the emergency department from a psychiatric hospital because of a decreasing level of consciousness over the past 3 days. He has become progressively less responsive and has remained in bed for the past 12 hours without speaking or following commands. He has a history of schizophrenia with multiple psychiatric hospitalizations and is currently being treated with haloperidol and benztropine. His temperature is 39.4oC (103oF), pulse is 120/min, respirations are 28/min, and blood pressure is 180/100 mm Hg. He withdraws weakly to noxious stimuli. His eyes are open, but he does not fix or follow visual stimuli or gaze around the room. He is mute and does not follow commands. Examination shows marked rigidity of the neck and all extremities. Laboratory studies show: Leukocyte count 18,000/mm3 Segmented neutrophils 80% Lymphocytes 20% Serum creatine kinase 12,000 U/L Cerebrospinal fluid Erythrocyte count 2/mm3, Leukocyte count 1/mm3, Protein 28 mg/dL, Glucose 78 mg/d",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "L",
+          "text": "A CT scan of the head shows no abnormalities. Which of the following is the most likely underlying cause?\\"
+        },
+        {
+          "label": "A",
+          "text": "Catatonia"
+        },
+        {
+          "label": "B",
+          "text": "Conversion reaction"
+        },
+        {
+          "label": "C",
+          "text": "Dissociative fugue"
+        },
+        {
+          "label": "D",
+          "text": "Drug reaction"
+        },
+        {
+          "label": "E",
+          "text": "Infection"
+        },
+        {
+          "label": "F",
+          "text": "Malingering"
+        },
+        {
+          "label": "G",
+          "text": "Toxin\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "D",
+      "educationalObjective": "Diagnose Neuroleptic Malignant Syndrome (NMS) as an adverse drug reaction in a patient taking an antipsychotic who presents with hyperthermia, extreme rigidity, autonomic instability, and elevated CK.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient is experiencing a life-threatening drug reaction: Neuroleptic Malignant Syndrome (NMS) secondary to haloperidol. The clinical tetrad of NMS includes altered mental status (mutism), autonomic instability (tachycardia, severe hypertension), hyperthermia (103ºF), and severe \"lead-pipe\" rigidity, accompanied by dramatically elevated creatine kinase (12,000 U/L) from muscle breakdown.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Catatonia (A) can cause rigidity and mutism but lacks the extreme hyperthermia, severe autonomic instability, and massive CK elevation. An infection like meningitis/encephalitis (E) is ruled out by the normal CSF profile.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Elevated creatine kinase (CK) and leukocytosis are critical laboratory markers that help differentiate NMS from a primary psychiatric catatonic state.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q037",
+      "questionNumber": 37,
+      "sourceQuestionNumber": 37,
+      "retrievalTag": "Famous gospel singer calm affect hears voice Lord schizoaffective\\",
+      "reviewPearl": "If a patient has a history of severe mood episodes but continues to hallucinate when their mood is completely stable, the diagnosis is Schizoaffective Disorder.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "Five weeks after being discharged from the hospital after treatment for a psychotic episode, a 27-year-old man comes to the physician for a follow-up examination. During hospitalization, he claimed that he was instructed by the Lord to find a new religion and that a famous gospel singer was in love with him. Today, he says that he still hears the voice of the Lord and members of the church he attends in his apartment and when he shops in the supermarket. He no longer believes the world needs a new religion because the Lord is no longer instructing him to create one. He states, “My father in heaven tells me that he is at peace, and therefore, so am I.” Current medications include risperidone and lorazepam. He drinks one to two beers on weekends. He used marijuana regularly in college but has abstained for the past 5 years. He appears clean and is casually dressed. His temperature is 36.7oC (98oF), pulse is 72/min, respirations are 20/min, and blood pressure is 130/72 mm Hg. Physical examination shows a calm affect. He is cooperative, alert, and oriented to person, place, and time. Based on this information, which of the following is the most likely current diagnosis for this patient?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Bipolar disorder"
+        },
+        {
+          "label": "B",
+          "text": "Cyclothymic disorder"
+        },
+        {
+          "label": "C",
+          "text": "Delusional disorder"
+        },
+        {
+          "label": "D",
+          "text": "Schizoaffective disorder"
+        },
+        {
+          "label": "E",
+          "text": "Substance-induced mood disorder\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "D",
+      "educationalObjective": "Differentiate Schizoaffective Disorder from Bipolar Disorder with psychotic features by identifying the persistence of psychotic symptoms for at least 2 weeks in the absence of a major mood episode.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient's initial hospitalization involved a manic episode with psychotic features (grandiose/erotomanic delusions). Currently, he is completely euthymic (\"calm affect\", \"at peace\") but continues to experience prominent psychotic symptoms (auditory hallucinations) 5 weeks later. Psychosis occurring for more than 2 weeks in the absence of a major mood episode is the defining criterion for Schizoaffective Disorder.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "In Bipolar disorder with psychotic features (A), the psychotic symptoms must only occur \nduring\n the manic or depressive mood episodes; they do not persist when the mood is euthymic. Delusional disorder (C) lacks prominent auditory hallucinations and manic episodes.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "If a patient has a history of severe mood episodes but continues to hallucinate when their mood is completely stable, the diagnosis is Schizoaffective Disorder.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q038",
+      "questionNumber": 38,
+      "sourceQuestionNumber": 38,
+      "retrievalTag": "Dilated pupils long breaks loquacious lethargic cocaine\\",
+      "reviewPearl": "Unexplained long absences during the workday followed by extreme energetic behavior and paranoia should highly raise suspicion for short-acting stimulant abuse, such as cocaine.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 32-year-old financial analyst comes to the physician at her employer’s request because of bizarre behavior and poor work productivity over the past 6 months. She has been arriving late, leaving early, and frequently taking long breaks. She has had daily mood swings; sometimes she appears withdrawn, lethargic, and belligerent and other times she appears energetic and loquacious. This morning, she threatened to physically assault her supervisor after he questioned her about a 2-hour absence from work. Her temperature is 37oC (98.6oF), pulse is 90/min, respirations are 16/min, and blood pressure is 160/100 mm Hg. The pupils are dilated and reactive to light. Deep tendon reflexes are increased. On mental status examination, she is angry but cooperative. She describes her supervisor’s unfairness and the unfriendliness of other analysts; she suspects that they are jealous of her. She speaks in a loud rapid voice, frequently interrupting the physician. She is oriented to person, place, and time. She is able to recall three of three objects after 5 minutes and accurately preforms 2-digit calculations. Which of the following is the most likely diagnosis?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Alcohol withdrawal"
+        },
+        {
+          "label": "B",
+          "text": "Bipolar disorder"
+        },
+        {
+          "label": "C",
+          "text": "Cocaine abuse"
+        },
+        {
+          "label": "D",
+          "text": "Delusional disorder, persecutory type"
+        },
+        {
+          "label": "E",
+          "text": "Inhalant abuse"
+        },
+        {
+          "label": "F",
+          "text": "Paranoid personality disorder"
+        },
+        {
+          "label": "G",
+          "text": "PCP abuse"
+        },
+        {
+          "label": "H",
+          "text": "Schizophrenia, paranoid type\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Identify cocaine abuse based on behavioral signs (frequent breaks, rapid mood swings) and physical findings of sympathetic overactivity (dilated pupils, hypertension, rapid speech).\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient's frequent long breaks from work, alternating between energetic/loquacious states and lethargic crashes, coupled with dilated pupils, hypertension, hyperreflexia, and paranoid ideation are highly characteristic of cocaine intoxication and withdrawal.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Bipolar disorder (B) does not typically cause acutely dilated pupils or daily, short-acting cycles of mania and lethargy tied to work breaks. PCP abuse (G) typically presents with prominent nystagmus, severe aggression, and dissociation. Paranoid personality disorder (F) does not involve pupillary dilation or extreme swings in energy levels.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Unexplained long absences during the workday followed by extreme energetic behavior and paranoia should highly raise suspicion for short-acting stimulant abuse, such as cocaine.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q039",
+      "questionNumber": 39,
+      "sourceQuestionNumber": 39,
+      "retrievalTag": "Ballet practice BMI 16 tibial stress fracture anorexia\\",
+      "reviewPearl": "\"Euthyroid sick syndrome\" (characterized by low T3 levels with normal TSH) and early-onset severe osteoporosis are frequent secondary complications of the starvation state in Anorexia Nervosa.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 15-year-old girl is brought to the emergency department 90 minutes after falling during ballet practice. She says that she has recently felt weak but has not had fever or other symptoms. She reports that she has felt “down” and “disgusted” with how she looks for the past 5 months. During this time, she has had difficulty sleeping and a decreased appetite resulting in a 6.8-kg (15-lb) weight loss. Menarche has not yet occurred. She is not sexually active and does not drink alcohol or use illicit drugs. She appears younger than her stated age. She is 163 cm (5 ft 4 in) tall and weighs 42 kg (92 lb); BMI is 16 kg/m2. Physical examination shows tenderness to palpation over the right tibia. On mental status examination, she makes poor eye contact, speaks softly, and answers questions with vague responses. Her leukocyte count is 2800/mm3, and serum triiodothyronine (T3) concentration is 95 ng/d",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "L",
+          "text": "An x-ray of the right lower extremity shows a tibial stress fracture and significant osteoporosis. Which of the following is the most likely diagnosis?\\"
+        },
+        {
+          "label": "A",
+          "text": "Anorexia nervosa"
+        },
+        {
+          "label": "B",
+          "text": "Body dysmorphic disorder"
+        },
+        {
+          "label": "C",
+          "text": "Hypoparathyroidism"
+        },
+        {
+          "label": "D",
+          "text": "Hypothyroidism"
+        },
+        {
+          "label": "E",
+          "text": "Major depressive disorder"
+        },
+        {
+          "label": "F",
+          "text": "Occult malignancy\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Diagnose Anorexia Nervosa by recognizing significantly low body weight, body image distortion, and secondary physical manifestations of starvation (osteoporosis, leukopenia, low T3).\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient has a significantly low BMI (16), primary amenorrhea, and body image distortion (\"disgusted\" with how she looks). The resulting malnutrition has led to severe complications including euthyroid sick syndrome (low T3), leukopenia, and osteoporosis resulting in a tibial stress fracture, all classic for severe Anorexia Nervosa.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Major depressive disorder (E) can cause weight loss but does not typically cause body image distortion or such severe primary amenorrhea and osteoporosis in a 15-year-old. Body dysmorphic disorder (B) involves preoccupation with a specific perceived defect, not global weight loss leading to starvation.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\"Euthyroid sick syndrome\" (characterized by low T3 levels with normal TSH) and early-onset severe osteoporosis are frequent secondary complications of the starvation state in Anorexia Nervosa.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q040",
+      "questionNumber": 40,
+      "sourceQuestionNumber": 40,
+      "retrievalTag": "Husband died 18 months brain cancer punished by God MDD\\",
+      "reviewPearl": "Psychotic features that emerge during severe major depressive episodes are almost always mood-congruent, typically taking the form of somatic delusions (terminal illness) or delusions of guilt, poverty, or deserved punishment.\\\neftab720-720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 67-year-old woman, whose husband died 18 months ago, is admitted to the hospital because of severe headaches for 4 weeks. She is quiet and seems sad. She believes that she has brain cancer, deserves to be punished for her sins, and is being punished by God for past misdeeds. She has had fatigue and a 6.8-kg (15-lb) weight loss over the past 4 months. Physical and neurologic examinations shows no abnormalities. Which of the following is the most likely diagnosis?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Adjustment disorder with mixed disturbance of emotions and conduct"
+        },
+        {
+          "label": "B",
+          "text": "Delusional disorder"
+        },
+        {
+          "label": "C",
+          "text": "Major depressive disorder"
+        },
+        {
+          "label": "D",
+          "text": "Schizophrenia"
+        },
+        {
+          "label": "E",
+          "text": "Somatization disorder\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Diagnose Major Depressive Disorder with psychotic features when a patient presents with a severe depressive syndrome accompanied by mood-congruent delusions.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient exhibits severe depressive symptoms (sadness, fatigue, significant weight loss) accompanied by mood-congruent psychotic delusions (fixed false beliefs that she has cancer and is being punished by God). This fully characterizes Major Depressive Disorder with psychotic features.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Delusional disorder (B) does not present with pervasive, severe systemic depressive symptoms like massive weight loss and psychomotor retardation. Adjustment disorder (A) does not encompass psychotic symptoms. Somatization disorder (E) requires multiple somatic complaints over many years, not a fixed psychotic delusion of cancer in the setting of severe depression.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Psychotic features that emerge during severe major depressive episodes are almost always mood-congruent, typically taking the form of somatic delusions (terminal illness) or delusions of guilt, poverty, or deserved punishment.\\\neftab720-720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q041",
+      "questionNumber": 41,
+      "sourceQuestionNumber": 41,
+      "retrievalTag": "15-year-old raucous unwanted sexual advance unsteady gait alcohol\\",
+      "reviewPearl": "Severe ataxia and bold behavioral disinhibition coupled with completely normal pupillary reflexes and vital signs point strongly toward alcohol rather than stimulant or hallucinogen intoxication.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 15-year-old boy is brought to the emergency department by his two friends because of unusual behavior that began at a party 1 hour ago. His friends say that he became raucous and made an unwanted sexual advance to a girl he had just met. He then ran into the street, careless to oncoming cars, saying he was able to avoid them. His pulse is 84/min, respirations are 12/min, and blood pressure is 110/70 mm Hg. He is agitated when left alone, but he calms down when spoken to by nursing staff. Physical examination shows an unsteady gait. Pupils are equal and reactive. Which of the following is the most likely drug taken?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Alcohol"
+        },
+        {
+          "label": "B",
+          "text": "Amphetamine"
+        },
+        {
+          "label": "C",
+          "text": "Cocaine"
+        },
+        {
+          "label": "D",
+          "text": "Heroin"
+        },
+        {
+          "label": "E",
+          "text": "LSD"
+        },
+        {
+          "label": "F",
+          "text": "Marijuana\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Recognize acute alcohol intoxication based on behavioral disinhibition, impaired judgment, and ataxia in the setting of normal vital signs and pupillary reflexes.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Alcohol intoxication classically presents with disinhibition (inappropriate sexual advances, raucous behavior), impaired judgment (running into traffic), and ataxia (unsteady gait), all while preserving normal pupillary responses and stable vital signs.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Amphetamine (B) and Cocaine (C) cause profound sympathetic activation, including tachycardia, hypertension, and pupillary dilation. Heroin (D) causes severe CNS depression, bradycardia, and pinpoint pupils. LSD (E) induces hallucinations and mydriasis. Marijuana (F) features conjunctival injection, tachycardia, and increased appetite rather than this degree of severe ataxia and impulsive disinhibition.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Severe ataxia and bold behavioral disinhibition coupled with completely normal pupillary reflexes and vital signs point strongly toward alcohol rather than stimulant or hallucinogen intoxication.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q042",
+      "questionNumber": 42,
+      "sourceQuestionNumber": 42,
+      "retrievalTag": "Daytime sleepiness vivid dream-like images decreased REM latency narcolepsy\\",
+      "reviewPearl": "Narcolepsy is characterized by the abnormal intrusion of REM sleep into wakefulness; consequently, patients often enter REM sleep within 15 minutes of sleep onset (decreased REM latency).\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 26-year-old man comes to the physician because of increasing daytime sleepiness over the past 3 years. He has begun to unexpectedly fall asleep at work and is concerned that he will lose his job if he does not change his behavior. He has stopped driving because of fear that he will fall asleep at the wheel. He generally sleeps well at night. He states that he avoids exercise and caffeine ingestion in the evening and does not read or watch television in bed. His wife states that he does not snore or have restless leg movements while sleeping. He has vivid dream-like images just before falling asleep and on awakening. He describes his mood as generally good despite his worry about his job security. Polysomnography is most likely to show which of the following?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Decreased REM density"
+        },
+        {
+          "label": "B",
+          "text": "Decreased REM latency"
+        },
+        {
+          "label": "C",
+          "text": "Decreased stage 1 sleep"
+        },
+        {
+          "label": "D",
+          "text": "Increased sleep efficiency"
+        },
+        {
+          "label": "E",
+          "text": "Increased sleep latency\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Identify narcolepsy based on excessive daytime sleepiness paired with sleep-related hallucinations, and associate it with a shortened REM latency on sleep studies.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient has classic symptoms of narcolepsy, including excessive daytime sleepiness (\"sleep attacks\") and hypnagogic/hypnopompic hallucinations (vivid dreams on falling asleep and waking). The physiological hallmark of narcolepsy is early-onset REM sleep, measured on polysomnography as a decreased REM latency.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Sleep efficiency in narcolepsy is typically normal or decreased, not increased (D). Sleep latency is dramatically decreased, not increased (E), because these patients fall asleep almost instantly. Stage 1 sleep and REM density (A, C) are not the primary, defining polysomnographic markers of narcolepsy.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Narcolepsy is characterized by the abnormal intrusion of REM sleep into wakefulness; consequently, patients often enter REM sleep within 15 minutes of sleep onset (decreased REM latency).\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q043",
+      "questionNumber": 43,
+      "sourceQuestionNumber": 43,
+      "retrievalTag": "Haloperidol smacks lips protrudes tongue discontinue begin risperidone\\",
+      "reviewPearl": "When tardive dyskinesia develops, switching to an atypical antipsychotic (such as clozapine, quetiapine, or risperidone) is the standard initial step because their lower D2 receptor affinity decreases the risk of worsening motor symptoms.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 52-year-old woman comes to the physician for a routine follow-up examination. She has received inpatient psychiatric treatment several times since the age of 25 years for auditory hallucinations and the belief that her thoughts and movements were being controlled by a local television station; her last admission to the hospital was 10 years ago. Treatment with haloperidol for the past 20 years has decreased the occurrence of symptoms. She attempted suicide at the ages of 30 and 38 years. She lives in a supervised residence and does not work. During the examination, she repeatedly smacks her lips and slightly protrudes her tongue. When the physician asks if she is chewing gum, she laughs and opens her mouth to show she is not. She can hold her mouth and tongue still when asked but begins lip smacking when the physician resumes the examination. Which of the following is the most appropriate next step in pharmacotherapy?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Continue haloperidol and add alprazolam"
+        },
+        {
+          "label": "B",
+          "text": "Continue haloperidol and add propranolol"
+        },
+        {
+          "label": "C",
+          "text": "Discontinue haloperidol"
+        },
+        {
+          "label": "D",
+          "text": "Discontinue haloperidol and begin chlorpromazine"
+        },
+        {
+          "label": "E",
+          "text": "Discontinue haloperidol and begin risperidone\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "E",
+      "educationalObjective": "Manage emergent tardive dyskinesia by tapering the offending first-generation antipsychotic and substituting it with a second-generation agent.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient has developed tardive dyskinesia (involuntary orofacial movements like lip-smacking and tongue protrusion) as a result of taking haloperidol, a high-potency first-generation antipsychotic, for 20 years. The most appropriate management is to discontinue the offending drug and switch to a second-generation (atypical) antipsychotic, like risperidone, which has a significantly lower risk of causing extrapyramidal symptoms.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Continuing haloperidol (A, B) will likely worsen the tardive dyskinesia over time. Completely discontinuing all antipsychotics (C) is dangerous given her severe history of schizophrenia and suicidality. Chlorpromazine (D) is a low-potency first-generation antipsychotic that still carries a high risk for tardive dyskinesia.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "When tardive dyskinesia develops, switching to an atypical antipsychotic (such as clozapine, quetiapine, or risperidone) is the standard initial step because their lower D2 receptor affinity decreases the risk of worsening motor symptoms.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q044",
+      "questionNumber": 44,
+      "sourceQuestionNumber": 44,
+      "retrievalTag": "Intrusive thoughts family harmed wash hands 10 times fluvoxamine behavioral\\",
+      "reviewPearl": "Exposure and Response Prevention (ERP) is the specific modality of behavioral therapy proven most effective for OCD, often requiring concurrent high-dose SSRI therapy for maximum benefit.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 42-year-old woman comes to the physician because of a 6-month history of intrusive thoughts of her family being harmed. She says that the only way to stop the thoughts is to wash her hands 10 times and count backwards from 100. The thoughts occur 15 to 20 times throughout the day. She takes no medications. Physical examination shows no abnormalities except for dry, chapped hands. Mental status examination shows a mildly anxious affect. There is no evidence of hallucinations or delusions. She is alert and oriented to person, place, and time. Concentration and short- and long-term memory are intact. Which of the following is the most appropriate next step in management?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Psychodynamic psychotherapy only"
+        },
+        {
+          "label": "B",
+          "text": "Diazepam and behavioral therapy"
+        },
+        {
+          "label": "C",
+          "text": "Diazepam and psychodynamic psychotherapy"
+        },
+        {
+          "label": "D",
+          "text": "Diazepam therapy only"
+        },
+        {
+          "label": "E",
+          "text": "Fluvoxamine and behavioral therapy"
+        },
+        {
+          "label": "F",
+          "text": "Fluvoxamine and psychodynamic psychotherapy"
+        },
+        {
+          "label": "G",
+          "text": "Fluvoxamine-therapy only\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "E",
+      "educationalObjective": "Recognize Obsessive-Compulsive Disorder and identify the combination of an SSRI and behavioral therapy as the optimal treatment.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient is suffering from severe Obsessive-Compulsive Disorder (OCD), characterized by intrusive obsessions (family being harmed) and time-consuming compulsions (hand washing, counting). The gold-standard, first-line treatment for OCD is a combination of a selective serotonin reuptake inhibitor (SSRI), such as fluvoxamine, and cognitive-behavioral therapy (specifically, exposure and response prevention).\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Psychodynamic psychotherapy (A, C, F) lacks efficacy for the core symptoms of OCD. Diazepam (B, C, D) is a benzodiazepine that can temporarily reduce anxiety but does not treat the underlying neurobiological mechanisms of OCD and carries a risk of dependence. SSRI monotherapy (G) is less effective than combination therapy with CBT.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Exposure and Response Prevention (ERP) is the specific modality of behavioral therapy proven most effective for OCD, often requiring concurrent high-dose SSRI therapy for maximum benefit.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q045",
+      "questionNumber": 45,
+      "sourceQuestionNumber": 45,
+      "retrievalTag": "Binge-eating vomiting yellow dental enamel increased amylase\\",
+      "reviewPearl": "Elevated serum amylase in a young, otherwise healthy female with a normal BMI is highly suggestive of purging behavior, as chronic vomiting induces bilateral parotid gland hypertrophy and salivary amylase hypersecretion.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 27-year-old woman comes to the physician for an examination prior to starting a new job. She has a 10-year history of binge-eating and self-induced vomiting. She takes no medications. She does not drink alcohol or use illicit drugs. She is 178 cm (5 ft 10 in) tall and weighs 72 kg (160 lb); BMI is 23 kg/m2. Her temperature is 37ºC (98.6ºF), pulse is 70/min, respirations are 10/min, and blood pressure is 120/70 mm Hg. Physical examination shows yellow dental enamel and abdominal striae. Serum studies are most likely to show which of the following abnormalities?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Decreased bicarbonate concentration"
+        },
+        {
+          "label": "B",
+          "text": "Increased amylase activity"
+        },
+        {
+          "label": "C",
+          "text": "Increased magnesium concentration"
+        },
+        {
+          "label": "D",
+          "text": "Increased potassium concentration"
+        },
+        {
+          "label": "E",
+          "text": "Increased sodium concentration\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Correlate chronic self-induced vomiting in bulimia nervosa with physical findings (dental enamel erosion) and characteristic laboratory abnormalities (elevated salivary amylase).\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient has a normal BMI, normal vital signs, and a long history of binge-eating and purging, confirming Bulimia Nervosa. Chronic self-induced vomiting leads to hyperstimulation and enlargement of the parotid (salivary) glands, which causes a prominent elevation in serum salivary amylase.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Purging through vomiting results in the loss of stomach acid (HCl), causing a metabolic alkalosis with an \nincreased\n bicarbonate concentration, not decreased (A). It also causes profound hypokalemia, not hyperkalemia (D). Magnesium and sodium levels are typically normal or decreased due to volume depletion, not increased (C, E).\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Elevated serum amylase in a young, otherwise healthy female with a normal BMI is highly suggestive of purging behavior, as chronic vomiting induces bilateral parotid gland hypertrophy and salivary amylase hypersecretion.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q046",
+      "questionNumber": 46,
+      "sourceQuestionNumber": 46,
+      "retrievalTag": "Inspects dust particular way nervous tense sertraline\\",
+      "reviewPearl": "Symptoms in OCD are ego-dystonic (distressing to the patient), whereas symptoms in OCPD are ego-syntonic (the patient views their rigid behaviors as correct and desirable). SSRIs are indicated for the former.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 25-year-old man comes to the physician with his wife because of bizarre behavior for the past 3 months. She reports that he will only travel to work by taking certain routes and is overly concerned about air quality, routinely inspecting for dust on the furniture and closing the windows when he returns from work. He has organized his office and his home in a particular way and becomes extremely upset when anything is rearranged. He realizes that his demands are unreasonable but says that “I would be very nervous and tense if it were arranged any other way.” He has had no changes in sleep pattern. Physical examination shows abnormalities. On mental status examination, he reports feeling mildly anxious and depressed “all the time.” Results of laboratory studies are within reference ranges. Which of the following is the most appropriate pharmacotherapy?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Bupropion"
+        },
+        {
+          "label": "B",
+          "text": "Buspirone"
+        },
+        {
+          "label": "C",
+          "text": "Clonazepam"
+        },
+        {
+          "label": "D",
+          "text": "Haloperidol"
+        },
+        {
+          "label": "E",
+          "text": "Sertraline\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "E",
+      "educationalObjective": "Differentiate OCD from OCPD based on the ego-dystonic nature of the symptoms and select an SSRI as the first-line medication.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient demonstrates obsessive thoughts (air quality, contamination) and compulsive behaviors (dust inspection, extreme organization) that he recognizes as unreasonable (ego-dystonic). This distress indicates Obsessive-Compulsive Disorder (OCD), rather than Obsessive-Compulsive Personality Disorder. The first-line pharmacotherapy for OCD is a selective serotonin reuptake inhibitor (SSRI), such as sertraline.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Bupropion (A) and Buspirone (B) have no proven efficacy in treating the core symptoms of OCD. Clonazepam (C) is a benzodiazepine that masks anxiety but does not correct the underlying serotonin imbalance. Haloperidol (D) is an antipsychotic, which is inappropriate for primary OCD.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Symptoms in OCD are ego-dystonic (distressing to the patient), whereas symptoms in OCPD are ego-syntonic (the patient views their rigid behaviors as correct and desirable). SSRIs are indicated for the former.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q047",
+      "questionNumber": 47,
+      "sourceQuestionNumber": 47,
+      "retrievalTag": "Metastatic breast cancer mumbling Ca 12.5 hypercalcemia\\",
+      "reviewPearl": "\"Stones, bones, groans, and psychiatric overtones\": Always check a serum calcium level in cancer patients presenting with sudden psychiatric symptoms, confusion, or lethargy.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 72-year-old woman with metastatic breast cancer is admitted to the hospital because of changes in her mental status during the past 3 days. Her family says she has been mumbling and softly moaning. They also report that she has been drinking more alcohol since she found out how far her disease has progressed. Current medications include fentanyl patches. There have not been any recent changes to her medication regimen. Vital signs are within normal limits. Physical examination shows no abnormalities. On mental status examination, she appears to be hallucinating. She is not oriented to person, place or time. Laboratory studies show: Hematocrit 35% Leukocyte count 8000/mm3 Serum Na+ 137 mEq/L Ca2+ 12.5 mg/dL Urea nitrogen 15 mg/dL Creatinine 1.1 mg/dL Albumin 1.5 g/dL Urinalysis shows no abnormalities. X-rays of the chest and a CT scan of the head show no abnormalities. Which of the following is the most likely cause of this patient’s change in mental status?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Adverse effect of fentanyl"
+        },
+        {
+          "label": "B",
+          "text": "Alcohol withdrawal"
+        },
+        {
+          "label": "C",
+          "text": "Hypercalcemia"
+        },
+        {
+          "label": "D",
+          "text": "Major depressive disorder with psychotic features"
+        },
+        {
+          "label": "E",
+          "text": "Meningitis\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Identify malignancy-associated hypercalcemia as a major organic cause of delirium in patients with metastatic cancer.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient presents with acute delirium (hallucinations, disorientation, mumbling) in the setting of severely elevated serum calcium (12.5 mg/dL; true ionized calcium is even higher due to her profound hypoalbuminemia). Hypercalcemia of malignancy is a frequent and life-threatening cause of acute encephalopathy/delirium in patients with advanced cancers involving bone metastases (like breast cancer).\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "While fentanyl (A) can cause altered mental status, her dose has not changed, making it less likely to be the acute trigger compared to the glaring metabolic abnormality. She is drinking \nmore\n alcohol, meaning she is not in withdrawal (B). Meningitis (E) requires signs of infection (fever, elevated WBCs). MDD with psychotic features (D) is a psychiatric diagnosis of exclusion that does not account for the severe organic hypercalcemia.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\"Stones, bones, groans, and psychiatric overtones\": Always check a serum calcium level in cancer patients presenting with sudden psychiatric symptoms, confusion, or lethargy.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q048",
+      "questionNumber": 48,
+      "sourceQuestionNumber": 48,
+      "retrievalTag": "Unaware of surroundings restricted lateral gaze gynecomastia Vitamin B1\\",
+      "reviewPearl": "Wernicke encephalopathy is a medical emergency; intravenous thiamine must be administered immediately, and specifically \nbefore\n administering any glucose, to prevent permanent Korsakoff psychosis.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 37-year-old man is brought to the emergency department by the police after they found him sitting in an alley unaware of his surroundings or situation. On arrival, he cannot remember his name, date of birth, or age. Vital signs are within normal limits. Examination shows numerous ecchymoses over the face and extremities. Right lateral gaze is severely restricted. On left lateral gaze, there is bilateral nystagmus. There is mild gynecomastia and palmar erythema. Abdominal examination shows right upper quadrant tenderness. The liver edge is palpated 4 cm below the right costal margin. Muscle strength is normal, but he is unable to stand or walk. Deep tendon reflexes are absent. The most likely cause of these findings is a deficiency of which of the following?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Folic acid"
+        },
+        {
+          "label": "B",
+          "text": "Niacin"
+        },
+        {
+          "label": "C",
+          "text": "Vitamin B1 (thiamine)"
+        },
+        {
+          "label": "D",
+          "text": "Vitamin B6"
+        },
+        {
+          "label": "E",
+          "text": "Vitamin B12 (cobalamin)\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Recognize Wernicke encephalopathy by its classic triad of confusion, ophthalmoplegia, and ataxia, and identify its cause as Vitamin B1 (thiamine) deficiency.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient has chronic liver disease (gynecomastia, palmar erythema, hepatomegaly) indicative of severe alcohol use disorder. He presents with Wernicke encephalopathy, defined by the classic triad of encephalopathy (unaware, amnesic), oculomotor dysfunction (restricted gaze, nystagmus), and gait ataxia (unable to walk). This condition is caused by a severe deficiency of Vitamin B1 (thiamine). His absent reflexes also indicate a concurrent thiamine-related alcoholic polyneuropathy.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Niacin (B3) deficiency (B) results in pellagra (diarrhea, dermatitis, dementia). Vitamin B12 deficiency (E) causes macrocytic anemia and subacute combined degeneration of the spinal cord (spasticity, loss of vibration sense), not this specific triad. Folic acid (A) deficiency causes macrocytic anemia without significant focal neurological defects.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Wernicke encephalopathy is a medical emergency; intravenous thiamine must be administered immediately, and specifically \nbefore\n administering any glucose, to prevent permanent Korsakoff psychosis.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q049",
+      "questionNumber": 49,
+      "sourceQuestionNumber": 49,
+      "retrievalTag": "16-year-old party conjunctivae injected prolonged response latency marijuana\\",
+      "reviewPearl": "Conjunctival injection is one of the most reliable and consistent physical examination findings in acute cannabis intoxication.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 16-year-old girl is brought to the physician by her father because of unusual behavior since returning from a party early this morning. Her father reports that when she arrived home, she barricaded herself in her room and refused to respond to his pleas to open the door. When he entered the room 1 hour later, he found her huddled in a corner in the dark, saying that the police wanted to kill her. She has no history of medical or psychiatric illness. Her pulse is 115/min, and blood pressure is 150/90 mm Hg. The pupils are 2 mm, equal, and reactive to light and accommodation. The conjunctivae are injected. On mental status examination, she appears apprehensive but is cooperative. Her speech is slow with a prolonged response latency. She believes that she is being followed by plainclothes police officer who want to assassinate her. She hears a male voice making threatening comments. She is oriented to person and place but not to time. She can perform double-digit money calculations but not serial sevens. Which of the following is the most likely cause of this patient’s symptoms?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Alcohol intoxication"
+        },
+        {
+          "label": "B",
+          "text": "Alcohol withdrawal"
+        },
+        {
+          "label": "C",
+          "text": "Cocaine withdrawal"
+        },
+        {
+          "label": "D",
+          "text": "Delusional disorder, persecutory type"
+        },
+        {
+          "label": "E",
+          "text": "Marijuana intoxication"
+        },
+        {
+          "label": "F",
+          "text": "Marijuana withdrawal"
+        },
+        {
+          "label": "G",
+          "text": "Panic disorder"
+        },
+        {
+          "label": "H",
+          "text": "Paranoid personality disorder"
+        },
+        {
+          "label": "I",
+          "text": "Schizophrenia, paranoid type\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "E",
+      "educationalObjective": "Diagnose acute marijuana intoxication by recognizing physical signs (conjunctival injection, tachycardia) accompanying psychological symptoms (paranoia, slowed mentation).\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient presents with acute substance-induced psychosis marked by severe paranoia, auditory hallucinations, and delayed reaction times (prolonged response latency) following a party. The physical findings of injected conjunctivae (red eyes) and tachycardia are highly specific physiological markers for acute marijuana (cannabis) intoxication.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Cocaine intoxication (not withdrawal, C) could present with acute paranoia but would prominently feature dilated pupils, not normal 2 mm pupils. Alcohol intoxication (A) produces ataxia and disinhibition rather than florid paranoia and red eyes. Primary psychiatric illnesses like Schizophrenia (I) and Delusional disorder (D) develop over longer periods and are diagnoses of exclusion after ruling out substance intoxication.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Conjunctival injection is one of the most reliable and consistent physical examination findings in acute cannabis intoxication.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q050",
+      "questionNumber": 50,
+      "sourceQuestionNumber": 50,
+      "retrievalTag": "ED nocturnal erections intact drinks several alcoholic beverages elevated GGT alcohol\\",
+      "reviewPearl": "The presence of normal nocturnal or morning erections reliably differentiates psychogenic or substance-induced erectile dysfunction from structural, vascular, or neurological impotence.\\",
+      "stem": "A 29-year-old man comes to the physician because of the inability to maintain an erection through completion of sexual activity. He has been married for 3 months and has not been able to complete coitus over the past 2 months. He is usually able to attain an erection by direct penile stimulation and is often aware of nocturnal erections when waking during the night. For the past month, he and his wife have attempted to have intercourse about twice a week. He drinks several alcoholic beverages before engaging in sexual activity in an effort to relax. He has had two major depressive episodes over the past 4 years and was successfully treated with desipramine; he has not taken the medication since his marriage. He has borderline hypertension but takes no medications for it. He has a strong family history of type 2 diabetes mellitus. He takes ranitidine for stomach problems. His vital signs are normal. Cranial nerve function appears normal. He walks normally. Laboratory studies show: Hemoglobin 11 g/dL Platelet count 178,000/mm3 Serum Fasting glucose 86 mg/dL -Glutamyltransferase 70 U/L (N=5-50) Which of the following is the most likely explanation for these findings?\\",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Alcohol use"
+        },
+        {
+          "label": "B",
+          "text": "Desipramine therapy"
+        },
+        {
+          "label": "C",
+          "text": "Diabetes mellitus"
+        },
+        {
+          "label": "D",
+          "text": "Generalized anxiety disorder"
+        },
+        {
+          "label": "E",
+          "text": "Major depressive disorder"
+        },
+        {
+          "label": "F",
+          "text": "Marital conflict"
+        },
+        {
+          "label": "G",
+          "text": "Ranitidine therapy\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Identify alcohol intoxication as a prominent secondary cause of situational erectile dysfunction, especially when supported by elevated liver enzymes (GGT).\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient's erectile dysfunction is situational; the preservation of nocturnal erections and erections via direct stimulation confirms that his neurovascular pathways are completely intact. His practice of drinking \"several alcoholic beverages\" before sex to relax impairs his physiological sexual performance. His elevated -Glutamyltransferase (GGT) strongly corroborates a history of heavy alcohol use, cementing it as the direct pharmacological cause of his ED.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "He is no longer taking desipramine (B), which rules it out. His fasting glucose is completely normal, ruling out Diabetes mellitus (C). While performance anxiety might prompt his drinking, the heavy acute consumption of a CNS depressant (alcohol) immediately before intercourse is the dominant physiological block. Ranitidine (G) is highly unlikely to cause this pattern compared to his alcohol use.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "The presence of normal nocturnal or morning erections reliably differentiates psychogenic or substance-induced erectile dysfunction from structural, vascular, or neurological impotence.\\"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    }
+  ]
+}

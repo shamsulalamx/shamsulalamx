@@ -1,0 +1,858 @@
+{
+  "schemaVersion": "nbme-gemini-json-v2",
+  "testTitle": "OME Sleep Sex Drugs",
+  "sourceFormat": "rtf",
+  "expectedQuestionCount": 16,
+  "actualExtractedQuestionCount": 16,
+  "extractionWarnings": [],
+  "questions": [
+    {
+      "id": "q001",
+      "questionNumber": 1,
+      "sourceQuestionNumber": 1,
+      "retrievalTag": "Night terrors occur in N3 sleep without memory recall",
+      "reviewPearl": "Night terrors occur in N3 sleep, retain muscle tone, and lack dream recall, requiring reassurance.",
+      "stem": "A 5-year-old boy is brought by his parents after episodes of frantic screaming at night. He sits up, maintains muscle tone, but has no memory of the event the next day. Which sleep stage is most likely involved?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "REM"
+        },
+        {
+          "label": "B",
+          "text": "N1"
+        },
+        {
+          "label": "C",
+          "text": "N2"
+        },
+        {
+          "label": "D",
+          "text": "N3"
+        }
+      ],
+      "correctAnswer": "D",
+      "educationalObjective": "Differentiate night terrors (N3 sleep, amnesia, intact tone) from nightmares (REM sleep, dream recall, atonia).",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Night terrors occur during stage N3 sleep, characterized by intact muscle tone, autonomic arousal, and complete amnesia of the event."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Option A is incorrect as REM sleep features a loss of muscle tone and full dream recall. Options B and C are incorrect because N1 and N2 are lighter sleep stages not associated with these deep parasomnias."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Night terrors occur in N3 sleep, retain muscle tone, and lack dream recall, requiring reassurance."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q002",
+      "questionNumber": 2,
+      "sourceQuestionNumber": 2,
+      "retrievalTag": "ACh increases dreams",
+      "reviewPearl": "Acetylcholine promotes dreaming, whereas dopamine and norepinephrine increase wakefulness.",
+      "stem": "A researcher is developing a drug that significantly increases acetylcholine levels in the central nervous system. Which of the following polysomnographic findings is most likely to increase in patients taking this medication?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Sleep latency"
+        },
+        {
+          "label": "B",
+          "text": "Dreams"
+        },
+        {
+          "label": "C",
+          "text": "Waking frequency"
+        },
+        {
+          "label": "D",
+          "text": "Stage 4 sleep"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Recognize the specific effects of neurotransmitters on sleep architecture, specifically ACh's role in promoting dreams.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Increased levels of acetylcholine (ACh) specifically increase the frequency and duration of dreaming during sleep."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Options A and D are incorrect because GABA controls sleep latency and deep stage 4 sleep. Option C is incorrect as dopamine and norepinephrine primarily govern wakefulness."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Acetylcholine promotes dreaming, whereas dopamine and norepinephrine increase wakefulness."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q003",
+      "questionNumber": 3,
+      "sourceQuestionNumber": 3,
+      "retrievalTag": "Narcolepsy shortens REM latency",
+      "reviewPearl": "Narcolepsy decreases REM latency, causing patients to enter REM sleep almost immediately and triggering cataplexy.",
+      "stem": "A 25-year-old man presents with severe daytime sleepiness and episodes of sudden muscle weakness when laughing. A sleep study is ordered to evaluate his condition. Which of the following findings is most expected?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Prolonged sleep latency"
+        },
+        {
+          "label": "B",
+          "text": "Decreased REM latency"
+        },
+        {
+          "label": "C",
+          "text": "Absence of N3 sleep"
+        },
+        {
+          "label": "D",
+          "text": "Increased REM rebound"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Correlate narcolepsy with its polysomnographic hallmark of a severely shortened REM latency.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Narcolepsy pathologically decreases REM latency, causing patients to plunge rapidly into REM sleep almost immediately upon falling asleep."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Option A is incorrect; prolonged sleep latency is classically seen in insomnia, not narcolepsy. Options C and D are incorrect as narcolepsy does not eliminate N3 sleep or selectively cause REM rebound, which is triggered by REM deprivation."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Narcolepsy decreases REM latency, causing patients to enter REM sleep almost immediately and triggering cataplexy."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q004",
+      "questionNumber": 4,
+      "sourceQuestionNumber": 4,
+      "retrievalTag": "Nightmares in PTSD require SSRI and therapy",
+      "reviewPearl": "PTSD-related nightmares occur during REM sleep and should be treated with therapy and SSRIs, not alcohol or sedative-hypnotics.\")\neftab720\ntightenfactor0\neftab720\ntightenfactor0\nDocument 2: Sleep Disorders",
+      "stem": "A 30-year-old veteran with PTSD uses alcohol nightly to suppress vivid, terrifying dreams that awaken him. He recalls the dreams clearly the next morning. Which intervention is most appropriate for his sleep disturbance?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Benzodiazepines"
+        },
+        {
+          "label": "B",
+          "text": "Group therapy and SSRI"
+        },
+        {
+          "label": "C",
+          "text": "Barbiturates"
+        },
+        {
+          "label": "D",
+          "text": "Reassurance only"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Identify the clinical presentation of nightmares in PTSD and select the appropriate psychiatric management.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Nightmares occur during REM sleep and are fully remembered; in the context of PTSD, they should be treated with group therapy and SSRIs, strictly avoiding self-medication."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Options A and C are incorrect; while these suppress REM sleep, they are contraindicated as pharmacotherapy should generally be avoided to prevent substance abuse. Option D is incorrect; reassurance alone is indicated only for night terrors."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "PTSD-related nightmares occur during REM sleep and should be treated with therapy and SSRIs, not alcohol or sedative-hypnotics.\")\neftab720\ntightenfactor0\neftab720\ntightenfactor0\nDocument 2: Sleep Disorders"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q005",
+      "questionNumber": 5,
+      "sourceQuestionNumber": 5,
+      "retrievalTag": "Polysomnography for suspected OSA",
+      "reviewPearl": "Obstructive sleep apnea presents with snoring and daytime somnolence; the definitive diagnostic step is polysomnography.",
+      "stem": "A 55-year-old obese man complains of severe daytime fatigue. His wife reports loud snoring and gasping for air at night, and examination shows a short, thick neck. What is the most appropriate next step in management?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Continuous positive airway pressure (CPAP)"
+        },
+        {
+          "label": "B",
+          "text": "Polysomnography"
+        },
+        {
+          "label": "C",
+          "text": "Weight loss counseling only"
+        },
+        {
+          "label": "D",
+          "text": "Adjust sleep schedule"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Recognize the classic signs of OSA and identify polysomnography as the definitive initial diagnostic step.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The essential initial diagnostic step for a patient presenting with suspected obstructive sleep apnea (OSA) is to perform polysomnography."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Option A is incorrect; CPAP is the appropriate treatment, but a formal diagnosis is required first. Options C and D are incorrect; weight loss is necessary but insufficient alone for diagnosis, and adjusting the schedule will not resolve an obstructed airway."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Obstructive sleep apnea presents with snoring and daytime somnolence; the definitive diagnostic step is polysomnography."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q006",
+      "questionNumber": 6,
+      "sourceQuestionNumber": 6,
+      "retrievalTag": "CSF hypocretin-1 low in narcolepsy",
+      "reviewPearl": "Narcolepsy is characterized by sleep attacks, cataplexy, and hallucinations, and is diagnosed by low CSF hypocretin-1 levels.",
+      "stem": "A 22-year-old woman experiences overwhelming sleepiness and sudden \"sleep attacks\" at work. She also reports seeing frightening shapes when falling asleep. Checking her cerebrospinal fluid would likely reveal a decrease in which substance?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Serotonin"
+        },
+        {
+          "label": "B",
+          "text": "Dopamine"
+        },
+        {
+          "label": "C",
+          "text": "Hypocretin-1"
+        },
+        {
+          "label": "D",
+          "text": "Melatonin"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Correlate the symptoms of narcolepsy (sleep attacks, hallucinations) with its specific diagnostic finding of low CSF hypocretin-1.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Decreased levels of CSF hypocretin-1 serve as a highly specific, modern diagnostic marker for narcolepsy."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Options A and D are incorrect; while serotonin and melatonin regulate normal sleep cycles, they are not the primary deficient markers in narcolepsy. Option B is incorrect; dopamine affects wakefulness but is not the diagnostic CSF marker."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Narcolepsy is characterized by sleep attacks, cataplexy, and hallucinations, and is diagnosed by low CSF hypocretin-1 levels."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q007",
+      "questionNumber": 7,
+      "sourceQuestionNumber": 7,
+      "retrievalTag": "Sleep hygiene first step for insomnia",
+      "reviewPearl": "Initial treatment for insomnia always involves sleep hygiene before advancing to short-term pharmacologic sleep aids.",
+      "stem": "A 40-year-old woman struggles to fall asleep, sleeping 7 hours a night but feeling chronically tired. She drinks coffee at 6 PM and reads in bed every night. What is the most appropriate initial recommendation?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Prescribe zolpidem"
+        },
+        {
+          "label": "B",
+          "text": "Recommend sleep hygiene"
+        },
+        {
+          "label": "C",
+          "text": "Prescribe diphenhydramine"
+        },
+        {
+          "label": "D",
+          "text": "Phototherapy"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Identify poor sleep hygiene habits and select behavioral modification as the first-line treatment for insomnia.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The first-line intervention for insomnia is optimizing sleep hygiene, which includes avoiding late stimulants and reserving the bed strictly for sleep and sex."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Options A and C are incorrect; pharmacologic sleep aids are only indicated if fixing sleep hygiene completely fails or if immediate relief is required. Option D is incorrect; phototherapy is primarily indicated for jet lag to reset circadian rhythms."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Initial treatment for insomnia always involves sleep hygiene before advancing to short-term pharmacologic sleep aids."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q008",
+      "questionNumber": 8,
+      "sourceQuestionNumber": 8,
+      "retrievalTag": "Trazodone causes priapism",
+      "reviewPearl": "Trazodone is a strong sleep medication whose classic adverse effects include priapism and nasal congestion.\")\neftab720\ntightenfactor0\neftab720\ntightenfactor0\nDocument 3: Substance Abuse Disorder",
+      "stem": "A 35-year-old man is prescribed a medication for persistent insomnia. He presents to the ER a week later with a painful, prolonged erection and significant nasal congestion. Which medication was he most likely prescribed?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Quetiapine"
+        },
+        {
+          "label": "B",
+          "text": "Zolpidem"
+        },
+        {
+          "label": "C",
+          "text": "Diphenhydramine"
+        },
+        {
+          "label": "D",
+          "text": "Trazodone"
+        }
+      ],
+      "correctAnswer": "D",
+      "educationalObjective": "Associate trazodone use with its highest-yield adverse effects: priapism and nasal congestion.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Trazodone is a strong, dependence-forming sleep aid known for its classic adverse effects of priapism (prolonged erection) and nasal congestion."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Option A is incorrect; quetiapine causes QTc prolongation. Options B and C are incorrect; zolpidem carries a high addiction risk and diphenhydramine is avoided in the elderly, but neither typically causes priapism."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Trazodone is a strong sleep medication whose classic adverse effects include priapism and nasal congestion.\")\neftab720\ntightenfactor0\neftab720\ntightenfactor0\nDocument 3: Substance Abuse Disorder"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q009",
+      "questionNumber": 9,
+      "sourceQuestionNumber": 9,
+      "retrievalTag": "Pre-contemplative stage involves denial",
+      "reviewPearl": "In the pre-contemplative stage of substance abuse, the patient is completely unaware or in flat denial that a problem exists.",
+      "stem": "A 45-year-old man is brought in by his family for heavy drinking and recurrently missing work. He insists he only drinks to \"wind down\" and aggressively states, \"I don't have a problem.\" Which stage of change is he currently in?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Pre-contemplative"
+        },
+        {
+          "label": "B",
+          "text": "Contemplative"
+        },
+        {
+          "label": "C",
+          "text": "Preparation"
+        },
+        {
+          "label": "D",
+          "text": "Action"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Correctly identify the pre-contemplative stage of substance abuse, characterized by complete denial of the problem.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient is in the pre-contemplative stage, defined by being entirely unaware of the substance issue or existing in flat denial."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Option B is incorrect; the contemplative stage requires actively admitting there is a problem. Options C and D are incorrect; preparation involves taking steps to quit, and action involves actually changing the behavior."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "In the pre-contemplative stage of substance abuse, the patient is completely unaware or in flat denial that a problem exists."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q010",
+      "questionNumber": 10,
+      "sourceQuestionNumber": 10,
+      "retrievalTag": "CAGE E stands for Eye-opener",
+      "reviewPearl": "The CAGE questionnaire screens for alcohol use disorder using the acronym: Cut down, Annoyed, Guilty, and Eye-opener.",
+      "stem": "A physician is screening a 50-year-old man for suspected alcohol abuse using the CAGE questionnaire. Which of the following questions corresponds to the \"E\" in this screening tool?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Do you drink to enhance your mood?"
+        },
+        {
+          "label": "B",
+          "text": "Do you need an eye-opener to get started in the day?"
+        },
+        {
+          "label": "C",
+          "text": "Have you experienced early-morning tremors?"
+        },
+        {
+          "label": "D",
+          "text": "Do you exercise while intoxicated?"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Memorize the exact components of the CAGE screening tool used for identifying substance abuse in adults.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "In the CAGE questionnaire, the \"E\" stands for \"Eye-opener,\" probing whether the patient needs a morning drink to get their day started."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Options A, C, and D are incorrect; they do not correspond to any letters in the CAGE acronym, which stands for Cut down, Annoyed, Guilty, and Eye-opener."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "The CAGE questionnaire screens for alcohol use disorder using the acronym: Cut down, Annoyed, Guilty, and Eye-opener."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q011",
+      "questionNumber": 11,
+      "sourceQuestionNumber": 11,
+      "retrievalTag": "FRAMES R stands for Responsibility",
+      "reviewPearl": "In Motivational Interviewing (FRAMES), 'Responsibility' emphasizes the patient taking personal ownership of their sobriety.",
+      "stem": "A physician uses Motivational Interviewing with a patient addicted to opioids. She emphasizes that the patient must take personal ownership of his sobriety and ultimate success. Which aspect of FRAMES does this represent?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Feedback"
+        },
+        {
+          "label": "B",
+          "text": "Responsibility"
+        },
+        {
+          "label": "C",
+          "text": "Empathy"
+        },
+        {
+          "label": "D",
+          "text": "Self-Efficacy"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Identify the specific components of the FRAMES model for motivational interviewing in addicted patients.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "In the FRAMES acronym, \"Responsibility\" specifically involves emphasizing the patient's personal ownership over their sobriety and clinical success."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Option A is incorrect; feedback involves providing objective clinical data. Options C and D are incorrect; empathy involves non-judgmental support, and self-efficacy demonstrates how life improves while clean."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "In Motivational Interviewing (FRAMES), 'Responsibility' emphasizes the patient taking personal ownership of their sobriety."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q012",
+      "questionNumber": 12,
+      "sourceQuestionNumber": 12,
+      "retrievalTag": "Addiction requires use to feel normal",
+      "reviewPearl": "Addiction is a neurobiological disease where the user requires the substance just to achieve a baseline feeling of normalcy.\")\neftab720\ntightenfactor0\neftab720\ntightenfactor0\nDocument 4: Drugs of Abuse",
+      "stem": "A 28-year-old woman uses heroin daily. She states she no longer experiences a \"high\" but must use the drug to prevent feeling violently ill and simply to \"feel normal\". How is this physiological state best classified?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Social impairment"
+        },
+        {
+          "label": "B",
+          "text": "Mild substance abuse"
+        },
+        {
+          "label": "C",
+          "text": "Addiction"
+        },
+        {
+          "label": "D",
+          "text": "Risk-taking"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Distinguish the clinical definition of addiction from basic substance abuse disorder.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Addiction is specifically defined as a neurobiological disease where the substance is required just to return the patient to a baseline feeling of normalcy."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Options A and D are incorrect; these represent specific checklist categories for diagnosing a general substance abuse disorder. Option B is incorrect; her reliance on the drug just to feel normal indicates deep addiction, not merely mild abuse."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Addiction is a neurobiological disease where the user requires the substance just to achieve a baseline feeling of normalcy.\")\neftab720\ntightenfactor0\neftab720\ntightenfactor0\nDocument 4: Drugs of Abuse"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q013",
+      "questionNumber": 13,
+      "sourceQuestionNumber": 13,
+      "retrievalTag": "Alcohol withdrawal treated with long-acting benzos",
+      "reviewPearl": "Severe alcohol withdrawal, presenting with autonomic hyperactivity and delirium tremens, is managed with long-acting benzodiazepines.",
+      "stem": "A 55-year-old man is admitted for acute pancreatitis. On hospital day 3, he becomes confused, diaphoretic, tachycardic, and hypertensive while reporting seeing bugs on the walls. Which medication is the most appropriate treatment?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Haloperidol"
+        },
+        {
+          "label": "B",
+          "text": "Naloxone"
+        },
+        {
+          "label": "C",
+          "text": "Chlordiazepoxide"
+        },
+        {
+          "label": "D",
+          "text": "Flumazenil"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Recognize the timeline and autonomic signs of alcohol withdrawal and select long-acting benzodiazepines as the appropriate treatment.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient is in severe alcohol withdrawal (delirium tremens), requiring prompt treatment with a long-acting benzodiazepine like chlordiazepoxide or diazepam."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Option A is incorrect; haloperidol lowers the seizure threshold and fails to treat the underlying GABA downregulation. Options B and D are incorrect; naloxone is for opiate overdose, and flumazenil reverses benzos, which would worsen his excitatory state."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Severe alcohol withdrawal, presenting with autonomic hyperactivity and delirium tremens, is managed with long-acting benzodiazepines."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q014",
+      "questionNumber": 14,
+      "sourceQuestionNumber": 14,
+      "retrievalTag": "Opiate withdrawal causes yawning and lacrimation",
+      "reviewPearl": "Opioid withdrawal is intensely uncomfortable, featuring yawning, lacrimation, and severe muscle aches, but is rarely life-threatening.",
+      "stem": "A 30-year-old man presents with severe muscle aches, sweating, diarrhea, yawning, and rhinorrhea. His condition is highly uncomfortable but not life-threatening. Which substance is he likely withdrawing from?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Alcohol"
+        },
+        {
+          "label": "B",
+          "text": "Cocaine"
+        },
+        {
+          "label": "C",
+          "text": "Opiates"
+        },
+        {
+          "label": "D",
+          "text": "Benzodiazepines"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Identify the classic clinical features of opiate withdrawal, differentiating it from life-threatening depressant withdrawal.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Opiate withdrawal classically presents with non-life-threatening but severe discomfort, heavily featuring yawning, lacrimation, diarrhea, and generalized muscle aches."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Options A and D are incorrect; alcohol and benzodiazepine withdrawals are potentially fatal and present with profound tachycardia, hypertension, and seizures. Option B is incorrect; cocaine withdrawal features severe depression, cravings, and suicidality."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Opioid withdrawal is intensely uncomfortable, featuring yawning, lacrimation, and severe muscle aches, but is rarely life-threatening."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q015",
+      "questionNumber": 15,
+      "sourceQuestionNumber": 15,
+      "retrievalTag": "Avoid beta blockers in cocaine intoxication",
+      "reviewPearl": "Cocaine intoxication causes severe sympathetic activation; beta-blockers must be avoided initially to prevent an unopposed alpha-adrenergic crisis.",
+      "stem": "A 24-year-old man is brought to the ER with extreme psychomotor agitation, a blood pressure of 190/110 mmHg, tachycardia, and dilated pupils. He admits to recent drug use. Which of the following should be AVOIDED initially?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Benzodiazepines"
+        },
+        {
+          "label": "B",
+          "text": "Alpha-blockers"
+        },
+        {
+          "label": "C",
+          "text": "Supportive care"
+        },
+        {
+          "label": "D",
+          "text": "Beta-blockers"
+        }
+      ],
+      "correctAnswer": "D",
+      "educationalObjective": "Recall that initial beta-blocker administration is contraindicated in patients with acute cocaine intoxication due to the risk of unopposed alpha agonism.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "In acute cocaine intoxication, initial beta-blockade is strictly contraindicated because it leads to unopposed alpha-adrenergic stimulation, drastically worsening hypertension."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Options A, B, and C are incorrect; benzodiazepines, supportive care, and alpha-blockers are the correct initial treatments for a cocaine-induced hypertensive crisis and agitation."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Cocaine intoxication causes severe sympathetic activation; beta-blockers must be avoided initially to prevent an unopposed alpha-adrenergic crisis."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q016",
+      "questionNumber": 16,
+      "sourceQuestionNumber": 16,
+      "retrievalTag": "PCP intoxication initially treated with benzos to subdue",
+      "reviewPearl": "PCP intoxication presents with violent aggression and vertical/horizontal nystagmus; initial treatment involves benzodiazepines to subdue, followed by haloperidol.",
+      "stem": "A 32-year-old man is brought by police after a violent altercation. He demonstrates enormous physical strength, blunted pain sensation, and vertical nystagmus. What is the most appropriate initial pharmacological treatment?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Haloperidol"
+        },
+        {
+          "label": "B",
+          "text": "Benzodiazepines"
+        },
+        {
+          "label": "C",
+          "text": "Naloxone"
+        },
+        {
+          "label": "D",
+          "text": "Acidify urine"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Diagnose PCP intoxication based on aggressive behavior and nystagmus, and choose benzodiazepines for initial chemical restraint.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient exhibits classic signs of PCP intoxication. The first-line pharmacological intervention is benzodiazepines to safely subdue the patient."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Option A is incorrect; haloperidol is used next only after benzodiazepines have been administered. Option C is incorrect; naloxone is used strictly for opiate intoxication. Option D is incorrect; while acidifying urine enhances excretion, subduing the violently agitated patient takes immediate priority."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "PCP intoxication presents with violent aggression and vertical/horizontal nystagmus; initial treatment involves benzodiazepines to subdue, followed by haloperidol."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    }
+  ]
+}

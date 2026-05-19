@@ -1,0 +1,3397 @@
+{
+  "schemaVersion": "nbme-gemini-json-v2",
+  "testTitle": "Psych Emma Holiday",
+  "sourceFormat": "rtf",
+  "expectedQuestionCount": 63,
+  "actualExtractedQuestionCount": 63,
+  "extractionWarnings": [],
+  "questions": [
+    {
+      "id": "q001",
+      "questionNumber": 1,
+      "sourceQuestionNumber": 1,
+      "retrievalTag": "Lithium toxicity precipitated by NSAIDs\\",
+      "reviewPearl": "Lithium toxicity risk increases significantly with NSAIDs; preferred analgesics are aspirin or sulindac.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 28-year-old man with a history of bipolar disorder is brought to the emergency department by his roommate. The patient has been compliant with his maintenance medication but recently started taking an over-the-counter analgesic for muscle aches. He now presents with nausea, vomiting, a coarse tremor, ataxia, confusion, and slurred speech.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Acetaminophen"
+        },
+        {
+          "label": "B",
+          "text": "Aspirin"
+        },
+        {
+          "label": "C",
+          "text": "Ibuprofen"
+        },
+        {
+          "label": "D",
+          "text": "Sulindac\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Recognize the clinical presentation of lithium toxicity and identify NSAIDs as major precipitants.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient is exhibiting signs of lithium toxicity (nausea, vomiting, diarrhea, coarse tremor, ataxia, confusion) precipitated by the addition of an NSAID (like ibuprofen or Advil).\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Acetaminophen, aspirin, and sulindac are not typical precipitants of lithium toxicity. If a patient on lithium requires pain management, safer alternatives include aspirin or sulindac.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Lithium toxicity risk increases significantly with NSAIDs; preferred analgesics are aspirin or sulindac.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q002",
+      "questionNumber": 2,
+      "sourceQuestionNumber": 2,
+      "retrievalTag": "TCA overdose widened QRS IV sodium bicarbonate\\",
+      "reviewPearl": "In TCA overdose, the most common cause of death is arrhythmia (torsades, v-fib); treat promptly with IV sodium bicarbonate to protect the heart.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 6-year-old boy is brought to the emergency department after ingesting several unidentified pills from his grandmother's purse. His grandmother suffers from hypertension, hyperlipidemia, fibromyalgia, insomnia, and peptic ulcer disease. On examination, the boy has dry mouth, tachycardia, urinary retention, and experiences a generalized seizure. An ECG reveals widened QRS complexes and a prolonged QT interval.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Activated charcoal alone"
+        },
+        {
+          "label": "B",
+          "text": "Intravenous sodium bicarbonate"
+        },
+        {
+          "label": "C",
+          "text": "Flumazenil"
+        },
+        {
+          "label": "D",
+          "text": "Haloperidol\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Identify TCA overdose by its anticholinergic and cardiac effects, and treat wide-complex dysrhythmias with IV sodium bicarbonate.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient's symptoms (anticholinergic toxidrome, seizures, widened QRS, prolonged QT) point to tricyclic antidepressant (TCA) overdose. The most common cause of death is arrhythmia, and the treatment of choice to provide cardioprotection and overcome the sodium channel blockade is IV sodium bicarbonate.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Activated charcoal is only helpful if the ingestion occurred within 1-2 hours. Flumazenil is for benzodiazepine overdose. Haloperidol would not correct the underlying cardiac conduction abnormalities and could lower the seizure threshold.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "In TCA overdose, the most common cause of death is arrhythmia (torsades, v-fib); treat promptly with IV sodium bicarbonate to protect the heart.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q003",
+      "questionNumber": 3,
+      "sourceQuestionNumber": 3,
+      "retrievalTag": "Schizoaffective disorder delusions independent of mood\\",
+      "reviewPearl": "Schizoaffective disorder requires delusions or hallucinations for greater than 2 weeks in the absence of mood symptoms.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 35-year-old man presents to the clinic with a 3-year history of believing that the government is tracking him and plotting to ruin his career. Six months ago, he began experiencing profound sadness, overwhelming guilt, insomnia, decreased concentration, and suicidal ideation.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Schizophrenia"
+        },
+        {
+          "label": "B",
+          "text": "Schizophreniform disorder"
+        },
+        {
+          "label": "C",
+          "text": "Schizoaffective disorder"
+        },
+        {
+          "label": "D",
+          "text": "Major depressive disorder with psychotic features\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Differentiate schizoaffective disorder from MDD with psychotic features based on the timing of psychotic versus mood symptoms.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient has experienced delusions for years in the absence of mood symptoms, and then later developed major depressive symptoms. This temporal relationship (delusions/hallucinations for >2 weeks in the absence of mood symptoms) is the hallmark of schizoaffective disorder.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Schizophrenia lacks the prominent, newly developed mood episodes meeting full criteria. Schizophreniform disorder resolves in under 6 months. In MDD with psychotic features, the psychotic symptoms only occur \nduring\n the mood episodes.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Schizoaffective disorder requires delusions or hallucinations for greater than 2 weeks in the absence of mood symptoms.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q004",
+      "questionNumber": 4,
+      "sourceQuestionNumber": 4,
+      "retrievalTag": "Haloperidol high fever rigidity CPK NMS\\",
+      "reviewPearl": "Discontinue the offending medication immediately in NMS; cooling blankets and dantrolene or bromocriptine are secondary treatments.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 30-year-old man with a history of acute agitation is given an intramuscular injection of haloperidol. Within hours, he develops a temperature of 103°F, severe \"lead pipe\" muscle rigidity, autonomic instability, and delirium. Laboratory results show an elevated creatine phosphokinase (CPK).",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Acute dystonia"
+        },
+        {
+          "label": "B",
+          "text": "Serotonin syndrome"
+        },
+        {
+          "label": "C",
+          "text": "Neuroleptic malignant syndrome (NM"
+        },
+        {
+          "label": "S",
+          "text": ""
+        },
+        {
+          "label": "D",
+          "text": "Akathisia\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Diagnose neuroleptic malignant syndrome following typical antipsychotic administration based on fever, rigidity, and autonomic instability.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The triad of high fever, severe rigidity, and autonomic instability following haloperidol administration, alongside elevated CPK, is classic for NMS. The first step in management is to discontinue the offending medication.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Acute dystonia presents under 12 hours with sustained muscle spasms (e.g., eyes \"stuck\" looking up) but without high fever or CPK elevation. Akathisia is a subjective feeling of restlessness occurring days to weeks later. Serotonin syndrome features hyperreflexia and myoclonus, not severe rigidity, and is caused by serotonergic agents.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Discontinue the offending medication immediately in NMS; cooling blankets and dantrolene or bromocriptine are secondary treatments.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q005",
+      "questionNumber": 5,
+      "sourceQuestionNumber": 5,
+      "retrievalTag": "Anorexia Russel sign high amylase hypokalemia\\",
+      "reviewPearl": "Eating disorders involving vomiting commonly cause high HCO3, low Cl, low K, and high amylase.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "An 18-year-old female is brought in for secondary amenorrhea lasting 3 months. Her BMI is calculated to be 17. Physical examination reveals eroded dental enamel and calluses on her knuckles.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Hyperkalemia"
+        },
+        {
+          "label": "B",
+          "text": "Low serum bicarbonate"
+        },
+        {
+          "label": "C",
+          "text": "High serum amylase"
+        },
+        {
+          "label": "D",
+          "text": "Low serum cortisol\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Identify the expected laboratory abnormalities in anorexia nervosa with purging behaviors.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient has anorexia with purging behavior (indicated by Russel sign and eroded teeth). Purging leads to enlarged salivary glands and consequently high serum amylase.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Patients with these purging behaviors develop hypokalemia (not hyperkalemia) and high HCO3 (metabolic alkalosis), not low. Hormonal profiles typically show high cortisol, low LH/FSH, and low estrogen due to starvation.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Eating disorders involving vomiting commonly cause high HCO3, low Cl, low K, and high amylase.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q006",
+      "questionNumber": 6,
+      "sourceQuestionNumber": 6,
+      "retrievalTag": "Fluctuating consciousness visual hallucinations shuffling gait Lewy Body\\",
+      "reviewPearl": "Avoid neuroleptics in patients with Lewy Body Dementia due to severe neuroleptic sensitivity; use acetylcholinesterase inhibitors instead.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 78-year-old female is evaluated for progressive memory loss. Her daughter reports that the patient experiences profound fluctuations in consciousness, frequently sees small children playing in her living room who are not actually there, and has developed a shuffling gait.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Alzheimer's Dementia"
+        },
+        {
+          "label": "B",
+          "text": "Frontotemporal Dementia"
+        },
+        {
+          "label": "C",
+          "text": "Lewy Body Dementia"
+        },
+        {
+          "label": "D",
+          "text": "Normal Pressure Hydrocephalus\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Recognize the classic triad of Lewy Body Dementia: fluctuating consciousness, visual hallucinations, and parkinsonism.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The clinical triad of fluctuating cognition/consciousness, well-formed visual hallucinations, and parkinsonism (shuffling gait) is highly specific for Lewy Body Dementia. Pathology shows intracytoplasmic alpha-synuclein inclusions.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Alzheimer's presents with progressive aphasia and apraxia without early hallucinations. Frontotemporal dementia presents initially with apathy and sexually explicit disinhibition. Normal Pressure Hydrocephalus presents with urinary incontinence, gait disturbance, and rapidly developing dementia (\"wacky, wobbly, wet\").\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Avoid neuroleptics in patients with Lewy Body Dementia due to severe neuroleptic sensitivity; use acetylcholinesterase inhibitors instead.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q007",
+      "questionNumber": 7,
+      "sourceQuestionNumber": 7,
+      "retrievalTag": "Alcohol withdrawal cirrhotic lorazepam oxazepam temazepam\\",
+      "reviewPearl": "For alcoholics with liver failure, remember \"LOT\" (Lorazepam, Oxazepam, Temazepam) because they undergo phase II glucuronidation and bypass phase I hepatic metabolism.\\\neftab720\ntightenfactor0\nStudio Output Study guide\\\neftab720\ntightenfactor0",
+      "stem": "A 50-year-old known alcoholic is admitted to the hospital. Three days into his admission, he develops severe confusion, fluctuations in consciousness, visual hallucinations of ants crawling on his skin, and a heart rate of 118 bpm. If this patient has known Child's class C cirrhosis, which of the following is the most appropriate treatment?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Diazepam"
+        },
+        {
+          "label": "B",
+          "text": "Chlordiazepoxide"
+        },
+        {
+          "label": "C",
+          "text": "Lorazepam"
+        },
+        {
+          "label": "D",
+          "text": "Haloperidol\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Select the appropriate benzodiazepine for alcohol withdrawal in a patient with significant hepatic impairment.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient is experiencing Delirium Tremens (DTs), which typically starts 48-72 hours after the last drink. Because he has severe liver disease (Child's class C cirrhosis), medications metabolized by the liver must be avoided. Lorazepam, oxazepam, and temazepam are glucuronidated prior to elimination and are safe in liver failure.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Diazepam and chlordiazepoxide are first-line for alcohol withdrawal in patients with normal liver function, but are contraindicated here due to long half-lives (80 and 120 hours) and heavy hepatic metabolism. Haloperidol does not prevent withdrawal seizures or treat the underlying GABA/glutamate imbalance.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "For alcoholics with liver failure, remember \"LOT\" (Lorazepam, Oxazepam, Temazepam) because they undergo phase II glucuronidation and bypass phase I hepatic metabolism.\\\neftab720\ntightenfactor0\nStudio Output Study guide\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q008",
+      "questionNumber": 8,
+      "sourceQuestionNumber": 8,
+      "retrievalTag": "Opiate overdose RR 6 intubate before naloxone\\",
+      "reviewPearl": "In opioid overdose with severe respiratory compromise, intubate the patient first, then give IV or IM naloxone.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 24-year-old man is brought to the emergency department by paramedics in a non-responsive state. His blood pressure is 100/60 mm Hg, heart rate is 50/min, and respiratory rate is 6/min. Physical examination reveals multiple track marks on his arms. Which of the following is the most appropriate next step in management?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Intramuscular naloxone"
+        },
+        {
+          "label": "B",
+          "text": "Endotracheal intubation"
+        },
+        {
+          "label": "C",
+          "text": "Intravenous flumazenil"
+        },
+        {
+          "label": "D",
+          "text": "Intravenous methadone\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Prioritize airway management (intubation) before administering naloxone in severe opioid overdose with critical respiratory depression.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient presents with severe respiratory depression (RR of 6) due to an opiate overdose, indicated by his unresponsiveness and track marks. The first priority in a patient with an unprotected airway and severe hypoventilation is airway management via intubation, followed immediately by IV or IM naloxone administration.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Naloxone (A) is a full mu-opiate antagonist and is the definitive antidote, but securing the airway (intubation) must come first if respiratory drive is critically low to prevent fatal hypoxia. Flumazenil (C) is the antidote for benzodiazepines and can precipitate seizures. Methadone (D) is a long-acting opioid used for long-term dependence, not acute overdose.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "In opioid overdose with severe respiratory compromise, intubate the patient first, then give IV or IM naloxone.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q009",
+      "questionNumber": 9,
+      "sourceQuestionNumber": 9,
+      "retrievalTag": "Cocaine intoxication hypertension beta-blockers contraindicated\\",
+      "reviewPearl": "Treat cocaine-induced hypertension and tachycardia with calcium channel blockers; beta-blockers are contraindicated due to the risk of unopposed alpha agonism.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 27-year-old man is brought to the ED by police after acting erratically. He is agitated, diaphoretic, and his pupils are widely dilated. Vital signs are significant for a heart rate of 135/min and blood pressure of 190/110 mm Hg. An ECG is performed, and a urine toxicology screen is positive. If pharmacological treatment is required for his cardiovascular symptoms, which of the following medications is strictly contraindicated?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Lorazepam"
+        },
+        {
+          "label": "B",
+          "text": "Calcium channel blockers"
+        },
+        {
+          "label": "C",
+          "text": "Propranolol"
+        },
+        {
+          "label": "D",
+          "text": "Haloperidol\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Identify beta-blockers as absolutely contraindicated in the management of cocaine or amphetamine intoxication.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient is presenting with cocaine/amphetamine intoxication (dilated pupils, tachycardia, severe hypertension). Beta-blockers like propranolol are strictly contraindicated because blocking beta-2 receptors leads to unopposed alpha-1 receptor stimulation, which can cause paradoxical, life-threatening worsening of hypertension.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Lorazepam (A) is the treatment of choice for managing cocaine-induced agitation and seizures. Calcium channel blockers (B) are the preferred treatment for hypertension and tachycardia in cocaine intoxication. Haloperidol (D) can be used to manage acute psychosis if present.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Treat cocaine-induced hypertension and tachycardia with calcium channel blockers; beta-blockers are contraindicated due to the risk of unopposed alpha agonism.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q010",
+      "questionNumber": 10,
+      "sourceQuestionNumber": 10,
+      "retrievalTag": "Fragile X IQ 50 macroorchidism CGG repeats\\",
+      "reviewPearl": "Fragile X is the most common cause of inherited mental retardation and is associated with comorbid seizures, mitral valve prolapse, and ADHD-like behavior.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "An 11-year-old boy is referred for evaluation due to poor academic and social performance. Formal IQ testing reveals an IQ of 50. On physical examination, the physician notes macrocephaly, a prominently long face, and macroorchidism. This patient's condition is most likely caused by which of the following genetic abnormalities?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Trisomy 21"
+        },
+        {
+          "label": "B",
+          "text": "Deletion on paternal chromosome 15"
+        },
+        {
+          "label": "C",
+          "text": "CGG trinucleotide repeats on the X chromosome"
+        },
+        {
+          "label": "D",
+          "text": "Deletion on chromosome 7\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Recognize the clinical triad of macrocephaly/long face, macroorchidism, and moderate mental retardation as Fragile X syndrome, caused by CGG repeats.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient's presentation of moderate mental retardation (IQ 40-55), macrocephaly, a long face, and macroorchidism is classic for Fragile X syndrome. This is an X-linked dominant condition caused by expanded CGG repeats demonstrating genetic anticipation.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Trisomy 21 (A) causes Down syndrome, which features oblique palpebral fissures, a simian crease, and endocardial cushion defects. Deletion on paternal chromosome 15 (B) causes Prader-Willi syndrome, marked by hyperphagia and hypogonadism. Deletion on chromosome 7 (D) causes Williams syndrome, characterized by elfin facies and increased sociability.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Fragile X is the most common cause of inherited mental retardation and is associated with comorbid seizures, mitral valve prolapse, and ADHD-like behavior.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q011",
+      "questionNumber": 11,
+      "sourceQuestionNumber": 11,
+      "retrievalTag": "Rett Syndrome normal 6-8mo handwringing MECP2\\",
+      "reviewPearl": "Rett Syndrome is caused by an X-linked dominant deletion of MECP2 and presents almost exclusively in girls with classic regression and hand-wringing.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 2-year-old girl is brought to the pediatrician by her parents, who are concerned about her recent development. She had been developing completely normally for the first 7 months of life, but recently she has lost all of her speech and no longer purposefully uses her hands. During the interview, she constantly wrings her hands together. Which of the following is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Asperger syndrome"
+        },
+        {
+          "label": "B",
+          "text": "Childhood Disintegrative Disorder"
+        },
+        {
+          "label": "C",
+          "text": "Autism spectrum disorder"
+        },
+        {
+          "label": "D",
+          "text": "Rett Syndrome\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "D",
+      "educationalObjective": "Diagnose Rett syndrome based on normal early development, subsequent loss of milestones, and characteristic hand-wringing in a young female.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Rett Syndrome occurs exclusively in girls and is characterized by normal development for the first 6-8 months, followed by regression. The hallmark symptoms are the loss of speech, loss of purposeful hand use, and the development of stereotypic hand movements, such as hand-wringing. It is caused by an X-linked dominant deletion of the MECP2 gene.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Childhood Disintegrative Disorder (B) involves normal development until age 2, followed by a major loss of verbal and social skills. Autism (C) typically presents before age 3 with a lack of eye contact and language delays, but does not have the characteristic period of completely normal early development followed by classic hand-wringing. Asperger (A) involves impaired social skills with preserved verbal abilities.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Rett Syndrome is caused by an X-linked dominant deletion of MECP2 and presents almost exclusively in girls with classic regression and hand-wringing.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q012",
+      "questionNumber": 12,
+      "sourceQuestionNumber": 12,
+      "retrievalTag": "Conduct disorder stealing fire setting assault\\",
+      "reviewPearl": "Conduct disorder involves behaviors that break the law or harm others and can progress to antisocial personality disorder in adulthood; ODD stops short of physical harm and law-breaking.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 14-year-old boy is mandated to attend counseling by a court order. He recently stole his neighbor’s lawnmower and then deliberately set fire to a nearby tool shed. His history is significant for 5 years of school truancy and a recent physical assault on a 13-year-old classmate. Which of the following is the most appropriate diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Antisocial personality disorder"
+        },
+        {
+          "label": "B",
+          "text": "Conduct disorder"
+        },
+        {
+          "label": "C",
+          "text": "Oppositional defiant disorder"
+        },
+        {
+          "label": "D",
+          "text": "Attention-deficit/hyperactivity disorder\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Differentiate conduct disorder from oppositional defiant disorder based on the presence of severe rule-breaking, property destruction, and violation of the rights of others.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Conduct disorder is diagnosed when a child or adolescent engages in a repetitive and persistent pattern of behavior that violates the basic rights of others or major age-appropriate societal norms (e.g., stealing, fire-setting, physical assault, truancy) for at least 6 months.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Antisocial personality disorder (A) cannot be diagnosed until age 18. Oppositional defiant disorder (C) involves argumentativeness and defiance towards authority figures but stops short of breaking the law or physically harming others/destroying property. ADHD (D) involves hyperactivity, impulsivity, and inattention, though it is commonly comorbid with conduct disorder.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Conduct disorder involves behaviors that break the law or harm others and can progress to antisocial personality disorder in adulthood; ODD stops short of physical harm and law-breaking.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q013",
+      "questionNumber": 13,
+      "sourceQuestionNumber": 13,
+      "retrievalTag": "Separation Anxiety Disorder abdominal pain missing school\\",
+      "reviewPearl": "In a child with recurrent somatic symptoms (belly pain) strictly on school days, suspect separation anxiety disorder.\\\neftab720\ntightenfactor0\nStudio Output Study guide\n\\",
+      "stem": "A 7-year-old boy is brought to the clinic because he frequently complains of severe abdominal pain on weekday mornings, resulting in him missing many days of school. His mother notes that the pain magically resolves by the afternoon and that he never complains of this pain on weekends or during summer vacation. A thorough medical workup is negative. What is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Factitious disorder"
+        },
+        {
+          "label": "B",
+          "text": "Rumination disorder"
+        },
+        {
+          "label": "C",
+          "text": "Separation anxiety disorder"
+        },
+        {
+          "label": "D",
+          "text": "Reactive attachment disorder\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Recognize separation anxiety disorder presenting as functional somatic complaints (e.g., abdominal pain) linked specifically to school attendance.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This presentation is highly characteristic of separation anxiety disorder. Children often present with somatic complaints (like abdominal pain or headaches) that occur strictly on school days when they are forced to separate from their primary caregivers, and these symptoms are notably absent on weekends or holidays.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Factitious disorder (A) involves intentionally feigning symptoms for primary gain (the sick role), which is less likely here than simple anxiety-induced somatic symptoms. Rumination disorder (B) involves regurgitating and re-chewing food. Reactive attachment disorder (D) occurs in neglected or orphaned children who fail to form relationships with caregivers and appear inhibited and hyper-vigilant.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "In a child with recurrent somatic symptoms (belly pain) strictly on school days, suspect separation anxiety disorder.\\\neftab720\ntightenfactor0\nStudio Output Study guide\n\\"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q014",
+      "questionNumber": 14,
+      "sourceQuestionNumber": 14,
+      "retrievalTag": "Atypical depression weight gain leaden paralysis MAOI\\",
+      "reviewPearl": "Atypical depression is uniquely characterized by hypersensitivity to rejection and \"leaden paralysis\"; it is historically known to be best treated with MAOIs.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 25-year-old woman presents to the clinic complaining of a depressed mood for the past month. She reports sleeping 14 hours a day, significant weight gain, and feeling like her arms and legs are \"made of lead\" in the mornings. However, she notes that her mood temporarily brightens when her friend invites her out to dinner.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Major depressive disorder with melancholic features"
+        },
+        {
+          "label": "B",
+          "text": "Atypical depression"
+        },
+        {
+          "label": "C",
+          "text": "Uncomplicated bereavement"
+        },
+        {
+          "label": "D",
+          "text": "Adjustment disorder\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Recognize the classic features of atypical depression, including hypersomnia, hyperphagia, leaden paralysis, and mood reactivity.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient's presentation of hypersomnia, hyperphagia (eating more/weight gain), leaden paralysis, and mood reactivity (feeling better in response to positive events) is classic for atypical depression.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Melancholic features typically include insomnia, weight loss, and lack of mood reactivity. Uncomplicated bereavement involves grief following the loss of a loved one. Adjustment disorder requires a clear stressor with symptoms occurring within 3 months and out of proportion to the stressor.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Atypical depression is uniquely characterized by hypersensitivity to rejection and \"leaden paralysis\"; it is historically known to be best treated with MAOIs.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q015",
+      "questionNumber": 15,
+      "sourceQuestionNumber": 15,
+      "retrievalTag": "Serotonin syndrome myoclonus hyperreflexia SSRI MAOI\\",
+      "reviewPearl": "Combining SSRIs with MAOIs can trigger lethal Serotonin Syndrome; always ensure a proper washout period when switching between these drug classes.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 42-year-old man with major depressive disorder is currently taking fluoxetine. He recently acquired a non-prescription medication online to help with his mood. He now presents to the ED with myoclonic jerks, tachycardia, high blood pressure, hyperreflexia, nausea, and diarrhea.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Tyramine hypertensive crisis"
+        },
+        {
+          "label": "B",
+          "text": "SSRI discontinuation syndrome"
+        },
+        {
+          "label": "C",
+          "text": "Serotonin syndrome"
+        },
+        {
+          "label": "D",
+          "text": "Neuroleptic malignant syndrome\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Identify serotonin syndrome based on the triad of autonomic instability, altered mental status, and neuromuscular hyperactivity (myoclonus/hyperreflexia).\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The combination of myoclonic jerks, hyperreflexia, autonomic instability (tachycardia, high BP), and GI distress in a patient on an SSRI strongly indicates serotonin syndrome. This is commonly precipitated by adding an MAOI to an SSRI regimen.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Tyramine hypertensive crisis occurs when patients on MAOIs consume tyramine-rich foods (cheese, wine) and presents with a pounding headache and flushing. SSRI discontinuation syndrome causes dizziness, fatigue, and headache. NMS presents with \"lead-pipe\" rigidity, not hyperreflexia.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Combining SSRIs with MAOIs can trigger lethal Serotonin Syndrome; always ensure a proper washout period when switching between these drug classes.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q016",
+      "questionNumber": 16,
+      "sourceQuestionNumber": 16,
+      "retrievalTag": "Malingering lawsuit secondary gain fake symptoms\\",
+      "reviewPearl": "Malingering is classified as a V-code in the DSM and has a strong association with antisocial personality disorder.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 45-year-old unemployed man is involved in a low-speed motor vehicle collision. He sues the other driver, claiming severe nerve damage to his legs prevents him from walking, and he arrives at his deposition in a wheelchair. A week later, video evidence surfaces showing him dancing at a nightclub.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Factitious disorder"
+        },
+        {
+          "label": "B",
+          "text": "Malingering"
+        },
+        {
+          "label": "C",
+          "text": "Illness anxiety disorder"
+        },
+        {
+          "label": "D",
+          "text": "Conversion disorder\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Differentiate malingering from factitious disorder based on the presence of clear secondary gain.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Malingering is the intentional production of false or grossly exaggerated physical or psychological symptoms motivated by external incentives (secondary gain), such as obtaining financial compensation in a lawsuit, avoiding work, or obtaining drugs.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Factitious disorder (Munchausen syndrome) involves intentionally producing symptoms for \nprimary\n gain (the psychological desire to assume the sick role). Conversion disorder involves unconscious, unintentional neurologic deficits. Illness anxiety disorder involves excessive worry about having a serious illness without intentionally faking symptoms.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Malingering is classified as a V-code in the DSM and has a strong association with antisocial personality disorder.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q017",
+      "questionNumber": 17,
+      "sourceQuestionNumber": 17,
+      "retrievalTag": "OSA daytime sleepiness obesity polysomnogram\\",
+      "reviewPearl": "A polysomnogram is required to diagnose OSA (>10 hypopneas/apneas per hour), and CPAP is essential to reduce the risk of pulmonary hypertension.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 45-year-old obese man presents to his primary care physician complaining of daytime sleepiness, anergia, and depressed mood. His wife forced him to come in because she is annoyed by his loud snoring and gasping for air during the night.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Narcolepsy"
+        },
+        {
+          "label": "B",
+          "text": "Major depressive disorder"
+        },
+        {
+          "label": "C",
+          "text": "Obstructive Sleep Apnea (OS"
+        },
+        {
+          "label": "A",
+          "text": ""
+        },
+        {
+          "label": "D",
+          "text": "Dyssomnia NOS\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Recognize Obstructive Sleep Apnea as a reversible medical cause of daytime sleepiness and depressive symptoms in obese patients.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Daytime sleepiness and depression in an obese patient with a large neck and witnessed snoring/apneas are the hallmark signs of Obstructive Sleep Apnea. It is crucial to evaluate this as a medical cause before diagnosing primary depression.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Narcolepsy presents with irresistible attacks of REM sleep, cataplexy (loss of muscle tone with intense emotion), and sleep hallucinations. MDD does not explain the apneas and snoring. Dyssomnia NOS (like Restless Legs Syndrome) would present with \"creepy-crawly\" sensations on the legs relieved by movement.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "A polysomnogram is required to diagnose OSA (>10 hypopneas/apneas per hour), and CPAP is essential to reduce the risk of pulmonary hypertension.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q018",
+      "questionNumber": 18,
+      "sourceQuestionNumber": 18,
+      "retrievalTag": "OCPD color coding lists ego syntonic\\",
+      "reviewPearl": "OCPD behaviors are \"ego-syntonic\" (acceptable to the self), making them distinct from the distressing, repetitive compulsions of true OCD.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 25-year-old medical student spends most of her time color-coding her notes and making intricate textbook highlighting schedules rather than actually studying. She makes three lists a day. Her peers dislike working with her because she is rigid, demanding that all group work be done exactly her way, which she believes is the only correct method.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Obsessive Compulsive Disorder (OC"
+        },
+        {
+          "label": "D",
+          "text": ""
+        },
+        {
+          "label": "B",
+          "text": "Obsessive Compulsive Personality Disorder (OCP"
+        },
+        {
+          "label": "D",
+          "text": ""
+        },
+        {
+          "label": "C",
+          "text": "Avoidant Personality Disorder"
+        },
+        {
+          "label": "D",
+          "text": "Dependent Personality Disorder\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Differentiate Obsessive Compulsive Personality Disorder from OCD based on the ego-syntonic nature of OCPD traits.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "OCPD is characterized by a pervasive pattern of preoccupation with orderliness, perfectionism, and interpersonal control at the expense of flexibility and efficiency. Crucially, these behaviors are \"ego-syntonic\" (the patient feels their way is the right way).\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "OCD involves true obsessions and compulsions that are \"ego-dystonic\" (cause the patient distress). Avoidant PD fears ridicule and rejection. Dependent PD involves jumping from relationship to relationship due to a fear of being alone.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "OCPD behaviors are \"ego-syntonic\" (acceptable to the self), making them distinct from the distressing, repetitive compulsions of true OCD.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q019",
+      "questionNumber": 19,
+      "sourceQuestionNumber": 19,
+      "retrievalTag": "Wernicke encephalopathy ataxia nystagmus thiamine before glucose\\",
+      "reviewPearl": "Always give thiamine \nbefore\n glucose in malnourished alcoholics to prevent progression to Korsakoff's syndrome (irreversible damage to the mamillary bodies causing confabulation and amnesia).\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 55-year-old homeless man with a known history of severe alcohol use disorder is brought to the ED confused and walking with a broad-based, unsteady gait. Physical examination reveals bilateral abducens nerve palsies and horizontal nystagmus. Which of the following is the most appropriate initial step in his management?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Administer intravenous glucose followed by thiamine"
+        },
+        {
+          "label": "B",
+          "text": "Administer intravenous thiamine followed by glucose-containing fluids"
+        },
+        {
+          "label": "C",
+          "text": "Administer intramuscular haloperidol"
+        },
+        {
+          "label": "D",
+          "text": "Administer intravenous lorazepam\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Diagnose Wernicke Encephalopathy and select the correct sequence of treatment to prevent permanent neurological damage.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient has the classic triad of Wernicke Encephalopathy: confusion, ataxia, and ophthalmoplegia/nystagmus caused by thiamine (Vitamin B1) deficiency. It is imperative to administer thiamine \nfirst\n, before any glucose-containing fluids.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Administering glucose before thiamine (A) will rapidly deplete remaining thiamine stores, precipitating irreversible Korsakoff's syndrome. Haloperidol (C) is for acute psychosis. Lorazepam (D) is the treatment for alcohol withdrawal seizures/delirium tremens, not Wernicke's.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Always give thiamine \nbefore\n glucose in malnourished alcoholics to prevent progression to Korsakoff's syndrome (irreversible damage to the mamillary bodies causing confabulation and amnesia).\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q020",
+      "questionNumber": 20,
+      "sourceQuestionNumber": 20,
+      "retrievalTag": "Enuresis next best test UA urine culture\\",
+      "reviewPearl": "For childhood enuresis, always rule out medical causes with a UA first; the best initial treatment is the alarm and pad method for 6 weeks.\\\neftab720\ntightenfactor0\nStudio Output Study guide\n\\",
+      "stem": "A 6-year-old girl is brought to the clinic by her mother because she frequently urinates in her clothes, averaging about once a day. She has never achieved full daytime bladder control. Before starting behavioral modifications, what is the most appropriate next step in management?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Reassurance that this is age-appropriate behavior"
+        },
+        {
+          "label": "B",
+          "text": "Prescribe oral desmopressin (DDAV"
+        },
+        {
+          "label": "P",
+          "text": ""
+        },
+        {
+          "label": "C",
+          "text": "Prescribe oral imipramine"
+        },
+        {
+          "label": "D",
+          "text": "Obtain a urinalysis and urine culture\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "D",
+      "educationalObjective": "Identify urinalysis and urine culture as the essential first step in the evaluation of childhood enuresis.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "In any child presenting with enuresis (urinary incontinence), the crucial first step is to rule out an underlying organic medical cause, such as a urinary tract infection or diabetes mellitus, by obtaining a UA and urine culture.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "It is not normal for a 6-year-old to lack daytime bladder control entirely (A). Behavioral modifications (alarm and pad) are the first-line treatment \nafter\n medical causes are ruled out. Desmopressin and TCAs like imipramine are second-line treatments with significant side effect profiles.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "For childhood enuresis, always rule out medical causes with a UA first; the best initial treatment is the alarm and pad method for 6 weeks.\\\neftab720\ntightenfactor0\nStudio Output Study guide\n\\"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q021",
+      "questionNumber": 21,
+      "sourceQuestionNumber": 21,
+      "retrievalTag": "Lithium suppresses inositol triphosphate Ebstein's anomaly\\",
+      "reviewPearl": "The preferred treatment for bipolar disorder in pregnant patients, especially in the first trimester, is clonazepam.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 28-year-old woman with a history of bipolar I disorder is planning to become pregnant. She currently takes a maintenance medication that functions by suppressing inositol triphosphate. If she continues taking this medication during her first trimester, her fetus is at highest risk for developing which of the following?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Neural tube defect"
+        },
+        {
+          "label": "B",
+          "text": "Ebstein's anomaly"
+        },
+        {
+          "label": "C",
+          "text": "Agranulocytosis"
+        },
+        {
+          "label": "D",
+          "text": "Cleft palate\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Identify lithium's mechanism of action and its classic teratogenic effect (Ebstein's anomaly) when used in the first trimester.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient is taking lithium, which has a mechanism of action that involves suppressing inositol triphosphate. If taken during the first trimester of pregnancy, lithium is notoriously associated with Ebstein's anomaly, a congenital heart defect characterized by a malformed tricuspid valve that atrializes a portion of the right ventricle.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Neural tube defects (A) are the major teratogenic complication associated with valproate or carbamazepine, which are also used for bipolar disorder. Agranulocytosis (C) is a complication of carbamazepine or clozapine, not a specific teratogenic effect. Cleft palate is not the primary classic teratogen effect of lithium.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "The preferred treatment for bipolar disorder in pregnant patients, especially in the first trimester, is clonazepam.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q022",
+      "questionNumber": 22,
+      "sourceQuestionNumber": 22,
+      "retrievalTag": "MDD polysomnogram shortened REM latency\\",
+      "reviewPearl": "Sleep studies in depressed patients commonly reveal shortened REM latency and more frequent REM cycles.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 45-year-old man presents to the clinic complaining of a 2-month history of profound sadness, a 10-pound weight loss, decreased energy, and extreme guilt. He states he wakes up at 3:00 AM every day and cannot fall back asleep. If a polysomnogram were performed on this patient, which of the following sleep architecture findings would most likely be observed?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Prolonged REM latency"
+        },
+        {
+          "label": "B",
+          "text": "Shortened REM latency"
+        },
+        {
+          "label": "C",
+          "text": "Increased delta wave sleep"
+        },
+        {
+          "label": "D",
+          "text": "Absence of REM sleep\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Recognize the characteristic polysomnogram findings in major depressive disorder.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient is presenting with classic symptoms of a Major Depressive Episode. Polysomnography in patients with major depressive disorder typically shows a shortened REM latency and more frequent REM sleep.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Prolonged REM latency (A) and absence of REM sleep (D) are incorrect; depression typically shifts REM sleep earlier into the night. Increased delta wave (slow-wave) sleep (C) is incorrect; depressed patients typically have decreased slow-wave sleep.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Sleep studies in depressed patients commonly reveal shortened REM latency and more frequent REM cycles.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q023",
+      "questionNumber": 23,
+      "sourceQuestionNumber": 23,
+      "retrievalTag": "GAD symptoms >6mo Buspirone 5HT 1a\\",
+      "reviewPearl": "Buspirone takes over 3 weeks to work, so patients with severe GAD often require a short-term benzodiazepine bridge while waiting for efficacy.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 23-year-old medical student reports severe difficulty falling asleep for the past 7 months because she constantly thinks about failing biochemistry. During the day, she cannot concentrate because she excessively worries that her boyfriend will leave her and that she will go bankrupt. She requests a non-sedating medication to help her. Which of the following is the most appropriate long-term pharmacotherapy?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Buspirone"
+        },
+        {
+          "label": "B",
+          "text": "Alprazolam"
+        },
+        {
+          "label": "C",
+          "text": "Propranolol"
+        },
+        {
+          "label": "D",
+          "text": "Haloperidol\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Diagnose Generalized Anxiety Disorder and select buspirone as an appropriate maintenance therapy.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient meets the criteria for Generalized Anxiety Disorder (GAD), characterized by uncontrollable worry about multiple domains (school, relationship, finances) lasting greater than 6 months. The best long-term non-sedating treatment is buspirone, a 5HT-1a partial agonist.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Alprazolam (B) is a benzodiazepine that can be used for acute, situational anxiety or panic disorder, but is not preferred as a primary long-term monotherapy due to dependence and sedation. Propranolol (C) is the best treatment for social phobia (e.g., performance anxiety), not GAD. Haloperidol (D) is an antipsychotic used for acute agitation or psychosis.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Buspirone takes over 3 weeks to work, so patients with severe GAD often require a short-term benzodiazepine bridge while waiting for efficacy.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q024",
+      "questionNumber": 24,
+      "sourceQuestionNumber": 24,
+      "retrievalTag": "Munchausen laxative abuse pigmentation in colon primary gain\\",
+      "reviewPearl": "Munchausen Syndrome is a severe form of factitious disorder where patients actually induce their symptoms (e.g., injecting feces, abusing laxatives) purely for the psychological reward of receiving medical care.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 54-year-old nurse presents to the emergency department with a 2-month history of severe, unrelenting diarrhea and abdominal pain. Her medical record reveals she has presented to four other hospitals with the same complaint in the past year. A colonoscopy is performed and reveals dark pigmentation in the wall of her colon. Which of the following is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Malingering"
+        },
+        {
+          "label": "B",
+          "text": "Factitious disorder (Munchausen Syndrome)"
+        },
+        {
+          "label": "C",
+          "text": "Somatic symptom disorder"
+        },
+        {
+          "label": "D",
+          "text": "Illness anxiety disorder\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Differentiate factitious disorder from malingering based on the presence of primary versus secondary gain and the intentional induction of symptoms.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient, a healthcare worker, is intentionally inducing her symptoms (laxative abuse, evidenced by melanosis coli/pigmentation in the colon wall) to assume the sick role. This intentional induction of symptoms for \nprimary gain\n is the hallmark of Munchausen Syndrome.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Malingering (A) involves faking symptoms for \nsecondary gain\n (e.g., a lawsuit, avoiding work), which is absent here. Somatic symptom disorder (C) and illness anxiety disorder (D) involve unconscious anxiety about symptoms or illness, without the intentional induction of illness using external agents like laxatives.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Munchausen Syndrome is a severe form of factitious disorder where patients actually induce their symptoms (e.g., injecting feces, abusing laxatives) purely for the psychological reward of receiving medical care.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q025",
+      "questionNumber": 25,
+      "sourceQuestionNumber": 25,
+      "retrievalTag": "Hyperphagia hypogonadism paternal chromosome 15 Prader-Willi\\",
+      "reviewPearl": "Remember \"P\" for Prader-Willi and Paternal deletion on chromosome 15; these patients lack satiety cues and will eat to the point of life-threatening obesity if unrestricted.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 14-year-old boy is evaluated by a geneticist for extreme obesity. His parents report that he has a voracious appetite and they have had to place padlocks on their kitchen cabinets to prevent him from eating constantly. On physical examination, the physician notes hypotonia, hypogonadism, and several scabs from chronic skin picking. Which of the following genetic abnormalities is the most likely cause of this patient's condition?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Deletion on maternal chromosome 15"
+        },
+        {
+          "label": "B",
+          "text": "Deletion on paternal chromosome 15"
+        },
+        {
+          "label": "C",
+          "text": "Deletion on chromosome 7"
+        },
+        {
+          "label": "D",
+          "text": "Deletion on chromosome 22\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Correlate the clinical features of Prader-Willi Syndrome with its underlying genetic deletion.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The classic presentation of hypotonia, hypogonadism, hyperphagia (extreme overeating), and skin picking is highly specific for Prader-Willi Syndrome, which is caused by a microdeletion on the \npaternal\n chromosome 15.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Deletion on maternal chromosome 15 (A) causes Angelman syndrome, presenting with seizures, strabismus, and episodic laughter. Deletion on chromosome 7 (C) causes Williams syndrome (elfin appearance, increased empathy). Deletion on chromosome 22 (D) causes DiGeorge syndrome (palate defects, hypocalcemia).\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Remember \"P\" for Prader-Willi and Paternal deletion on chromosome 15; these patients lack satiety cues and will eat to the point of life-threatening obesity if unrestricted.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q026",
+      "questionNumber": 26,
+      "sourceQuestionNumber": 26,
+      "retrievalTag": "Rapid dementia myoclonus corneal transplant triphasic bursts CJD\\",
+      "reviewPearl": "CJD is a spongiform encephalopathy caused by prions; classic buzzwords include myoclonus provoked by startle and triphasic bursts on EEG.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 65-year-old man is brought to the hospital by his wife due to a rapidly progressive decline in his memory and cognition over the last 3 months. Upon examination, he exhibits frequent myoclonic jerks and an exaggerated startle response to loud noises. His medical history is notable for a recent corneal transplant. Which of the following is the most likely electroencephalogram (EE",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "G",
+          "text": "finding in this patient?"
+        },
+        {
+          "label": "A",
+          "text": "Diffuse background slowing"
+        },
+        {
+          "label": "B",
+          "text": "Triphasic bursts"
+        },
+        {
+          "label": "C",
+          "text": "3-Hz spike-and-wave discharges"
+        },
+        {
+          "label": "D",
+          "text": "Normal sleep architecture\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Recognize the clinical presentation of Creutzfeldt-Jakob disease and identify its characteristic EEG pattern.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient's rapidly developing dementia, prominent myoclonus, heightened startle response, and history of a corneal transplant (a known route of prion transmission) are strongly suggestive of Creutzfeldt-Jakob Disease (CJD). The classic EEG finding for CJD is periodic triphasic bursts.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Diffuse background slowing (A) is typically seen in generalized delirium. 3-Hz spike-and-wave discharges (C) are the classic EEG finding for absence seizures. A normal EEG (D) would be expected in acute primary psychosis, not a severe spongiform encephalopathy.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "CJD is a spongiform encephalopathy caused by prions; classic buzzwords include myoclonus provoked by startle and triphasic bursts on EEG.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q027",
+      "questionNumber": 27,
+      "sourceQuestionNumber": 27,
+      "retrievalTag": "Down syndrome Trisomy 21 Alzheimer's by 30-35 APP gene\\",
+      "reviewPearl": "Down Syndrome patients have three copies of chromosome 21, resulting in overexpression of the APP gene and near-universal development of Alzheimer's pathology if they survive into adulthood.\\\neftab720\ntightenfactor0\nStudio Output Study guide\n\\",
+      "stem": "A newborn male is evaluated in the nursery. He has decreased muscle tone, an unusually large tongue, oblique palpebral fissures, and a single transverse palmar crease. An echocardiogram reveals an endocardial cushion defect. The physician counsels the parents on the child's long-term prognosis. As this patient reaches his 30s, he is at significantly increased risk for developing which of the following neurologic conditions?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Parkinson's disease"
+        },
+        {
+          "label": "B",
+          "text": "Alzheimer's dementia"
+        },
+        {
+          "label": "C",
+          "text": "Huntington's disease"
+        },
+        {
+          "label": "D",
+          "text": "Normal pressure hydrocephalus\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Identify the link between Down Syndrome and early-onset Alzheimer's disease due to the location of the APP gene.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The infant's physical features (decreased tone, oblique palpebral fissures, simian crease, large tongue, endocardial cushion defect) are classic for Down Syndrome (Trisomy 21). Patients with Down Syndrome have a significantly increased risk of developing early-onset Alzheimer's dementia by age 30-35 because the Amyloid Precursor Protein (APP) gene is located on chromosome 21.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Parkinson's disease (A), Huntington's disease (C), and Normal pressure hydrocephalus (D) are not directly linked to the trisomy 21 genetic abnormality or the extra copy of the APP gene.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Down Syndrome patients have three copies of chromosome 21, resulting in overexpression of the APP gene and near-universal development of Alzheimer's pathology if they survive into adulthood.\\\neftab720\ntightenfactor0\nStudio Output Study guide\n\\"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q028",
+      "questionNumber": 28,
+      "sourceQuestionNumber": 28,
+      "retrievalTag": "Elfin appearance friendly empathy deletion Chr 7 Williams\\",
+      "reviewPearl": "Patients with Williams syndrome are highly sociable and empathetic, distinguishing them from other causes of developmental delay, and they have a deletion on chromosome 7.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 7-year-old boy is evaluated for learning difficulties. He is noted to be extremely friendly and sociable with the clinic staff, demonstrating high empathy and strong verbal reasoning skills for his age. Physical examination reveals a broad forehead, short nose, and full cheeks, described as an \"elfin\" appearance. Which of the following genetic abnormalities is most likely responsible for this patient's presentation?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Deletion on chromosome 7"
+        },
+        {
+          "label": "B",
+          "text": "Deletion on maternal chromosome 15"
+        },
+        {
+          "label": "C",
+          "text": "Deletion on paternal chromosome 15"
+        },
+        {
+          "label": "D",
+          "text": "Deletion on chromosome 17\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Correlate the clinical features of Williams syndrome (elfin facies, hypersociability) with its genetic etiology (chromosome 7 deletion).\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient presents with Williams syndrome, which is characterized by an \"elfin\" appearance, increased sociability, high empathy, and strong verbal reasoning skills. It is caused by a microdeletion on chromosome 7.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Deletion on maternal chromosome 15 causes Angelman syndrome (seizures, episodic laughter). Deletion on paternal chromosome 15 causes Prader-Willi syndrome (hyperphagia, obesity). Deletion on chromosome 17 causes Smith-Magenis syndrome (broad face, self-injurious behavior).\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Patients with Williams syndrome are highly sociable and empathetic, distinguishing them from other causes of developmental delay, and they have a deletion on chromosome 7.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q029",
+      "questionNumber": 29,
+      "sourceQuestionNumber": 29,
+      "retrievalTag": "ADHD symptoms microcephaly smooth philtrum Fetal Alcohol Syndrome\\",
+      "reviewPearl": "Fetal Alcohol Syndrome is the most common recognizable cause of mental retardation and presents with distinct facial features like a smooth philtrum.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 6-year-old boy is evaluated for hyperactivity and poor attention in class. His physical examination is notable for microcephaly, short palpebral fissures, a thin upper lip, and a smooth philtrum. His foster mother notes that his biological mother struggled with substance abuse. What is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Congenital CMV infection"
+        },
+        {
+          "label": "B",
+          "text": "Fetal Alcohol Syndrome"
+        },
+        {
+          "label": "C",
+          "text": "Congenital Rubella Syndrome"
+        },
+        {
+          "label": "D",
+          "text": "Fragile X Syndrome\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Recognize the classic facial dysmorphisms and neurobehavioral symptoms associated with Fetal Alcohol Syndrome.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The classic triad of facial dysmorphisms (smooth philtrum, thin upper lip, short palpebral fissures), microcephaly, and ADHD-like symptoms is highly specific for Fetal Alcohol Syndrome. It is the most common cause of mental retardation.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Congenital CMV presents with chorioretinitis, periventricular calcifications, and petechiae. Congenital Rubella presents with cloudy corneas, hearing impairment, and heart defects. Fragile X presents with macrocephaly, a long face, and macroorchidism.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Fetal Alcohol Syndrome is the most common recognizable cause of mental retardation and presents with distinct facial features like a smooth philtrum.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q030",
+      "questionNumber": 30,
+      "sourceQuestionNumber": 30,
+      "retrievalTag": "Palate defects hypocalcemia autism Chr 22 DiGeorge\\",
+      "reviewPearl": "Patients with DiGeorge syndrome (chromosome 22q11 deletion) have a significantly increased risk of developing psychiatric conditions, including autism spectrum behaviors and schizophrenia.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 4-year-old boy with a history of a ventricular septal defect and a cleft palate is brought to the clinic for delayed social milestones. He exhibits behaviors consistent with autism spectrum disorder. A review of his neonatal records reveals an episode of severe hypocalcemia. Which of the following genetic microdeletions is most likely present?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Chromosome 7"
+        },
+        {
+          "label": "B",
+          "text": "Chromosome 8"
+        },
+        {
+          "label": "C",
+          "text": "Chromosome 22"
+        },
+        {
+          "label": "D",
+          "text": "Chromosome 15\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Identify the clinical features of DiGeorge syndrome and its association with chromosome 22 deletions and autism spectrum symptoms.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient's history of palate defects, congenital heart disease, hypocalcemia (due to hypoplastic thymus/parathyroids), and autism spectrum behaviors is characteristic of DiGeorge syndrome. This is caused by a microdeletion on chromosome 22.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Chromosome 7 deletion causes Williams syndrome. Chromosome 8 anomalies can be seen in CHARGE syndrome (coloboma, heart defects, choanal atresia). Chromosome 15 deletions cause Prader-Willi or Angelman syndromes.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Patients with DiGeorge syndrome (chromosome 22q11 deletion) have a significantly increased risk of developing psychiatric conditions, including autism spectrum behaviors and schizophrenia.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q031",
+      "questionNumber": 31,
+      "sourceQuestionNumber": 31,
+      "retrievalTag": "Lack eye contact language delay parts of toys Autism\\",
+      "reviewPearl": "A classic early sign of autism is a preoccupation with \"parts of toys\" (like spinning wheels) rather than engaging in imaginative play.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 2-year-old boy is brought in by his parents due to delayed speech. They report that he rarely makes eye contact with his mother and frequently repeats words back to them rather than answering questions. He does not play with other children and instead spends hours spinning the wheels of a toy truck.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Asperger syndrome"
+        },
+        {
+          "label": "B",
+          "text": "Autism spectrum disorder"
+        },
+        {
+          "label": "C",
+          "text": "Childhood Disintegrative Disorder"
+        },
+        {
+          "label": "D",
+          "text": "Rett syndrome\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Diagnose autism based on early-onset deficits in social communication and restricted, repetitive behaviors.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Lack of eye contact, delayed language with echolalia (repetitive language), and a rigid preoccupation with parts of toys (spinning wheels) presenting before age 3 are hallmark features of autism.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Asperger syndrome typically presents with preserved verbal ability but impaired social skills. Childhood Disintegrative Disorder features entirely normal development until age 2, followed by a drastic loss of acquired verbal and social skills. Rett syndrome occurs almost exclusively in girls and features hand-wringing and loss of milestones.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "A classic early sign of autism is a preoccupation with \"parts of toys\" (like spinning wheels) rather than engaging in imaginative play.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q032",
+      "questionNumber": 32,
+      "sourceQuestionNumber": 32,
+      "retrievalTag": "ADHD non-stimulant NE reuptake inhibitor atomoxetine\\",
+      "reviewPearl": "Atomoxetine is a non-stimulant option for ADHD, carrying a side effect profile of dry mouth, insomnia, and decreased appetite.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "An 8-year-old boy is diagnosed with Attention-Deficit/Hyperactivity Disorder (ADHD). His parents are extremely hesitant to start him on a stimulant medication due to a strong family history of substance abuse, and they request a non-stimulant alternative. Which of the following medications is a norepinephrine reuptake inhibitor?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Methylphenidate"
+        },
+        {
+          "label": "B",
+          "text": "Amphetamine"
+        },
+        {
+          "label": "C",
+          "text": "Atomoxetine"
+        },
+        {
+          "label": "D",
+          "text": "Clonidine\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Identify atomoxetine as a non-stimulant, norepinephrine reuptake inhibitor option for the treatment of ADHD.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Atomoxetine is a non-stimulant medication used for ADHD that works primarily as a norepinephrine reuptake inhibitor. It is a good choice for patients who cannot tolerate or should avoid stimulants.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Methylphenidate and Amphetamine are both first-line stimulant medications that block dopamine/norepinephrine reuptake and stimulate release. Clonidine is an alpha-2 agonist that reduces peripheral sympathetic nervous system activity and is also used for ADHD.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Atomoxetine is a non-stimulant option for ADHD, carrying a side effect profile of dry mouth, insomnia, and decreased appetite.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q033",
+      "questionNumber": 33,
+      "sourceQuestionNumber": 33,
+      "retrievalTag": "Tourette tics >1 yr first line clonidine\\",
+      "reviewPearl": "For Tourette's, clonidine is first-line due to its benign side effect profile, but typical antipsychotics like haloperidol or pimozide are the most effective.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 9-year-old boy is brought to the clinic because his teacher notes he makes loud grunting noises and complex hand movements that disrupt the class. These behaviors have occurred at least once a day for the past 14 months without any prolonged period of remission. The physician decides to initiate first-line pharmacotherapy with a medication known for its relatively benign side effect profile.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Haloperidol"
+        },
+        {
+          "label": "B",
+          "text": "Pimozide"
+        },
+        {
+          "label": "C",
+          "text": "Clonidine"
+        },
+        {
+          "label": "D",
+          "text": "Fluoxetine\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Select clonidine as the first-line, lower-risk pharmacological treatment for Tourette syndrome.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient has Tourette syndrome (motor and vocal tics occurring daily for over 1 year). The first-line medication, chosen for its relatively benign side effect profile, is clonidine (an alpha-2 agonist).\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Haloperidol and pimozide are dopamine-receptor antagonists; while they are the \nmost effective\n treatments for severe Tourette's, they are not first-line due to their risk of extrapyramidal side effects. Fluoxetine is an SSRI and would only be useful if the patient had comorbid OCD.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "For Tourette's, clonidine is first-line due to its benign side effect profile, but typical antipsychotics like haloperidol or pimozide are the most effective.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q034",
+      "questionNumber": 34,
+      "sourceQuestionNumber": 34,
+      "retrievalTag": "Adopted child inhibited no relationship Reactive Attachment Disorder\\",
+      "reviewPearl": "Suspect reactive attachment disorder in an adopted or neglected child who is hypervigilant and fails to form a bond with their new parents.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 6-year-old girl is brought to the pediatrician by her adoptive parents. She was adopted 8 months ago after spending the first 5 years of her life in an understaffed, crowded orphanage. The parents report that she is withdrawn, hypervigilant, and has failed to form any emotional attachment or relationship with them.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Autism spectrum disorder"
+        },
+        {
+          "label": "B",
+          "text": "Separation anxiety disorder"
+        },
+        {
+          "label": "C",
+          "text": "Reactive attachment disorder"
+        },
+        {
+          "label": "D",
+          "text": "Oppositional defiant disorder\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Recognize reactive attachment disorder in a child with a history of neglect who fails to form relationships with caregivers.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Reactive attachment disorder occurs in children who have experienced severe social neglect or institutionalization (e.g., orphanages) and fail to form normal, secure attachment relationships with caregivers. They characteristically appear socially inhibited, withdrawn, and hypervigilant.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Autism spectrum disorder involves innate neurodevelopmental deficits in social communication, not strictly environmentally induced attachment failure. Separation anxiety disorder features excessive distress upon separating from attachment figures. ODD involves defiant, argumentative behavior toward authority figures.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Suspect reactive attachment disorder in an adopted or neglected child who is hypervigilant and fails to form a bond with their new parents.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q035",
+      "questionNumber": 35,
+      "sourceQuestionNumber": 35,
+      "retrievalTag": "Stools in clothes encopresis check fecal retention\\",
+      "reviewPearl": "In a child with new-onset encopresis, always evaluate for underlying severe constipation causing overflow incontinence by checking for fecal retention.\\\neftab720\ntightenfactor0\nStudio Output Study guide\n\\",
+      "stem": "A 6-year-old girl is brought to the clinic because she frequently passes stool in her clothes, averaging an episode every 2 weeks. She has no known medical conditions and was fully toilet trained by age 4. What is the most appropriate next step in management?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Prescribe oral imipramine"
+        },
+        {
+          "label": "B",
+          "text": "Obtain a urinalysis and urine culture"
+        },
+        {
+          "label": "C",
+          "text": "Check for fecal retention"
+        },
+        {
+          "label": "D",
+          "text": "Implement the alarm and pad method\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Identify the initial step in evaluating encopresis as ruling out underlying constipation and fecal retention.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This child presents with encopresis (fecal incontinence). The most common cause of encopresis in children is chronic constipation leading to fecal impaction and overflow incontinence. Therefore, the next best test is to check for fecal retention (often via an abdominal X-ray or physical exam).\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Urinalysis and culture (B) and the alarm and pad method (D) are appropriate steps for evaluating and treating \nenuresis\n (urinary incontinence). Imipramine (A) is a second-line treatment for enuresis, not encopresis.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "In a child with new-onset encopresis, always evaluate for underlying severe constipation causing overflow incontinence by checking for fecal retention.\\\neftab720\ntightenfactor0\nStudio Output Study guide\n\\"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q036",
+      "questionNumber": 36,
+      "sourceQuestionNumber": 36,
+      "retrievalTag": "Rumination disorder re-chewing food check lead levels\\",
+      "reviewPearl": "In young children presenting with rumination disorder or pica, always evaluate for heavy metal toxicity by checking serum lead levels.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "An 18-month-old girl is brought to the pediatrician by her parents. They report that over the past month, she has been regurgitating her food into her mouth, re-chewing it, and swallowing it again. She had previously been eating and developing normally. Physical examination is unremarkable. Which of the following is the most appropriate next step in evaluation?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Upper endoscopy"
+        },
+        {
+          "label": "B",
+          "text": "Reassurance that this is a normal phase"
+        },
+        {
+          "label": "C",
+          "text": "Check serum lead levels"
+        },
+        {
+          "label": "D",
+          "text": "24-hour esophageal pH monitoring\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Recognize rumination disorder in a toddler and identify the need to screen for lead toxicity.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This infant is exhibiting signs of rumination disorder, characterized by the repeated regurgitation and re-chewing of food. Because patients with rumination and pica are at high risk for ingesting non-food substances or being exposed to environmental toxins through their oral behaviors, it is highly recommended to check serum lead levels.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Reassurance (B) is incorrect because rumination is not a normal developmental phase and can lead to malnutrition or failure to thrive. Endoscopy (A) and pH monitoring (D) evaluate for anatomical defects or GERD, which typically present with distress, vomiting, or arching rather than the placid re-chewing seen in rumination.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "In young children presenting with rumination disorder or pica, always evaluate for heavy metal toxicity by checking serum lead levels.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q037",
+      "questionNumber": 37,
+      "sourceQuestionNumber": 37,
+      "retrievalTag": "Delusional disorder erotomanic type non-bizarre functional\\",
+      "reviewPearl": "Delusional disorder is distinct from schizophrenia because patients maintain their baseline level of functioning outside the scope of their specific delusion.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 45-year-old man presents to the clinic stating that a famous pop singer is secretly in love with him. He claims they communicate through hidden messages in her song lyrics. He has held this belief for 8 months. He holds a steady job as an accountant, maintains appropriate hygiene, and interacts normally with his peers. He denies any hallucinations or mood changes.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Schizophrenia"
+        },
+        {
+          "label": "B",
+          "text": "Schizoaffective disorder"
+        },
+        {
+          "label": "C",
+          "text": "Delusional disorder"
+        },
+        {
+          "label": "D",
+          "text": "Schizotypal personality disorder\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Diagnose delusional disorder, erotomanic type, based on an isolated non-bizarre delusion with intact daily functioning.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient has an isolated, non-bizarre delusion (erotomanic type) present for greater than 1 month, without other psychotic symptoms (e.g., no prominent hallucinations, disorganized speech, or negative symptoms) and with preserved overall functioning. This is the classic presentation of delusional disorder.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Schizophrenia (A) requires significant functional decline and the presence of other psychotic symptoms. Schizoaffective disorder (B) requires concurrent mood episodes (mania or major depression). Schizotypal personality disorder (D) presents with pervasive magical thinking, odd behavior, and social deficits, rather than a fixed, isolated delusion.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Delusional disorder is distinct from schizophrenia because patients maintain their baseline level of functioning outside the scope of their specific delusion.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q038",
+      "questionNumber": 38,
+      "sourceQuestionNumber": 38,
+      "retrievalTag": "PCP intoxication horizontal nystagmus ataxia acute psychosis\\",
+      "reviewPearl": "Horizontal nystagmus is the defining physical exam buzzword for distinguishing PCP intoxication from other sympathomimetic or hallucinogenic ingestions; treat acute psychosis with haloperidol.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 24-year-old man is brought to the emergency department by police after he was found running through traffic. He is extremely agitated, combative, and appears to be experiencing visual hallucinations. Physical examination reveals severe ataxia, dilated pupils, and prominent horizontal nystagmus.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Cocaine intoxication"
+        },
+        {
+          "label": "B",
+          "text": "Cannabis intoxication"
+        },
+        {
+          "label": "C",
+          "text": "Hallucinogen (PC"
+        },
+        {
+          "label": "P",
+          "text": "intoxication"
+        },
+        {
+          "label": "D",
+          "text": "Opiate withdrawal\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Identify PCP intoxication based on the hallmark finding of horizontal nystagmus combined with acute psychosis and ataxia.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The triad of horizontal nystagmus, ataxia, and acute psychosis (often accompanied by extreme agitation and combativeness) strongly points to Phencyclidine (PCP) intoxication.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Cocaine intoxication (A) presents with dilated pupils, tachycardia, hypertension, and agitation, but lacks prominent horizontal nystagmus. Cannabis intoxication (B) presents with injected conjunctiva, sedation, and increased appetite. Opiate withdrawal (D) features dilated pupils, yawning, piloerection, and diarrhea, but not severe ataxia and horizontal nystagmus.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Horizontal nystagmus is the defining physical exam buzzword for distinguishing PCP intoxication from other sympathomimetic or hallucinogenic ingestions; treat acute psychosis with haloperidol.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q039",
+      "questionNumber": 39,
+      "sourceQuestionNumber": 39,
+      "retrievalTag": "Trazodone priapism erection >3 hours\\",
+      "reviewPearl": "\"Trazobone\" is a common mnemonic used to remember that trazodone can cause priapism, an emergent condition requiring medical intervention.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 65-year-old man presents to the emergency department complaining of a painful erection that has lasted for 4 hours without any sexual stimulation. He recently started a new medication for major depressive disorder and insomnia.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Fluoxetine"
+        },
+        {
+          "label": "B",
+          "text": "Bupropion"
+        },
+        {
+          "label": "C",
+          "text": "Mirtazapine"
+        },
+        {
+          "label": "D",
+          "text": "Trazodone\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "D",
+      "educationalObjective": "Associate priapism with the use of the antidepressant trazodone.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient is experiencing priapism (a prolonged, painful erection lasting >3 hours), which is a classic, high-yield side effect of the atypical antidepressant trazodone.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Fluoxetine (A) is an SSRI commonly associated with sexual dysfunction (loss of erection/ejaculation), not priapism. Bupropion (B) is a DA/NE reuptake inhibitor that does not cause sexual dysfunction and is often used to counter SSRI-induced sexual side effects. Mirtazapine (C) is associated with weight gain and sedation, not priapism.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\"Trazobone\" is a common mnemonic used to remember that trazodone can cause priapism, an emergent condition requiring medical intervention.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q040",
+      "questionNumber": 40,
+      "sourceQuestionNumber": 40,
+      "retrievalTag": "Schizoid PD night security guard doesn't want relationships\\",
+      "reviewPearl": "The key differentiator between Schizoid and Avoidant personality disorders is that Schizoid patients prefer isolation, while Avoidant patients desire connection but fear rejection.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 30-year-old man is evaluated at his mother's insistence. He has never been married, has no close friends, and works the night shift as a security guard. In his free time, he stays in his basement building model ships. When asked about his lack of social life, he states he simply has no desire to form relationships and prefers to be alone.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Avoidant personality disorder"
+        },
+        {
+          "label": "B",
+          "text": "Schizoid personality disorder"
+        },
+        {
+          "label": "C",
+          "text": "Schizotypal personality disorder"
+        },
+        {
+          "label": "D",
+          "text": "Social anxiety disorder\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Differentiate schizoid personality disorder from avoidant personality disorder based on the patient's lack of desire for relationships.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "A pervasive pattern of detachment from social relationships and a restricted range of emotional expression is characteristic of schizoid personality disorder. The defining feature is that the patient does \nnot want\n relationships.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Avoidant personality disorder (A) and social anxiety disorder (D) both involve social isolation, but the patient desperately \nwants\n relationships and only avoids them out of a fear of rejection or ridicule. Schizotypal personality disorder (C) is characterized by magical thinking, eccentric behavior, and odd beliefs.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "The key differentiator between Schizoid and Avoidant personality disorders is that Schizoid patients prefer isolation, while Avoidant patients desire connection but fear rejection.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q041",
+      "questionNumber": 41,
+      "sourceQuestionNumber": 41,
+      "retrievalTag": "Tertiary syphilis loss vibration sense pupil accommodates doesn't react\\",
+      "reviewPearl": "The diagnostic next step for suspected tertiary syphilis is a positive RPR/VDRL followed by a spinal tap to look for spirochetes; treatment is IV penicillin.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 72-year-old man is brought to the clinic due to progressive memory loss and emotional lability. Neurological examination reveals a loss of vibration sense in his lower extremities. His pupils are small and constrict during near accommodation, but do not constrict when exposed to bright light.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Vascular dementia"
+        },
+        {
+          "label": "B",
+          "text": "Tertiary syphilis"
+        },
+        {
+          "label": "C",
+          "text": "Frontotemporal dementia"
+        },
+        {
+          "label": "D",
+          "text": "Normal pressure hydrocephalus\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Recognize the clinical presentation of neurosyphilis, including the Argyll Robertson pupil and tabes dorsalis.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The combination of dementia, loss of vibration sense (tabes dorsalis), and a pupil that accommodates but does not react to light (Argyll Robertson pupil) is the classic triad of neurosyphilis/tertiary syphilis.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Vascular dementia (A) presents with sudden, step-wise decreases in cognition. Frontotemporal dementia (C) presents early with disinhibition or progressive aphasia. Normal pressure hydrocephalus (D) presents with the triad of urinary incontinence, gait disturbance, and dementia.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "The diagnostic next step for suspected tertiary syphilis is a positive RPR/VDRL followed by a spinal tap to look for spirochetes; treatment is IV penicillin.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q042",
+      "questionNumber": 42,
+      "sourceQuestionNumber": 42,
+      "retrievalTag": "Mirtazapine old skinny sad ladies increased appetite sleep\\",
+      "reviewPearl": "For \"old, skinny, sad ladies\" who can't sleep or eat, Mirtazapine is the drug of choice because its side effects (weight gain and sedation) directly counteract their symptoms.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 78-year-old woman is diagnosed with major depressive disorder. She reports feeling profoundly sad, has difficulty sleeping, and has unintentionally lost 15 pounds over the last 2 months due to a complete lack of appetite. Her BMI is currently 18. Which of the following is the most appropriate pharmacotherapy for this patient?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Fluoxetine"
+        },
+        {
+          "label": "B",
+          "text": "Bupropion"
+        },
+        {
+          "label": "C",
+          "text": "Mirtazapine"
+        },
+        {
+          "label": "D",
+          "text": "Venlafaxine\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Select mirtazapine as the preferred antidepressant for patients with concurrent insomnia and significant weight loss.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Mirtazapine is an atypical antidepressant that prominently increases both appetite and sleep. It is the ideal medication for elderly patients with depression who are suffering from significant weight loss and insomnia.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Fluoxetine (A) and Venlafaxine (D) can cause gastrointestinal upset and sometimes further decrease appetite. Bupropion (B) is contraindicated in eating disorders and is associated with weight loss; it does not promote sleep and can cause insomnia.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "For \"old, skinny, sad ladies\" who can't sleep or eat, Mirtazapine is the drug of choice because its side effects (weight gain and sedation) directly counteract their symptoms.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q043",
+      "questionNumber": 43,
+      "sourceQuestionNumber": 43,
+      "retrievalTag": "Alcohol withdrawal seizures 12-24 hours bimodal peak\\",
+      "reviewPearl": "Alcohol withdrawal seizures peak at 12-24 hours, while life-threatening Delirium Tremens (hallucinations, severe autonomic instability) typically start at 48-72 hours.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 50-year-old man with a known history of severe alcohol use disorder is brought to the emergency department after suffering a generalized tonic-clonic seizure. His blood pressure is 180/110 mm Hg, heart rate is 118/min, and temperature is 100.1°F. He is currently oriented and denies any visual hallucinations or sensation of things crawling on him. Approximately how long ago was his last alcoholic drink?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "2-6 hours"
+        },
+        {
+          "label": "B",
+          "text": "12-24 hours"
+        },
+        {
+          "label": "C",
+          "text": "48-72 hours"
+        },
+        {
+          "label": "D",
+          "text": "5-7 days\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Identify the timeline of alcohol withdrawal syndromes, specifically that withdrawal seizures peak at 12-24 hours.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Alcohol withdrawal seizures typically occur 12-24 hours after the patient's last drink, with a bimodal peak at 8 and 48 hours. The patient has not yet progressed to delirium tremens, which feature confusion and hallucinations.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "2-6 hours (A) is the onset of early, mild withdrawal (tremulousness, anxiety). 48-72 hours (C) is the classic timeframe for the onset of Delirium Tremens (DTs), marked by profound confusion, autonomic instability, and tactile/visual hallucinations (e.g., ants crawling on skin).\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Alcohol withdrawal seizures peak at 12-24 hours, while life-threatening Delirium Tremens (hallucinations, severe autonomic instability) typically start at 48-72 hours.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q044",
+      "questionNumber": 44,
+      "sourceQuestionNumber": 44,
+      "retrievalTag": "Olanzapine weight gain blood sugar lipids\\",
+      "reviewPearl": "Patients prescribed olanzapine or clozapine require routine monitoring of their BMI, fasting blood glucose, and lipid panels due to the high risk of metabolic syndrome.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 26-year-old man with schizophrenia is currently stabilized on an atypical antipsychotic. He presents to his primary care physician for a routine check-up. Blood tests reveal a fasting glucose of 145 mg/dL and a significantly elevated lipid profile. He has also gained 30 pounds since starting the medication 6 months ago. Which of the following medications is he most likely taking?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Aripiprazole"
+        },
+        {
+          "label": "B",
+          "text": "Ziprasidone"
+        },
+        {
+          "label": "C",
+          "text": "Olanzapine"
+        },
+        {
+          "label": "D",
+          "text": "Risperidone\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Identify olanzapine as the atypical antipsychotic most heavily associated with metabolic syndrome (weight gain, elevated lipids, and blood sugar).\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Olanzapine is the atypical antipsychotic most strongly associated with severe metabolic side effects, including significant weight gain, hyperglycemia, and dyslipidemia.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Aripiprazole (A) and Ziprasidone (B) are generally considered weight-neutral atypical antipsychotics. Risperidone (D) can cause some weight gain but is most notorious for causing hyperprolactinemia and extrapyramidal symptoms.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Patients prescribed olanzapine or clozapine require routine monitoring of their BMI, fasting blood glucose, and lipid panels due to the high risk of metabolic syndrome.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q045",
+      "questionNumber": 45,
+      "sourceQuestionNumber": 45,
+      "retrievalTag": "Smith-Magenis broad square face self-injurious Chr 17\\",
+      "reviewPearl": "Severe self-injurious behavior (like biting or head-banging) combined with a deletion on chromosome 17 points directly to Smith-Magenis syndrome.\\\neftab720\ntightenfactor0\nWhile the 45 questions generated so far cover the vast majority of the document—spanning from bipolar disorder all the way through to childhood psychiatric conditions—there are still several high-yield concepts remaining.\\\nKey concepts that have not yet been covered include:\\\neftab720-720\ntightenfactor0\nTrauma and Anxiety:\n PTSD vs. Acute Stress Disorder, Panic Disorder medical workup, and OCD.\\\nAntipsychotic Complications:\n Tardive Dyskinesia, specific atypical side effects (Clozapine agranulocytosis).\\\nSleep Disorders:\n Narcolepsy and Restless Leg Syndrome.\\\nPersonality Disorders:\n Borderline and Narcissistic Personality Disorders.\\\nNeurology/Dementia:\n Normal Pressure Hydrocephalus.\\\nPsychology Basics:\n Childhood development stages (Piaget, Erikson, Freud).\\\neftab720\ntightenfactor0\nHere are the additional questions to ensure the \nentire\n document is comprehensively covered:\\\neftab720\ntightenfactor0\nStudio Output Study guide\n\\",
+      "stem": "A 6-year-old boy is evaluated for behavioral issues and developmental delay. His parents report that he frequently bangs his head against the wall and bites his own hands. Physical examination reveals a broad, square face and short stature. Genetic testing reveals a microdeletion on chromosome 17. What is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Prader-Willi syndrome"
+        },
+        {
+          "label": "B",
+          "text": "Williams syndrome"
+        },
+        {
+          "label": "C",
+          "text": "Smith-Magenis syndrome"
+        },
+        {
+          "label": "D",
+          "text": "Angelman syndrome\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Associate Smith-Magenis syndrome with self-injurious behavior, a broad/square face, and a deletion on chromosome 17.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The clinical presentation of a broad, square face, short stature, and prominent self-injurious behavior (head banging, biting), resulting from a deletion on chromosome 17, is diagnostic of Smith-Magenis syndrome.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Prader-Willi syndrome (A) features hypotonia, hyperphagia, and obesity linked to a paternal chromosome 15 deletion. Williams syndrome (B) features elfin facies, hypersociability, and a chromosome 7 deletion. Angelman syndrome (D) features seizures and episodic laughter due to a maternal chromosome 15 deletion.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Severe self-injurious behavior (like biting or head-banging) combined with a deletion on chromosome 17 points directly to Smith-Magenis syndrome.\\\neftab720\ntightenfactor0\nWhile the 45 questions generated so far cover the vast majority of the document—spanning from bipolar disorder all the way through to childhood psychiatric conditions—there are still several high-yield concepts remaining.\\\nKey concepts that have not yet been covered include:\\\neftab720-720\ntightenfactor0\nTrauma and Anxiety:\n PTSD vs. Acute Stress Disorder, Panic Disorder medical workup, and OCD.\\\nAntipsychotic Complications:\n Tardive Dyskinesia, specific atypical side effects (Clozapine agranulocytosis).\\\nSleep Disorders:\n Narcolepsy and Restless Leg Syndrome.\\\nPersonality Disorders:\n Borderline and Narcissistic Personality Disorders.\\\nNeurology/Dementia:\n Normal Pressure Hydrocephalus.\\\nPsychology Basics:\n Childhood development stages (Piaget, Erikson, Freud).\\\neftab720\ntightenfactor0\nHere are the additional questions to ensure the \nentire\n document is comprehensively covered:\\\neftab720\ntightenfactor0\nStudio Output Study guide\n\\"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q046",
+      "questionNumber": 46,
+      "sourceQuestionNumber": 46,
+      "retrievalTag": "Trauma symptoms <1 month acute stress disorder\\",
+      "reviewPearl": "Acute stress disorder becomes PTSD once the symptoms persist beyond the 1-month mark.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 25-year-old woman is brought to the clinic by her sister. Three weeks ago, the patient was the victim of a violent robbery. Since the event, she has experienced recurrent, vivid nightmares about the robbery, avoids going near the neighborhood where it occurred, and feels constantly \"on edge.\" She startles easily and has had difficulty sleeping. Which of the following is the most appropriate diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Post-traumatic stress disorder (PTS"
+        },
+        {
+          "label": "D",
+          "text": ""
+        },
+        {
+          "label": "B",
+          "text": "Acute stress disorder"
+        },
+        {
+          "label": "C",
+          "text": "Adjustment disorder"
+        },
+        {
+          "label": "D",
+          "text": "Generalized anxiety disorder\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Differentiate acute stress disorder from PTSD based on the 1-month symptom duration threshold.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient is experiencing classic symptoms of trauma (nightmares, avoidance, hyperarousal) following a life-threatening event. Because these symptoms have been present for less than 1 month (3 weeks), the correct diagnosis is acute stress disorder.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "PTSD (A) requires these exact symptoms to be present for \ngreater\n than 1 month. Adjustment disorder (C) involves symptoms occurring within 3 months of a stressor but does not typically feature the severe re-experiencing and hyperarousal of trauma disorders. GAD (D) involves generalized worry, not trauma-specific flashbacks.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Acute stress disorder becomes PTSD once the symptoms persist beyond the 1-month mark.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q047",
+      "questionNumber": 47,
+      "sourceQuestionNumber": 47,
+      "retrievalTag": "Panic attack SOB chest pain next step EKG\\",
+      "reviewPearl": "Always rule out medical causes (MI, PE, hyperthyroidism) with an ECG and appropriate labs before diagnosing a panic attack, especially in patients with vascular risk factors.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 28-year-old woman is brought to the emergency department by paramedics complaining of a sudden onset of shortness of breath, palpitations, sweating, and severe chest pain. She states she feels like she is dying. She smokes 1 pack of cigarettes a day and takes oral contraceptives. She reports having a similar episode two weeks ago while grocery shopping and now rarely leaves her house for fear of having another attack. What is the most appropriate next step in management?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Prescribe a short-acting benzodiazepine"
+        },
+        {
+          "label": "B",
+          "text": "Administer intravenous haloperidol"
+        },
+        {
+          "label": "C",
+          "text": "Initiate cognitive behavioral therapy"
+        },
+        {
+          "label": "D",
+          "text": "Obtain an ECG and cardiac enzymes\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "D",
+      "educationalObjective": "Prioritize medical workup (ECG, cardiac enzymes) to rule out life-threatening conditions before diagnosing a primary panic attack.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Although this patient's presentation and history of agoraphobia strongly suggest panic disorder, her symptoms of shortness of breath and chest pain combined with her risk factors (smoking, OCPs) mean a life-threatening medical emergency (e.g., myocardial infarction, pulmonary embolism) must be ruled out first.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Benzodiazepines (A) and CBT (C) are appropriate treatments for panic disorder, but only \nafter\n organic medical causes have been definitively excluded. Haloperidol (B) is used for acute psychosis or severe agitation, not panic attacks.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Always rule out medical causes (MI, PE, hyperthyroidism) with an ECG and appropriate labs before diagnosing a panic attack, especially in patients with vascular risk factors.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q048",
+      "questionNumber": 48,
+      "sourceQuestionNumber": 48,
+      "retrievalTag": "Clozapine treatment refractory schizophrenia ANC monitoring\\",
+      "reviewPearl": "Discontinue clozapine immediately if white blood cells drop below 3000 or the absolute neutrophil count drops below 1500.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 35-year-old man with treatment-refractory schizophrenia has failed trials of risperidone, olanzapine, and haloperidol. His psychiatrist decides to initiate a trial of clozapine. To safely manage this medication, the patient must be enrolled in a mandatory registry and undergo which of the following routine monitoring protocols?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Weekly lipid panels for 6 months"
+        },
+        {
+          "label": "B",
+          "text": "Weekly absolute neutrophil counts (AN"
+        },
+        {
+          "label": "C",
+          "text": "for 6 months"
+        },
+        {
+          "label": "C",
+          "text": "Monthly echocardiograms"
+        },
+        {
+          "label": "D",
+          "text": "Monthly hemoglobin A1c\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Identify agranulocytosis as the most dangerous side effect of clozapine, requiring strict ANC monitoring.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Clozapine is an excellent atypical antipsychotic for treatment-refractory schizophrenia, but it carries a severe, life-threatening risk of agranulocytosis. Patients must have their complete blood count (specifically the ANC) monitored weekly for the first 6 months.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "While atypical antipsychotics (including clozapine) can cause metabolic syndrome necessitating checks of lipids (A) and HbA1c (D), the mandatory, high-frequency monitoring unique to clozapine is for agranulocytosis. Echocardiograms (C) are not routinely required, though clozapine does carry a small risk of myocarditis.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Discontinue clozapine immediately if white blood cells drop below 3000 or the absolute neutrophil count drops below 1500.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q049",
+      "questionNumber": 49,
+      "sourceQuestionNumber": 49,
+      "retrievalTag": "Fluphenazine 10 years lip smacking tongue movements Tardive Dyskinesia\\",
+      "reviewPearl": "The treatment for tardive dyskinesia is to stop the offending typical antipsychotic and switch to an atypical agent, preferably clozapine.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 45-year-old man with a long-standing history of schizophrenia has been treated with fluphenazine for the past 10 years. He presents to his psychiatrist for a follow-up. During the interview, the physician notes that the patient is continuously grimacing, smacking his lips, and performing repetitive, involuntary tongue movements.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Acute dystonia"
+        },
+        {
+          "label": "B",
+          "text": "Akathisia"
+        },
+        {
+          "label": "C",
+          "text": "Parkinsonism"
+        },
+        {
+          "label": "D",
+          "text": "Tardive dyskinesia\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "D",
+      "educationalObjective": "Diagnose tardive dyskinesia based on the clinical presentation of involuntary orofacial movements following chronic typical antipsychotic use.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Repetitive, involuntary movements of the face, mouth, and tongue (choreoathetoid movements) occurring after years of typical antipsychotic use (like fluphenazine) are the hallmark of tardive dyskinesia.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Acute dystonia (A) occurs within 12 hours of starting a drug and features sustained muscle spasms (e.g., torticollis). Akathisia (B) is a subjective feeling of restlessness occurring within weeks. Parkinsonism (C) features a resting tremor, bradykinesia, and a shuffling gait occurring after months of therapy.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "The treatment for tardive dyskinesia is to stop the offending typical antipsychotic and switch to an atypical agent, preferably clozapine.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q050",
+      "questionNumber": 50,
+      "sourceQuestionNumber": 50,
+      "retrievalTag": "Narcolepsy sleep attacks cataplexy modafinil\\",
+      "reviewPearl": "Narcolepsy is characterized by entering REM sleep abnormally fast; patients can also experience hypnagogic/hypnopompic hallucinations and sleep paralysis.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 22-year-old college student presents to the clinic complaining of excessive daytime sleepiness. She reports that despite getting 8 hours of sleep at night, she frequently experiences \"irresistible attacks\" of sleep during the day. Furthermore, she states that whenever her friends tell a very funny joke and she laughs hard, she suddenly loses all muscle tone and collapses to the floor, remaining fully conscious.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Modafinil"
+        },
+        {
+          "label": "B",
+          "text": "Continuous Positive Airway Pressure (CPA"
+        },
+        {
+          "label": "P",
+          "text": ""
+        },
+        {
+          "label": "C",
+          "text": "Pramipexole"
+        },
+        {
+          "label": "D",
+          "text": "Zolpidem\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Recognize narcolepsy with cataplexy and identify modafinil as the preferred treatment for excessive daytime sleepiness.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient's daytime sleep attacks and cataplexy (sudden loss of muscle tone triggered by intense emotion) are diagnostic of narcolepsy. The first-line pharmacological treatment for the daytime sleepiness of narcolepsy is modafinil (a non-amphetamine stimulant).\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "CPAP (B) is the treatment for obstructive sleep apnea. Pramipexole (C) is a dopamine agonist used for restless legs syndrome. Zolpidem (D) is a GABA-A receptor agonist used to treat insomnia, which would worsen her daytime sleepiness.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Narcolepsy is characterized by entering REM sleep abnormally fast; patients can also experience hypnagogic/hypnopompic hallucinations and sleep paralysis.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q051",
+      "questionNumber": 51,
+      "sourceQuestionNumber": 51,
+      "retrievalTag": "Wrist cutting unstable relationships splitting Borderline PD\\",
+      "reviewPearl": "\"Splitting\" is a highly characteristic defense mechanism in Borderline Personality Disorder, and Dialectical Behavior Therapy (DBT) is the treatment of choice.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 24-year-old woman is brought to the emergency department after sustaining superficial lacerations to both wrists. Her medical history is significant for a pattern of intense, unstable interpersonal relationships. She often idealizes her physicians, telling one doctor he is \"the only person who has ever understood her,\" while angrily demanding a different nurse because the previous one was \"completely evil.\" She is highly impulsive with her spending and sexual practices. What is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Histrionic personality disorder"
+        },
+        {
+          "label": "B",
+          "text": "Borderline personality disorder"
+        },
+        {
+          "label": "C",
+          "text": "Dependent personality disorder"
+        },
+        {
+          "label": "D",
+          "text": "Antisocial personality disorder\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Identify Borderline Personality Disorder based on self-harm, impulsivity, unstable relationships, and the use of splitting.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient demonstrates classic features of Borderline Personality Disorder: recurrent self-mutilation/suicidality, highly unstable relationships, impulsivity, and the defense mechanism of \"splitting\" (viewing people as entirely good or entirely bad).\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Histrionic PD (A) features excessive emotionality and attention-seeking (e.g., dressing provocatively) without the profound emptiness and self-harm of borderline. Dependent PD (C) involves extreme clinginess and fear of being alone, without the chaotic hostility. Antisocial PD (D) involves a disregard for the rights of others and breaking the law.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\"Splitting\" is a highly characteristic defense mechanism in Borderline Personality Disorder, and Dialectical Behavior Therapy (DBT) is the treatment of choice.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q052",
+      "questionNumber": 52,
+      "sourceQuestionNumber": 52,
+      "retrievalTag": "Piaget 3-5 years Preoperational egocentric\\",
+      "reviewPearl": "In the preoperational stage (ages 1-5), children are highly egocentric and lack the concept of conservation (e.g., understanding that a short, wide glass can hold the same volume as a tall, thin glass).\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 4-year-old girl is evaluated during a routine well-child visit. She frequently plays hide-and-seek by simply covering her own eyes, believing that if she cannot see her parents, they cannot see her. According to Piaget's stages of cognitive development, this child's egocentric thinking places her in which of the following stages?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Sensorimotor"
+        },
+        {
+          "label": "B",
+          "text": "Preoperational"
+        },
+        {
+          "label": "C",
+          "text": "Concrete Operational"
+        },
+        {
+          "label": "D",
+          "text": "Formal Operational\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Correlate cognitive behaviors with Piaget's stages of childhood development.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "According to Piaget, children aged roughly 1 to 5 years are in the \"Preoperational\" stage. A defining feature of this stage is egocentric thinking—the inability to see a situation from another person's point of view.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "The Sensorimotor stage (A) occurs from birth to 1 year and is defined by the development of object permanence. Concrete Operational (C) occurs from 6 to 11 years, where children understand that death is permanent. Formal Operational (D) begins in adolescence and involves abstract, hypothetical reasoning.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "In the preoperational stage (ages 1-5), children are highly egocentric and lack the concept of conservation (e.g., understanding that a short, wide glass can hold the same volume as a tall, thin glass).\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q053",
+      "questionNumber": 53,
+      "sourceQuestionNumber": 53,
+      "retrievalTag": "Incontinence gait disturbance dementia Normal Pressure Hydrocephalus\\",
+      "reviewPearl": "NPH is one of the few reversible causes of dementia; a lumbar puncture will show normal opening pressure, and treatment with a ventriculoperitoneal shunt can significantly improve cognitive function.\\\neftab720\ntightenfactor0\nStudio Output Study guide\n\\",
+      "stem": "A 75-year-old man is brought to the clinic by his daughter. She reports that over the past several months, her father has developed a wide-based, unsteady gait and has suffered several falls. Furthermore, he has begun having frequent episodes of urinary incontinence and his memory is rapidly declining. A CT scan of his head reveals enlarged ventricles. Which of the following is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Alzheimer's Dementia"
+        },
+        {
+          "label": "B",
+          "text": "Creutzfeldt-Jakob Disease"
+        },
+        {
+          "label": "C",
+          "text": "Normal Pressure Hydrocephalus"
+        },
+        {
+          "label": "D",
+          "text": "Frontotemporal Dementia\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Recognize the classic clinical triad (\"wacky, wobbly, wet\") of Normal Pressure Hydrocephalus.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The classic triad of urinary incontinence, gait disturbance (unsteady/magnetic gait), and rapidly developing dementia (\"wacky, wobbly, wet\") combined with enlarged ventricles on imaging is diagnostic of Normal Pressure Hydrocephalus (NPH).\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Alzheimer's (A) presents with progressive memory loss and apraxia, but lacks early urinary incontinence and gait issues. CJD (B) presents with rapid dementia, myoclonus, and triphasic EEG bursts. Frontotemporal dementia (D) presents with early personality changes and disinhibition.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "NPH is one of the few reversible causes of dementia; a lumbar puncture will show normal opening pressure, and treatment with a ventriculoperitoneal shunt can significantly improve cognitive function.\\\neftab720\ntightenfactor0\nStudio Output Study guide\n\\"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q054",
+      "questionNumber": 54,
+      "sourceQuestionNumber": 54,
+      "retrievalTag": "Prolonged QTc and pigmentary retinopathy Thioridazine\\",
+      "reviewPearl": "Thioridazine causes pigmentary retinopathy and QTc prolongation, whereas chlorpromazine causes a metallic rash and jaundice.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 45-year-old man with a long-standing history of schizophrenia is brought to the ophthalmologist complaining of progressive vision loss. He has been maintained on a low-potency typical antipsychotic for over a decade. A fundoscopic examination reveals pigmentary retinopathy. Which of the following medications is most likely responsible for this finding?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Haloperidol"
+        },
+        {
+          "label": "B",
+          "text": "Thioridazine"
+        },
+        {
+          "label": "C",
+          "text": "Chlorpromazine"
+        },
+        {
+          "label": "D",
+          "text": "Fluphenazine\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Identify pigmentary retinopathy as a classic, high-yield adverse effect of the typical antipsychotic thioridazine.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Thioridazine is a low-potency typical antipsychotic that is uniquely associated with pigmentary retinopathy and a prolonged QTc interval.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Chlorpromazine (C) is another low-potency typical antipsychotic, but its unique side effects include a purple-grey metallic rash over sun-exposed areas and jaundice. Haloperidol (A) and fluphenazine (D) are high-potency agents that are more commonly associated with severe extrapyramidal symptoms rather than retinopathy.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Thioridazine causes pigmentary retinopathy and QTc prolongation, whereas chlorpromazine causes a metallic rash and jaundice.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q055",
+      "questionNumber": 55,
+      "sourceQuestionNumber": 55,
+      "retrievalTag": "Social Phobia grand rounds fear of laugh propranolol\\",
+      "reviewPearl": "Propranolol effectively suppresses the physical symptoms of performance anxiety, allowing patients to function in high-stress, evaluative situations.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 24-year-old medical student reports a deathly fear of presenting cases during surgical grand rounds because she is terrified that the attending surgeons will laugh at her. She experiences severe tachycardia, tremors, and a cracking voice when asked to speak. Which of the following is the most appropriate treatment to manage her hyperarousal prior to a presentation?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Paroxetine"
+        },
+        {
+          "label": "B",
+          "text": "Propranolol"
+        },
+        {
+          "label": "C",
+          "text": "Haloperidol"
+        },
+        {
+          "label": "D",
+          "text": "Buspirone\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Select propranolol as the preferred acute treatment for the autonomic hyperarousal seen in performance-type social phobia.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient is suffering from performance-type social phobia. The best treatment to stop the autonomic hyperarousal (tachycardia, tremors) associated with this situational anxiety is a beta-blocker like propranolol, occasionally combined with a short-acting benzodiazepine.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Paroxetine (A) is an SSRI used for generalized social anxiety disorder, but propranolol is preferred for situational performance anxiety. Buspirone (D) is the treatment of choice for Generalized Anxiety Disorder and takes over 3 weeks to work. Haloperidol (C) is an antipsychotic.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Propranolol effectively suppresses the physical symptoms of performance anxiety, allowing patients to function in high-stress, evaluative situations.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q056",
+      "questionNumber": 56,
+      "sourceQuestionNumber": 56,
+      "retrievalTag": "Re-feeding syndrome low PO4 low Mg low Ca fluid retention\\",
+      "reviewPearl": "When re-feeding anorexic patients, continually monitor phosphate, magnesium, and calcium to prevent fatal cardiac arrhythmias associated with re-feeding syndrome.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "An 18-year-old woman is admitted to the inpatient psychiatry unit for severe anorexia nervosa, presenting with a BMI of 14 and severe malnutrition. Shortly after starting an aggressive inpatient nutritional rehabilitation protocol, she develops acute fluid retention and an arrhythmia. Which of the following laboratory findings is most likely the primary cause of her acute deterioration?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Low serum phosphate"
+        },
+        {
+          "label": "B",
+          "text": "High serum calcium"
+        },
+        {
+          "label": "C",
+          "text": "High serum potassium"
+        },
+        {
+          "label": "D",
+          "text": "High serum magnesium\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Identify hypophosphatemia as a hallmark and dangerous component of re-feeding syndrome in patients with anorexia nervosa.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient is experiencing re-feeding syndrome, a potentially fatal complication of rapidly feeding a severely malnourished patient. It is characterized by severe shifts in electrolytes, most notably low phosphate (PO4), low magnesium (Mg), low calcium (Ca), and fluid retention.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Re-feeding syndrome causes \nlow\n levels of intracellular ions like phosphate, magnesium, and calcium as insulin surges and drives these electrolytes into the cells. Therefore, high calcium (B), high potassium (C), and high magnesium (D) are incorrect.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "When re-feeding anorexic patients, continually monitor phosphate, magnesium, and calcium to prevent fatal cardiac arrhythmias associated with re-feeding syndrome.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q057",
+      "questionNumber": 57,
+      "sourceQuestionNumber": 57,
+      "retrievalTag": "Dyssomnia NOS creepy-crawlies legs ropinirole pramipexole\\",
+      "reviewPearl": "Always check iron levels in a patient with Restless Legs Syndrome; treat the symptoms with the dopamine agonists ropinirole or pramipexole.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 45-year-old woman presents to the clinic complaining of difficulty falling asleep. She states that as she is trying to fall asleep, she experiences uncomfortable \"creepy-crawly\" sensations on her legs. These sensations are only relieved when she gets out of bed and walks around the room. Medical workup reveals an underlying iron-deficiency anemia. Which of the following medications is the most appropriate treatment for her sleep-related symptoms?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Modafinil"
+        },
+        {
+          "label": "B",
+          "text": "Zolpidem"
+        },
+        {
+          "label": "C",
+          "text": "Ropinirole"
+        },
+        {
+          "label": "D",
+          "text": "Haloperidol\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Recognize Restless Legs Syndrome, evaluate for secondary causes like iron deficiency, and treat with dopamine agonists.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient's presentation of \"creepy-crawly\" sensations on the legs that are worse at night and relieved by movement is diagnostic of Restless Legs Syndrome (classified as Dyssomnia NOS), which is often secondary to iron-deficiency anemia or chronic kidney disease. The treatment of choice is a dopamine agonist, such as ropinirole or pramipexole.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Modafinil (A) is used to treat daytime sleepiness in narcolepsy. Zolpidem (B) is a GABA-A receptor agonist used for primary insomnia, not RLS. Haloperidol (D) is a dopamine antagonist, which would worsen RLS symptoms.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Always check iron levels in a patient with Restless Legs Syndrome; treat the symptoms with the dopamine agonists ropinirole or pramipexole.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q058",
+      "questionNumber": 58,
+      "sourceQuestionNumber": 58,
+      "retrievalTag": "Histrionic PD dresses provocatively seduce professor\\",
+      "reviewPearl": "When evaluating for histrionic personality disorder, also be sure to screen for commonly comorbid substance abuse or eating disorders.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 26-year-old medical student is referred to counseling by her program director. Her classmates complain that she constantly dresses provocatively and acts highly dramatically in small group settings to be the center of attention. She recently crossed professional boundaries by attempting to seduce one of her attending physicians.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Narcissistic personality disorder"
+        },
+        {
+          "label": "B",
+          "text": "Borderline personality disorder"
+        },
+        {
+          "label": "C",
+          "text": "Histrionic personality disorder"
+        },
+        {
+          "label": "D",
+          "text": "Dependent personality disorder\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Diagnose histrionic personality disorder based on attention-seeking and sexually provocative behavior.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This patient's presentation of excessive emotionality, attention-seeking behavior, and inappropriate, provocative seductiveness is the classic presentation of histrionic personality disorder.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Narcissistic personality disorder (A) involves grandiosity and a lack of empathy, feeling they only need to deal directly with high-level individuals. Borderline personality disorder (B) features severe relationship instability, suicidality/self-harm, and splitting. Dependent personality disorder (D) involves excessive clinginess and reliance on others for daily decision-making.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "When evaluating for histrionic personality disorder, also be sure to screen for commonly comorbid substance abuse or eating disorders.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q059",
+      "questionNumber": 59,
+      "sourceQuestionNumber": 59,
+      "retrievalTag": "Frontotemporal Dementia sexually explicit apathy silver staining inclusions\\",
+      "reviewPearl": "For severe behavioral disinhibition in Frontotemporal Dementia, low-dose atypical antipsychotics like olanzapine can be utilized.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 60-year-old man is brought to the clinic by his wife, who reports a drastic change in his behavior over the past year. He has become increasingly apathetic towards his family and has begun making highly sexually explicit comments to strangers in public. A biopsy of his brain tissue would most likely reveal which of the following pathological findings?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Beta-amyloid plaques"
+        },
+        {
+          "label": "B",
+          "text": "Intra-cytoplasmic alpha-synuclein inclusions"
+        },
+        {
+          "label": "C",
+          "text": "Spongiform encephalopathy"
+        },
+        {
+          "label": "D",
+          "text": "Lobar atrophy with intra-neuronal silver staining inclusions\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "D",
+      "educationalObjective": "Match the clinical features of Frontotemporal Dementia (Pick's Disease) with its characteristic silver-staining pathology.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient's early-onset behavioral disinhibition (sexually explicit comments) and profound apathy are the hallmark early signs of Frontotemporal Dementia (Pick's Disease). Pathology demonstrates lobar atrophy (frontal and temporal lobes) and Pick bodies, which are intra-neuronal silver staining inclusions.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Beta-amyloid plaques (A) are seen in Alzheimer's Dementia, which presents primarily with memory loss. Intra-cytoplasmic alpha-synuclein inclusions (B) are seen in Lewy Body Dementia, featuring visual hallucinations and parkinsonism. Spongiform encephalopathy (C) is seen in Creutzfeldt-Jakob Disease, which presents with rapid dementia and myoclonus.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "For severe behavioral disinhibition in Frontotemporal Dementia, low-dose atypical antipsychotics like olanzapine can be utilized.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q060",
+      "questionNumber": 60,
+      "sourceQuestionNumber": 60,
+      "retrievalTag": "Cocaine/Amphetamine withdrawal SI hypersomnia anergia\\",
+      "reviewPearl": "Cocaine withdrawal is not typically life-threatening in terms of autonomic instability, but patients must be closely monitored for high suicide risk during the acute \"crash\" phase.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 28-year-old man is brought to the emergency department by his friends. He complains of feeling intensely depressed, with suicidal ideation. He exhibits extreme anergia and has been sleeping for 16 hours a day since abruptly stopping his recreational drug habit two days ago. He has also developed a voracious appetite.",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Cocaine withdrawal"
+        },
+        {
+          "label": "B",
+          "text": "Cannabis intoxication"
+        },
+        {
+          "label": "C",
+          "text": "Opiate withdrawal"
+        },
+        {
+          "label": "D",
+          "text": "Hallucinogen (PC"
+        },
+        {
+          "label": "P",
+          "text": "intoxication\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Identify the clinical signs of a cocaine or amphetamine withdrawal \"crash,\" notably severe depression, hypersomnia, and anergia.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The classic symptoms of cocaine or amphetamine withdrawal include a severe \"crash\" marked by suicidal ideation (SI), hypersomnia, severe depression, and anergia, often accompanied by increased appetite (hyperphagia).\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Cannabis intoxication (B) presents with injected conjunctiva, sedation, and increased appetite. Opiate withdrawal (C) presents with a flu-like syndrome: diarrhea, rhinorrhea, piloerection, and muscle cramps. PCP intoxication (D) presents with acute psychosis, horizontal nystagmus, and ataxia.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Cocaine withdrawal is not typically life-threatening in terms of autonomic instability, but patients must be closely monitored for high suicide risk during the acute \"crash\" phase.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q061",
+      "questionNumber": 61,
+      "sourceQuestionNumber": 61,
+      "retrievalTag": "Altered mental status delirium diffuse background slowing EEG\\",
+      "reviewPearl": "In any elderly patient with new-onset hallucinations and confusion, an organic cause like a UTI must be ruled out; the EEG will show diffuse slowing.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 78-year-old woman is brought to the emergency department from her nursing home due to acutely altered mental status. She is lethargic during the day but becomes highly agitated at night, reporting that she sees \"green men\" in the corner of her room. She also complains of pain upon urination. If an electroencephalogram (EE",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "G",
+          "text": "were performed, what would be the most likely finding?"
+        },
+        {
+          "label": "A",
+          "text": "Triphasic bursts"
+        },
+        {
+          "label": "B",
+          "text": "Diffuse slowing of background rhythm"
+        },
+        {
+          "label": "C",
+          "text": "3-Hz spike-and-wave discharges"
+        },
+        {
+          "label": "D",
+          "text": "Normal EEG tracing\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Differentiate organic delirium from primary psychosis based on the EEG finding of diffuse background slowing.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "This elderly patient is experiencing delirium, likely secondary to a urinary tract infection (pain upon urination). Delirium classically presents with acute, fluctuating altered mental status, visual hallucinations, and reversed sleep-wake cycles. The hallmark EEG finding in delirium is diffuse background slowing.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Triphasic bursts (A) are the classic EEG finding for Creutzfeldt-Jakob disease. A normal EEG tracing (D) is typically seen in primary psychiatric disorders, like acute psychosis or schizophrenia, which helps differentiate them from organic delirium.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "In any elderly patient with new-onset hallucinations and confusion, an organic cause like a UTI must be ruled out; the EEG will show diffuse slowing.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q062",
+      "questionNumber": 62,
+      "sourceQuestionNumber": 62,
+      "retrievalTag": "Specific Phobia fear of flying CBT flooding exposure\\",
+      "reviewPearl": "While CBT with flooding/exposure is the best definitive treatment for specific phobias, short-acting benzodiazepines can be prescribed for infrequent, strictly situational use.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0",
+      "stem": "A 26-year-old fourth-year medical student is terrified of flying. This fear is significantly impacting her career, as she is unable to fly to residency interviews at her dream programs. She realizes this fear is irrational but cannot overcome it. What is the most effective long-term treatment for her condition?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Psychoanalysis"
+        },
+        {
+          "label": "B",
+          "text": "Daily buspirone"
+        },
+        {
+          "label": "C",
+          "text": "Cognitive behavioral therapy with flooding or exposure"
+        },
+        {
+          "label": "D",
+          "text": "Daily fluoxetine\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Identify exposure therapy/CBT as the gold standard long-term treatment for specific phobias.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient is suffering from a specific phobia (fear of flying) that is causing significant occupational impairment. The best long-term treatment for specific phobias is cognitive behavioral therapy (CBT) utilizing exposure/extinction techniques, such as flooding or systematic desensitization.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Buspirone (B) is used for Generalized Anxiety Disorder. Fluoxetine (D) is an SSRI used for depression and other anxiety disorders, but behavioral therapy is superior for isolated specific phobias. Benzodiazepines can be used situationally (e.g., just for the flight), but CBT is the best definitive treatment.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "While CBT with flooding/exposure is the best definitive treatment for specific phobias, short-acting benzodiazepines can be prescribed for infrequent, strictly situational use.\\\neftab720\ntightenfactor0\n\\\neftab720\ntightenfactor0"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q063",
+      "questionNumber": 63,
+      "sourceQuestionNumber": 63,
+      "retrievalTag": "Schizophrenia Neg Sxs decr DA prefrontal meso-cortical tract\\",
+      "reviewPearl": "Typical antipsychotics block dopamine indiscriminately, which effectively treats positive symptoms (mesolimbic) but can unfortunately worsen the negative symptoms driven by the meso-cortical tract.\\",
+      "stem": "A 20-year-old college student is brought to the psychiatrist by his roommate. He has locked himself in his room for the past 6 weeks, claiming he hears two voices having a discussion in his head telling him the President has put a \"hit on him\". His affect is completely flattened, and he lacks any motivation to attend classes. His negative symptoms (flattened affect, lack of motivation) are thought to be caused by a decrease of dopamine in which of the following neural pathways?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Mesolimbic tract"
+        },
+        {
+          "label": "B",
+          "text": "Prefrontal cortex / meso-cortical tract"
+        },
+        {
+          "label": "C",
+          "text": "Nigrostriatal tract"
+        },
+        {
+          "label": "D",
+          "text": "Tuberoinfundibular tract\\\neftab720-720\ntightenfactor0"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Correlate the negative symptoms of schizophrenia with decreased dopaminergic tone in the meso-cortical pathway.\\",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "In the neurobiology of schizophrenia, the negative symptoms (e.g., flattened affect, alogia, avolition) are theorized to result from a \ndecrease\n in dopamine activity within the prefrontal cortex / meso-cortical tract.\\"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "The positive symptoms of schizophrenia (delusions, hallucinations) are caused by an \nexcess\n of dopamine in the mesolimbic tract (A) binding to D2 receptors. The nigrostriatal tract (C) is involved in movement; blocking dopamine here causes extrapyramidal symptoms. The tuberoinfundibular tract (D) controls prolactin release; blocking dopamine here causes hyperprolactinemia.\\"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Typical antipsychotics block dopamine indiscriminately, which effectively treats positive symptoms (mesolimbic) but can unfortunately worsen the negative symptoms driven by the meso-cortical tract.\\"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    }
+  ]
+}

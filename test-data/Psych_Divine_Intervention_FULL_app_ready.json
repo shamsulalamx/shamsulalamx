@@ -1,0 +1,2134 @@
+{
+  "schemaVersion": "nbme-gemini-json-v2",
+  "testTitle": "Psych Divine Intervention",
+  "sourceFormat": "rtf",
+  "expectedQuestionCount": 40,
+  "actualExtractedQuestionCount": 40,
+  "extractionWarnings": [],
+  "questions": [
+    {
+      "id": "q001",
+      "questionNumber": 1,
+      "sourceQuestionNumber": 1,
+      "retrievalTag": "\\f1\\b0  TCA overdose wide QRS sodium bicarbonate \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  Sodium bicarbonate overcomes TCA-induced sodium channel blockade to reverse QRS widening.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 34-year-old man presents unresponsive after an intentional overdose of amitriptyline. His ECG demonstrates a wide QRS complex of 145 msec. Which of the following is the most appropriate next step in management?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Flumazenil"
+        },
+        {
+          "label": "B",
+          "text": "Sodium bicarbonate"
+        },
+        {
+          "label": "C",
+          "text": "Physostigmine"
+        },
+        {
+          "label": "D",
+          "text": "Magnesium sulfate \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "\\f1\\b0  Recognize wide QRS complexes in TCA overdose and treat them with sodium bicarbonate. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Tricyclic antidepressants block fast sodium channels, leading to life-threatening arrhythmias and wide QRS complexes, which are overcome by administering sodium bicarbonate. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Flumazenil is for benzodiazepines, physostigmine reverses anticholinergic toxicity, and magnesium is for torsades de pointes, none of which overcome the sodium channel blockade seen here. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  Sodium bicarbonate overcomes TCA-induced sodium channel blockade to reverse QRS widening.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q002",
+      "questionNumber": 2,
+      "sourceQuestionNumber": 2,
+      "retrievalTag": "\\f1\\b0  OCD clomipramine indication \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  Clomipramine is the 'C' in the OCD mnemonic for step exams, indicating its specific use for this condition.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 22-year-old man presents with severe anxiety caused by intrusive thoughts that his house will burn down, leading him to check the stove 30 times a day. If his symptoms fail to respond to first-line SSRIs and atypical antipsychotics, which of the following tricyclic antidepressants is uniquely indicated for this condition?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Imipramine"
+        },
+        {
+          "label": "B",
+          "text": "Clomipramine"
+        },
+        {
+          "label": "C",
+          "text": "Amitriptyline"
+        },
+        {
+          "label": "D",
+          "text": "Doxepin \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "\\f1\\b0  Identify clomipramine as the TCA of choice for obsessive-compulsive disorder. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Clomipramine is a tricyclic antidepressant specifically highly tested and utilized as a second- or third-line treatment for obsessive-compulsive disorder (OCD). \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Imipramine is classically tested for nocturnal enuresis, while amitriptyline and doxepin do not have the same specific indication for OCD. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  Clomipramine is the 'C' in the OCD mnemonic for step exams, indicating its specific use for this condition.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q003",
+      "questionNumber": 3,
+      "sourceQuestionNumber": 3,
+      "retrievalTag": "\\f1\\b0  SSRI to MAOI 2 week washout \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  Always allow a minimum of 2 weeks between discontinuing an SSRI and initiating an MAOI to prevent serotonin syndrome.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 45-year-old woman is switched from fluoxetine to phenelzine for refractory depression. To avoid a life-threatening drug interaction, how long must the physician wait after stopping fluoxetine before initiating the new medication?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "3 days"
+        },
+        {
+          "label": "B",
+          "text": "1 week"
+        },
+        {
+          "label": "C",
+          "text": "2 weeks"
+        },
+        {
+          "label": "D",
+          "text": "6 weeks \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "\\f1\\b0  Know the mandatory 2-week washout period when switching from an SSRI to an MAOI. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Due to the risk of precipitating serotonin syndrome, patients must wait at least 2 weeks after stopping an SSRI or SNRI before starting a monoamine oxidase inhibitor (MAOI). \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Waiting less than two weeks leaves residual SSRI in the system, risking serotonin syndrome when combined with the MAOI. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  Always allow a minimum of 2 weeks between discontinuing an SSRI and initiating an MAOI to prevent serotonin syndrome.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q004",
+      "questionNumber": 4,
+      "sourceQuestionNumber": 4,
+      "retrievalTag": "\\f1\\b0  Trazodone priapism alpha 1 block \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  Trazodone-induced priapism can be managed with an alpha-1 agonist like phenylephrine to reverse the vasodilation.\\\n\\pard\\pardeftab720\\partightenfactor0\n\\cf3 \\strokec3 \\\n\\pard\\pardeftab720\\sa240\\partightenfactor0\n\\f0\\b \\cf0 \\strokec2 Source 2: episode-131-general.mp3\n\\f1\\b0 \\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 50-year-old man treated for depression and insomnia presents to the ED with a painful erection lasting 6 hours. Which of the following psychiatric medications most likely caused this adverse effect?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Bupropion"
+        },
+        {
+          "label": "B",
+          "text": "Mirtazapine"
+        },
+        {
+          "label": "C",
+          "text": "Trazodone"
+        },
+        {
+          "label": "D",
+          "text": "Venlafaxine \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "\\f1\\b0  Associate trazodone use with the side effect of priapism due to alpha-1 blockade. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Trazodone acts as an alpha-1 receptor blocker, causing vasodilation that classically results in priapism, a urologic emergency. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Bupropion lacks sexual side effects, mirtazapine causes weight gain and sedation, and venlafaxine causes dose-dependent hypertension. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  Trazodone-induced priapism can be managed with an alpha-1 agonist like phenylephrine to reverse the vasodilation.\\\n\\pard\\pardeftab720\\partightenfactor0\n\\cf3 \\strokec3 \\\n\\pard\\pardeftab720\\sa240\\partightenfactor0\n\\f0\\b \\cf0 \\strokec2 Source 2: episode-131-general.mp3\n\\f1\\b0 \\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q005",
+      "questionNumber": 5,
+      "sourceQuestionNumber": 5,
+      "retrievalTag": "\\f1\\b0  Down syndrome Alzheimer's APP gene Trisomy 21 \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  The amyloid precursor protein gene is located on chromosome 21, causing early Alzheimer's in Trisomy 21.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 42-year-old man with epicanthal folds, a single palmar crease, and a history of congenital heart defects presents with progressive memory loss and confusion. What underlying factor most directly increases his risk for this specific cognitive decline?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Excessive tau protein phosphorylation"
+        },
+        {
+          "label": "B",
+          "text": "Three copies of the amyloid precursor protein gene"
+        },
+        {
+          "label": "C",
+          "text": "Autoimmune destruction of the hippocampus"
+        },
+        {
+          "label": "D",
+          "text": "Microvascular ischemic disease \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "\\f1\\b0  Link Down syndrome with early-onset Alzheimer's disease due to three copies of the APP gene. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Patients with Down syndrome (Trisomy 21) have three copies of chromosome 21, which houses the amyloid precursor protein (APP) gene, placing them at the highest risk for early-onset Alzheimer's disease. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  While tau tangles are part of Alzheimer's, the direct increased genetic risk in Down syndrome relates to the triplication of the APP gene; it is not an autoimmune or purely ischemic process. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  The amyloid precursor protein gene is located on chromosome 21, causing early Alzheimer's in Trisomy 21.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q006",
+      "questionNumber": 6,
+      "sourceQuestionNumber": 6,
+      "retrievalTag": "\\f1\\b0  Alzheimer's acetylcholine basal nucleus of Meynert \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  Destruction of the basal nucleus of Meynert leads to the acetylcholine deficit classically seen in Alzheimer's disease.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 75-year-old man presents with worsening memory impairment, repeatedly getting lost in his own neighborhood, and leaving the stove on. Degeneration of which of the following brain structures is most uniquely associated with this specific neurodegenerative condition?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Substantia nigra"
+        },
+        {
+          "label": "B",
+          "text": "Basal nucleus of Meynert"
+        },
+        {
+          "label": "C",
+          "text": "Caudate nucleus"
+        },
+        {
+          "label": "D",
+          "text": "Locus coeruleus \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "\\f1\\b0  Identify the basal nucleus of Meynert as the source of acetylcholine deficiency in Alzheimer's disease. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Alzheimer's disease is characterized by low levels of acetylcholine, which is produced in the basal nucleus of Meynert; destruction here correlates with symptoms. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  The substantia nigra degenerates in Parkinson's, the caudate in Huntington's, and the locus coeruleus is the primary site of norepinephrine synthesis. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  Destruction of the basal nucleus of Meynert leads to the acetylcholine deficit classically seen in Alzheimer's disease.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q007",
+      "questionNumber": 7,
+      "sourceQuestionNumber": 7,
+      "retrievalTag": "\\f1\\b0  Narcolepsy CSF orexin hypocretin \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  Orexin (hypocretin) deficiency in the CSF is a key diagnostic marker for narcolepsy.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 28-year-old woman presents with severe daytime sleepiness and episodes where she suddenly loses all muscle tone while laughing. Cerebrospinal fluid analysis is most likely to show decreased levels of which of the following?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Dopamine"
+        },
+        {
+          "label": "B",
+          "text": "14-3-3 protein"
+        },
+        {
+          "label": "C",
+          "text": "Orexin"
+        },
+        {
+          "label": "D",
+          "text": "Serotonin \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "\\f1\\b0  Recognize that narcolepsy with cataplexy is associated with decreased hypocretin/orexin in the CSF. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Narcolepsy is characterized by low CSF levels of orexin (hypocretin), which normally regulates wakefulness. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Decreased dopamine is seen in Parkinson's, 14-3-3 is elevated in CJD, and serotonin levels do not diagnose narcolepsy. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  Orexin (hypocretin) deficiency in the CSF is a key diagnostic marker for narcolepsy.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q008",
+      "questionNumber": 8,
+      "sourceQuestionNumber": 8,
+      "retrievalTag": "\\f1\\b0  CJD rapidly progressive dementia 14-3-3 \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  Elevated 14-3-3 protein in the CSF strongly points toward Creutzfeldt-Jakob disease in patients with rapid dementia and myoclonus.\\\n\\pard\\pardeftab720\\partightenfactor0\n\\cf3 \\strokec3 \\\n\\pard\\pardeftab720\\sa240\\partightenfactor0\n\\f0\\b \\cf0 \\strokec2 Source 3: episode-164-clutch-toxicology.mp3\n\\f1\\b0 \\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 55-year-old man presents with rapidly progressive dementia developing over 7 weeks and new-onset myoclonus. Which of the following is the most likely cerebrospinal fluid finding in this patient?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Oligoclonal bands"
+        },
+        {
+          "label": "B",
+          "text": "Elevated 14-3-3 protein"
+        },
+        {
+          "label": "C",
+          "text": "Xanthochromia"
+        },
+        {
+          "label": "D",
+          "text": "Albuminocytologic dissociation \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "\\f1\\b0  Identify elevated 14-3-3 protein in the CSF as a marker for Creutzfeldt-Jakob disease. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Rapidly progressive dementia accompanied by myoclonus strongly suggests Creutzfeldt-Jakob disease (CJD), which classically presents with elevated 14-3-3 protein in the CSF. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Oligoclonal bands are seen in multiple sclerosis, xanthochromia in subarachnoid hemorrhage, and albuminocytologic dissociation in Guillain-Barr\\'e9 syndrome. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  Elevated 14-3-3 protein in the CSF strongly points toward Creutzfeldt-Jakob disease in patients with rapid dementia and myoclonus.\\\n\\pard\\pardeftab720\\partightenfactor0\n\\cf3 \\strokec3 \\\n\\pard\\pardeftab720\\sa240\\partightenfactor0\n\\f0\\b \\cf0 \\strokec2 Source 3: episode-164-clutch-toxicology.mp3\n\\f1\\b0 \\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q009",
+      "questionNumber": 9,
+      "sourceQuestionNumber": 9,
+      "retrievalTag": "\\f1\\b0  Opioid overdose miosis naloxone before intubation \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  Naloxone acts rapidly to rescue patients from opioid-induced respiratory depression and should be given before invasive intubation.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 30-year-old man is found unresponsive with a respiratory rate of 4/min, an oxygen saturation of 82%, and bilateral pinpoint pupils. Which of the following is the most appropriate initial step in management?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Endotracheal intubation"
+        },
+        {
+          "label": "B",
+          "text": "Administration of naloxone"
+        },
+        {
+          "label": "C",
+          "text": "Administration of naltrexone"
+        },
+        {
+          "label": "D",
+          "text": "Administration of flumazenil \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "\\f1\\b0  Administer naloxone prior to intubation in cases of acute opioid-induced respiratory depression. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  The patient has an opioid overdose; naloxone should be given immediately to reverse the profound respiratory depression before jumping to intubation. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Intubation should be deferred until naloxone is tried; naltrexone is for long-term maintenance, and flumazenil is for benzodiazepine toxicity, which lacks pinpoint pupils. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  Naloxone acts rapidly to rescue patients from opioid-induced respiratory depression and should be given before invasive intubation.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q010",
+      "questionNumber": 10,
+      "sourceQuestionNumber": 10,
+      "retrievalTag": "\\f1\\b0  Wernicke encephalopathy ataxia nystagmus IV thiamine \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  Always administer IV thiamine before glucose in patients suspected of having Wernicke encephalopathy.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 45-year-old man with severe anorexia and alcohol use disorder presents with confusion, a staggering wide-based gait, and horizontal nystagmus. Which of the following should be administered immediately?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Intravenous thiamine"
+        },
+        {
+          "label": "B",
+          "text": "Intravenous glucose"
+        },
+        {
+          "label": "C",
+          "text": "Intravenous haloperidol"
+        },
+        {
+          "label": "D",
+          "text": "Intravenous naloxone \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "\\f1\\b0  Diagnose Wernicke encephalopathy and treat promptly with IV thiamine. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  The triad of confusion, ataxia, and ophthalmoplegia (nystagmus) indicates Wernicke encephalopathy, requiring immediate IV thiamine (Vitamin B1). \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Glucose given before thiamine can worsen the encephalopathy, haloperidol does not treat the underlying vitamin deficiency, and naloxone is for opioid overdose. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  Always administer IV thiamine before glucose in patients suspected of having Wernicke encephalopathy.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q011",
+      "questionNumber": 11,
+      "sourceQuestionNumber": 11,
+      "retrievalTag": "\\f1\\b0  Zolpidem Z-drug overdose flumazenil \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  Flumazenil reverses both benzodiazepines and Z-drugs (zolpidem, zaleplon, eszopiclone) as they both act on GABA-A receptors.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 35-year-old woman is brought to the ED unresponsive with respiratory depression after intentionally overdosing on her prescribed zolpidem for insomnia. Which of the following agents can be used to reverse her toxicity?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Naloxone"
+        },
+        {
+          "label": "B",
+          "text": "Flumazenil"
+        },
+        {
+          "label": "C",
+          "text": "Physostigmine"
+        },
+        {
+          "label": "D",
+          "text": "Fomepizole \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "\\f1\\b0  Utilize flumazenil as the antidote for zolpidem and benzodiazepine overdoses. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Flumazenil is a GABA-A receptor antagonist that reverses the toxicity of both benzodiazepines and non-benzodiazepine \"Z-drugs\" like zolpidem. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Naloxone reverses opioids, physostigmine reverses anticholinergics, and fomepizole treats methanol or ethylene glycol poisoning. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  Flumazenil reverses both benzodiazepines and Z-drugs (zolpidem, zaleplon, eszopiclone) as they both act on GABA-A receptors.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q012",
+      "questionNumber": 12,
+      "sourceQuestionNumber": 12,
+      "retrievalTag": "\\f1\\b0  Anticholinergic toxidrome dry flushed mydriasis \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  Anticholinergic toxicity presents with mydriasis, hyperthermia, dry skin, and urinary retention due to parasympathetic blockade.\\\n\\pard\\pardeftab720\\partightenfactor0\n\\cf3 \\strokec3 \\\n\\pard\\pardeftab720\\sa240\\partightenfactor0\n\\f0\\b \\cf0 \\strokec2 Source 4: episode-166-psych.mp3\n\\f1\\b0 \\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 24-year-old woman is brought to the ED with a temperature of 103 F, completely dry and flushed skin, dilated pupils, and suprapubic fullness indicating urinary retention. Toxicity from which of the following drug classes is most likely responsible?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Cholinergic agonists"
+        },
+        {
+          "label": "B",
+          "text": "Opioids"
+        },
+        {
+          "label": "C",
+          "text": "Anticholinergics"
+        },
+        {
+          "label": "D",
+          "text": "Benzodiazepines \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "\\f1\\b0  Recognize the classic signs of an anticholinergic toxidrome. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  The classic symptoms of \"hot as a hare, dry as a bone, red as a beet, blind as a bat\" paired with urinary retention and mydriasis point directly to an anticholinergic toxidrome. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Cholinergic toxicity causes excess secretions (diarrhea, sweating, miosis), opioids cause miosis, and benzodiazepines cause sedation without these pupillary/secretory changes. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  Anticholinergic toxicity presents with mydriasis, hyperthermia, dry skin, and urinary retention due to parasympathetic blockade.\\\n\\pard\\pardeftab720\\partightenfactor0\n\\cf3 \\strokec3 \\\n\\pard\\pardeftab720\\sa240\\partightenfactor0\n\\f0\\b \\cf0 \\strokec2 Source 4: episode-166-psych.mp3\n\\f1\\b0 \\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q013",
+      "questionNumber": 13,
+      "sourceQuestionNumber": 13,
+      "retrievalTag": "\\f1\\b0  Lithium bipolar decreases suicide risk \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  Lithium and clozapine are the two primary psychiatric medications known to decrease the risk of suicide.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 28-year-old man is diagnosed with bipolar disorder after a manic episode characterized by grandiosity and decreased need for sleep. He is started on a medication that has been uniquely shown to decrease the risk of suicide. Which medication was prescribed?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Valproate"
+        },
+        {
+          "label": "B",
+          "text": "Lamotrigine"
+        },
+        {
+          "label": "C",
+          "text": "Lithium"
+        },
+        {
+          "label": "D",
+          "text": "Quetiapine \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "\\f1\\b0  Identify lithium as a mood stabilizer that reduces suicide risk in bipolar patients. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Lithium is the drug of choice for bipolar disorder and is one of only two psychiatric drugs (the other being clozapine) definitively shown to decrease the risk of suicide. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  While valproate, lamotrigine, and quetiapine are used in bipolar disorder, they do not possess the established anti-suicidal properties of lithium. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  Lithium and clozapine are the two primary psychiatric medications known to decrease the risk of suicide.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q014",
+      "questionNumber": 14,
+      "sourceQuestionNumber": 14,
+      "retrievalTag": "\\f1\\b0  Lithium nephrogenic DI amiloride \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  Amiloride blocks the ENaC channels in the collecting duct, preventing further lithium uptake and treating lithium-induced diabetes insipidus.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 35-year-old woman chronically treated with lithium develops polyuria, hypernatremia, and a low urine osmolarity. If pharmacologic intervention is required to treat this specific renal complication, which medication is most appropriate?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Hydrochlorothiazide"
+        },
+        {
+          "label": "B",
+          "text": "Amiloride"
+        },
+        {
+          "label": "C",
+          "text": "Desmopressin"
+        },
+        {
+          "label": "D",
+          "text": "Demeclocycline \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "\\f1\\b0  Treat lithium-induced nephrogenic diabetes insipidus with amiloride and strictly avoid thiazides. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Lithium induces nephrogenic diabetes insipidus by entering the collecting duct via ENaC channels; amiloride, an ENaC blocker, prevents lithium entry and treats the condition without worsening toxicity. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Thiazide diuretics cause volume depletion which upregulates proximal sodium/lithium reabsorption, precipitating severe lithium toxicity; desmopressin does not fix nephrogenic DI. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  Amiloride blocks the ENaC channels in the collecting duct, preventing further lithium uptake and treating lithium-induced diabetes insipidus.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q015",
+      "questionNumber": 15,
+      "sourceQuestionNumber": 15,
+      "retrievalTag": "\\f1\\b0  Bupropion contraindication anorexia bulimia seizure \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  Never prescribe bupropion to patients with eating disorders due to the severely elevated risk of precipitating seizures.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 19-year-old female with a BMI of 17.5 kg/m2 and a history of self-induced vomiting presents seeking pharmacotherapy for depression and fatigue. Which of the following antidepressants is strictly contraindicated in this patient?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Fluoxetine"
+        },
+        {
+          "label": "B",
+          "text": "Sertraline"
+        },
+        {
+          "label": "C",
+          "text": "Mirtazapine"
+        },
+        {
+          "label": "D",
+          "text": "Bupropion \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "D",
+      "educationalObjective": "\\f1\\b0  Recognize that bupropion is contraindicated in eating disorders due to the risk of seizures. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Bupropion lowers the seizure threshold and is strictly contraindicated in patients with anorexia nervosa or bulimia due to their inherent risk of electrolyte abnormalities that already predispose them to seizures. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Fluoxetine, sertraline, and mirtazapine do not lower the seizure threshold to the same dangerous degree in patients with eating disorders. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  Never prescribe bupropion to patients with eating disorders due to the severely elevated risk of precipitating seizures.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q016",
+      "questionNumber": 16,
+      "sourceQuestionNumber": 16,
+      "retrievalTag": "\\f1\\b0  Adjustment disorder vs MDD stressor \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  If a patient has depressive symptoms following a stressor but lacks 5 of 9 SIGECAPS criteria, the diagnosis is adjustment disorder.\\\n\\pard\\pardeftab720\\partightenfactor0\n\\cf3 \\strokec3 \\\n\\pard\\pardeftab720\\sa240\\partightenfactor0\n\\f0\\b \\cf0 \\strokec2 Source 5: episode-436-eye-findings-and-the-usmles.mp3\n\\f1\\b0 \\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 40-year-old man reports feelings of sadness, poor sleep, and low energy beginning two weeks after going through a difficult divorce. He denies suicidal ideation, guilt, or psychomotor changes, and his symptoms do not meet the criteria for major depressive disorder. What is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Major depressive disorder"
+        },
+        {
+          "label": "B",
+          "text": "Adjustment disorder with depressed mood"
+        },
+        {
+          "label": "C",
+          "text": "Generalized anxiety disorder"
+        },
+        {
+          "label": "D",
+          "text": "Normal bereavement \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "\\f1\\b0  Differentiate adjustment disorder from major depressive disorder based on symptom count and clear stressor timelines. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Patients presenting with depressive symptoms following a clear psychosocial stressor who do not meet the 5-out-of-9 SIGECAPS criteria for MDD should be diagnosed with an adjustment disorder. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  The patient lacks sufficient criteria for MDD, and Generalized Anxiety Disorder requires 6 months of multi-domain worry. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  If a patient has depressive symptoms following a stressor but lacks 5 of 9 SIGECAPS criteria, the diagnosis is adjustment disorder.\\\n\\pard\\pardeftab720\\partightenfactor0\n\\cf3 \\strokec3 \\\n\\pard\\pardeftab720\\sa240\\partightenfactor0\n\\f0\\b \\cf0 \\strokec2 Source 5: episode-436-eye-findings-and-the-usmles.mp3\n\\f1\\b0 \\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q017",
+      "questionNumber": 17,
+      "sourceQuestionNumber": 17,
+      "retrievalTag": "\\f1\\b0  Opioid toxicity miosis pupillary constriction \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  The combination of severe respiratory depression and bilateral pupillary miosis is highly specific for opioid overdose.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 25-year-old man is brought to the ED lethargic and breathing at 6 breaths per minute. A toxidrome is suspected. Pupillary examination is most likely to reveal which of the following findings?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Mydriasis"
+        },
+        {
+          "label": "B",
+          "text": "Miosis"
+        },
+        {
+          "label": "C",
+          "text": "Argyll Robertson pupil"
+        },
+        {
+          "label": "D",
+          "text": "Relative afferent pupillary defect \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "\\f1\\b0  Recognize miosis as a classic physical exam finding in opioid intoxication. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Profound respiratory depression coupled with pupillary miosis (pinpoint pupils) is the hallmark presentation of opioid intoxication. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Mydriasis is seen in sympathomimetic or anticholinergic toxicity, while Argyll Robertson pupil is linked to neurosyphilis. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  The combination of severe respiratory depression and bilateral pupillary miosis is highly specific for opioid overdose.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q018",
+      "questionNumber": 18,
+      "sourceQuestionNumber": 18,
+      "retrievalTag": "\\f1\\b0  Cocaine sympathomimetic mydriasis pupil dilation \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  Sympathomimetic drugs cause pupillary dilation (mydriasis) due to excess adrenergic stimulation of the pupillary dilator muscle.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 30-year-old man presents with extreme agitation, pressured speech, chest pain, and a blood pressure of 180/110 mmHg. Examination of his eyes is most likely to show which of the following?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Miosis"
+        },
+        {
+          "label": "B",
+          "text": "Mydriasis"
+        },
+        {
+          "label": "C",
+          "text": "Nystagmus"
+        },
+        {
+          "label": "D",
+          "text": "Ptosis \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "\\f1\\b0  Associate mydriasis with sympathomimetic toxidromes such as cocaine intoxication. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Cocaine and methamphetamine are sympathomimetics that cause alpha-1 receptor activation, resulting in significant pupillary mydriasis (dilation) along with hypertension and tachycardia. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Miosis is seen with opioids, nystagmus is classic for PCP or Wernicke encephalopathy, and ptosis points toward Horner syndrome or oculomotor nerve palsy. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  Sympathomimetic drugs cause pupillary dilation (mydriasis) due to excess adrenergic stimulation of the pupillary dilator muscle.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q019",
+      "questionNumber": 19,
+      "sourceQuestionNumber": 19,
+      "retrievalTag": "\\f1\\b0  Wernicke encephalopathy nystagmus ophthalmoplegia \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  The classic triad of Wernicke encephalopathy includes confusion, ataxia, and ophthalmoplegia, which frequently presents as nystagmus.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 55-year-old severely malnourished man is evaluated for profound confusion and an unsteady, wide-based gait. Which of the following eye findings is most characteristic of his underlying condition?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Cotton wool spots"
+        },
+        {
+          "label": "B",
+          "text": "Papilledema"
+        },
+        {
+          "label": "C",
+          "text": "Nystagmus"
+        },
+        {
+          "label": "D",
+          "text": "Cherry red spot \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "\\f1\\b0  Identify nystagmus as the classic ocular finding in Wernicke encephalopathy. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  This patient has Wernicke encephalopathy (confusion, ataxia), which classically presents with ophthalmoplegia, most commonly manifesting as horizontal nystagmus. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Cotton wool spots are seen in hypertensive or diabetic retinopathy, and cherry red spots are seen in Tay-Sachs or central retinal artery occlusion. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  The classic triad of Wernicke encephalopathy includes confusion, ataxia, and ophthalmoplegia, which frequently presents as nystagmus.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q020",
+      "questionNumber": 20,
+      "sourceQuestionNumber": 20,
+      "retrievalTag": "\\f1\\b0  Methanol windshield washer fluid alcohol dehydrogenase fomepizole \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  Methanol toxicity uniquely damages the optic nerve causing blindness, and is treated by blocking alcohol dehydrogenase with fomepizole.\\\n\\pard\\pardeftab720\\partightenfactor0\n\\cf3 \\strokec3 \\\n\\pard\\pardeftab720\\sa240\\partightenfactor0\n\\f0\\b \\cf0 \\strokec2 Source 6: episode-442-rr-92.mp3\n\\f1\\b0 \\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 45-year-old man presents with acute vision loss, optic disc hyperemia, and a severe high anion gap metabolic acidosis after consuming windshield washer fluid. Pharmacologic inhibition of which enzyme is the most appropriate treatment for his ingestion?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Aldose reductase"
+        },
+        {
+          "label": "B",
+          "text": "Alcohol dehydrogenase"
+        },
+        {
+          "label": "C",
+          "text": "Hexosaminidase A"
+        },
+        {
+          "label": "D",
+          "text": "Acetylcholinesterase \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "\\f1\\b0  Treat methanol-induced optic neuropathy by administering an alcohol dehydrogenase inhibitor (fomepizole). \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Windshield washer fluid contains methanol, which damages the optic nerve (causing vision loss) when metabolized by alcohol dehydrogenase to formic acid; fomepizole inhibits alcohol dehydrogenase to treat this. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Aldose reductase is involved in diabetic cataracts, hexosaminidase A is deficient in Tay-Sachs, and acetylcholinesterase is inhibited by organophosphates. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  Methanol toxicity uniquely damages the optic nerve causing blindness, and is treated by blocking alcohol dehydrogenase with fomepizole.\\\n\\pard\\pardeftab720\\partightenfactor0\n\\cf3 \\strokec3 \\\n\\pard\\pardeftab720\\sa240\\partightenfactor0\n\\f0\\b \\cf0 \\strokec2 Source 6: episode-442-rr-92.mp3\n\\f1\\b0 \\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q021",
+      "questionNumber": 21,
+      "sourceQuestionNumber": 21,
+      "retrievalTag": "\\f1\\b0  Specific phobia single trigger dogs greater than 6 months \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  Specific phobias are defined by intense, irrational anxiety directed at a single object or situation, leading to active avoidance.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 22-year-old woman states she has avoided visiting her friends for the past two years because they own dogs. She experiences intense anxiety and facial pallor whenever dogs are discussed or seen, but denies any specific past trauma involving a dog. What is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Panic disorder"
+        },
+        {
+          "label": "B",
+          "text": "Generalized anxiety disorder"
+        },
+        {
+          "label": "C",
+          "text": "Specific phobia"
+        },
+        {
+          "label": "D",
+          "text": "Post-traumatic stress disorder \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "\\f1\\b0  Differentiate specific phobia from other anxiety disorders based on the presence of a singular defined trigger lasting >6 months. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  The patient's intense fear and avoidance behavior is centered entirely around a single, specific trigger (dogs) for greater than 6 months, defining a specific phobia. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Generalized anxiety disorder involves multiple life domains, PTSD requires a specific traumatic event, and panic disorder lacks a consistent, specific trigger. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  Specific phobias are defined by intense, irrational anxiety directed at a single object or situation, leading to active avoidance.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q022",
+      "questionNumber": 22,
+      "sourceQuestionNumber": 22,
+      "retrievalTag": "\\f1\\b0  Specific phobia treatment CBT exposure therapy \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  First-line therapy for specific phobia with frequent impairment is CBT involving systematic exposure.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 25-year-old man suffers from an intense fear of heights that has severely limited his ability to work in office buildings for over a year. What is the most effective long-term treatment for his condition?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Cognitive behavioral therapy"
+        },
+        {
+          "label": "B",
+          "text": "Lorazepam"
+        },
+        {
+          "label": "C",
+          "text": "Fluoxetine"
+        },
+        {
+          "label": "D",
+          "text": "Venlafaxine \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "\\f1\\b0  Identify Cognitive Behavioral Therapy (CBT) as the best treatment for specific phobia. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  The gold standard and most effective treatment for specific phobia is cognitive behavioral therapy (CBT), specifically exposure therapy or systematic desensitization. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Short-acting benzodiazepines are only used for very infrequent exposures (like flying once a year), and SSRIs are not first-line for specific phobias. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  First-line therapy for specific phobia with frequent impairment is CBT involving systematic exposure.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q023",
+      "questionNumber": 23,
+      "sourceQuestionNumber": 23,
+      "retrievalTag": "\\f1\\b0  Alcohol intoxication ataxia slurred speech normal pupils \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  Alcohol intoxication classically presents with ataxia and slurred speech, but typically lacks the pupillary findings seen with illicit drugs.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 17-year-old boy is brought to the ED laughing inappropriately, speaking with a slurred voice, and walking with an ataxic gait. His pupillary exam is unremarkable, his respiratory rate is normal, and he is not tachycardic. What is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Marijuana intoxication"
+        },
+        {
+          "label": "B",
+          "text": "Alcohol intoxication"
+        },
+        {
+          "label": "C",
+          "text": "Cocaine intoxication"
+        },
+        {
+          "label": "D",
+          "text": "Opioid intoxication \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "\\f1\\b0  Distinguish alcohol intoxication from other drugs of abuse by identifying ataxia and disinhibition without pupillary changes. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Disinhibited behavior, slurred speech, and ataxia in the absence of pupillary changes or respiratory depression is the classic presentation of alcohol intoxication on exams. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Marijuana causes hunger and conjunctival injection, cocaine causes mydriasis and tachycardia, and opioids cause pinpoint pupils with respiratory depression. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  Alcohol intoxication classically presents with ataxia and slurred speech, but typically lacks the pupillary findings seen with illicit drugs.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q024",
+      "questionNumber": 24,
+      "sourceQuestionNumber": 24,
+      "retrievalTag": "\\f1\\b0  Panic disorder unprovoked attacks 1 month worry \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  The hallmark of panic disorder is recurrent attacks without an identifiable trigger, followed by >1 month of fear of future attacks.\\\n\\pard\\pardeftab720\\partightenfactor0\n\\cf3 \\strokec3 \\\n\\pard\\pardeftab720\\sa240\\partightenfactor0\n\\f0\\b \\cf0 \\strokec2 Source 7: episode-451-serotonin-syndrome-.mp3\n\\f1\\b0 \\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 30-year-old woman presents to the clinic reporting recurrent, unexpected episodes of severe sweating, hyperventilation, and a feeling of impending doom. For the past month, she has been terrified of having another episode. What is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Specific phobia"
+        },
+        {
+          "label": "B",
+          "text": "Generalized anxiety disorder"
+        },
+        {
+          "label": "C",
+          "text": "Panic disorder"
+        },
+        {
+          "label": "D",
+          "text": "Acute stress disorder \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "\\f1\\b0  Diagnose panic disorder based on recurrent unprovoked panic attacks and >1 month of anticipatory anxiety. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Panic disorder is diagnosed when a patient experiences recurrent, unprovoked panic attacks followed by at least one month of persistent worry about having another attack. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  If the attacks had an identifiable trigger, it would be a specific phobia or social anxiety; GAD is worry about multiple domains, not just panic attacks. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  The hallmark of panic disorder is recurrent attacks without an identifiable trigger, followed by >1 month of fear of future attacks.\\\n\\pard\\pardeftab720\\partightenfactor0\n\\cf3 \\strokec3 \\\n\\pard\\pardeftab720\\sa240\\partightenfactor0\n\\f0\\b \\cf0 \\strokec2 Source 7: episode-451-serotonin-syndrome-.mp3\n\\f1\\b0 \\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q025",
+      "questionNumber": 25,
+      "sourceQuestionNumber": 25,
+      "retrievalTag": "\\f1\\b0  Linezolid SSRI serotonin syndrome MAOI activity \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  Linezolid is uniquely capable of precipitating serotonin syndrome because it acts as a weak MAO inhibitor.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 25-year-old man with depression managed on an SSRI is hospitalized for MRSA endocarditis and started on an antibiotic. 24 hours later, he develops a temperature of 104 F, muscle rigidity, and hyperreflexia. Which antibiotic most likely precipitated this complication?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Vancomycin"
+        },
+        {
+          "label": "B",
+          "text": "Linezolid"
+        },
+        {
+          "label": "C",
+          "text": "Daptomycin"
+        },
+        {
+          "label": "D",
+          "text": "Ceftaroline \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "\\f1\\b0  Recognize that linezolid has MAOI activity and can cause serotonin syndrome when combined with other serotonergic agents. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Linezolid is a 50S protein synthesis inhibitor that also possesses monoamine oxidase inhibitor (MAOI) activity; combining it with an SSRI can precipitate severe serotonin syndrome. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Vancomycin, daptomycin, and ceftaroline treat MRSA but do not have serotonergic or MAOI properties. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  Linezolid is uniquely capable of precipitating serotonin syndrome because it acts as a weak MAO inhibitor.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q026",
+      "questionNumber": 26,
+      "sourceQuestionNumber": 26,
+      "retrievalTag": "\\f1\\b0  Serotonin syndrome hyperreflexia clonus vs NMS \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  Patients with serotonin syndrome show hyperreflexia and clonus, while those with NMS typically show 'lead-pipe' rigidity and hypokinesia.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 32-year-old woman taking fluoxetine and sumatriptan presents with fever, tachycardia, and altered mental status. Which of the following physical exam findings best distinguishes her condition from neuroleptic malignant syndrome?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Lead-pipe rigidity"
+        },
+        {
+          "label": "B",
+          "text": "Hypokinesia"
+        },
+        {
+          "label": "C",
+          "text": "Hyperreflexia and clonus"
+        },
+        {
+          "label": "D",
+          "text": "Diaphoresis \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "\\f1\\b0  Differentiate serotonin syndrome from NMS based on the presence of hyperreflexia and clonus. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Serotonin syndrome classically presents with hyperkinesia, hyperreflexia, and clonus, which distinguishes it from neuroleptic malignant syndrome (NMS). \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Lead-pipe rigidity and hypokinesia are the hallmark physical exam findings of NMS, whereas serotonin syndrome is hyperkinetic. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  Patients with serotonin syndrome show hyperreflexia and clonus, while those with NMS typically show 'lead-pipe' rigidity and hypokinesia.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q027",
+      "questionNumber": 27,
+      "sourceQuestionNumber": 27,
+      "retrievalTag": "\\f1\\b0  Serotonin syndrome treatment IV benzodiazepines \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  IV benzodiazepines are preferred over cyproheptadine initially in serotonin syndrome due to rapid onset and IV availability in agitated patients.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 40-year-old man develops serotonin syndrome after intentionally ingesting multiple serotonergic medications. After discontinuing the offending agents and providing supportive care, what is the best initial pharmacologic step in management?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Oral cyproheptadine"
+        },
+        {
+          "label": "B",
+          "text": "Intravenous benzodiazepines"
+        },
+        {
+          "label": "C",
+          "text": "Intravenous dantrolene"
+        },
+        {
+          "label": "D",
+          "text": "Oral bromocriptine \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "\\f1\\b0  Utilize intravenous benzodiazepines as the primary pharmacologic intervention for serotonin syndrome. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  In serotonin syndrome, if stopping the agents and supportive care fails, the next line of treatment is intravenous benzodiazepines to control agitation and hyperadrenergic symptoms. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Oral cyproheptadine is reserved for when benzodiazepines fail, as it cannot be given IV; dantrolene and bromocriptine treat NMS, not serotonin syndrome. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  IV benzodiazepines are preferred over cyproheptadine initially in serotonin syndrome due to rapid onset and IV availability in agitated patients.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q028",
+      "questionNumber": 28,
+      "sourceQuestionNumber": 28,
+      "retrievalTag": "\\f1\\b0  Cyproheptadine mechanism serotonin receptor antagonist \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  Cyproheptadine reverses serotonin syndrome by directly antagonizing 5-HT receptors.\\\n\\pard\\pardeftab720\\partightenfactor0\n\\cf3 \\strokec3 \\\n\\pard\\pardeftab720\\sa240\\partightenfactor0\n\\f0\\b \\cf0 \\strokec2 Source 8: episode-452-mh-and-nms.mp3\n\\f1\\b0 \\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 29-year-old man with severe serotonin syndrome remains hyperreflexic and agitated despite intravenous benzodiazepines. He is administered cyproheptadine. This medication acts primarily through which of the following mechanisms?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Ryanodine receptor antagonism"
+        },
+        {
+          "label": "B",
+          "text": "Dopamine D2 receptor agonism"
+        },
+        {
+          "label": "C",
+          "text": "Serotonin receptor antagonism"
+        },
+        {
+          "label": "D",
+          "text": "Monoamine oxidase inhibition \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "\\f1\\b0  Identify cyproheptadine as a serotonin receptor antagonist used to treat refractory serotonin syndrome. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Cyproheptadine is an antihistamine that possesses powerful serotonin receptor antagonist properties, making it the definitive antidote for refractory serotonin syndrome. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Ryanodine antagonism describes dantrolene (for MH/NMS), dopamine D2 agonism describes bromocriptine (for NMS), and MAO inhibition causes serotonin syndrome rather than treating it. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  Cyproheptadine reverses serotonin syndrome by directly antagonizing 5-HT receptors.\\\n\\pard\\pardeftab720\\partightenfactor0\n\\cf3 \\strokec3 \\\n\\pard\\pardeftab720\\sa240\\partightenfactor0\n\\f0\\b \\cf0 \\strokec2 Source 8: episode-452-mh-and-nms.mp3\n\\f1\\b0 \\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q029",
+      "questionNumber": 29,
+      "sourceQuestionNumber": 29,
+      "retrievalTag": "\\f1\\b0  NMS withdrawal of dopamine agonist Parkinson's \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  Neuroleptic malignant syndrome can occur either from starting a D2 blocker or abruptly stopping a dopamine agonist.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 60-year-old man with Parkinson's disease is brought to the ED with severe confusion, fever, and lead-pipe muscle rigidity. He recently ran out of his carbidopa-levodopa prescription and has not taken it for several days. What is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Serotonin syndrome"
+        },
+        {
+          "label": "B",
+          "text": "Malignant hyperthermia"
+        },
+        {
+          "label": "C",
+          "text": "Neuroleptic malignant syndrome"
+        },
+        {
+          "label": "D",
+          "text": "Anticholinergic toxicity \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "\\f1\\b0  Recognize that abrupt withdrawal of a dopamine agonist can precipitate neuroleptic malignant syndrome. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Neuroleptic malignant syndrome (NMS) can be caused not only by administering dopamine antagonists (antipsychotics) but also by the abrupt withdrawal of a dopamine agonist in conditions like Parkinson's disease. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Serotonin syndrome requires serotonergic drugs; malignant hyperthermia is triggered by volatile anesthetics, and anticholinergic toxicity lacks lead-pipe rigidity. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  Neuroleptic malignant syndrome can occur either from starting a D2 blocker or abruptly stopping a dopamine agonist.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q030",
+      "questionNumber": 30,
+      "sourceQuestionNumber": 30,
+      "retrievalTag": "\\f1\\b0  NMS reflexes hypokinesia normal \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  Unlike serotonin syndrome, NMS does not cause hyperreflexia or clonus; it presents with severe hypokinesia and rigidity.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 35-year-old man with schizophrenia treated with haloperidol develops a temperature of 104 F, altered mental status, and severe muscle rigidity. Which of the following deep tendon reflex findings is most expected in this patient?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Hyperreflexia"
+        },
+        {
+          "label": "B",
+          "text": "Clonus"
+        },
+        {
+          "label": "C",
+          "text": "Normal or hypokinetic reflexes"
+        },
+        {
+          "label": "D",
+          "text": "Pendular reflexes \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "\\f1\\b0  Differentiate NMS from serotonin syndrome by the presence of normal or hypokinetic reflexes instead of hyperreflexia. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Patients with neuroleptic malignant syndrome typically present with hypokinesia and lead-pipe rigidity, which results in normal or decreased deep tendon reflexes. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Hyperreflexia and clonus are the defining characteristics of serotonin syndrome, differentiating it from NMS. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  Unlike serotonin syndrome, NMS does not cause hyperreflexia or clonus; it presents with severe hypokinesia and rigidity.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q031",
+      "questionNumber": 31,
+      "sourceQuestionNumber": 31,
+      "retrievalTag": "\\f1\\b0  Malignant hyperthermia ryanodine receptor sarcoplasmic reticulum \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  Malignant hyperthermia results from massive calcium release from the sarcoplasmic reticulum due to a mutant ryanodine receptor.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 25-year-old man develops a temperature of 105 F, severe muscle rigidity, and lactic acidosis shortly after receiving halothane anesthesia. This condition is most likely caused by a mutation in a receptor located on which of the following structures?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Postsynaptic nerve terminal"
+        },
+        {
+          "label": "B",
+          "text": "Sarcoplasmic reticulum"
+        },
+        {
+          "label": "C",
+          "text": "Mitochondrial membrane"
+        },
+        {
+          "label": "D",
+          "text": "Lysosomal membrane \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "\\f1\\b0  Identify the ryanodine receptor on the sarcoplasmic reticulum as the defective site in malignant hyperthermia. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Malignant hyperthermia is caused by an autosomal dominant mutation in the ryanodine receptor, a calcium channel located on the sarcoplasmic reticulum of muscle cells. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  The defect is not in the nerve terminal, mitochondria, or lysosomes, but directly in the sarcoplasmic reticulum governing calcium release in skeletal muscle. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  Malignant hyperthermia results from massive calcium release from the sarcoplasmic reticulum due to a mutant ryanodine receptor.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q032",
+      "questionNumber": 32,
+      "sourceQuestionNumber": 32,
+      "retrievalTag": "\\f1\\b0  Dantrolene mechanism inhibits calcium release sarcoplasmic reticulum \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  Dantrolene reverses the rigidity of both NMS and MH by acting as a direct muscle relaxant at the sarcoplasmic reticulum.\\\n\\pard\\pardeftab720\\partightenfactor0\n\\cf3 \\strokec3 \\\n\\pard\\pardeftab720\\sa240\\partightenfactor0\n\\f0\\b \\cf0 \\strokec2 Source 9: episode-453-psychiatry-timelines (1).mp3\n\\f1\\b0 \\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 40-year-old woman develops severe neuroleptic malignant syndrome and is administered dantrolene. By what mechanism does this medication relieve her muscle rigidity?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Agonism of central dopamine receptors"
+        },
+        {
+          "label": "B",
+          "text": "Antagonism of 5-HT2A receptors"
+        },
+        {
+          "label": "C",
+          "text": "Inhibition of calcium release from the sarcoplasmic reticulum"
+        },
+        {
+          "label": "D",
+          "text": "Enhancement of GABA-A receptor activity \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "\\f1\\b0  Explain the mechanism of dantrolene in treating NMS and malignant hyperthermia. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Dantrolene is a ryanodine receptor antagonist that prevents the massive release of calcium from the sarcoplasmic reticulum, relaxing the hypercontractile muscle state. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Bromocriptine acts as a dopamine agonist, cyproheptadine is a 5-HT antagonist, and benzodiazepines enhance GABA-A; dantrolene works directly on the muscle. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  Dantrolene reverses the rigidity of both NMS and MH by acting as a direct muscle relaxant at the sarcoplasmic reticulum.\\\n\\pard\\pardeftab720\\partightenfactor0\n\\cf3 \\strokec3 \\\n\\pard\\pardeftab720\\sa240\\partightenfactor0\n\\f0\\b \\cf0 \\strokec2 Source 9: episode-453-psychiatry-timelines (1).mp3\n\\f1\\b0 \\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q033",
+      "questionNumber": 33,
+      "sourceQuestionNumber": 33,
+      "retrievalTag": "\\f1\\b0  Acute stress disorder timeline less than 1 month \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  If PTSD-like symptoms have been present for less than 1 month, the correct diagnosis is acute stress disorder.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 28-year-old woman presents with severe flashbacks, avoidance of driving, and hyperarousal two weeks after surviving a major motor vehicle collision. Her symptoms have caused significant occupational impairment. What is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Post-traumatic stress disorder"
+        },
+        {
+          "label": "B",
+          "text": "Acute stress disorder"
+        },
+        {
+          "label": "C",
+          "text": "Adjustment disorder"
+        },
+        {
+          "label": "D",
+          "text": "Generalized anxiety disorder \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "\\f1\\b0  Distinguish acute stress disorder from PTSD based on the <1 month symptom duration. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Symptoms of intense trauma (flashbacks, hyperarousal) lasting less than one month after the inciting event are classified as acute stress disorder. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Post-traumatic stress disorder (PTSD) requires symptoms to persist for greater than one month; adjustment disorder lacks the severe flashback/trauma criteria. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  If PTSD-like symptoms have been present for less than 1 month, the correct diagnosis is acute stress disorder.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q034",
+      "questionNumber": 34,
+      "sourceQuestionNumber": 34,
+      "retrievalTag": "\\f1\\b0  Adjustment disorder resolution within 6 months \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  In adjustment disorder, symptoms arise in response to a stressor and must resolve within 6 months of the stressor ending.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 45-year-old man presents with depressed mood and anxiety that began three months ago after a difficult divorce, but his symptoms do not meet criteria for MDD. To confirm a diagnosis of adjustment disorder, his symptoms must eventually resolve within what timeframe after the stressor and its consequences have ended?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "D",
+          "text": "To confirm a diagnosis of adjustment disorder, his symptoms must eventually resolve within what timeframe after the stressor and its consequences have ended?"
+        },
+        {
+          "label": "A",
+          "text": "1 month"
+        },
+        {
+          "label": "B",
+          "text": "6 months"
+        },
+        {
+          "label": "C",
+          "text": "1 year"
+        },
+        {
+          "label": "D",
+          "text": "2 years \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "\\f1\\b0  Know the resolution timeline criteria for adjustment disorder. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  By definition, the symptoms of adjustment disorder must not persist for more than 6 months after the stressor (or its consequences) has terminated. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Symptoms extending beyond 6 months indicate a different underlying anxiety or depressive disorder. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  In adjustment disorder, symptoms arise in response to a stressor and must resolve within 6 months of the stressor ending.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q035",
+      "questionNumber": 35,
+      "sourceQuestionNumber": 35,
+      "retrievalTag": "\\f1\\b0  Schizophreniform disorder timeline 1 to 6 months \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  The schizophrenia timeline is: <1 month = brief psychotic disorder, 1-6 months = schizophreniform, >6 months = schizophrenia.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 22-year-old man is brought to the clinic because he has been hearing voices and demonstrating disorganized speech for the past 3 months. He has no prior psychiatric history. What is the most accurate diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Brief psychotic disorder"
+        },
+        {
+          "label": "B",
+          "text": "Schizophreniform disorder"
+        },
+        {
+          "label": "C",
+          "text": "Schizophrenia"
+        },
+        {
+          "label": "D",
+          "text": "Schizoaffective disorder \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "\\f1\\b0  Diagnose schizophreniform disorder based on psychotic symptoms lasting between 1 and 6 months. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Psychotic symptoms (hallucinations, disorganized speech) lasting between 1 month and 6 months warrant a diagnosis of schizophreniform disorder. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Brief psychotic disorder lasts less than 1 month, whereas full schizophrenia requires symptoms to be present for greater than 6 months. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  The schizophrenia timeline is: <1 month = brief psychotic disorder, 1-6 months = schizophreniform, >6 months = schizophrenia.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q036",
+      "questionNumber": 36,
+      "sourceQuestionNumber": 36,
+      "retrievalTag": "\\f1\\b0  ADHD diagnosis before age 12 two settings \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  For ADHD, symptoms must be present in at least two different settings (e.g., home and school) and begin before age 12.\\\n\\pard\\pardeftab720\\partightenfactor0\n\\cf3 \\strokec3 \\\n\\pard\\pardeftab720\\sa240\\partightenfactor0\n\\f0\\b \\cf0 \\strokec2 Source 10: episode-68-psych-pharmacology-part-2-.mp3\n\\f1\\b0 \\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 14-year-old boy is evaluated for difficulty paying attention and hyperactive behavior that occurs both at school and at home, causing impairment. For a definitive diagnosis of attention-deficit/hyperactivity disorder (ADHD), these symptoms must have been present prior to what age?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "5 years"
+        },
+        {
+          "label": "B",
+          "text": "7 years"
+        },
+        {
+          "label": "C",
+          "text": "12 years"
+        },
+        {
+          "label": "D",
+          "text": "18 years \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "\\f1\\b0  Identify age 12 as the cutoff age for the onset of ADHD symptoms. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  The diagnostic criteria for ADHD explicitly state that several hyperactive-impulsive or inattentive symptoms must have been present before the age of 12 years. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Previously the cutoff was age 7, but current criteria require symptom onset before age 12 in at least two different settings. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  For ADHD, symptoms must be present in at least two different settings (e.g., home and school) and begin before age 12.\\\n\\pard\\pardeftab720\\partightenfactor0\n\\cf3 \\strokec3 \\\n\\pard\\pardeftab720\\sa240\\partightenfactor0\n\\f0\\b \\cf0 \\strokec2 Source 10: episode-68-psych-pharmacology-part-2-.mp3\n\\f1\\b0 \\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q037",
+      "questionNumber": 37,
+      "sourceQuestionNumber": 37,
+      "retrievalTag": "\\f1\\b0  Clozapine ANC monitoring agranulocytosis \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  Clozapine is highly effective for refractory schizophrenia but requires strict hematologic monitoring due to the risk of agranulocytosis.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 30-year-old man with treatment-resistant schizophrenia is started on clozapine. Which of the following parameters must be closely monitored due to a life-threatening adverse effect uniquely associated with this medication?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Absolute neutrophil count"
+        },
+        {
+          "label": "B",
+          "text": "Serum creatinine"
+        },
+        {
+          "label": "C",
+          "text": "Thyroid-stimulating hormone"
+        },
+        {
+          "label": "D",
+          "text": "Serum lithium levels \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "\\f1\\b0  Monitor absolute neutrophil counts in patients taking clozapine to prevent severe agranulocytosis. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Clozapine carries a roughly 2% risk of agranulocytosis; therefore, absolute neutrophil count (ANC) and white blood cell counts must be monitored closely (often weekly initially). \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Creatinine and TSH are monitored for lithium toxicity, not clozapine. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  Clozapine is highly effective for refractory schizophrenia but requires strict hematologic monitoring due to the risk of agranulocytosis.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q038",
+      "questionNumber": 38,
+      "sourceQuestionNumber": 38,
+      "retrievalTag": "\\f1\\b0  Akathisia restlessness propranolol treatment \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  Propranolol is the drug of choice for antipsychotic-induced akathisia, while benztropine is favored for dystonia and parkinsonism.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 28-year-old woman treated with haloperidol for schizophrenia complains of an intense inner restlessness and is observed constantly pacing the examination room. Which of the following is the most appropriate initial pharmacologic treatment for her symptom?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Benztropine"
+        },
+        {
+          "label": "B",
+          "text": "Propranolol"
+        },
+        {
+          "label": "C",
+          "text": "Lorazepam"
+        },
+        {
+          "label": "D",
+          "text": "Haloperidol dose increase \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "\\f1\\b0  Treat antipsychotic-induced akathisia with propranolol. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  The patient is experiencing akathisia (an inability to sit still). The first-line pharmacologic treatment for akathisia on board exams is a non-selective beta-blocker like propranolol. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Benztropine is preferred for acute dystonia and parkinsonism, while increasing haloperidol would worsen the extrapyramidal symptom. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  Propranolol is the drug of choice for antipsychotic-induced akathisia, while benztropine is favored for dystonia and parkinsonism.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q039",
+      "questionNumber": 39,
+      "sourceQuestionNumber": 39,
+      "retrievalTag": "\\f1\\b0  Marijuana hunger leptin antagonism lateral nucleus \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  Cannabinoids stimulate appetite (munchies) by antagonizing leptin, resulting in activation of the lateral nucleus of the hypothalamus.\\\n\\f0\\b",
+      "stem": "\\f1\\b0  A 19-year-old college student presents to the student health clinic with conjunctival injection and an immense craving for food. The substance he ingested causes increased appetite primarily by antagonizing the activity of which of the following at the hypothalamus?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Ghrelin"
+        },
+        {
+          "label": "B",
+          "text": "Leptin"
+        },
+        {
+          "label": "C",
+          "text": "Orexin"
+        },
+        {
+          "label": "D",
+          "text": "Dopamine \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "\\f1\\b0  Describe the mechanism of marijuana-induced appetite stimulation via leptin antagonism. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Marijuana (cannabinoids) promotes hunger by antagonizing the activity of leptin at the hypothalamus, thus disinhibiting the lateral nucleus (the hunger center). \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  Ghrelin stimulates hunger directly, orexin is involved in wakefulness (deficient in narcolepsy), and dopamine relates to reward/psychosis rather than the primary mechanism of cannabinoid-induced hunger. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  Cannabinoids stimulate appetite (munchies) by antagonizing leptin, resulting in activation of the lateral nucleus of the hypothalamus.\\\n\\f0\\b"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q040",
+      "questionNumber": 40,
+      "sourceQuestionNumber": 40,
+      "retrievalTag": "\\f1\\b0  PCP intoxication violence nystagmus superhuman strength \n\\f0\\b",
+      "reviewPearl": "\\f1\\b0  Multidirectional nystagmus in a highly combative, violently agitated patient is the hallmark of PCP intoxication.\\\n}",
+      "stem": "\\f1\\b0  A 25-year-old man is brought to the ED by police after he was found violently attacking a car and displaying superhuman strength. Physical examination reveals prominent horizontal and vertical nystagmus. Intoxication with which of the following substances is most likely?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Phencyclidine (PCP)"
+        },
+        {
+          "label": "B",
+          "text": "Lysergic acid diethylamide (LSD)"
+        },
+        {
+          "label": "C",
+          "text": "Cocaine"
+        },
+        {
+          "label": "D",
+          "text": "Heroin \n\\f0\\b"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "\\f1\\b0  Diagnose PCP intoxication based on the triad of extreme aggression, superhuman strength, and prominent nystagmus. \n\\f0\\b",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "\\f1\\b0  Phencyclidine (PCP) intoxication classically presents with extreme violence, agitation, \"superhuman strength,\" and characteristic multidirectional (horizontal and vertical) nystagmus. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "\\f1\\b0  LSD presents with prominent visual hallucinations and flashbacks, cocaine causes mydriasis and tachycardia without nystagmus, and heroin causes sedation with miosis. \n\\f0\\b"
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "\\f1\\b0  Multidirectional nystagmus in a highly combative, violently agitated patient is the hallmark of PCP intoxication.\\\n}"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    }
+  ]
+}

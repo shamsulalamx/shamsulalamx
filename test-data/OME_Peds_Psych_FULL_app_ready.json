@@ -1,0 +1,434 @@
+{
+  "schemaVersion": "nbme-gemini-json-v2",
+  "testTitle": "OME Peds Psych",
+  "sourceFormat": "rtf",
+  "expectedQuestionCount": 8,
+  "actualExtractedQuestionCount": 8,
+  "extractionWarnings": [],
+  "questions": [
+    {
+      "id": "q001",
+      "questionNumber": 1,
+      "sourceQuestionNumber": 1,
+      "retrievalTag": "Enuresis normal until age 7",
+      "reviewPearl": "Avoid negative reinforcement; utilize only positive reinforcement for primary enuresis in young children.",
+      "stem": "A 6-year-old boy is brought in by his parents because he wets the bed three nights a week. He has never had a dry period of more than a few days since birth. What is the most appropriate initial management?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Desmopressin therapy"
+        },
+        {
+          "label": "B",
+          "text": "Urinalysis"
+        },
+        {
+          "label": "C",
+          "text": "Reassurance and toilet training"
+        },
+        {
+          "label": "D",
+          "text": "Imipramine therapy"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Recognize that primary enuresis in children under 7 is normal and managed with behavioral training, not medical intervention.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Bed-wetting in a child who has never been dry until age seven is considered normal and requires toilet training with positive reinforcement."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Medications like desmopressin and diagnostic workups like urinalysis are reserved for functional enuresis in older children or those who regress after a dry period."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Avoid negative reinforcement; utilize only positive reinforcement for primary enuresis in young children."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q002",
+      "questionNumber": 2,
+      "sourceQuestionNumber": 2,
+      "retrievalTag": "Secondary enuresis urinalysis first step",
+      "reviewPearl": "Screen for abuse and urinary tract infections whenever a child presents with secondary enuresis.",
+      "stem": "An 8-year-old girl who has been toilet trained for four years begins wetting the bed every night. Her mother recently had a new baby, but the child also complains of pain with urination. What is the best initial step in evaluation?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Reassurance"
+        },
+        {
+          "label": "B",
+          "text": "Urinalysis"
+        },
+        {
+          "label": "C",
+          "text": "Desmopressin"
+        },
+        {
+          "label": "D",
+          "text": "Water restriction"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Evaluate secondary enuresis (bed-wetting after a dry period) for medical causes like infections using a urinalysis before assuming it is behavioral.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "When enuresis occurs after a dry period, it indicates an underlying stressor or a medical issue such as a urinary tract infection. A urinalysis and urine culture must be performed to rule out infection."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "While a new sibling is a stressor that can cause regression, the presence of dysuria necessitates ruling out a medical cause before attributing symptoms solely to behavioral regression."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Screen for abuse and urinary tract infections whenever a child presents with secondary enuresis."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q003",
+      "questionNumber": 3,
+      "sourceQuestionNumber": 3,
+      "retrievalTag": "Conduct disorder animal cruelty and law breaking",
+      "reviewPearl": "Conduct disorder is essentially antisocial personality disorder in a child or adolescent.",
+      "stem": "A 15-year-old boy is brought to the clinic after being suspended for starting a fire in the school bathroom. His parents report a history of stealing, bullying peers, and torturing neighborhood animals. What is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Oppositional defiant disorder"
+        },
+        {
+          "label": "B",
+          "text": "Conduct disorder"
+        },
+        {
+          "label": "C",
+          "text": "Antisocial personality disorder"
+        },
+        {
+          "label": "D",
+          "text": "Attention-deficit/hyperactivity disorder"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Identify conduct disorder in adolescents presenting with severe rule-breaking, aggression toward people or animals, and destruction of property.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Conduct disorder is characterized by a disregard for the rights of others, including breaking laws, destroying property, and cruelty to animals."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Oppositional defiant disorder involves defiance without breaking laws or hurting others, while antisocial personality disorder cannot be formally diagnosed until adulthood."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Conduct disorder is essentially antisocial personality disorder in a child or adolescent."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q004",
+      "questionNumber": 4,
+      "sourceQuestionNumber": 4,
+      "retrievalTag": "Oppositional defiant disorder intact peer relations",
+      "reviewPearl": "Kids with oppositional defiant disorder fight with authority but play well and interact socially with peers.\"\neftab720\ntightenfactor0\neftab720\ntightenfactor0\nDocument 2: Neurodevelopmental Disorders",
+      "stem": "A 10-year-old boy argues constantly with his teachers and refuses to comply with his parents' rules. However, he does not break laws, never steals, and plays amicably with his peers on the baseball team. What is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Oppositional defiant disorder"
+        },
+        {
+          "label": "B",
+          "text": "Conduct disorder"
+        },
+        {
+          "label": "C",
+          "text": "Normal adolescent rebellion"
+        },
+        {
+          "label": "D",
+          "text": "Autism spectrum disorder"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Differentiate oppositional defiant disorder from conduct disorder based on the absence of law-breaking and the presence of normal peer interactions.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Oppositional defiant disorder involves confronting authority through yelling or tantrums, but uniquely lacks law-breaking behavior and maintains normal peer interactions."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Conduct disorder is incorrect because he does not break laws or hurt others, and his healthy social play with peers rules out the severe communication deficits seen in autism."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Kids with oppositional defiant disorder fight with authority but play well and interact socially with peers.\"\neftab720\ntightenfactor0\neftab720\ntightenfactor0\nDocument 2: Neurodevelopmental Disorders"
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q005",
+      "questionNumber": 5,
+      "sourceQuestionNumber": 5,
+      "retrievalTag": "ADHD inattention vs absence seizures EEG",
+      "reviewPearl": "If a test question describes a 'bad kid' with staring spells or seizure activity, look for absence seizure diagnosis and management.",
+      "stem": "A 9-year-old boy's teacher notes he frequently fails to finish tasks and seems easily distracted. The teacher specifically reports episodes where the boy stares blankly for 10 seconds and is completely unresponsive. What is the most appropriate next step in management?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Initiate amphetamine stimulants"
+        },
+        {
+          "label": "B",
+          "text": "Order an electroencephalogram"
+        },
+        {
+          "label": "C",
+          "text": "Recommend special education classes"
+        },
+        {
+          "label": "D",
+          "text": "Reassure the parents"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Recognize absence seizures as a medical mimic of ADHD inattention symptoms and evaluate them appropriately with an EEG.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Although the child has symptoms of inattention, the blank staring spells strongly suggest absence seizures, which must be evaluated with an electroencephalogram (EEG)."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Initiating amphetamine stimulants or recommending special classes is inappropriate until medical causes of inattention, like absence seizures, are fully ruled out and managed."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "If a test question describes a 'bad kid' with staring spells or seizure activity, look for absence seizure diagnosis and management."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q006",
+      "questionNumber": 6,
+      "sourceQuestionNumber": 6,
+      "retrievalTag": "Rett syndrome regression after 6 months in girls",
+      "reviewPearl": "On a test, if you see 'young girl' with regression that looks 'maybe autism,' choose Rett's.",
+      "stem": "A 2-year-old girl is brought in for a developmental evaluation. She developed normally until 6 months of age, but has since progressively lost her ability to speak and perform purposeful hand movements. Which of the following is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Autism spectrum disorder"
+        },
+        {
+          "label": "B",
+          "text": "Specific learning disorder"
+        },
+        {
+          "label": "C",
+          "text": "Rett syndrome"
+        },
+        {
+          "label": "D",
+          "text": "Intellectual disability disorder"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Diagnose Rett syndrome in female patients presenting with profound developmental regression following an initial period of normal development.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Rett syndrome occurs almost exclusively in girls and is characterized by normal development until around 6 months, followed by severe developmental regression."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "While autism involves social and communication deficits, the classic presentation of a young girl regressing after 6 months of normal development is the hallmark of Rett syndrome."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "On a test, if you see 'young girl' with regression that looks 'maybe autism,' choose Rett's."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q007",
+      "questionNumber": 7,
+      "sourceQuestionNumber": 7,
+      "retrievalTag": "Tourette's first line treatment alpha 2 agonists",
+      "reviewPearl": "Look for an 'ADHD' kid who gets put on stimulants, which then prominently worsens their underlying Tourette's tics.",
+      "stem": "A 14-year-old boy has experienced recurrent, sudden throat-clearing and frequent facial grimacing for the past 18 months. He is extremely bothered by these symptoms and requests treatment. What is the most appropriate first-line pharmacotherapy?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Methylphenidate"
+        },
+        {
+          "label": "B",
+          "text": "Haloperidol"
+        },
+        {
+          "label": "C",
+          "text": "Clonidine"
+        },
+        {
+          "label": "D",
+          "text": "Ethosuximide"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Identify alpha-2 agonists as the preferred first-line pharmacologic treatment for Tourette's disorder over dopamine antagonists.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "The patient has Tourette's disorder, characterized by motor and vocal tics lasting over a year. First-line pharmacologic treatment consists of alpha-2 agonists like clonidine or guanfacine."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Dopamine antagonists like haloperidol are not first-line, and methylphenidate (a stimulant) can actually worsen tics in patients with underlying Tourette's disorder."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "Look for an 'ADHD' kid who gets put on stimulants, which then prominently worsens their underlying Tourette's tics."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q008",
+      "questionNumber": 8,
+      "sourceQuestionNumber": 8,
+      "retrievalTag": "Autism core symptoms social impairment repetitive behaviors",
+      "reviewPearl": "There is no link at all between autism and vaccines; the etiology involves genetic predisposition with higher incidence in males.",
+      "stem": "A 4-year-old boy avoids eye contact, shows no interest in sharing toys, and exhibits whole-body rocking. He becomes severely distressed if his mother alters his daily morning routine. What are the two core diagnostic requirements for this condition?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Impaired social communication and restricted repetitive behaviors"
+        },
+        {
+          "label": "B",
+          "text": "Low IQ and impaired adaptive functioning"
+        },
+        {
+          "label": "C",
+          "text": "Inattention and hyperactivity across two settings"
+        },
+        {
+          "label": "D",
+          "text": "Chromosomal abnormalities and cognitive deficits"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Diagnose autism spectrum disorder based on the required presence of impaired social communication and restricted, repetitive behaviors.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Autism spectrum disorder requires two core features for diagnosis: impaired social communication (lack of eye contact/sharing) and restricted repetitive behaviors (rocking/insistence on sameness)."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Low IQ/adaptive functioning defines intellectual disability, and inattention/hyperactivity defines ADHD, neither of which fully explains this child's profound social deficits and rigid routines."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "There is no link at all between autism and vaccines; the etiology involves genetic predisposition with higher incidence in males."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    }
+  ]
+}

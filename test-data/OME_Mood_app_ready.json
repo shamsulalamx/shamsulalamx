@@ -1,0 +1,1514 @@
+{
+  "schemaVersion": "nbme-gemini-json-v2",
+  "testTitle": "OME Mood",
+  "sourceFormat": "rtf",
+  "expectedQuestionCount": 32,
+  "actualExtractedQuestionCount": 32,
+  "extractionWarnings": [],
+  "questions": [
+    {
+      "id": "q001",
+      "questionNumber": 1,
+      "sourceQuestionNumber": 1,
+      "retrievalTag": "Trichotillomania Non-Specific Hair Pulling r/o Fungus",
+      "reviewPearl": "Hair in different lengths strongly suggests trichotillomania versus a medical disease.",
+      "stem": "A 14-year-old girl has patchy hair loss. Exam reveals scalp hair of varying lengths without erythema or scaling. KOH prep is negative. What is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Alopecia areata"
+        },
+        {
+          "label": "B",
+          "text": "Tinea capitis"
+        },
+        {
+          "label": "C",
+          "text": "Trichotillomania"
+        },
+        {
+          "label": "D",
+          "text": "Body dysmorphic disorder"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Identify trichotillomania by the presence of hair of varying lengths after ruling out fungal causes.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: C) Trichotillomania",
+          "body": [
+            "Trichotillomania involves pulling out hair to reduce anxiety, classically leaving hair of different lengths. Fungal infections must be ruled out first."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Alopecia and tinea capitis are medical causes of hair loss that do not present with anxiety-induced pulling and varying hair lengths. Body dysmorphia involves perceived flaws, not primary hair pulling."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q002",
+      "questionNumber": 2,
+      "sourceQuestionNumber": 2,
+      "retrievalTag": "Muscle Dysmorphia Preoccupation with muscle size",
+      "reviewPearl": "Muscle dysmorphia patients are at high risk for rhabdomyolysis and roid rage from excessive exercise and steroids.",
+      "stem": "A 22-year-old male spends 4 hours daily exercising and uses anabolic steroids, believing his musculature is insufficient despite being heavily muscled. What is the diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Body dysmorphic disorder"
+        },
+        {
+          "label": "B",
+          "text": "Muscle dysmorphia"
+        },
+        {
+          "label": "C",
+          "text": "Obsessive-compulsive disorder"
+        },
+        {
+          "label": "D",
+          "text": "Anorexia nervosa"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Recognize muscle dysmorphia presentation and its associated behaviors like anabolic steroid use.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: B) Muscle dysmorphia",
+          "body": [
+            "Muscle dysmorphia is a subset of body dysmorphia predominantly in males, characterized by a preoccupation with insufficient muscle size leading to excessive exercise and steroid use."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "While related, typical body dysmorphia focuses on facial/body asymmetry. OCD and anorexia lack the specific male-predominant preoccupation with gaining muscle mass."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q003",
+      "questionNumber": 3,
+      "sourceQuestionNumber": 3,
+      "retrievalTag": "CBT used is Exposure and Response Prevention",
+      "reviewPearl": "Therapy for OCD either controls the anxiety (desensitization) or redirects the compulsion to something innocuous.",
+      "stem": "A 30-year-old woman spends 3 hours a day washing her hands due to fears of contamination. She is aware the behavior is irrational. What is the best initial psychotherapy?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Psychodynamic psychotherapy"
+        },
+        {
+          "label": "B",
+          "text": "Cognitive behavioral therapy"
+        },
+        {
+          "label": "C",
+          "text": "Dialectical behavior therapy"
+        },
+        {
+          "label": "D",
+          "text": "Interpersonal therapy"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Identify Cognitive Behavioral Therapy (Exposure and Response Prevention) as the best psychotherapy for OCD.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: B) Cognitive behavioral therapy",
+          "body": [
+            "CBT, specifically Exposure and Response Prevention (ERP), is the most effective therapy for OCD, directed at desensitizing the anxiety associated with the obsession."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Psychodynamic, dialectical, and interpersonal therapies are not first-line treatments for the targeted control of OCD-related anxiety and compulsive rituals."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q004",
+      "questionNumber": 4,
+      "sourceQuestionNumber": 4,
+      "retrievalTag": "Hoarding Distress about thoughts of ridding possessions",
+      "reviewPearl": "Hoarding disorder can severely compromise patient safety due to fall risks and blocked emergency access. eftab720 tightenfactor0 eftab720 tightenfactor0 Document 2: Impulse Control and Destructive Disorders",
+      "stem": "An elderly man’s home is cluttered with accumulated trash, causing an inability for emergency personnel to maneuver safely. He feels intense distress at the thought of discarding items. Diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Hoarding disorder"
+        },
+        {
+          "label": "B",
+          "text": "Obsessive-compulsive disorder"
+        },
+        {
+          "label": "C",
+          "text": "Schizophrenia"
+        },
+        {
+          "label": "D",
+          "text": "Normal aging"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Diagnose hoarding disorder based on the inability to discard possessions resulting in unsafe living environments.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: A) Hoarding disorder",
+          "body": [
+            "Hoarding disorder involves immense distress about losing items, leading to unsafe, cluttered homes filled with possessions regardless of their actual value."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "OCD compulsions neutralize anxiety but lack the specific distress of discarding useless items. Schizophrenia and aging do not primarily feature this specific retention pathology."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q005",
+      "questionNumber": 5,
+      "sourceQuestionNumber": 5,
+      "retrievalTag": "Kleptomania Steals to reduce anxiety Women SSRIs",
+      "reviewPearl": "Kleptomaniacs steal unplanned items of no value to reduce anxiety and feel severe remorse, unlike typical theft.",
+      "stem": "A 25-year-old woman impulsively steals cheap trinkets she can easily afford. She steals spontaneously without planning, feels intense guilt afterward, and stashes the items away. What is the best treatment?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Incarceration"
+        },
+        {
+          "label": "B",
+          "text": "SSRIs and group therapy"
+        },
+        {
+          "label": "C",
+          "text": "Haloperidol"
+        },
+        {
+          "label": "D",
+          "text": "Electroconvulsive therapy"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Identify kleptomania features and select SSRIs combined with group therapy as the management strategy.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: B) SSRIs and group therapy",
+          "body": [
+            "Kleptomania involves impulsive theft of unneeded items to reduce anxiety, followed by guilt; it is typically managed with SSRIs and psychotherapy."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Incarceration is inappropriate because this is a psychiatric impulse disorder, not premeditated theft. Haloperidol and ECT are not indicated for impulse control disorders."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q006",
+      "questionNumber": 6,
+      "sourceQuestionNumber": 6,
+      "retrievalTag": "Intermittent Explosive Disorder Violent or destructive act out of proportion",
+      "reviewPearl": "Symptoms of intermittent explosive disorder often lessen with age and can be treated with SSRIs and group therapy.",
+      "stem": "A 35-year-old man routinely destroys furniture when his child drops a toy. After these disproportionately violent outbursts, he feels calm and relaxed. Diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Intermittent explosive disorder"
+        },
+        {
+          "label": "B",
+          "text": "Antisocial personality disorder"
+        },
+        {
+          "label": "C",
+          "text": "Bipolar I disorder"
+        },
+        {
+          "label": "D",
+          "text": "Borderline personality disorder"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Diagnose intermittent explosive disorder based on disproportionate destructive reactions to minor stressors.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: A) Intermittent explosive disorder",
+          "body": [
+            "Intermittent explosive disorder involves violent or destructive acts out of proportion to a minor stressor, followed immediately by feeling calm and without remorse."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Antisocial and borderline personality disorders have pervasive relationship and behavioral issues, not just acute stressor-induced destructive outbursts followed by calm."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q007",
+      "questionNumber": 7,
+      "sourceQuestionNumber": 7,
+      "retrievalTag": "Pyromania Sets fire for pleasure / anxiety",
+      "reviewPearl": "Pyromania requires ruling out arson; pyromaniacs act to relieve anxiety or seek pleasure, not for financial gain.",
+      "stem": "A 19-year-old male is arrested for repeatedly setting fires to abandoned sheds. He admits he sets them because it brings him intense pleasure and sexual arousal. Diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Arson"
+        },
+        {
+          "label": "B",
+          "text": "Pyromania"
+        },
+        {
+          "label": "C",
+          "text": "Conduct disorder"
+        },
+        {
+          "label": "D",
+          "text": "Schizophrenia"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Differentiate pyromania (fire setting for pleasure/anxiety reduction) from arson (fire setting for profit).",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: B) Pyromania",
+          "body": [
+            "Pyromania involves setting fires for pleasure, fascination, or sexual arousal, distinguishing it from arson which is done for monetary gain or revenge."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Arson is committed for monetary gain (insurance). Conduct disorder and schizophrenia do not specifically account for the intense pleasure/arousal derived from fire-setting."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q008",
+      "questionNumber": 8,
+      "sourceQuestionNumber": 8,
+      "retrievalTag": "linked impulse control disorders with depleted serotonin",
+      "reviewPearl": "Medications and therapy often work poorly for impulse control disorders, but SSRIs remain the standard first trial. eftab720 tightenfactor0 eftab720 tightenfactor0 Document 3: Post-Traumatic Stress Disorders",
+      "stem": "A patient with an impulse control disorder starts treatment. Which medication class was historically linked to depleted serotonin in these disorders and is commonly trialed?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Benzodiazepines"
+        },
+        {
+          "label": "B",
+          "text": "Atypical antipsychotics"
+        },
+        {
+          "label": "C",
+          "text": "SSRIs"
+        },
+        {
+          "label": "D",
+          "text": "Mood stabilizers"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Recall the theoretical role of SSRIs in treating impulse control disorders based on serotonin depletion.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: C) SSRIs",
+          "body": [
+            "DSM-IV linked impulse control disorders with depleted serotonin, making SSRIs the standard pharmacological approach, though efficacy often varies."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Benzodiazepines, antipsychotics, and mood stabilizers are not the primary medications targeted for the depleted serotonin theory in these specific impulse disorders."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q009",
+      "questionNumber": 9,
+      "sourceQuestionNumber": 9,
+      "retrievalTag": "> 3 days AND < 1 month duration = Acute stress",
+      "reviewPearl": "Early group therapy implementation for Acute Stress Disorder can limit the duration and prevent progression to PTSD.",
+      "stem": "A woman survived a severe car crash 2 weeks ago. She now experiences nightmares, avoidance of cars, and hypervigilance. What is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Acute stress disorder"
+        },
+        {
+          "label": "B",
+          "text": "Post-traumatic stress disorder"
+        },
+        {
+          "label": "C",
+          "text": "Adjustment disorder"
+        },
+        {
+          "label": "D",
+          "text": "Generalized anxiety disorder"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Distinguish Acute Stress Disorder from PTSD based on a symptom duration of less than 1 month.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: A) Acute stress disorder",
+          "body": [
+            "Acute stress disorder presents with PTSD-like symptoms (intrusion, avoidance, arousal) lasting greater than 3 days but less than 1 month."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "PTSD requires symptoms lasting >1 month. Adjustment disorder follows a non-life-threatening stressor. GAD lacks a specific life-threatening trauma trigger."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q010",
+      "questionNumber": 10,
+      "sourceQuestionNumber": 10,
+      "retrievalTag": "PTSD SSRI/SNRI (adjunct)",
+      "reviewPearl": "Benzodiazepines are generally avoided in PTSD due to high abuse potential; PTSD is predominated by long-term anxiety.",
+      "stem": "A combat veteran reports 3 months of flashbacks, depersonalization, irritability, and avoiding loud noises. What is the preferred pharmacological adjunct to group therapy?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Benzodiazepines"
+        },
+        {
+          "label": "B",
+          "text": "SSRI/SNRIs"
+        },
+        {
+          "label": "C",
+          "text": "Atypical antipsychotics"
+        },
+        {
+          "label": "D",
+          "text": "Lithium"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Select SSRI/SNRIs as the preferred pharmacotherapy adjunct for Post-Traumatic Stress Disorder.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: B) SSRI/SNRIs",
+          "body": [
+            "For PTSD (>1 month duration), group therapy is definitive, and SSRI/SNRIs are the preferred adjunct medications for long-term anxiety management."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Benzodiazepines are easily abused and only indicated for acute panic attacks. Antipsychotics and Lithium are not first-line agents for PTSD."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q011",
+      "questionNumber": 11,
+      "sourceQuestionNumber": 11,
+      "retrievalTag": "Adjustment Disorder Begin < 3 months from stressor",
+      "reviewPearl": "Adjustment disorder usually requires no pharmacological treatment, as reassurance is often sufficient.",
+      "stem": "A 40-year-old man develops depressive symptoms 2 months after losing his job. Symptoms are not severe enough for MDD. What is the diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Major depressive disorder"
+        },
+        {
+          "label": "B",
+          "text": "Adjustment disorder"
+        },
+        {
+          "label": "C",
+          "text": "Persistent depressive disorder"
+        },
+        {
+          "label": "D",
+          "text": "Acute stress disorder"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Diagnose adjustment disorder following a non-life-threatening stressor leading to mood changes within 3 months.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: B) Adjustment disorder",
+          "body": [
+            "Adjustment disorder features mood changes beginning within 3 months of a non-life-threatening stressor (like job loss) and lasts less than 6 months."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "MDD requires full SIGECAPS criteria. Persistent depressive disorder requires 2 years of symptoms. Acute stress disorder requires a life-threatening stressor."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q012",
+      "questionNumber": 12,
+      "sourceQuestionNumber": 12,
+      "retrievalTag": "Too little attachment (RAD)",
+      "reviewPearl": "Treatment for Reactive Attachment Disorder targets the caregiver through parent coaching and teaching, rather than treating the child directly. eftab720 tightenfactor0 eftab720 tightenfactor0 Document 4: Major Depression and Bipolar Disorder",
+      "stem": "A 3-year-old adopted from an abusive home fails to bond with her new parents and rarely seeks comfort. Autism is ruled out. Diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Disinhibited social engagement disorder"
+        },
+        {
+          "label": "B",
+          "text": "Reactive attachment disorder"
+        },
+        {
+          "label": "C",
+          "text": "Adjustment disorder"
+        },
+        {
+          "label": "D",
+          "text": "Post-traumatic stress disorder"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Differentiate Reactive Attachment Disorder from DSED based on the complete lack of attachment to caregivers.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: B) Reactive attachment disorder",
+          "body": [
+            "Reactive attachment disorder (RAD) occurs when severe neglect or abuse in infancy leads to an inability to attach to any adult caregiver."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "DSED involves inappropriate, excessive attachment to strangers. Adjustment disorder and PTSD do not accurately describe this specific infant attachment failure."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q013",
+      "questionNumber": 13,
+      "sourceQuestionNumber": 13,
+      "retrievalTag": "If there are suicidal ideations AND a plan, hospitalize.",
+      "reviewPearl": "Assessing the intention, ability, and validity of the suicide threat are all paramount before deciding on outpatient therapy.",
+      "stem": "A 30-year-old woman exhibits anhedonia, fatigue, and insomnia for 3 weeks. She reports a specific plan to end her life. What is the most appropriate next step?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Start SSRI and discharge"
+        },
+        {
+          "label": "B",
+          "text": "Safety contract"
+        },
+        {
+          "label": "C",
+          "text": "Hospitalize immediately"
+        },
+        {
+          "label": "D",
+          "text": "Begin electroconvulsive therapy"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Manage a suicidal patient with a specific plan by prioritizing immediate hospitalization.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: C) Hospitalize immediately",
+          "body": [
+            "Patients meeting Major Depressive Episode criteria who have suicidal ideation and a concrete plan must be hospitalized immediately to ensure safety."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Discharging or using a safety contract is unsafe for a patient with a clear suicide plan. ECT is reserved for refractory or catatonic depression, not initial triage."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q014",
+      "questionNumber": 14,
+      "sourceQuestionNumber": 14,
+      "retrievalTag": "Bipolar I is mania-predominant DIG FASTER",
+      "reviewPearl": "If a patient requires hospitalization or has psychosis during an elevated mood state, the diagnosis is automatically Bipolar I.",
+      "stem": "A 25-year-old man presents with 8 days of decreased need for sleep, grandiosity, pressured speech, and spending sprees. What is the diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Bipolar I"
+        },
+        {
+          "label": "B",
+          "text": "Bipolar II"
+        },
+        {
+          "label": "C",
+          "text": "Cyclothymia"
+        },
+        {
+          "label": "D",
+          "text": "Major depressive disorder"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Diagnose Bipolar I disorder based on a full manic episode lasting at least one week.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: A) Bipolar I",
+          "body": [
+            "Bipolar I is defined by a true manic episode lasting at least 1 week, marked by symptoms like grandiosity, decreased sleep, and impulsivity (DIG FASTER)."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Bipolar II requires hypomania (<7 days, less severe impairment) and major depression. Cyclothymia is a chronic low-grade mood cycle."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q015",
+      "questionNumber": 15,
+      "sourceQuestionNumber": 15,
+      "retrievalTag": "ATYPICAL SLEEP Insomnia/ hyperinsomnia WEIGHT Weight gain",
+      "reviewPearl": "SSRIs/SNRIs remain first-line for depression and are equally efficacious regardless of typical or atypical features.",
+      "stem": "A patient reports depressed mood for 3 weeks alongside hypersomnia, hyperphagia, weight gain, and profound fatigue. What is the subtype of this depression?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Melancholic"
+        },
+        {
+          "label": "B",
+          "text": "Atypical"
+        },
+        {
+          "label": "C",
+          "text": "Dysthymia"
+        },
+        {
+          "label": "D",
+          "text": "Disruptive mood dysregulation"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Recognize the clinical presentation of atypical depression featuring hypersomnia and hyperphagia.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: B) Atypical",
+          "body": [
+            "Atypical depression features \"atypical\" symptoms such as increased sleep, increased appetite, and weight gain, opposite to typical melancholic depression."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Melancholic depression features decreased sleep and appetite. Dysthymia is chronic (>2 years). Disruptive mood dysregulation affects children with behavioral outbursts."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q016",
+      "questionNumber": 16,
+      "sourceQuestionNumber": 16,
+      "retrievalTag": "Dysthymia—Persistent Depressive Disorder depressed mood for 2 years",
+      "reviewPearl": "Dysthymia is treated identically to MDD: rule out hypothyroidism, screen for suicide risk, and prescribe SSRIs. eftab720 tightenfactor0 eftab720 tightenfactor0 Document 5: Grief, Survivors, and Babies",
+      "stem": "A 45-year-old feels consistently depressed for 2.5 years, never without symptoms for more than 2 months, but maintains daily functioning. Diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Major depressive disorder"
+        },
+        {
+          "label": "B",
+          "text": "Cyclothymia"
+        },
+        {
+          "label": "C",
+          "text": "Persistent Depressive Disorder (Dysthymia)"
+        },
+        {
+          "label": "D",
+          "text": "Bipolar II"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Diagnose Persistent Depressive Disorder (dysthymia) based on chronic, mild depression lasting over 2 years.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: C) Persistent Depressive Disorder (Dysthymia)",
+          "body": [
+            "Dysthymia (Persistent Depressive Disorder) is chronic depression lasting >2 years without meeting severe MDE criteria, allowing the patient to function."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "MDD involves severe, acute symptoms impairing function. Cyclothymia and Bipolar II both require episodes of hypomania."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q017",
+      "questionNumber": 17,
+      "sourceQuestionNumber": 17,
+      "retrievalTag": "Grief CAN be happy with family... NO psychotic features, or... there IS insight",
+      "reviewPearl": "Do not medically treat the guilt of normal grief; instead, offer therapy sessions to help the patient process it.",
+      "stem": "A woman’s husband died 3 months ago. She cries holding his clothes but enjoys visiting grandchildren. She occasionally hears his voice, knowing it isn't real. Diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Major depressive disorder"
+        },
+        {
+          "label": "B",
+          "text": "Normal grief"
+        },
+        {
+          "label": "C",
+          "text": "Postpartum psychosis"
+        },
+        {
+          "label": "D",
+          "text": "Persistent complicated bereavement disorder"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Differentiate normal grief from major depressive disorder based on insight and the ability to experience happiness.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: B) Normal grief",
+          "body": [
+            "Normal grief lasts <12 months, waxes and wanes, allows for happiness, and can include psychotic-like features (hearing the deceased) as long as there is insight."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "MDD features pervasive hopelessness. PCBD requires symptoms lasting >12 months. Postpartum psychosis is completely unrelated."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q018",
+      "questionNumber": 18,
+      "sourceQuestionNumber": 18,
+      "retrievalTag": "POSTPARTUM PSYCHOSIS Fears the baby, likely to kill it Psychosis +",
+      "reviewPearl": "Postpartum psychosis requires immediate intervention to separate mother and baby, alongside treatment with mood stabilizers or antipsychotics.",
+      "stem": "A mother who delivered 3 weeks ago believes her baby is a demon and fears she must kill it. She is actively hallucinating. Diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Postpartum blues"
+        },
+        {
+          "label": "B",
+          "text": "Postpartum depression"
+        },
+        {
+          "label": "C",
+          "text": "Postpartum psychosis"
+        },
+        {
+          "label": "D",
+          "text": "Normal grief"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Identify postpartum psychosis and recognize the extremely high risk of harm to the infant.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: C) Postpartum psychosis",
+          "body": [
+            "Postpartum psychosis presents within 1 month with delusions, hallucinations, intense fear of the baby, and a high risk of infanticide."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Postpartum blues and depression lack psychotic features and delusions driving infanticidal ideation. Grief is unrelated to childbirth."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q019",
+      "questionNumber": 19,
+      "sourceQuestionNumber": 19,
+      "retrievalTag": "POSTPARTUM DEPRESSION Doesn’t care about baby Treatment Anti-Depressants",
+      "reviewPearl": "Postpartum depression differs from baby blues by its severity (meeting MDE criteria) and duration lasting past 2 weeks.",
+      "stem": "A woman is 1 month postpartum and reports daily depressed mood, anhedonia, and not caring about her baby, but denies hallucinations. Treatment?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "No treatment needed"
+        },
+        {
+          "label": "B",
+          "text": "SSRIs"
+        },
+        {
+          "label": "C",
+          "text": "Mood stabilizers"
+        },
+        {
+          "label": "D",
+          "text": "Electroconvulsive therapy"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Diagnose and treat postpartum depression using antidepressant medications.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: B) SSRIs",
+          "body": [
+            "Postpartum depression meets MDD criteria, presents within 1 month, and often involves mom not caring about the baby. SSRIs are the indicated treatment."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Baby blues require no treatment but resolve within 2 weeks. Mood stabilizers are for psychosis/bipolar. ECT is an extreme measure not first-line here."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q020",
+      "questionNumber": 20,
+      "sourceQuestionNumber": 20,
+      "retrievalTag": "DEPRESSION Pervasive Global Cannot imagine happy",
+      "reviewPearl": "In depression following loss, the sadness transitions away from the deceased and becomes pervasive in all aspects of the patient's life. eftab720 tightenfactor0 eftab720 tightenfactor0 Document 6: Eating Disorders",
+      "stem": "A 65-year-old man’s wife died 14 months ago. He is pervasively hopeless, unable to enjoy any activities, and has major depressive symptoms. Diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Persistent complicated bereavement disorder"
+        },
+        {
+          "label": "B",
+          "text": "Major depressive disorder"
+        },
+        {
+          "label": "C",
+          "text": "Normal grief"
+        },
+        {
+          "label": "D",
+          "text": "Adjustment disorder"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Distinguish MDD from PCBD by recognizing pervasive anhedonia and hopelessness extending beyond the deceased.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: B) Major depressive disorder",
+          "body": [
+            "Pervasive hopelessness and inability to enjoy anything point to MDD, rather than grief or PCBD where the mood focus remains mainly on the deceased."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "PCBD lacks pervasive global anhedonia into all aspects of life. Normal grief lasts <12 months and is hopeful. Adjustment disorder is not used for bereavement."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q021",
+      "questionNumber": 21,
+      "sourceQuestionNumber": 21,
+      "retrievalTag": "Hospitalize if BMI or E-lytes Extreme < 15",
+      "reviewPearl": "Anorexia nervosa severity is categorized by BMI, whereas Bulimia nervosa is categorized by the frequency of compensatory behaviors.",
+      "stem": "A 16-year-old girl with a BMI of 14 presents with amenorrhea, cold intolerance, and bradycardia. She firmly believes she is overweight. What is the first step in management?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Fluoxetine"
+        },
+        {
+          "label": "B",
+          "text": "Bupropion"
+        },
+        {
+          "label": "C",
+          "text": "Hospitalization for refeeding"
+        },
+        {
+          "label": "D",
+          "text": "Cognitive behavioral therapy alone"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Recognize the indications for acute medical hospitalization in extreme anorexia nervosa.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: C) Hospitalization for refeeding",
+          "body": [
+            "Anorexia nervosa patients with extreme BMI (<15) or severe signs like bradycardia and electrolyte shifts require immediate hospitalization for forced feeds."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "SSRIs and CBT are adjuncts used later. Bupropion is strictly contraindicated in eating disorders due to seizure risk."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q022",
+      "questionNumber": 22,
+      "sourceQuestionNumber": 22,
+      "retrievalTag": "BULIMIA NERVOSA Tx: SSRI (fluoxetine), CBT",
+      "reviewPearl": "Self-induced vomiting in bulimia frequently causes metabolic alkalosis, hypokalemia, dorsal hand scars, and dental erosion.",
+      "stem": "A 20-year-old female with a normal BMI reports binge eating followed by self-induced vomiting twice a week for 4 months. She has dorsal hand scars. Treatment?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Fluoxetine and CBT"
+        },
+        {
+          "label": "B",
+          "text": "Bupropion"
+        },
+        {
+          "label": "C",
+          "text": "Inpatient weight restoration"
+        },
+        {
+          "label": "D",
+          "text": "Haloperidol"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Identify Bulimia Nervosa and select its primary outpatient treatment consisting of Fluoxetine and CBT.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: A) Fluoxetine and CBT",
+          "body": [
+            "Bulimia nervosa features binge/purge cycles with a normal or overweight BMI. It is treated with Cognitive Behavioral Therapy and SSRIs like fluoxetine."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Bupropion lowers the seizure threshold. Inpatient weight restoration is for anorexia with low BMI. Haloperidol is not indicated."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q023",
+      "questionNumber": 23,
+      "sourceQuestionNumber": 23,
+      "retrievalTag": "Bupropion causes seizures Bulimia NEVER",
+      "reviewPearl": "Never give bupropion to bulimics, as the electrolyte abnormalities from purging already predispose them to seizures.",
+      "stem": "A patient with bulimia nervosa is seeking medication for concurrent smoking cessation. Which medication is strictly contraindicated?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Fluoxetine"
+        },
+        {
+          "label": "B",
+          "text": "Bupropion"
+        },
+        {
+          "label": "C",
+          "text": "Varenicline"
+        },
+        {
+          "label": "D",
+          "text": "Sertraline"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Identify bupropion as strictly contraindicated in bulimia nervosa.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: B) Bupropion",
+          "body": [
+            "Bupropion is an atypical antidepressant that lowers the seizure threshold and is strictly contraindicated in bulimia due to an unacceptably high risk of seizures."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Fluoxetine is the treatment of choice for bulimia. Varenicline and Sertraline do not carry this specific absolute contraindication in eating disorders."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q024",
+      "questionNumber": 24,
+      "sourceQuestionNumber": 24,
+      "retrievalTag": "Binge-Eating Disorder It's bulimia, except there's no purge",
+      "reviewPearl": "Binge-eating disorder patients are typically overweight or obese because they do not utilize purging or caloric restriction. eftab720 tightenfactor0 eftab720 tightenfactor0 Document 7: Antidepressants, Antianxiety, Mood Stabilizers",
+      "stem": "An overweight 35-year-old man eats unusually large amounts of food rapidly until uncomfortably full, feeling distressed afterward. He never uses laxatives or vomits. Diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Bulimia nervosa"
+        },
+        {
+          "label": "B",
+          "text": "Binge-eating disorder"
+        },
+        {
+          "label": "C",
+          "text": "Anorexia nervosa"
+        },
+        {
+          "label": "D",
+          "text": "Prader-Willi syndrome"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Distinguish binge-eating disorder from bulimia based on the absence of compensatory purging behaviors.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: B) Binge-eating disorder",
+          "body": [
+            "Binge-eating disorder involves recurrent binges causing distress, but crucially lacks the inappropriate compensatory behaviors (purging, fasting) seen in bulimia."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Bulimia nervosa requires compensatory behaviors. Anorexia features severe underweight. Prader-Willi is a genetic childhood syndrome causing hyperphagia."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q025",
+      "questionNumber": 25,
+      "sourceQuestionNumber": 25,
+      "retrievalTag": "Bupropion Smoking cessation No weight gain",
+      "reviewPearl": "Mirtazapine is an excellent choice for depressed patients who are malnourished because it acts as an appetite stimulant.",
+      "stem": "A patient with major depression wants a medication that will also help him quit smoking without causing weight gain. Which is the best choice?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Mirtazapine"
+        },
+        {
+          "label": "B",
+          "text": "Paroxetine"
+        },
+        {
+          "label": "C",
+          "text": "Bupropion"
+        },
+        {
+          "label": "D",
+          "text": "Trazodone"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Select bupropion for a depressed patient desiring concurrent smoking cessation and avoidance of weight gain.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: C) Bupropion",
+          "body": [
+            "Bupropion is an atypical antidepressant that aids in smoking cessation, treats depression effectively, and importantly prevents weight gain."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Mirtazapine stimulates appetite and causes weight gain. Paroxetine is an SSRI with no smoking benefit. Trazodone is primarily a sleep aid."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q026",
+      "questionNumber": 26,
+      "sourceQuestionNumber": 26,
+      "retrievalTag": "Lithium Causes nephro DI",
+      "reviewPearl": "Lithium has a narrow therapeutic index and requires regular monitoring to prevent nephrotoxicity, ataxia, and encephalopathy.",
+      "stem": "A bipolar patient stabilized on long-term medication develops severe polyuria and hypernatremia. Which medication is most likely responsible?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Valproic acid"
+        },
+        {
+          "label": "B",
+          "text": "Lithium"
+        },
+        {
+          "label": "C",
+          "text": "Quetiapine"
+        },
+        {
+          "label": "D",
+          "text": "Lamotrigine"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Recognize nephrogenic diabetes insipidus as a major side effect of Lithium therapy.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: B) Lithium",
+          "body": [
+            "Lithium toxicity or chronic use causes nephrotoxicity leading to nephrogenic diabetes insipidus, which presents with polyuria and hypernatremia."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Valproic acid causes thrombocytopenia and pancreatitis. Quetiapine causes weight gain and QTc prolongation. Lamotrigine causes rash/SJS."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q027",
+      "questionNumber": 27,
+      "sourceQuestionNumber": 27,
+      "retrievalTag": "giving a drug at least 6 weeks... before switching",
+      "reviewPearl": "Remember the \"666\" rule: 6 weeks minimum trial, 6 months maintenance therapy, and a 6-week washout if switching to an MAOI.",
+      "stem": "A patient started an SSRI 2 weeks ago for MDD but reports no improvement in mood. What is the most appropriate next step?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Switch to an SNRI"
+        },
+        {
+          "label": "B",
+          "text": "Add a TCA"
+        },
+        {
+          "label": "C",
+          "text": "Increase the dose immediately to maximum"
+        },
+        {
+          "label": "D",
+          "text": "Continue the medication and follow up in 4 weeks"
+        }
+      ],
+      "correctAnswer": "D",
+      "educationalObjective": "Manage SSRI trials by recognizing the 6-week latency period required for maximal therapeutic efficacy.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: D) Continue the medication and follow up in 4 weeks",
+          "body": [
+            "Antidepressants require an adequate trial of at least 4 to 6 weeks at a therapeutic dose to allow neuronal plasticity before efficacy can be judged."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Switching, augmenting, or aggressively maxing the dose at 2 weeks are premature interventions that do not allow the drug sufficient time to work."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q028",
+      "questionNumber": 28,
+      "sourceQuestionNumber": 28,
+      "retrievalTag": "Valproate Teratogen (spina bifida)",
+      "reviewPearl": "Both lithium and valproate are potent teratogens, severely limiting their utility in women with bipolar disorder who desire pregnancy or refuse contraception. eftab720 tightenfactor0 eftab720 tightenfactor0 Document 8: Anxiety Disorders",
+      "stem": "A female bipolar patient refuses Lithium. She is prescribed valproate. Which congenital defect must she be warned about if she becomes pregnant?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Ebstein anomaly"
+        },
+        {
+          "label": "B",
+          "text": "Spina bifida"
+        },
+        {
+          "label": "C",
+          "text": "Cleft palate"
+        },
+        {
+          "label": "D",
+          "text": "Renal agenesis"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Identify spina bifida as the major teratogenic risk associated with valproate therapy.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: B) Spina bifida",
+          "body": [
+            "Valproate is a known teratogen that causes neural tube defects, specifically spina bifida, limiting its utility in pregnant women."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Ebstein anomaly is caused by Lithium. Cleft palate is associated with carbamazepine. Renal agenesis can be caused by ACE inhibitors."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q029",
+      "questionNumber": 29,
+      "sourceQuestionNumber": 29,
+      "retrievalTag": "GAD Psychotherapy > SSRI",
+      "reviewPearl": "Benzodiazepines should be used to treat acute panic attacks only; their use for chronic anxiety like GAD risks severe dependence and withdrawal.",
+      "stem": "A 28-year-old woman reports 8 months of constant, daily worry about her finances, health, and relationships, accompanied by muscle tension. Best long-term management?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Benzodiazepines"
+        },
+        {
+          "label": "B",
+          "text": "Psychotherapy and SSRI"
+        },
+        {
+          "label": "C",
+          "text": "Haloperidol"
+        },
+        {
+          "label": "D",
+          "text": "Reassurance only"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Diagnose Generalized Anxiety Disorder and select Psychotherapy plus an SSRI as the definitive long-term treatment.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: B) Psychotherapy and SSRI",
+          "body": [
+            "Generalized Anxiety Disorder (GAD) involves >6 months of constant worry with somatic symptoms; it is treated long-term with psychotherapy and SSRIs."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Benzodiazepines are explicitly the wrong answer for chronic GAD anxiety. Haloperidol is an antipsychotic. Reassurance ignores a valid pathology."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q030",
+      "questionNumber": 30,
+      "sourceQuestionNumber": 30,
+      "retrievalTag": "Panic Attacks BZD",
+      "reviewPearl": "Long-term management of panic disorder relies on SSRIs and CBT to prevent attacks and avoid benzodiazepine dependence.",
+      "stem": "A healthy 24-year-old woman presents to the ED with sudden palpitations, chest pain, and fear of dying lasting 20 minutes. Troponins and ECG are normal. Immediate treatment?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "SSRI"
+        },
+        {
+          "label": "B",
+          "text": "Benzodiazepine"
+        },
+        {
+          "label": "C",
+          "text": "Beta-blocker"
+        },
+        {
+          "label": "D",
+          "text": "Cognitive behavioral therapy"
+        }
+      ],
+      "correctAnswer": "B",
+      "educationalObjective": "Use benzodiazepines to acutely abort a panic attack once medical emergencies are fully ruled out.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: B) Benzodiazepine",
+          "body": [
+            "Acute panic attacks are sudden and severe. After ruling out medical emergencies, abortive therapy with a short-acting benzodiazepine is indicated in the acute setting."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "SSRIs and CBT are for long-term prevention, not acute chemical abortion. Beta-blockers are primarily used for performance anxiety."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q031",
+      "questionNumber": 31,
+      "sourceQuestionNumber": 31,
+      "retrievalTag": "-Blockers Performance anxiety",
+      "reviewPearl": "Beta-blockers lower the heart rate and control physical symptoms, making them ideal PRN medications for specific social phobias like public speaking.",
+      "stem": "A law student develops intense tachycardia, sweating, and trembling only when standing in front of the class to speak. He avoids public speaking entirely. Best PRN treatment?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Benzodiazepine"
+        },
+        {
+          "label": "B",
+          "text": "SSRI"
+        },
+        {
+          "label": "C",
+          "text": "Propranolol"
+        },
+        {
+          "label": "D",
+          "text": "Valproate"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Prescribe beta-blockers as needed for performance anxiety/stage fright.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: C) Propranolol",
+          "body": [
+            "Performance anxiety (a social phobia variant) is effectively treated with as-needed beta-blockers like propranolol to control autonomic symptoms before an event."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Benzodiazepines cause cognitive sedation. SSRIs are for chronic daily anxiety. Valproate is a mood stabilizer for bipolar disorder."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    },
+    {
+      "id": "q032",
+      "questionNumber": 32,
+      "sourceQuestionNumber": 32,
+      "retrievalTag": "Systemic desensitization (slower, more effective over time",
+      "reviewPearl": "Flooding is used when time is restricted, burning out the anxiety response quickly but with less long-term durability than desensitization.",
+      "stem": "A patient has an intense, irrational fear of spiders causing significant impairment. She wishes to overcome this long-term. Best highly effective psychological therapy?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Psychoanalysis"
+        },
+        {
+          "label": "B",
+          "text": "Flooding"
+        },
+        {
+          "label": "C",
+          "text": "Systemic desensitization"
+        },
+        {
+          "label": "D",
+          "text": "Hypnosis"
+        }
+      ],
+      "correctAnswer": "C",
+      "educationalObjective": "Select systemic desensitization as the most effective long-term behavioral treatment for specific phobias.",
+      "explanationSections": [
+        {
+          "heading": "Correct Answer: C) Systemic desensitization",
+          "body": [
+            "Systemic desensitization involving gradual exposure while controlling anxiety is the best, most durable long-term treatment for specific phobias."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "Flooding is faster but less effective over time. Psychoanalysis and hypnosis are not first-line behavioral techniques for specific phobias."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
+    }
+  ]
+}
