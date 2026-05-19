@@ -1311,6 +1311,9 @@ body.quiz-fullscreen-mode .modal-overlay {
             <button class="btn-generate" id="btn-nbme-gemini-json" onclick="App.openNbmeGeminiJsonImportModal()" style="background:#0d5c2b;" title="Import Gemini-extracted NBME JSON">
               &#x2B07; NBME JSON Import
             </button>
+            <button class="btn-generate" id="btn-landing-json-import" onclick="App.openLandingJsonImportModal()" style="background:#1a4a7a;" title="Import any app-ready or NBME Gemini JSON file">
+              &#x2B06; Import JSON
+            </button>
           </div>
         </div>
         <div id="home-content">
@@ -2019,6 +2022,50 @@ body.quiz-fullscreen-mode .modal-overlay {
       <button type="button" class="btn-modal primary" id="ngj-save-btn" onclick="App.createTestFromNbmeGeminiJsonImport()" disabled>Save Test</button>
       <button type="button" class="btn-modal" id="ngj-save-valid-btn" onclick="App.saveValidNbmeGeminiJsonQuestionsOnly()" disabled style="display:none;border-color:#c0392b;color:#c0392b;" title="Testing only: saves valid questions, excludes questions with blocking errors">Save valid questions only</button>
       <button type="button" class="btn-modal" onclick="App.closeNbmeGeminiJsonImportModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ LANDING JSON IMPORT MODAL ═══ -->
+<div id="modal-landing-json-import" class="modal-overlay">
+  <div class="modal-box" style="max-width:480px;">
+    <h3>Import JSON Test</h3>
+    <p style="font-size:12px;color:#5a6a7a;margin-bottom:12px;">Upload an app-ready or NBME Gemini JSON file to import as a test.</p>
+
+    <div class="form-group">
+      <label class="form-label">JSON File (.json)</label>
+      <input type="file" class="form-input" id="lji-file-input" accept=".json" onchange="App.handleLandingJsonFileUpload(this)">
+      <div id="lji-file-name" style="font-size:11px;color:#5a6a7a;margin-top:3px;"></div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Test Name</label>
+      <input type="text" class="form-input" id="lji-test-name" autocomplete="off" placeholder="e.g. Psych SELF Block 8" onkeydown="if(event.key==='Enter')App.confirmLandingJsonImport()">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Save to</label>
+      <select class="form-input" id="lji-folder-select" onchange="App._onLandingJsonFolderChange()"></select>
+    </div>
+
+    <div id="lji-new-sub-row" style="display:none;" class="form-group">
+      <label class="form-label">New Subfolder Name</label>
+      <input type="text" class="form-input" id="lji-new-sub-name" autocomplete="off" placeholder="e.g. Psychiatry">
+    </div>
+    <div id="lji-new-main-row" style="display:none;" class="form-group">
+      <label class="form-label">New Main Folder Name</label>
+      <input type="text" class="form-input" id="lji-new-main-name" autocomplete="off" placeholder="e.g. My Custom Source">
+    </div>
+    <div id="lji-new-main-sub-row" style="display:none;" class="form-group">
+      <label class="form-label">Initial Subfolder</label>
+      <input type="text" class="form-input" id="lji-new-main-sub-name" autocomplete="off" placeholder="e.g. Imports">
+    </div>
+
+    <div id="lji-error" style="display:none;font-size:12px;color:#c0392b;margin-bottom:8px;padding:8px;background:#fff5f5;border-radius:4px;border:1px solid #f5c6cb;"></div>
+
+    <div class="modal-actions">
+      <button class="btn-modal primary" id="lji-import-btn" onclick="App.confirmLandingJsonImport()">Import</button>
+      <button class="btn-modal" onclick="App.closeLandingJsonImportModal()">Cancel</button>
     </div>
   </div>
 </div>
@@ -21415,6 +21462,198 @@ const App = (() => {
     Quiz.startTest(newTest.id);
   }
 
+  // ─── LANDING JSON IMPORT ───────────────────────────────────────────────────
+
+  let _landingJsonImport = null;
+
+  function openLandingJsonImportModal() {
+    _landingJsonImport = { rawText: '', fileName: '' };
+    const fi = document.getElementById('lji-file-input');
+    if (fi) fi.value = '';
+    document.getElementById('lji-file-name').textContent = '';
+    document.getElementById('lji-test-name').value = '';
+    document.getElementById('lji-error').style.display = 'none';
+    document.getElementById('lji-new-sub-row').style.display = 'none';
+    document.getElementById('lji-new-sub-name').value = '';
+    document.getElementById('lji-new-main-row').style.display = 'none';
+    document.getElementById('lji-new-main-name').value = '';
+    document.getElementById('lji-new-main-sub-row').style.display = 'none';
+    document.getElementById('lji-new-main-sub-name').value = '';
+
+    const allSources = DB.getSourceFolders();
+    const allFolders = DB.getFolders();
+    const sel = document.getElementById('lji-folder-select');
+    sel.innerHTML = '';
+
+    allSources.forEach(function(src) {
+      const subs = allFolders.filter(function(f) { return (f.sourceId || 'src-nbme') === src.id; });
+      const grp = document.createElement('optgroup');
+      grp.label = src.name;
+      subs.forEach(function(f) {
+        const opt = document.createElement('option');
+        opt.value = 'fid:' + f.id;
+        opt.textContent = f.name;
+        grp.appendChild(opt);
+      });
+      const newSubOpt = document.createElement('option');
+      newSubOpt.value = 'newsub:' + src.id;
+      newSubOpt.textContent = '＋ New subfolder in “' + src.name + '”…';
+      grp.appendChild(newSubOpt);
+      sel.appendChild(grp);
+    });
+
+    const divOpt = document.createElement('option');
+    divOpt.disabled = true;
+    divOpt.textContent = '────────────────────';
+    sel.appendChild(divOpt);
+    const newMainOpt = document.createElement('option');
+    newMainOpt.value = '__newmain__';
+    newMainOpt.textContent = '＋ New main folder…';
+    sel.appendChild(newMainOpt);
+
+    if (_currentFolder) {
+      const matchOpt = Array.from(sel.options).find(function(o) { return o.value === 'fid:' + _currentFolder; });
+      if (matchOpt) sel.value = matchOpt.value;
+    }
+
+    _onLandingJsonFolderChange();
+    document.getElementById('modal-landing-json-import').style.display = 'flex';
+    setTimeout(function() { document.getElementById('lji-test-name').focus(); }, 80);
+  }
+
+  function closeLandingJsonImportModal() {
+    document.getElementById('modal-landing-json-import').style.display = 'none';
+    _landingJsonImport = null;
+  }
+
+  function handleLandingJsonFileUpload(inp) {
+    const file = inp.files[0];
+    if (!file) return;
+    document.getElementById('lji-file-name').textContent = '📄 ' + file.name;
+    if (_landingJsonImport) _landingJsonImport.fileName = file.name;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const text = e.target.result || '';
+      if (_landingJsonImport) _landingJsonImport.rawText = text;
+      const tnInput = document.getElementById('lji-test-name');
+      if (tnInput && !tnInput.value) {
+        let suggested = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim();
+        try {
+          const p = JSON.parse(text);
+          if (p && p.testTitle) suggested = String(p.testTitle);
+          else if (p && p.name) suggested = String(p.name);
+        } catch(e2) {}
+        tnInput.value = suggested;
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function _onLandingJsonFolderChange() {
+    const val = document.getElementById('lji-folder-select').value;
+    const isNewSub  = val.startsWith('newsub:');
+    const isNewMain = val === '__newmain__';
+    document.getElementById('lji-new-sub-row').style.display      = isNewSub  ? 'block' : 'none';
+    document.getElementById('lji-new-main-row').style.display     = isNewMain ? 'block' : 'none';
+    document.getElementById('lji-new-main-sub-row').style.display = isNewMain ? 'block' : 'none';
+    if (isNewSub)  setTimeout(function() { document.getElementById('lji-new-sub-name').focus(); }, 80);
+    if (isNewMain) setTimeout(function() { document.getElementById('lji-new-main-name').focus(); }, 80);
+  }
+
+  function confirmLandingJsonImport() {
+    const errEl = document.getElementById('lji-error');
+    function showError(msg) { errEl.textContent = msg; errEl.style.display = 'block'; }
+
+    const testName = (document.getElementById('lji-test-name').value || '').trim();
+    if (!testName) { showError('Please enter a test name.'); return; }
+
+    const rawText = (_landingJsonImport && _landingJsonImport.rawText) || '';
+    if (!rawText) { showError('Please select a JSON file first.'); return; }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch(err) {
+      showError('Invalid JSON: ' + (err.message || String(err)));
+      return;
+    }
+
+    // Resolve folder / create new folder if needed
+    const selVal = document.getElementById('lji-folder-select').value;
+    let folderId;
+    if (selVal === '__newmain__') {
+      const mainName = (document.getElementById('lji-new-main-name').value || '').trim();
+      if (!mainName) { showError('Please enter a name for the new main folder.'); return; }
+      const subName  = (document.getElementById('lji-new-main-sub-name').value || '').trim();
+      if (!subName)  { showError('Please enter an initial subfolder name.'); return; }
+      const newSrc = DB.createSourceFolder(mainName);
+      folderId = DB.createFolder(subName, newSrc.id).id;
+    } else if (selVal.startsWith('newsub:')) {
+      const srcId   = selVal.slice('newsub:'.length);
+      const subName = (document.getElementById('lji-new-sub-name').value || '').trim();
+      if (!subName) { showError('Please enter a subfolder name.'); return; }
+      folderId = DB.createFolder(subName, srcId).id;
+    } else if (selVal.startsWith('fid:')) {
+      folderId = selVal.slice('fid:'.length);
+    } else {
+      showError('Please select a destination folder.'); return;
+    }
+
+    // Detect schema and extract questions
+    let questions;
+
+    if (parsed && parsed.testTitle !== undefined && Array.isArray(parsed.questions)) {
+      // NBME Gemini JSON — route through existing validate/normalize pipeline
+      const validation = validateNbmeGeminiJsonImport(parsed);
+      if (!validation.isValid) {
+        const errs = (validation.blockingErrors || []).slice(0, 3).join('; ');
+        showError('NBME Gemini JSON validation failed: ' + errs);
+        return;
+      }
+      const normalizedItems = normalizeNbmeGeminiJsonImport(parsed);
+      const importedAt = new Date().toISOString();
+      questions = normalizedItems.map(function(q) {
+        const out = Object.assign({}, q);
+        out.metadata = Object.assign({}, out.metadata || {}, {
+          sourceType: 'nbme-gemini-json',
+          sourceFormat: parsed.sourceFormat || null,
+          importedAt: importedAt,
+          originalTestTitle: parsed.testTitle || null,
+          schemaVersion: 'nbme-gemini-json-v1',
+          figureAttachments: {}
+        });
+        return out;
+      });
+    } else if (parsed && Array.isArray(parsed.questions) && parsed.questions.length) {
+      // App-ready test object with questions array
+      const qs = parsed.questions;
+      const valid = qs.every(function(q) { return q.stem && Array.isArray(q.options); });
+      if (!valid) { showError('JSON questions are missing required fields (stem, options).'); return; }
+      questions = qs;
+    } else if (Array.isArray(parsed) && parsed.length && parsed[0] && parsed[0].stem) {
+      // Bare array of question objects
+      const valid = parsed.every(function(q) { return q.stem && Array.isArray(q.options); });
+      if (!valid) { showError('JSON questions are missing required fields (stem, options).'); return; }
+      questions = parsed;
+    } else {
+      showError('Unrecognized JSON schema. Expected a test object with a "questions" array, or NBME Gemini JSON format.');
+      return;
+    }
+
+    if (!questions || !questions.length) { showError('No questions found in JSON.'); return; }
+
+    const test = DB.createTest(folderId, testName, questions);
+    if (!test) { showError('Could not create test — storage may be full.'); return; }
+
+    closeLandingJsonImportModal();
+    _currentFolder = folderId;
+    renderSidebar();
+    renderHomeGrid();
+    toast('✓ “' + testName + '” imported with ' + questions.length + ' question(s).');
+  }
+
+  // ─── END LANDING JSON IMPORT ────────────────────────────────────────────────
+
   function createIncorrectsTestFromTest(testId) {
     const test = DB.getTest(testId);
     if (!test) return;
@@ -24141,6 +24380,11 @@ const App = (() => {
     saveSelectedExplanationNote,
     openSettings,
     toggleSidebar,
+    openLandingJsonImportModal,
+    closeLandingJsonImportModal,
+    handleLandingJsonFileUpload,
+    _onLandingJsonFolderChange,
+    confirmLandingJsonImport,
     openNbmeGeminiJsonImportModal,
     closeNbmeGeminiJsonImportModal,
     clearNbmeGeminiJsonImportState,
