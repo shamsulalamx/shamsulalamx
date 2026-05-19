@@ -2,10 +2,68 @@
   "schemaVersion": "normalized-question-batch-v1",
   "sourceFile": "8A-pages_raw.txt",
   "sourceChunkFile": "8A-pages_chunks.json",
-  "createdAt": "2026-05-19T15:37:42.575514Z",
+  "createdAt": "2026-05-19T15:49:29.657885Z",
   "normalizationMode": "gemini",
-  "normalizedCount": 0,
+  "normalizedCount": 1,
   "failedCount": 0,
-  "items": [],
+  "items": [
+    {
+      "schemaVersion": "nbme-normalized-question-v1",
+      "sourceFile": "8A-pages_raw.txt",
+      "sourceQuestionNumber": 1,
+      "questionId": "q001",
+      "stem": "A 67-year-old woman with non-Hodgkin lymphoma is being prepared for discharge from the hospital after treatment of a hypertensive crisis. She is currently receiving her first course of chemotherapy. One year ago, she received pneumococcal and influenza vaccines. Her blood pressure has responded well to lisinopril. Currently, her temperature is 37°C (98.6°F), pulse is 80/min, respirations are 18/min, and blood pressure is 140/86 mm Hg. Examination shows an enlarged left supraclavicular node. The spleen tip is palpated 5 cm below the left costal margin. Administration of which of the following vaccines is most appropriate for this patient?",
+      "choices": [
+        {
+          "label": "A",
+          "text": "Influenza"
+        },
+        {
+          "label": "B",
+          "text": "Measles-mumps-rubella"
+        },
+        {
+          "label": "C",
+          "text": "Meningococcal"
+        },
+        {
+          "label": "D",
+          "text": "Pneumococcal"
+        },
+        {
+          "label": "E",
+          "text": "Varicella"
+        }
+      ],
+      "correctAnswer": "A",
+      "educationalObjective": "Annual influenza virus vaccination is recommended beginning at age greater than 6 months. Inactivated influenza virus vaccine can be safely administered via intramuscular injection to patients who are immunocompromised, who may be at higher risk for severe illness and influenza-related complications if they forego vaccination and become infected.",
+      "correctExplanation": "Influenza is a respiratory viral illness that can be complicated by lower respiratory tract infection (pneumonia) and bacterial superinfection, especially in elderly or immunocompromised patients. Symptoms include fever, chills, myalgias, malaise, headaches, cough, nausea, and vomiting. The Centers for Disease Control (CDC) recommends annual influenza virus vaccination beginning at age greater than 6 months. The influenza vaccine is available as a trivalent or quadrivalent intramuscular injection of inactivated virus or as a nasal spray of live attenuated virus. Inactivated influenza vaccine can be safely administered via intramuscular injection to patients who are immunocompromised, who may be at higher risk for severe illness and influenza-related complications if they forego vaccination and are infected with influenza. Influenza is a seasonal illness, affecting patients in winter and early spring. This patient who is immunocompromised should receive annual vaccination for influenza virus.",
+      "incorrectExplanations": [
+        {
+          "label": "B",
+          "explanation": "Measles-mumps-rubella vaccine (Choice B) is a live attenuated vaccination that involves two doses, typically administered in childhood. Patients who are severely immunocompromised should not receive measles-mumps-rubella vaccine because of the risk for viral reactivation."
+        },
+        {
+          "label": "C",
+          "explanation": "Meningococcal vaccine (Choice C) is a conjugate vaccine that is indicated for all children, with an additional serogroup B vaccine indicated for all children over 10 years of age at increased risk for meningococcal disease (eg, dormitory, military living). While meningococcal vaccine may be safely administered to immunocompromised patients, boosters are not routinely necessary."
+        },
+        {
+          "label": "D",
+          "explanation": "Pneumococcal vaccine (Choice D) is a 23-valent conjugate vaccine and is indicated for all adults over 65 years of age and in patients with high-risk conditions such as chronic heart, renal, and liver disease or chronic smokers. This patient received pneumococcal vaccine 1 year ago and does not need a booster dose."
+        },
+        {
+          "label": "E",
+          "explanation": "Varicella vaccine (Choice E) is a live attenuated vaccination that involves two doses and is usually administered during childhood between 12 to 15 months of age and a second at age 4 to 6 years. Zoster vaccine to prevent shingles is recommended for adults aged greater than 60 years. Zoster vaccine is also a live attenuated vaccination and is contraindicated in patients who are immunocompromised."
+        }
+      ],
+      "reviewPearl": "",
+      "retrievalTag": "",
+      "tags": [],
+      "figures": [],
+      "tables": [],
+      "warnings": [],
+      "confidence": "high"
+    }
+  ],
   "failures": []
 }
