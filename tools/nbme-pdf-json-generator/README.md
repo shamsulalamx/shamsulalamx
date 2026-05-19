@@ -1,11 +1,11 @@
 # NBME PDF → JSON Generator
 
-**Current: Milestone 4.5 — OCR fallback for image-based / scanned PDFs**
+**Current: Milestone 5 — App-ready JSON conversion**
 
 Staged pipeline for converting NBME-style PDF answer files into app-ready JSON.
 
 ```
-PDF → raw text (+ OCR fallback) → chunks → Gemini → normalized JSON → (Milestone 5: app-ready JSON)
+PDF → raw text (+ OCR fallback) → chunks → Gemini → normalized JSON → app-ready JSON
 ```
 
 ---
@@ -15,7 +15,8 @@ PDF → raw text (+ OCR fallback) → chunks → Gemini → normalized JSON → 
 ```
 tools/nbme-pdf-json-generator/
 ├── Generate_NBME_JSONs.command        ← double-click launcher (macOS)
-├── extract_pdfs.py                    ← core pipeline script (M1–M4)
+├── extract_pdfs.py                    ← core pipeline script (M1–M4.5)
+├── normalized_to_app_json.py          ← M5: normalized JSON → app-ready JSON
 ├── README.md                          ← this file
 │
 ├── schema/
@@ -28,9 +29,10 @@ tools/nbme-pdf-json-generator/
 ├── input_pdfs/                        ← DROP YOUR PDFs HERE
 │
 ├── output_json/
-│   ├── raw_text/                      ← one _raw.txt per PDF          (M1)
-│   ├── chunks/                        ← one _chunks.json per PDF      (M2)
-│   └── normalized/                    ← one _normalized.json per PDF  (M3/M4)
+│   ├── raw_text/                      ← one _raw.txt per PDF              (M1)
+│   ├── chunks/                        ← one _chunks.json per PDF          (M2)
+│   ├── normalized/                    ← one _normalized.json per PDF      (M3/M4)
+│   └── app_ready/                     ← one _app_ready.json per source    (M5)
 │
 └── reports/                           ← timestamped pipeline reports
 ```
@@ -70,6 +72,9 @@ python3 extract_pdfs.py
 
 # Step 2: normalize chunks via Gemini (requires GEMINI_API_KEY)
 python3 extract_pdfs.py --normalize-gemini
+
+# Step 3: convert normalized JSON → app-ready JSON
+python3 normalized_to_app_json.py
 ```
 
 ### Individual commands
@@ -81,6 +86,8 @@ python3 extract_pdfs.py --normalize-gemini
 | `python3 extract_pdfs.py --chunk-only` | Re-chunk existing raw_text files (skip PDF re-extraction) |
 | `python3 extract_pdfs.py --normalize-dry-run` | Create empty placeholder normalized JSON (no LLM, no key needed) |
 | `python3 extract_pdfs.py --normalize-gemini` | Call Gemini to normalize chunks (requires `GEMINI_API_KEY`) |
+| `python3 normalized_to_app_json.py` | Convert normalized JSON → app-ready JSON (M5) |
+| `python3 normalized_to_app_json.py --dry-run` | Validate normalized files without writing output |
 
 ### Double-click launcher
 
@@ -165,6 +172,51 @@ Markdown-style, one `## Page N` section per PDF page.
   ]
 }
 ```
+
+### App-ready JSON (`output_json/app_ready/<stem>_app_ready.json`)
+
+Schema `nbme-gemini-json-v1` — final internal question format for the app:
+
+```json
+{
+  "schemaVersion": "nbme-gemini-json-v1",
+  "title": "NBME Psych 9",
+  "source": "nbme-pdf-json-generator",
+  "sourceFile": "NBME_Psych_9_raw.txt",
+  "createdAt": "2026-05-19T...",
+  "questionCount": 49,
+  "questions": [
+    {
+      "n": 1,
+      "t": "A 28-year-old woman presents with...",
+      "o": [{"l": "A", "t": "Adjustment disorder"}, {"l": "B", "t": "MDD"}],
+      "c": "B",
+      "e": {"A": "Adjustment disorder requires a stressor..."},
+      "tags": ["MDD diagnostic criteria"],
+      "retrievalTag": "MDD diagnostic criteria",
+      "reviewPearl": "MDD requires 5 of 9 SIGECAPS for 2 weeks.",
+      "educationalObjective": "Diagnose major depressive disorder.",
+      "correctBlurb": "<div class=\"ngj-exp-section\">...</div>",
+      "metadata": {
+        "sourceType": "nbme-pdf-json-generator",
+        "sourceQuestionNumber": 1,
+        "sourceId": "q001",
+        "hasEmbeddedFigure": false,
+        "figureRefs": [],
+        "tables": [],
+        "extractionWarnings": [],
+        "explanationSections": [...],
+        "schemaVersion": "nbme-gemini-json-v1",
+        "figureAttachments": {},
+        "sourceFormat": "normalized-json",
+        "importedAt": "2026-05-19T..."
+      }
+    }
+  ]
+}
+```
+
+Validation before writing: stem non-empty, ≥ 2 choices, correct answer present in choices, no contamination phrases. Questions failing validation are skipped and reported.
 
 ### Pipeline report (`reports/extraction_report_<timestamp>.json`)
 
