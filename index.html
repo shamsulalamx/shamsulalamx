@@ -3080,6 +3080,26 @@ const DB = (() => {
     save();
   }
 
+  // ── Stem Highlights ────────────────────────────────────────
+  // Keyed by testId → qIdx. Stored separately from attempt results
+  // so they survive pause/resume, finish, and app restart.
+  function getStemHighlights(testId) {
+    const db = get();
+    return (db.stemHighlights || {})[testId] || {};
+  }
+  function setStemHighlight(testId, qIdx, data) {
+    const db = get();
+    if (!db.stemHighlights) db.stemHighlights = {};
+    if (!db.stemHighlights[testId]) db.stemHighlights[testId] = {};
+    db.stemHighlights[testId][String(qIdx)] = data;
+    save();
+  }
+  function clearStemHighlights(testId) {
+    const db = get();
+    if (db.stemHighlights) delete db.stemHighlights[testId];
+    save();
+  }
+
   return { get, save, initAsync, flushAppState, saveAppState, uid,
     getSourceFolders, getSourceFolder, getDefaultSourceFolderWorkflows, createSourceFolder, renameSourceFolder,
     getFolders, createFolder, renameFolder, deleteFolder,
@@ -3088,7 +3108,8 @@ const DB = (() => {
     getMarks, addMark, removeMark, isMarked, syncMarks,
     getNotes, addNote, deleteNote, updateNote,
     getFlashcards, upsertFlashcard, deleteFlashcard,
-    getMiscDocFolders, upsertMiscDocFolder, deleteMiscDocFolder };
+    getMiscDocFolders, upsertMiscDocFolder, deleteMiscDocFolder,
+    getStemHighlights, setStemHighlight, clearStemHighlights };
 })();
 window.DB = DB;
 
@@ -3541,7 +3562,8 @@ window.MiscDocStore = MiscDocStore;
       notes: db.notes || [],
       history: db.history,
       flashcards: db.flashcards || [],
-      miscDocFolders: db.miscDocFolders || []
+      miscDocFolders: db.miscDocFolders || [],
+      stemHighlights: db.stemHighlights || {}
     }, (key, value) => {
       if (key === 'dataUrl' || key === '_figureData' || key === 'highlights') return undefined;
       if (key === '_range' || key === 'blob' || key === 'base64') return undefined;
@@ -3815,6 +3837,7 @@ window.MiscDocStore = MiscDocStore;
       if (Array.isArray(snapshot.history))       db.history       = snapshot.history;
       if (Array.isArray(snapshot.flashcards))       db.flashcards       = snapshot.flashcards;
       if (Array.isArray(snapshot.miscDocFolders))  db.miscDocFolders   = snapshot.miscDocFolders;
+      if (snapshot.stemHighlights && typeof snapshot.stemHighlights === 'object' && !Array.isArray(snapshot.stemHighlights)) db.stemHighlights = snapshot.stemHighlights;
       _skipNextSchedule = true;
       DB.save();
       // Flush to IndexedDB synchronously before reload — prevents quota errors
@@ -6187,6 +6210,8 @@ const Quiz = (() => {
       qTimerRef: null,
       paused: false
     };
+    const savedHL = DB.getStemHighlights(testId);
+    state.results.forEach((r, i) => { if (savedHL[i] && Object.keys(savedHL[i]).length) r.highlights = savedHL[i]; });
     startTotalTimer();
     if (typeof resetHintPanel === 'function') resetHintPanel();
     renderQuiz();
@@ -6202,6 +6227,8 @@ const Quiz = (() => {
       qTimerRef: null,
       paused: false
     };
+    const savedHL = DB.getStemHighlights(testId);
+    state.results.forEach((r, i) => { if (savedHL[i] && Object.keys(savedHL[i]).length) r.highlights = savedHL[i]; });
     startTotalTimer();
     renderQuiz();
     window.toast('Test resumed ✓', 2000);
@@ -6356,12 +6383,14 @@ const Quiz = (() => {
   function saveHighlight(qIdx, htmlContent) {
     if (!state) return;
     state.results[qIdx].highlights = Object.assign({}, state.results[qIdx].highlights, { html: htmlContent });
+    DB.setStemHighlight(state.testId, qIdx, state.results[qIdx].highlights);
     persistState();
   }
 
   function saveHighlightPart(qIdx, key, value) {
     if (!state) return;
     state.results[qIdx].highlights = Object.assign({}, state.results[qIdx].highlights, { [key]: value });
+    DB.setStemHighlight(state.testId, qIdx, state.results[qIdx].highlights);
     persistState();
   }
 
@@ -7199,7 +7228,14 @@ const Results = (() => {
   }
 
   function show(testId, entry, results, questions) {
-    _testId = testId; _entry = entry; _results = results; _questions = questions;
+    const savedHL = DB.getStemHighlights(testId);
+    const mergedResults = results.map((r, i) => {
+      const hl = savedHL[String(i)];
+      return (hl && Object.keys(hl).length)
+        ? Object.assign({}, r, { highlights: Object.assign({}, r.highlights || {}, hl) })
+        : r;
+    });
+    _testId = testId; _entry = entry; _results = mergedResults; _questions = questions;
     _inReview = false;
     document.getElementById('screen-quiz').style.display    = 'none';
     document.getElementById('screen-home').style.display    = 'none';
@@ -22036,8 +22072,13 @@ const App = (() => {
     const body = document.getElementById('rev-all-body');
     body.innerHTML = '';
 
+    const savedHL = DB.getStemHighlights(testId);
     test.questions.forEach((q, i) => {
-      const r = latest.results[i] || { answered: false, correct: false, chosen: null, highlights: {}, strikethrough: [] };
+      const baseR = latest.results[i] || { answered: false, correct: false, chosen: null, highlights: {}, strikethrough: [] };
+      const hl = savedHL[String(i)];
+      const r = (hl && Object.keys(hl).length)
+        ? Object.assign({}, baseR, { highlights: Object.assign({}, baseR.highlights || {}, hl) })
+        : baseR;
 
       const card = document.createElement('div');
       card.className = 'rev-all-card';
