@@ -86,6 +86,21 @@ Return a JSON array of question objects. Each object must match this exact struc
   }
 ]
 
+ASSET CONTEXT MARKERS (v2 only — ignore if absent):
+When the lecture content contains lines like:
+
+  [DETECTED FIGURE: filename.png | WxH px | confidence: high]
+  An educational image was detected here. ...
+
+  [DETECTED TABLE: filename.json | N rows × M cols]
+  | Header1 | Header2 | ...
+
+These markers mean the pipeline detected an embedded figure or table in the slide PDF.
+Use the table data (rendered as markdown) directly — it is reliable extracted content.
+For figures, incorporate the likely topic of the image (chart, algorithm, diagram) into
+the question vignette when the surrounding text supports it. Do NOT invent figure content
+not supported by other text on the slide. If no markers are present, ignore this section.
+
 LECTURE CONTENT:
 {{NOTES_CHUNK}}
 

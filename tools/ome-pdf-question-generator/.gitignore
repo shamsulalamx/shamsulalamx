@@ -9,7 +9,14 @@ output_json/
 # Run logs — timestamped, accumulate per-run, not versioned
 reports/
 
+# v2 asset extraction outputs — regenerable from source PDFs
+extracted_figures/
+extracted_tables/
+
 # Input PDF files — OME lesson PDFs may be large or subject to copyright
-# Exception: test_ome_mood_disorders.pdf is the 3 KB synthetic test fixture (stays tracked)
+# Exceptions: canonical synthetic test fixtures (stay tracked)
+#   test_ome_mood_disorders.pdf  — v1 text-only fixture (3 KB)
+#   test_ome_assets_fixture.pdf  — v2 fixture with embedded image + table
 input_pdfs/*
 !input_pdfs/test_ome_mood_disorders.pdf
+!input_pdfs/test_ome_assets_fixture.pdf

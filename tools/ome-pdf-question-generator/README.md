@@ -1,14 +1,13 @@
-# OME PDF → Step 2 Question Generator (v1)
+# OME PDF → Step 2 Question Generator (v1 / v2)
 
 External tool pipeline that converts OME (Online MedEd) video lesson PDFs into
 `nbme-gemini-json-v3` app-ready JSON, ready for import into the NBME Self-Assessment app.
 
-**OME v1 extracts native text only. Figure/table-aware multimodal generation is planned
-but not active.**
-
 ---
 
 ## Pipeline
+
+### v1 — text only (default)
 
 ```
 OME PDF (input_pdfs/)
@@ -28,6 +27,28 @@ OME PDF (input_pdfs/)
   ▼ Import via: App → NBME Gemini JSON importer
 ```
 
+### v2 — hybrid text + asset extraction (`--extract-assets`)
+
+Same as v1, plus:
+
+```
+OME PDF (input_pdfs/)
+  │
+  ├─▶ PyMuPDF figure extraction
+  │     extracted_figures/<stem>_p<N>_fig<M>.png
+  │     Filtered: ≥80×80 px, aspect ratio ≤ 8:1, MD5-dedup
+  │
+  ├─▶ pdfplumber table extraction (lattice/stream)
+  │     extracted_tables/<stem>_p<N>_table<M>.json
+  │     Filtered: ≥ 2 rows × 2 cols
+  │
+  └─▶ Asset metadata injected into chunk text as [DETECTED FIGURE: ...] and
+      [DETECTED TABLE: ...] markers. Tables rendered as markdown inline.
+      No image bytes sent to Gemini. No OCR. No schema changes. No app changes.
+```
+
+**figureRefs stays `[]`** in all output. The app and importer are unchanged.
+
 ---
 
 ## Usage
@@ -37,6 +58,7 @@ OME PDF (input_pdfs/)
 ```bash
 cd tools/ome-pdf-question-generator
 python3 generate_ome_questions.py --dry-run
+python3 generate_ome_questions.py --dry-run --extract-assets
 ```
 
 Produces placeholder app-ready JSON. Full pipeline exercised except Gemini calls.
@@ -46,9 +68,14 @@ Produces placeholder app-ready JSON. Full pipeline exercised except Gemini calls
 ```bash
 cd tools/ome-pdf-question-generator
 export GEMINI_API_KEY='your-api-key-here'
+
+# v1 — text only
 python3 generate_ome_questions.py --generate
 python3 generate_ome_questions.py --generate --questions-per-file 15
-python3 generate_ome_questions.py --generate --questions-per-file 8
+
+# v2 — hybrid text + figure/table extraction
+python3 generate_ome_questions.py --generate --extract-assets
+python3 generate_ome_questions.py --generate --extract-assets --questions-per-file 15
 ```
 
 Default: 15 questions per PDF file.
@@ -70,6 +97,10 @@ OME PDFs are vector-based (text-layer); pdfplumber extracts them cleanly without
 Import this file via:
 **App → Import → NBME Gemini JSON → select file → validate → preview → save**
 
+v2 also produces:
+- `extracted_figures/<stem>_p<N>_fig<M>.png` — filtered embedded images
+- `extracted_tables/<stem>_p<N>_table<M>.json` — pdfplumber table data
+
 ---
 
 ## Dependencies
@@ -77,9 +108,10 @@ Import this file via:
 | Package | Required | Install |
 |---|---|---|
 | pdfplumber | Required | `pip3 install pdfplumber` |
+| PyMuPDF (fitz) | Required for `--extract-assets` (v2) | `pip3 install pymupdf` |
 | Gemini API key | Required for `--generate` | Set `GEMINI_API_KEY` env var |
 
-No other dependencies. All Gemini infrastructure is inherited from the UWorld generator.
+All Gemini infrastructure is inherited from the UWorld generator (no additional deps).
 
 ---
 
@@ -93,29 +125,53 @@ Per-file fields include:
 |---|---|
 | `pagesProcessed` | Pages with extractable text |
 | `charsExtracted` | Total character count of extracted text |
-| `figuresDetected` | Always 0 in v1 — not implemented |
-| `tablesDetected` | Always 0 in v1 — not implemented |
-| `pdfExtractionWarnings` | Pages with no extractable text (image-only or blank) |
+| `figuresDetected` | Raw image count found by PyMuPDF (0 in v1) |
+| `figuresKept` | Images that passed size/ratio/dedup filtering (0 in v1) |
+| `figuresIgnored` | Images filtered out (too small, banner-shaped, or duplicate) |
+| `tablesDetected` | Tables found by pdfplumber with ≥2×2 dimensions (0 in v1) |
+| `tablesExtracted` | Tables saved to `extracted_tables/` (0 in v1) |
+| `assetOutputPaths` | Absolute paths of all saved figure/table files |
+| `pdfExtractionWarnings` | Pages with no extractable text or extraction errors |
 | `questionsGenerated` | Questions produced for this file |
 | `validationFailures` | Questions that failed initial validation |
 | `repairsSucceeded` | Questions successfully repaired on retry |
 | `repairFailures` | Questions that failed both attempts |
 
+Top-level report fields:
+
+| Field | Description |
+|---|---|
+| `extractAssets` | `true` if `--extract-assets` was passed (v2), `false` otherwise |
+| `dryRun` | Whether this was a dry-run |
+
 ---
 
-## v1 Scope and Limitations
+## v1 vs v2 Scope
 
-OME v1 is **text-only**. It does not:
+| Capability | v1 (default) | v2 (`--extract-assets`) |
+|---|---|---|
+| Native text extraction | Yes | Yes |
+| Embedded figure extraction | No | Yes (PyMuPDF, filtered) |
+| Table extraction | No | Yes (pdfplumber lattice/stream) |
+| OCR | No | No |
+| Image bytes sent to Gemini | No | No |
+| App/importer changes | None | None |
+| Schema changes | None | None |
+| `figureRefs` | `[]` | `[]` |
 
-- Extract or attach figures
-- Parse tables from PDF layout
-- Use OCR (OME PDFs are vector-based; OCR is not needed and would add noise)
+---
 
-Figure/table-aware multimodal generation (Option B from `NEXT_STEPS_OME.md`) is planned
-for a future version but is not active in v1.
+## Known Limitations (v2)
 
-If a page contains only an image with no text layer, it produces an extraction warning
-and is skipped. The remaining text-layer content is still processed normally.
+- **Figure content is not interpreted**: Asset markers provide spatial context and
+  dimensions but Gemini cannot see the image pixels. Questions about figure content
+  are based on surrounding slide text plus the marker hint only.
+- **Not all embedded images are educational**: Logos, watermarks, and decorative
+  dividers are filtered out by size/ratio heuristics but filtering is imperfect.
+- **pdfplumber table detection requires borders**: Borderless/merged-cell tables may
+  not be detected. Complex multi-page tables are not reconstructed.
+- **No OCR path**: If a slide is a scanned image (no text layer), that page produces
+  an extraction warning and is skipped. This is rare in OME PDFs (vector-based).
 
 ---
 
@@ -136,10 +192,20 @@ The following are reused without modification:
 - `_placeholder_question()` — dry-run placeholders
 - `check_duplicate_stems()`, `renumber_questions()`
 
-Only two components are OME-specific:
+OME-specific components:
 
-1. `extract_pdf_text()` — pdfplumber-based extraction (replaces text-file `extract_text`)
+1. `extract_pdf_text()` — pdfplumber text + optional PyMuPDF figures + pdfplumber tables
 2. `prompts/ome_to_questions_prompt.txt` — prompt adapted for lecture/slide structure
+3. `--extract-assets` flag and v2 asset pipeline
+
+---
+
+## Test Fixtures
+
+| File | Purpose | Size |
+|---|---|---|
+| `input_pdfs/test_ome_mood_disorders.pdf` | v1 text-only dry-run fixture | ~3 KB |
+| `input_pdfs/test_ome_assets_fixture.pdf` | v2 fixture: text + image + table | ~10 KB |
 
 ---
 
@@ -157,3 +223,11 @@ Before declaring a run successful:
 - [ ] App import: validation modal shows ≥ 90% pass rate
 - [ ] App import: preview shows full stems without truncation
 - [ ] App import: quiz runs correctly on imported test
+
+v2 additional checks:
+
+- [ ] `extracted_figures/` directory created and contains at least one `.png`
+- [ ] `extracted_tables/` directory created and contains at least one `.json`
+- [ ] Report shows `figuresKept` > 0 and `tablesExtracted` > 0
+- [ ] `assetOutputPaths` lists the saved file paths
+- [ ] v1 dry-run (`--dry-run` without `--extract-assets`) still works correctly
