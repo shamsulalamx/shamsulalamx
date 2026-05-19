@@ -1,168 +1,132 @@
 {
-  "schemaVersion": "nbme-gemini-json-v1",
-  "title": "test selectable",
-  "source": "nbme-pdf-json-generator",
-  "sourceFile": "test_selectable_raw.txt",
-  "createdAt": "2026-05-19T15:56:25.465776+00:00",
-  "questionCount": 2,
+  "schemaVersion": "nbme-gemini-json-v3",
+  "testTitle": "test selectable",
+  "sourceFormat": "mixed",
+  "expectedQuestionCount": 2,
+  "actualExtractedQuestionCount": 2,
+  "extractionWarnings": [],
   "questions": [
     {
-      "n": 1,
-      "t": "A 28-year-old woman presents with 3 weeks of low mood, fatigue, insomnia, and feelings of worthlessness. Which of the following is the most likely diagnosis?",
-      "o": [
-        {
-          "l": "A",
-          "t": "Adjustment disorder"
-        },
-        {
-          "l": "B",
-          "t": "Major depressive disorder"
-        },
-        {
-          "l": "C",
-          "t": "Persistent depressive disorder"
-        },
-        {
-          "l": "D",
-          "t": "Bipolar I disorder"
-        },
-        {
-          "l": "E",
-          "t": "Grief reaction"
-        }
-      ],
-      "c": "B",
-      "e": {
-        "A": "Adjustment disorder requires an identifiable stressor within 3 months.",
-        "C": "PDD requires 2+ years duration.",
-        "D": "No manic episodes reported.",
-        "E": "Grief is not a disorder."
-      },
-      "tags": [
-        "Major depressive disorder diagnosis criteria"
-      ],
+      "id": "q001",
+      "questionNumber": 1,
+      "sourceQuestionNumber": 1,
       "retrievalTag": "Major depressive disorder diagnosis criteria",
       "reviewPearl": "MDD requires 5 of 9 SIGECAPS for at least 2 weeks.",
+      "clinicalPearl": null,
+      "stem": "A 28-year-old woman presents with 3 weeks of low mood, fatigue, insomnia, and feelings of worthlessness. Which of the following is the most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Adjustment disorder"
+        },
+        {
+          "label": "B",
+          "text": "Major depressive disorder"
+        },
+        {
+          "label": "C",
+          "text": "Persistent depressive disorder"
+        },
+        {
+          "label": "D",
+          "text": "Bipolar I disorder"
+        },
+        {
+          "label": "E",
+          "text": "Grief reaction"
+        }
+      ],
+      "correctAnswer": "B",
       "educationalObjective": "Diagnose major depressive disorder.",
-      "correctBlurb": "<div class=\"ngj-exp-section\"><strong>Correct Answer Explanation</strong><p>Patient meets DSM-5 criteria with 5+ SIGECAPS for 2 weeks.</p></div><div class=\"ngj-exp-section\"><strong>Incorrect Answer Explanations</strong><p><strong>A.</strong> Adjustment disorder requires an identifiable stressor within 3 months.</p><p><strong>C.</strong> PDD requires 2+ years duration.</p><p><strong>D.</strong> No manic episodes reported.</p><p><strong>E.</strong> Grief is not a disorder.</p></div><div class=\"ngj-exp-section\"><strong>Clinical Pearl</strong><p>MDD requires 5 of 9 SIGECAPS for at least 2 weeks.</p></div>",
-      "metadata": {
-        "sourceType": "nbme-pdf-json-generator",
-        "sourceQuestionNumber": 1,
-        "sourceId": "q001",
-        "retrievalTag": "Major depressive disorder diagnosis criteria",
-        "reviewPearl": "MDD requires 5 of 9 SIGECAPS for at least 2 weeks.",
-        "hasEmbeddedFigure": false,
-        "figureRefs": [],
-        "tables": [],
-        "sharedGroup": null,
-        "extractionWarnings": [],
-        "explanationSections": [
-          {
-            "heading": "Correct Answer Explanation",
-            "body": [
-              "Patient meets DSM-5 criteria with 5+ SIGECAPS for 2 weeks."
-            ]
-          },
-          {
-            "heading": "Incorrect Answer Explanations",
-            "body": [
-              "A. Adjustment disorder requires an identifiable stressor within 3 months.",
-              "C. PDD requires 2+ years duration.",
-              "D. No manic episodes reported.",
-              "E. Grief is not a disorder."
-            ]
-          },
-          {
-            "heading": "Clinical Pearl",
-            "body": [
-              "MDD requires 5 of 9 SIGECAPS for at least 2 weeks."
-            ]
-          }
-        ],
-        "schemaVersion": "nbme-gemini-json-v1",
-        "figureAttachments": {},
-        "sourceFormat": "normalized-json",
-        "importedAt": "2026-05-19T15:56:25.465776+00:00"
-      }
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Patient meets DSM-5 criteria with 5+ SIGECAPS for 2 weeks."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "A. Adjustment disorder requires an identifiable stressor within 3 months.",
+            "C. PDD requires 2+ years duration.",
+            "D. No manic episodes reported.",
+            "E. Grief is not a disorder."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "MDD requires 5 of 9 SIGECAPS for at least 2 weeks."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
     },
     {
-      "n": 1,
-      "t": "A 28-year-old woman presents with 3 weeks of low mood, fatigue,\ninsomnia, and feelings of worthlessness. Which of the following is\nthe most likely diagnosis?",
-      "o": [
-        {
-          "l": "A",
-          "t": "Adjustment disorder"
-        },
-        {
-          "l": "B",
-          "t": "Major depressive disorder"
-        },
-        {
-          "l": "C",
-          "t": "Persistent depressive disorder"
-        },
-        {
-          "l": "D",
-          "t": "Bipolar | disorder"
-        },
-        {
-          "l": "E",
-          "t": "Grief reaction"
-        }
-      ],
-      "c": "B",
-      "e": {
-        "A": "Adjustment disorder requires an identifiable stressor within 3 months.",
-        "C": "PDD requires 2+ years duration.",
-        "D": "No manic episodes reported.",
-        "E": "Grief is not a disorder."
-      },
-      "tags": [
-        "Major depressive disorder diagnosis criteria"
-      ],
+      "id": "q001",
+      "questionNumber": 1,
+      "sourceQuestionNumber": 1,
       "retrievalTag": "Major depressive disorder diagnosis criteria",
       "reviewPearl": "MDD requires 5 of 9 SIGECAPS for at least 2 weeks.",
+      "clinicalPearl": null,
+      "stem": "A 28-year-old woman presents with 3 weeks of low mood, fatigue,\ninsomnia, and feelings of worthlessness. Which of the following is\nthe most likely diagnosis?",
+      "hasEmbeddedFigure": false,
+      "figureRefs": [],
+      "answerChoices": [
+        {
+          "label": "A",
+          "text": "Adjustment disorder"
+        },
+        {
+          "label": "B",
+          "text": "Major depressive disorder"
+        },
+        {
+          "label": "C",
+          "text": "Persistent depressive disorder"
+        },
+        {
+          "label": "D",
+          "text": "Bipolar | disorder"
+        },
+        {
+          "label": "E",
+          "text": "Grief reaction"
+        }
+      ],
+      "correctAnswer": "B",
       "educationalObjective": "Diagnose major depressive disorder.",
-      "correctBlurb": "<div class=\"ngj-exp-section\"><strong>Correct Answer Explanation</strong><p>Patient meets DSM-5 criteria with 5+ SIGECAPS for 2 weeks.</p></div><div class=\"ngj-exp-section\"><strong>Incorrect Answer Explanations</strong><p><strong>A.</strong> Adjustment disorder requires an identifiable stressor within 3 months.</p><p><strong>C.</strong> PDD requires 2+ years duration.</p><p><strong>D.</strong> No manic episodes reported.</p><p><strong>E.</strong> Grief is not a disorder.</p></div><div class=\"ngj-exp-section\"><strong>Clinical Pearl</strong><p>MDD requires 5 of 9 SIGECAPS for at least 2 weeks.</p></div>",
-      "metadata": {
-        "sourceType": "nbme-pdf-json-generator",
-        "sourceQuestionNumber": 1,
-        "sourceId": "q001",
-        "retrievalTag": "Major depressive disorder diagnosis criteria",
-        "reviewPearl": "MDD requires 5 of 9 SIGECAPS for at least 2 weeks.",
-        "hasEmbeddedFigure": false,
-        "figureRefs": [],
-        "tables": [],
-        "sharedGroup": null,
-        "extractionWarnings": [],
-        "explanationSections": [
-          {
-            "heading": "Correct Answer Explanation",
-            "body": [
-              "Patient meets DSM-5 criteria with 5+ SIGECAPS for 2 weeks."
-            ]
-          },
-          {
-            "heading": "Incorrect Answer Explanations",
-            "body": [
-              "A. Adjustment disorder requires an identifiable stressor within 3 months.",
-              "C. PDD requires 2+ years duration.",
-              "D. No manic episodes reported.",
-              "E. Grief is not a disorder."
-            ]
-          },
-          {
-            "heading": "Clinical Pearl",
-            "body": [
-              "MDD requires 5 of 9 SIGECAPS for at least 2 weeks."
-            ]
-          }
-        ],
-        "schemaVersion": "nbme-gemini-json-v1",
-        "figureAttachments": {},
-        "sourceFormat": "normalized-json",
-        "importedAt": "2026-05-19T15:56:25.465776+00:00"
-      }
+      "explanationSections": [
+        {
+          "heading": "Correct Answer Explanation",
+          "body": [
+            "Patient meets DSM-5 criteria with 5+ SIGECAPS for 2 weeks."
+          ]
+        },
+        {
+          "heading": "Incorrect Answer Explanation",
+          "body": [
+            "A. Adjustment disorder requires an identifiable stressor within 3 months.",
+            "C. PDD requires 2+ years duration.",
+            "D. No manic episodes reported.",
+            "E. Grief is not a disorder."
+          ]
+        },
+        {
+          "heading": "Clinical Pearl",
+          "body": [
+            "MDD requires 5 of 9 SIGECAPS for at least 2 weeks."
+          ]
+        }
+      ],
+      "tables": [],
+      "sharedGroup": null,
+      "extractionWarnings": []
     }
   ]
 }

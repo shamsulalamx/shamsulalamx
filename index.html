@@ -2003,9 +2003,13 @@ body.quiz-fullscreen-mode .modal-overlay {
         </div>
         <div class="form-group">
           <label class="form-label">Target folder</label>
-          <select class="form-input" id="ngj-folder-select" onchange="App.updateNbmeGeminiJsonSaveReadiness()">
+          <select class="form-input" id="ngj-folder-select" onchange="App._onNgjFolderChange()">
             <option value="">— choose folder —</option>
           </select>
+        </div>
+        <div id="ngj-new-sub-row" style="display:none;" class="form-group">
+          <label class="form-label">New Folder Name</label>
+          <input type="text" class="form-input" id="ngj-new-sub-name" autocomplete="off" placeholder="e.g. Psychiatry" oninput="App.updateNbmeGeminiJsonSaveReadiness()">
         </div>
       </div>
       <div class="ngj-confirm-row">
@@ -22848,27 +22852,63 @@ const App = (() => {
     document.getElementById('ngj-save-error').style.display = 'none';
     document.getElementById('ngj-save-btn').disabled = true;
 
-    // Populate folder select
+    // Populate folder select (grouped by source, with "New subfolder" per source)
     const sel = document.getElementById('ngj-folder-select');
     if (sel) {
       sel.innerHTML = '<option value="">— choose folder —</option>';
-      const folders = DB.getFolders ? DB.getFolders() : (DB.get ? DB.get().folders : []);
-      if (Array.isArray(folders)) {
-        folders.forEach(f => {
+      const allSources = DB.getSourceFolders();
+      const allFolders = DB.getFolders();
+      allSources.forEach(src => {
+        const subs = allFolders.filter(f => (f.sourceId || 'src-nbme') === src.id);
+        const grp = document.createElement('optgroup');
+        grp.label = src.name;
+        subs.forEach(f => {
           const opt = document.createElement('option');
-          opt.value = f.id;
+          opt.value = 'fid:' + f.id;
           opt.textContent = f.name;
           if (_currentFolder && f.id === _currentFolder) opt.selected = true;
-          sel.appendChild(opt);
+          grp.appendChild(opt);
         });
-      }
+        const newSubOpt = document.createElement('option');
+        newSubOpt.value = 'newsub:' + src.id;
+        newSubOpt.textContent = '＋ New folder in "' + src.name + '"…';
+        grp.appendChild(newSubOpt);
+        sel.appendChild(grp);
+      });
     }
+    document.getElementById('ngj-new-sub-row').style.display = 'none';
+    document.getElementById('ngj-new-sub-name').value = '';
     document.getElementById('modal-nbme-gemini-json').style.display = 'flex';
     setTimeout(() => document.getElementById('ngj-raw-text')?.focus(), 80);
   }
 
   function closeNbmeGeminiJsonImportModal() {
     document.getElementById('modal-nbme-gemini-json').style.display = 'none';
+  }
+
+  function _onNgjFolderChange() {
+    const val = (document.getElementById('ngj-folder-select')?.value || '');
+    const isNewSub = val.startsWith('newsub:');
+    document.getElementById('ngj-new-sub-row').style.display = isNewSub ? 'block' : 'none';
+    if (isNewSub) setTimeout(() => document.getElementById('ngj-new-sub-name')?.focus(), 80);
+    updateNbmeGeminiJsonSaveReadiness();
+  }
+
+  // Resolves the current NGJ folder selection into a real folderId string.
+  // Creates the folder if "newsub:" was chosen. Returns null on validation failure.
+  function _resolveNgjFolderId(errEl) {
+    function showErr(msg) { if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; } else { toast(msg, 4000); } }
+    const selVal = (document.getElementById('ngj-folder-select')?.value || '');
+    if (selVal.startsWith('fid:')) {
+      return selVal.slice('fid:'.length);
+    } else if (selVal.startsWith('newsub:')) {
+      const srcId   = selVal.slice('newsub:'.length);
+      const subName = (document.getElementById('ngj-new-sub-name')?.value || '').trim();
+      if (!subName) { showErr('Enter a name for the new folder.'); return null; }
+      return DB.createFolder(subName, srcId).id;
+    } else {
+      showErr('Select a target folder.'); return null;
+    }
   }
 
   function clearNbmeGeminiJsonImportState() {
@@ -23626,7 +23666,9 @@ const App = (() => {
     }
 
     const testName = (document.getElementById('ngj-test-name')?.value || '').trim();
-    const folderId = document.getElementById('ngj-folder-select')?.value || '';
+    const folderVal = document.getElementById('ngj-folder-select')?.value || '';
+    const folderOk  = folderVal.startsWith('fid:') ||
+      (folderVal.startsWith('newsub:') && (document.getElementById('ngj-new-sub-name')?.value || '').trim());
     const confirmed = document.getElementById('ngj-confirm-check')?.checked || false;
     const hasBlockingErrors = !st.validation.isValid;
     const validCount = st.validation.counts.validQuestions || 0;
@@ -23637,7 +23679,7 @@ const App = (() => {
     const reasons = [];
     if (hasBlockingErrors) reasons.push('fix blocking errors');
     if (!testName) reasons.push('enter a test name');
-    if (!folderId) reasons.push('select a target folder');
+    if (!folderOk) reasons.push('select a target folder');
     if (!confirmed) reasons.push('check the confirmation checkbox');
 
     if (reasons.length === 0) {
@@ -23655,7 +23697,7 @@ const App = (() => {
     if (validBtn) {
       const partialReasons = [];
       if (!testName) partialReasons.push('enter a test name');
-      if (!folderId) partialReasons.push('select a target folder');
+      if (!folderOk) partialReasons.push('select a target folder');
       if (!confirmed) partialReasons.push('check the confirmation checkbox');
 
       if (hasBlockingErrors && validCount > 0) {
@@ -23780,13 +23822,13 @@ const App = (() => {
     if (!st || !st.validation || !st.validation.isValid) { toast('Validation errors must be resolved first.', 4000); return; }
 
     const testName = (document.getElementById('ngj-test-name')?.value || '').trim();
-    const folderId = document.getElementById('ngj-folder-select')?.value || '';
     const confirmed = document.getElementById('ngj-confirm-check')?.checked || false;
     const errEl = document.getElementById('ngj-save-error');
 
     if (!testName) { toast('Enter a test name.'); return; }
-    if (!folderId) { toast('Select a target folder.'); return; }
     if (!confirmed) { toast('Check the confirmation checkbox.'); return; }
+    const folderId = _resolveNgjFolderId(errEl);
+    if (!folderId) return;
 
     const items = st.normalizedItems || [];
     if (!items.length) { toast('No normalized questions to save.'); return; }
@@ -23871,13 +23913,13 @@ const App = (() => {
     if (!st || !st.validation) { toast('No validation data. Upload and validate a JSON file first.', 4000); return; }
 
     const testName = (document.getElementById('ngj-test-name')?.value || '').trim();
-    const folderId = document.getElementById('ngj-folder-select')?.value || '';
     const confirmed = document.getElementById('ngj-confirm-check')?.checked || false;
     const errEl = document.getElementById('ngj-save-error');
 
     if (!testName) { toast('Enter a test name.'); return; }
-    if (!folderId) { toast('Select a target folder.'); return; }
     if (!confirmed) { toast('Check the confirmation checkbox.'); return; }
+    const folderId = _resolveNgjFolderId(errEl);
+    if (!folderId) return;
 
     // Build a set of valid question numbers from questionResults
     const validNums = new Set(
@@ -24397,6 +24439,7 @@ const App = (() => {
     confirmLandingJsonImport,
     openNbmeGeminiJsonImportModal,
     closeNbmeGeminiJsonImportModal,
+    _onNgjFolderChange,
     clearNbmeGeminiJsonImportState,
     handleNbmeGeminiJsonFileUpload,
     parseNbmeGeminiJson,
