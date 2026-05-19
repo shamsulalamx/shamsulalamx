@@ -1,0 +1,15 @@
+# ── OME PDF Question Generator — ignored paths ────────────────────────────────
+#
+# Source code, prompts, and README are tracked.
+# Generated outputs, run logs, and real OME PDFs are NOT tracked.
+
+# All pipeline outputs — regenerable
+output_json/
+
+# Run logs — timestamped, accumulate per-run, not versioned
+reports/
+
+# Input PDF files — OME lesson PDFs may be large or subject to copyright
+# Exception: test_ome_mood_disorders.pdf is the 3 KB synthetic test fixture (stays tracked)
+input_pdfs/*
+!input_pdfs/test_ome_mood_disorders.pdf

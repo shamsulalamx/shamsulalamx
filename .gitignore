@@ -6,3 +6,8 @@ node_modules/
 
 dist/
 .claude/
+
+# ── Tool pipeline outputs (belt-and-suspenders; per-tool .gitignore handles exceptions) ──
+# These are always regenerable artifacts — never commit them.
+tools/*/output_json/
+tools/*/reports/

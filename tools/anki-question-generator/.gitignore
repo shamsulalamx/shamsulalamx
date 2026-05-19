@@ -1,0 +1,15 @@
+# ── Anki Question Generator — ignored paths ───────────────────────────────────
+#
+# Source code, prompts, schema, and README are tracked.
+# Generated outputs, run logs, and source notes are NOT tracked.
+
+# All pipeline outputs — regenerable
+output_json/
+
+# Run logs — timestamped, accumulate per-run, not versioned
+reports/
+
+# Input source files — potentially proprietary Anki deck content
+# Exception: test_medicine_anki.txt is the canonical 14 KB dry-run fixture (stays tracked)
+input_notes/*
+!input_notes/test_medicine_anki.txt

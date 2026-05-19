@@ -1,0 +1,15 @@
+# ── UWorld Notes Generator — ignored paths ────────────────────────────────────
+#
+# Source code, prompts, schema, and README are tracked.
+# Generated outputs, run logs, and source notes are NOT tracked.
+
+# All pipeline outputs — regenerable
+output_json/
+
+# Run logs — timestamped, accumulate per-run, not versioned
+reports/
+
+# Input source files — potentially proprietary UWorld content
+# Exception: test_cardiology.txt is the canonical 2 KB dry-run fixture (stays tracked)
+input_notes/*
+!input_notes/test_cardiology.txt

@@ -1,0 +1,16 @@
+# ── NBME PDF Generator — ignored paths ────────────────────────────────────────
+#
+# Source code, prompts, schema, and README are tracked.
+# Everything else is a generated artifact or a potentially copyrighted source file.
+
+# All pipeline outputs — regenerable from source PDFs
+output_json/
+
+# Run logs — timestamped, accumulate per-run, not versioned
+reports/
+
+# Source PDF files
+# NBME shelf exam PDFs are potentially copyrighted and large (60–70 MB each).
+# Known-good regression reference lives in test-assets/known-good/ instead.
+# There is intentionally no committed "safe" test PDF for this tool.
+input_pdfs/
