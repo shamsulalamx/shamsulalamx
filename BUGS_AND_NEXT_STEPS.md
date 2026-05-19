@@ -1,6 +1,6 @@
 # BUGS AND NEXT STEPS
 
-**Last updated:** 2026-05-18 (Focus mode, timer system, flashcards, incorrects generation, font sync)  
+**Last updated:** 2026-05-18 (HEAD: `81e11f5` — editable notes, persistent highlights, review later, mark reasons, performance summaries, Electron close fix, expanded search, responsive resizing)
 **Purpose:** Active bug tracker and prioritized work queue. Contains all unresolved issues and pending validations. Update this file as items are resolved.
 
 ---
@@ -166,7 +166,7 @@ Both files are now 1,073,458 bytes.
 
 ## PENDING VALIDATION (code written but not end-to-end tested)
 
-### [VAL-001] Explanation rendering end-to-end test — ✅ VALIDATED
+### [VAL-001] Explanation rendering end-to-end test — ✅ VALIDATED (2026-05-13)
 
 Confirmed working: blue "Educational Objective" box, structured explanation sections (with correct inter-section spacing), and per-choice rationales all render correctly for Psych_Shelf_8 Q1.
 
@@ -185,12 +185,14 @@ Confirmed working: blue "Educational Objective" box, structured explanation sect
 
 ### [VAL-003] "Save valid questions only" Phase 3
 
-**Status:** Partially implemented. Verify whether `saveValidNbmeGeminiJsonQuestionsOnly` has a complete function body or is just a stub.
+**Status:** ✅ IMPLEMENTED (`e29420c`). Needs runtime smoke test.
 
-**What to test:**
-1. Import a JSON file with some invalid questions (e.g., missing choices)
-2. In the import modal, check whether a "Save valid questions only" button appears
-3. Verify it saves only questions that passed validation, skipping errored ones
+`saveValidNbmeGeminiJsonQuestionsOnly()` is fully implemented. It filters `_nbmeGeminiJsonImport.validation.questionResults` to `isValid === true`, builds question payloads with correct metadata, calls `DB.createTest()` + `DB.updateTest()`, and reports skipped count in toast. Figure-attachment size warning (3 MB threshold) also present.
+
+**What to smoke test:**
+1. Import a JSON file with at least one invalid question (e.g., missing choices)
+2. In the import modal, confirm "Save valid questions only" button appears and is clickable
+3. Verify: only valid questions saved; toast shows skipped count; test appears in library correctly
 
 ---
 
@@ -465,6 +467,98 @@ Gemini-powered "Generate Missing Tags & Pearls" is deferred until after the exam
 - `compareStemChoiceFont` fixed to use `#options-list` as canonical choice reference
 
 **Commits:** `dab7678`, `ab9c060`, `d11b66e`
+
+---
+
+---
+
+## COMPLETED — 2026-05-18: Second session (e29420c → 81e11f5)
+
+### [FEAT-013] Block validate save — ✅ COMPLETE (`e29420c`)
+
+`saveValidNbmeGeminiJsonQuestionsOnly()` implemented. Filters normalized items to `isValid === true`, persists with full metadata, reports skipped count. Resolves VAL-003 (implementation complete; runtime smoke test pending).
+
+---
+
+### [FEAT-014] Editable saved notes — ✅ COMPLETE (`686e75c`)
+
+- `DB.updateNote(id, newText)` added to DB layer and exposed in public API
+- Notes panel: each note shows Edit button; click enters inline textarea with Save/Cancel
+- `App.startNoteEdit / saveNoteEdit / cancelNoteEdit` exposed on `window.App`
+- Auto-focuses textarea at end of content on edit entry
+
+---
+
+### [FEAT-015] Persistent stem highlights — ✅ COMPLETE (`985cfd0`)
+
+- `DB.getStemHighlights / setStemHighlight / clearStemHighlights` added to DB layer
+- Stored `db.stemHighlights[testId][String(qIdx)]`, separate from attempt results
+- `saveHighlight()` and `saveHighlightPart()` in Quiz module now call `DB.setStemHighlight()` on every write
+- Highlights loaded from DB on both `startTest()` and `resumeTest()`
+- `stemHighlights` included in Drive backup manifest and restore path
+
+**Key distinction:** The Drive manifest serializer excludes a key named `highlights` — this refers to IndexedDB figure/image blob data, NOT to `db.stemHighlights`. Stem highlights are stored at the top level of `db` and are correctly included.
+
+---
+
+### [FEAT-016] Review Later quick notes — ✅ COMPLETE (`e0bb2e8`)
+
+- `🗒️ Review Later` button in quiz top bar → `#modal-review-later` modal
+- Notes stored as `type:'reviewLater'` in `db.notes[]` via `DB.addNote()`
+- Normal Notes view (`showNotes()`) filters these OUT
+- `showReviewLater()` sidebar panel filters to only `type:'reviewLater'`
+- `#nav-review-later` sidebar nav item between Notes and Flashcards
+- Context shows test name + question number in modal header
+
+---
+
+### [FEAT-017] Mark reasons — ✅ COMPLETE (`608a1c7`)
+
+- `#modal-mark-reason` modal: optional reason textarea; Cancel/Unmark, Skip, Save
+- `DB.getMarkReason / setMarkReason / clearMarkReason` added — `db.markReasons[testId][String(qIdx)]` with `createdAt`/`updatedAt`
+- `markReasons` included in Drive backup manifest and restore path
+- `Quiz.toggleMark()` updated: mark → persist first → open reason modal; unmark → silent (no modal)
+- `.marked-item-reason` CSS class renders reason with amber left-border in marked items list
+
+**Critical invariant:** `db.markReasons` is stored separately from `db.marks` because `syncMarks()` rebuilds `db.marks` wholesale on test finish. Do not merge these.
+
+---
+
+### [FEAT-018] Lightweight performance summaries — ✅ COMPLETE (`130f531`)
+
+- `getPerformanceStatsForScope(tests)` — computes testsCreated, completed, in-progress, questionsGenerated/answered, avgScore from DB history
+- `renderPerformanceSummary(stats)` — flex row of stat cards; returns `''` when no tests exist
+- Injected above test grid in: subfolder view, source landing, source folder page
+- CSS: `.perf-summary`, `.perf-stat`, `.perf-stat-value`, `.perf-stat.accent`
+
+---
+
+### [FEAT-019] Electron app close and reload — ✅ COMPLETE (`60cc867`)
+
+**Changes to `electron/main.js` only:**
+- `buildAppMenu(win)` — full macOS `Menu.buildFromTemplate`: Cmd+R (reload), Cmd+Shift+R (hard reload), standard Edit/View/Window roles
+- `will-prevent-unload` override — prevents Drive's `beforeunload` handler from silently swallowing window close
+- Two-pass `win.on('close')` handler: defers close, flushes `saveGoogleDriveNow()` + `DB.save()` via `executeJavaScript` (3s timeout), then closes
+
+---
+
+### [FEAT-020] Expanded search indexing with highlighted snippets — ✅ COMPLETE (`415fa79`)
+
+- `_stripSearchHtml(s)` — strips HTML tags/entities before indexing/display
+- `buildQuestionSearchFields(q)` — priority-ordered `{label, text}` pairs: stem → tags (all variants) → pearls → choices → explanations (all format-specific fields)
+- `buildHighlightedSnippet(text, query)` — 300-char context window with `<mark class="search-hl">` on all case-insensitive matches; regex-injection safe
+- Search deduplicates by `testId__idx`; first-priority-matching field wins
+- `.search-hl { background: #fff176 }` for yellow in-card highlighting
+
+---
+
+### [FEAT-021] Responsive app resizing — ✅ COMPLETE (`81e11f5`)
+
+CSS-only changes:
+- `@media (max-width: 1280px)` breakpoint narrows sidebar to 160px
+- `body { overflow-x: hidden }` prevents horizontal scrollbar
+- `clamp()`/`min()` values throughout: topbar padding, topbar-right gap, home padding, search width, grid minmax, perf-stat sizing, quiz topbar padding
+- No functional changes; no transform:scale hacks
 
 ---
 

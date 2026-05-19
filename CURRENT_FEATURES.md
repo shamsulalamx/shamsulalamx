@@ -1,6 +1,6 @@
 # NBME Self-Assessment Suite — Current Features
 
-**Last updated:** 2026-05-18  
+**Last updated:** 2026-05-18 (HEAD: `81e11f5`)
 **Purpose:** Complete inventory of all currently implemented features. Does not cover planned/deferred features — see `BUGS_AND_NEXT_STEPS.md`.
 
 ---
@@ -18,10 +18,11 @@
 
 ### Test Operations
 - Create, rename, delete tests
-- Mark questions, flag questions, add per-question notes
+- Mark questions (with optional reason), flag questions, add per-question notes
 - Track: correct/incorrect/unanswered per question, time per question, total elapsed
 - Score history per test (multiple attempts)
-- Search across all tests and questions
+- Search across all tests and questions (all field types indexed; highlighted matches)
+- Performance summary cards: tests created/completed/in-progress, questions answered, avg score — shown above test grids
 
 ---
 
@@ -71,11 +72,13 @@
 
 ### Other Quiz Features
 - Gemini-powered hints (one per question; `callGeminiDirect` — works browser + Electron)
-- Question highlighting (yellow highlighter)
+- Question highlighting (yellow highlighter) — **persists across pause/resume/restart** (`db.stemHighlights[testId][qIdx]`; Drive-synced)
 - Text zoom / font-size control (stem and choices synchronized via `_applyQuestionFontSize`)
 - Lab values panel (slide-in panel for reference lab values)
 - Calculator
 - Labs and tutor controls in bottom quiz panel
+- **Mark reasons:** When marking a question, a modal prompts for an optional reason note; reason displayed in the marked items panel. `db.markReasons[testId][qIdx]` — Drive-synced.
+- **Review Later button:** `🗒️ Review Later` in quiz top bar — opens a quick-note modal with test+question context. Notes stored as `type:'reviewLater'` in DB, accessible from sidebar.
 
 ---
 
@@ -97,6 +100,29 @@
 - Includes: score summary, answer choice pills, per-question explanation, `retrievalTag`, `reviewPearl`
 - Educational Objective, correct blurb sections, per-choice rationales all included
 - PDF layout is sensitive to font state and page breaks — do not modify jsPDF calls carelessly
+
+---
+
+## Notes System
+
+Three distinct note types, all stored in `DB.getNotes()` (`db.notes[]`):
+
+### Study Notes (type: default)
+- Selected during explanation review → "Add to Notes"
+- Editable inline: **Edit** button in Notes panel opens an inline textarea; Save/Cancel controls (`DB.updateNote()`)
+- Notes panel (`App.showNotes()`) — accessible from sidebar nav → Notes
+- Organized by test via section groups
+
+### Review Later Notes (type: `'reviewLater'`)
+- Added via `🗒️ Review Later` button in quiz top bar during an active test
+- Modal shows test + question context; Ctrl/Cmd+Enter to save
+- Stored with `type:'reviewLater'` — invisible in the main Notes panel
+- Accessible from sidebar nav → Review Later (`App.showReviewLater()`)
+- Also editable inline with Edit/Delete buttons
+
+### Import from DOCX
+- Notes can be bulk-imported from a DOCX file (OCR import path)
+- Preview modal before saving
 
 ---
 
@@ -144,6 +170,7 @@ Generates a focused practice test from wrong answers:
 - Lab value tables (from `tables[]` or `figureRef.visibleText`)
 - Two-phase sanitizer: UI artifact removal (Phase A) + OCR separator removal (Phase B)
 - Retrieval Tag and Review Pearl support (`retrievalTag`, `reviewPearl` fields)
+- **"Save valid questions only"** (`saveValidNbmeGeminiJsonQuestionsOnly()`): saves only questions where `validation.questionResults[i].isValid === true`; reports skipped count in toast
 - Validated: Psych Shelf 3–8 (300 questions), UWorld Notes (enhanced)
 
 ### UWorld DOCX
@@ -273,5 +300,5 @@ Document-only storage (not a quiz source):
 - `.apkg` file support (Anki)
 - OCR fallback for OME (short high-quality PDFs only in v1)
 - VAL-002: Figure rendering end-to-end validation (Psych_Shelf_8 Q25/Q34/Q48)
-- VAL-003: "Save valid questions only" button
+- VAL-003: ✅ "Save valid questions only" button — implemented `e29420c` (runtime smoke test still pending)
 - VAL-004: Shared-group rendering validation (Psych_Shelf_3 Q33–Q36)

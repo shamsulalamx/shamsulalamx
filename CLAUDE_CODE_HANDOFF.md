@@ -1,6 +1,6 @@
 # CLAUDE CODE HANDOFF — NBME Self-Assessment Suite
 
-**Last updated:** 2026-05-18  
+**Last updated:** 2026-05-18 (HEAD: `81e11f5`)
 **Purpose:** Primary onboarding document for any new Claude Code session. Read this first. Then read `CURRENT_ARCHITECTURE.md`, `DEBUGGING_PITFALLS.md`, and `PROJECT_STATUS_2026-05-18.md`.
 
 ---
@@ -92,7 +92,10 @@ A personal study tool for NBME medical board exam preparation. It:
 - Focus mode (fullscreen) — hides all app chrome; `body.quiz-fullscreen-mode`
 - Question navigation panel with active-question highlighting
 - Tutor mode (immediate feedback) and block mode (deferred feedback)
-- Answer highlighting, notes, marks, flags
+- Answer highlighting, notes, marks (with reason modal), flags
+- **Persistent stem highlights** — survive pause/resume/restart; stored `db.stemHighlights[testId][qIdx]`; Drive-synced
+- **Mark reasons** — optional reason modal on mark; `db.markReasons[testId][qIdx]`; Drive-synced
+- **Review Later button** — quick note from quiz top bar; `type:'reviewLater'` notes; sidebar panel
 - Gemini-powered hints (`callGeminiDirect` — works in browser and Electron)
 - Lab values panel, calculator
 - Zoom / font-size control; stem and choice font-size synchronized
@@ -147,6 +150,7 @@ A personal study tool for NBME medical board exam preparation. It:
 - Folder → Subfolder → Tests hierarchy
 - Incorrects folder for generated incorrects tests
 - Miscellaneous Documents: file storage (PDF, DOCX, TXT, RTF, MD, PNG, JPG), now with subfolders
+- **Performance summary cards** above each test grid: tests created/completed/in-progress, questions answered, avg score (`getPerformanceStatsForScope` + `renderPerformanceSummary`)
 
 ### Gemini Integration
 - **Hints and tagging:** `callGeminiDirect()` — direct `fetch` to Gemini API from renderer. Works in browser and Electron. Key stored in `db.settings.geminiApiKey` + mirrored to `localStorage('nbme_gemini_key_v1')`.
@@ -155,13 +159,19 @@ A personal study tool for NBME medical board exam preparation. It:
 - **Export safety:** All downloadable JSON exports use `safeExportJson()` which strips `geminiApiKey` at any depth. The key NEVER appears in downloads.
 - **Model:** `gemini-2.5-flash` (hardcoded constant — do not change without a documented reason).
 
+### Search
+- `buildQuestionSearchFields(q)` — ordered `{label, text}` pairs covering stem → tags → pearls → choices → explanations (all field variants for all import formats)
+- `buildHighlightedSnippet(text, query)` — 300-char window with `<mark class="search-hl">` on matches; regex-injection safe
+- First-priority-matching field wins; one result per question (deduped by `testId__idx`)
+- `q.retrievalTag` used as primary tag display in search cards
+
 ### Persistence
 | Storage | Contents |
 |---------|----------|
-| `localStorage` (`nbme_app_v1`) | Test metadata, folders, marks, flags, notes, history, settings (including Gemini key) |
+| `localStorage` (`nbme_app_v1`) | Test metadata, folders, marks, flags, notes, history, settings (including Gemini key), `stemHighlights`, `markReasons` |
 | IndexedDB (`FigureStore`) | Stem/exhibit images, figures |
 | IndexedDB (`MiscDocStore`, `nbme_misc_docs_v1`) | Miscellaneous Documents file blobs + metadata |
-| Google Drive — main manifest | Full DB snapshot: tests, folders, history, settings, Gemini key |
+| Google Drive — main manifest | Full DB snapshot: tests, folders, history, settings, Gemini key, `stemHighlights`, `markReasons` |
 | Google Drive — `NBME_MiscDocs_backup.json` | Misc doc blobs (separate file) |
 
 ### Google Drive / OAuth
@@ -203,6 +213,9 @@ A personal study tool for NBME medical board exam preparation. It:
 - **Do not use `prompt()` or `confirm()`** in any Electron save flow — use inline modal UI instead.
 - **Do not change the Gemini model string** from `gemini-2.5-flash` without a documented reason.
 - **Do not commit `dist/` as source of truth** — it's generated.
+- **Do not remove `will-prevent-unload` override in `electron/main.js`** — without it the Drive `beforeunload` handler silently swallows window close (the red X does nothing).
+- **Do not call `syncMarks()` in a way that overwrites `db.markReasons`** — mark reasons are stored separately (`db.markReasons`) precisely because `syncMarks` rebuilds `db.marks` wholesale on test finish.
+- **Do not strip `stemHighlights` from the Drive manifest serializer** — the `highlights` key exclusion in the serializer refers to IndexedDB figure/image blobs, not stem highlights.
 
 ---
 

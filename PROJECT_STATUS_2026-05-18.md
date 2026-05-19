@@ -33,8 +33,8 @@ Frozen bundle — invisible to source edits. Use `npm run electron:build:mac` fo
 
 | Branch | HEAD | Notes |
 |---|---|---|
-| `main` | `be965b2` | GitHub Pages source; all app work |
-| `origin/main` | `be965b2` | In sync with local main |
+| `main` | `81e11f5` | GitHub Pages source; all app work |
+| `origin/main` | `81e11f5` | In sync with local main |
 
 ---
 
@@ -71,7 +71,7 @@ Single-file SPA: `index.html` (~21,700+ lines). All HTML, CSS, JS inline.
 
 ## 5. What Changed on 2026-05-18 (Today)
 
-Full details: `RECENT_MAJOR_CHANGES.md`. Summary:
+Full details: `RECENT_MAJOR_CHANGES.md`. Summary of first session (commits up to `72cd243`):
 
 | Area | Change |
 |---|---|
@@ -87,6 +87,20 @@ Full details: `RECENT_MAJOR_CHANGES.md`. Summary:
 | **Nav active state** | Active question highlighting improved in navigation panel |
 | **Electron packaging** | Fixed: runtime files now included in packaged app |
 | **Debug cleanup** | All noisy debug logs removed |
+
+Summary of second session (commits `e29420c` → `81e11f5`):
+
+| Area | Change |
+|---|---|
+| **Block validate save** | `saveValidNbmeGeminiJsonQuestionsOnly()` fully implemented (VAL-003 resolved) |
+| **Editable notes** | `DB.updateNote()` + inline edit UI in Notes panel |
+| **Persistent highlights** | Stem highlights survive pause/resume/restart; Drive-synced under `db.stemHighlights` |
+| **Review Later** | New `type:'reviewLater'` note type; quiz top-bar button; sidebar panel; separate from study notes |
+| **Mark reasons** | Mark reason modal; `db.markReasons` storage; displayed in marked items list |
+| **Performance summaries** | Stat cards (tests completed, in-progress, avg score) above test grids |
+| **Electron close/reload** | `will-prevent-unload` fix; 3s flush-then-close; `buildAppMenu` with Cmd+R/Cmd+Shift+R |
+| **Search indexing** | All field types indexed (tags, pearls, explanations, choices); highlighted snippets |
+| **Responsive resizing** | `clamp()`/`min()` CSS; sidebar breakpoint at 1280px; horizontal overflow fix |
 
 ---
 
@@ -193,10 +207,12 @@ Untracked test data files (not committed — local only):
 | Item | Status |
 |---|---|
 | VAL-002: Figure rendering (Psych_Shelf_8 Q25/Q34/Q48) | ⏳ Not yet end-to-end tested |
-| VAL-003: "Save valid questions only" button | ⏳ Verify whether stub or complete |
+| VAL-003: "Save valid questions only" button | ✅ Implemented (`e29420c`) — needs runtime smoke test |
 | VAL-004: Shared-group rendering (Psych_Shelf_3 Q33–Q36) | ⏳ Not yet end-to-end tested |
 | Cross-device Drive restore (incognito + school Windows) | ⏳ School browser retest pending |
 | Pearl flashcard Drive sync validation | ⏳ Not yet tested cross-device |
+| Stem highlight persistence cross-device (Drive restore) | ⏳ `stemHighlights` included in manifest — not yet validated on restore |
+| Mark reason persistence cross-device (Drive restore) | ⏳ `markReasons` included in manifest — not yet validated on restore |
 
 ---
 

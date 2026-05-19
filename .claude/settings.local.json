@@ -4,7 +4,9 @@
       "Bash(awk -F: '$1<=636')",
       "Bash(awk -F: '$1>636')",
       "Bash(open *)",
-      "Bash(node *)"
+      "Bash(node *)",
+      "Bash(git diff *)",
+      "Bash(git add *)"
     ]
   }
 }
