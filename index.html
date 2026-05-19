@@ -1252,6 +1252,10 @@ body.quiz-fullscreen-mode .modal-overlay {
           <span class="item-icon">📝</span>
           <span class="item-label">Notes</span>
         </div>
+        <div class="sidebar-item" onclick="App.showReviewLater()" id="nav-review-later">
+          <span class="item-icon">🗒️</span>
+          <span class="item-label">Review Later</span>
+        </div>
         <div class="sidebar-item" onclick="App.showFlashcards()" id="nav-flashcards">
           <span class="item-icon">🃏</span>
           <span class="item-label">Flashcards</span>
@@ -1335,6 +1339,7 @@ body.quiz-fullscreen-mode .modal-overlay {
               <button class="quiz-btn" id="btn-mark" onclick="Quiz.toggleMark(Quiz.getState()?.qIdx)">📌 Mark</button>
               <button class="quiz-btn btn-pause" onclick="Quiz.pauseTest()">⏸ Pause</button>
               <button id="btn-hint" class="quiz-btn" onclick="requestHint()">💡 Hint</button>
+              <button id="btn-review-later" class="quiz-btn" onclick="App.openReviewLaterModal()" title="Save a quick note to review later">🗒️ Review Later</button>
               <button id="btn-quiz-fullscreen" class="quiz-btn" onclick="Quiz.toggleQuizFullscreen()" title="Toggle focus mode">⛶ Focus</button>
             </div>
           </div>
@@ -2515,6 +2520,21 @@ body.quiz-fullscreen-mode .modal-overlay {
     <div class="modal-actions">
       <button class="btn-modal" onclick="App._cancelIncorrectsSave()">Cancel</button>
       <button class="btn-modal primary" onclick="App._confirmIncorrectsSave()">Save &amp; Start</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ REVIEW LATER MODAL ═══ -->
+<div id="modal-review-later" class="modal-overlay">
+  <div class="modal-box" style="max-width:420px;">
+    <h3>Review Later</h3>
+    <div id="review-later-ctx" style="font-size:12px;color:#9ab8d0;margin-bottom:10px;min-height:1em;"></div>
+    <div class="form-group">
+      <textarea id="review-later-text" class="form-input" rows="4" style="resize:vertical;width:100%;box-sizing:border-box;" placeholder="Quick note to review later…" onkeydown="if(event.key==='Enter'&&(event.ctrlKey||event.metaKey))App.saveReviewLaterNote()"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal" onclick="App.closeReviewLaterModal()">Cancel</button>
+      <button class="btn-modal primary" onclick="App.saveReviewLaterNote()">Save</button>
     </div>
   </div>
 </div>
@@ -7942,7 +7962,8 @@ const App = (() => {
   let _ocrIssueIdx = 0;
 	  let _ocrUndoStack = [];
   let _noteSelection  = null;
-  let _editingNoteId  = null;
+  let _editingNoteId    = null;
+  let _rlEditingNoteId  = null;
   let _noteHighlightSeq = 0;
   let _notesImportPreview = null;
   let _nbmeGeminiJsonImport = null;
@@ -8805,7 +8826,7 @@ const App = (() => {
       '<button class="btn-card" onclick="App.openNotesImportPreview()">Import DOCX Preview</button>' +
       '<button class="btn-card" onclick="App.downloadNotesDocx()">Download DOCX</button>' +
       '<button class="btn-card" onclick="App.downloadNotesPdf()">Download PDF</button></div>';
-    const notes = DB.getNotes();
+    const notes = DB.getNotes().filter(n => n.type !== 'reviewLater');
 
     if (!notes.length) {
       content.innerHTML = notesActions + '<div class="no-tests">No notes yet. Select answer explanation text during review, then choose Add to Notes.</div>';
@@ -8869,6 +8890,123 @@ const App = (() => {
     DB.deleteNote(id);
     if (_editingNoteId === id) _editingNoteId = null;
     showNotes();
+    toast('Note deleted.');
+  }
+
+  // ── Review Later ───────────────────────────────────────────
+  function openReviewLaterModal() {
+    const st   = Quiz.getState();
+    const test = st ? DB.getTest(st.testId) : null;
+    const q    = test?.questions?.[st.qIdx];
+    const ctx  = document.getElementById('review-later-ctx');
+    if (ctx) {
+      ctx.textContent = test
+        ? (test.name + ' · Q' + (q?.n ?? (st.qIdx + 1)))
+        : '';
+    }
+    const ta = document.getElementById('review-later-text');
+    if (ta) { ta.value = ''; }
+    document.getElementById('modal-review-later').style.display = 'flex';
+    if (ta) setTimeout(() => ta.focus(), 60);
+  }
+
+  function closeReviewLaterModal() {
+    document.getElementById('modal-review-later').style.display = 'none';
+  }
+
+  function saveReviewLaterNote() {
+    const ta   = document.getElementById('review-later-text');
+    const text = (ta ? ta.value : '').trim();
+    if (!text) { toast('Note cannot be empty.', 3000); return; }
+    const st   = Quiz.getState();
+    const test = st ? DB.getTest(st.testId) : null;
+    const q    = test?.questions?.[st.qIdx];
+    DB.addNote({
+      type:        'reviewLater',
+      testId:      test?.id      || '',
+      testName:    test?.name    || '',
+      folderId:    test?.folderId || '',
+      questionIdx: st?.qIdx      ?? null,
+      questionNum: q?.n          ?? (st ? st.qIdx + 1 : null),
+      source:      'reviewLater',
+      text
+    });
+    closeReviewLaterModal();
+    toast('Saved to Review Later.');
+  }
+
+  function showReviewLater() {
+    _pushNav();
+    _currentView = 'reviewLater';
+    document.getElementById('screen-home').style.display    = 'flex';
+    document.getElementById('screen-quiz').style.display    = 'none';
+    document.getElementById('screen-results').style.display = 'none';
+    document.getElementById('screen-review').style.display  = 'none';
+    document.getElementById('home-title').textContent = 'Review Later';
+    setActiveNav('nav-review-later');
+
+    const content = document.getElementById('home-content');
+    const notes   = DB.getNotes().filter(n => n.type === 'reviewLater');
+
+    if (!notes.length) {
+      content.innerHTML = '<div class="no-tests">No Review Later notes yet. Click 🗒️ Review Later in the quiz top bar to add one.</div>';
+      return;
+    }
+
+    const groups = _buildSectionGroups(notes, n => n.testId);
+    content.innerHTML = _sectionGroupsHTML('review-later', groups, (items) =>
+      '<ul class="notes-list">' +
+      items.map(n => {
+        const qLabel = 'Q' + (n.questionNum != null ? n.questionNum : (n.questionIdx != null ? n.questionIdx + 1 : '?'));
+        const ts     = n.createdAt ? new Date(n.createdAt).toLocaleString() : '';
+        if (n.id === _rlEditingNoteId) {
+          return `<li style="list-style:none;">` +
+            `<textarea id="rl-edit-ta-${n.id}" style="width:100%;min-height:72px;font-size:13px;font-family:inherit;border:1px solid #c8d0da;border-radius:3px;padding:6px 8px;resize:vertical;box-sizing:border-box;">${escapeHTML(n.text)}</textarea>` +
+            `<span class="notes-meta">${escapeHTML(qLabel)}` +
+            `<button class="btn-card" onclick="App.saveRLEdit('${n.id}')" style="margin-left:8px;">Save</button>` +
+            `<button class="btn-card" onclick="App.cancelRLEdit()" style="margin-left:4px;">Cancel</button>` +
+            `</span></li>`;
+        }
+        return `<li>${escapeHTML(n.text)}` +
+          `<span class="notes-meta">${escapeHTML(qLabel)}${ts ? ' · ' + escapeHTML(ts) : ''}` +
+          `<button class="btn-card" onclick="App.startRLEdit('${n.id}')" style="margin-left:8px;">Edit</button>` +
+          `<button class="btn-card" onclick="App.deleteRLNote('${n.id}')" style="margin-left:4px;">Delete</button>` +
+          `</span></li>`;
+      }).join('') +
+      '</ul>'
+    );
+
+    if (_rlEditingNoteId) {
+      const ta = document.getElementById('rl-edit-ta-' + _rlEditingNoteId);
+      if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+    }
+  }
+
+  function startRLEdit(id) {
+    _rlEditingNoteId = id;
+    showReviewLater();
+  }
+
+  function saveRLEdit(id) {
+    const ta      = document.getElementById('rl-edit-ta-' + id);
+    const newText = (ta ? ta.value : '').trim();
+    if (!newText) { toast('Note cannot be empty. Edit or click Cancel.', 4000); return; }
+    const ok = DB.updateNote(id, newText);
+    if (!ok) { toast('Note not found — it may have been deleted.', 3000); }
+    _rlEditingNoteId = null;
+    showReviewLater();
+    if (ok) toast('Note updated.');
+  }
+
+  function cancelRLEdit() {
+    _rlEditingNoteId = null;
+    showReviewLater();
+  }
+
+  function deleteRLNote(id) {
+    DB.deleteNote(id);
+    if (_rlEditingNoteId === id) _rlEditingNoteId = null;
+    showReviewLater();
     toast('Note deleted.');
   }
 
@@ -23628,6 +23766,14 @@ const App = (() => {
     startNoteEdit,
     saveNoteEdit,
     cancelNoteEdit,
+    openReviewLaterModal,
+    closeReviewLaterModal,
+    saveReviewLaterNote,
+    showReviewLater,
+    startRLEdit,
+    saveRLEdit,
+    cancelRLEdit,
+    deleteRLNote,
     openOmePdfImportPreview,
     closeOmePdfImportPreview,
     clearOmePdfImportPreview,
