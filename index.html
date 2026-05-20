@@ -23525,6 +23525,9 @@ const App = (() => {
 	    if (importAttachBtn) {
 	      importAttachBtn.style.display = _nbmeFigureCropState.importTarget ? '' : 'none';
 	      importAttachBtn.disabled = true;
+	      importAttachBtn.textContent = _nbmeFigureCropState.importTarget?.mode === 'manual-upload'
+	        ? 'Replace With Cropped Image'
+	        : 'Attach Cropped Image';
 	    }
 	    if (existingAttachPanel) existingAttachPanel.style.display = _nbmeFigureCropState.importTarget ? 'none' : '';
 	    nbmeFigureAttachResetPanel();
@@ -25329,6 +25332,30 @@ const App = (() => {
 	    };
 	  }
 
+	  function ngjQuestionNumberForFigureRefId(figureRefId) {
+	    const fid = String(figureRefId || '').trim();
+	    if (!fid || !_nbmeGeminiJsonImport?.parsed) return null;
+	    const questions = _nbmeGeminiJsonImport.parsed.questions || [];
+	    for (let idx = 0; idx < questions.length; idx += 1) {
+	      const q = questions[idx] || {};
+	      const qNum = q.questionNumber || idx + 1;
+	      const refs = Array.isArray(q.figureRefs) ? q.figureRefs : [];
+	      if (refs.some(ref => ngjFigureRefId(ref) === fid)) return qNum;
+	    }
+	    return null;
+	  }
+
+	  function ngjFigureRefById(figureRefId) {
+	    const fid = String(figureRefId || '').trim();
+	    const questions = _nbmeGeminiJsonImport?.parsed?.questions || [];
+	    for (const q of questions) {
+	      const refs = Array.isArray(q?.figureRefs) ? q.figureRefs : [];
+	      const match = refs.find(ref => ngjFigureRefId(ref) === fid);
+	      if (match) return match;
+	    }
+	    return null;
+	  }
+
 	  function ngjOpenImportFigureCrop(el) {
 	    const data = ngjSuggestionFromElement(el);
 	    if (!data || !data.qNum || !data.figureRefId) {
@@ -25357,6 +25384,38 @@ const App = (() => {
 	        qNum: data.qNum,
 	        figureRefId: data.figureRefId,
 	        suggestionKey: data.key
+	      }
+	    });
+	  }
+
+	  function ngjOpenManualUploadCrop(el) {
+	    const figureRefId = el?.getAttribute?.('data-ngj-figure-ref-id') || '';
+	    const qNum = Number(el?.getAttribute?.('data-ngj-q-num') || ngjQuestionNumberForFigureRefId(figureRefId) || 0);
+	    const dataUrl = _nbmeGeminiJsonImport?.figureAttachments?.[figureRefId] || '';
+	    if (!figureRefId || !qNum || !dataUrl) {
+	      toast('Uploaded image is no longer available for cropping.', 4000);
+	      return;
+	    }
+	    const ref = ngjFigureRefById(figureRefId);
+	    const figure = {
+	      figureId: figureRefId,
+	      filePath: 'manual-upload',
+	      suggestedQuestionNumber: qNum,
+	      questionNumber: qNum,
+	      confidence: 'manual',
+	      stemPreview: ''
+	    };
+	    nbmeFigureCropOpen({
+	      src: dataUrl,
+	      srcCandidates: [dataUrl],
+	      figure,
+	      importTarget: {
+	        qNum,
+	        figureRefId,
+	        suggestionKey: '',
+	        mode: 'manual-upload',
+	        replaceExisting: true,
+	        placeholder: ref?.placeholder || ''
 	      }
 	    });
 	  }
@@ -25394,28 +25453,30 @@ const App = (() => {
 	    const key = ngjImportFigureAttachmentKey(qNum, figureRefId);
 	    if (!_nbmeGeminiJsonImport.figureImageAttachments) _nbmeGeminiJsonImport.figureImageAttachments = {};
 	    const list = _nbmeGeminiJsonImport.figureImageAttachments[key] || [];
-	    const cropBox = crop ? [crop.x, crop.y, crop.x + crop.w, crop.y + crop.h] : null;
-	    const signature = crop
-	      ? nbmeFigureAttachCropSignature(figure, crop)
-	      : `${figure?.figureId || 'figure'}|${figure?.filePath || ''}|original`;
-	    if (list.some(item => item.cropSignature === signature)) return { duplicate: true, count: list.length };
-	    list.push({
-	      qNum,
-	      figureRefId,
-	      figureId: figure?.figureId || figureRefId,
-	      originalFigureId: figure?.figureId || '',
-	      dataUrl,
+		    const cropBox = crop ? [crop.x, crop.y, crop.x + crop.w, crop.y + crop.h] : null;
+		    const signature = crop
+		      ? nbmeFigureAttachCropSignature(figure, crop)
+		      : `${figure?.figureId || 'figure'}|${figure?.filePath || ''}|original`;
+		    if (list.some(item => item.cropSignature === signature)) return { duplicate: true, count: list.length };
+		    const entry = {
+		      qNum,
+		      figureRefId,
+		      figureId: figure?.figureId || figureRefId,
+		      originalFigureId: figure?.figureId || '',
+		      dataUrl,
 	      source: source || 'nbme-import-figure-suggestion',
 	      filePath: figure?.filePath || '',
 	      absoluteFilePath: figure?.absoluteFilePath || '',
 	      fileUrl: figure?.fileUrl || '',
-	      cropSignature: signature,
-	      cropBox,
-	      attachedAt: new Date().toISOString()
-	    });
-	    _nbmeGeminiJsonImport.figureImageAttachments[key] = list;
-	    return { duplicate: false, count: list.length };
-	  }
+		      cropSignature: signature,
+		      cropBox,
+		      attachedAt: new Date().toISOString()
+		    };
+		    const nextList = target?.replaceExisting ? [entry] : list.concat(entry);
+		    _nbmeGeminiJsonImport.figureImageAttachments[key] = nextList;
+		    if (target?.replaceExisting) _nbmeGeminiJsonImport.figureAttachments[figureRefId] = dataUrl;
+		    return { duplicate: false, count: nextList.length };
+		  }
 
 	  async function ngjAttachOriginalSuggestedFigure(el) {
 	    const data = ngjSuggestionFromElement(el);
@@ -25442,11 +25503,14 @@ const App = (() => {
 	    const btn = document.getElementById('nbme-figure-crop-import-attach-btn');
 	    if (btn) btn.disabled = true;
 	    try {
-	      const result = ngjAttachPendingFigureImage(st.importTarget, st.figure, output.dataUrl, output.crop, 'nbme-import-crop-suggestion');
-	      const msg = result.duplicate ? 'This exact crop is already attached for import save.' : 'Cropped image attached to this import question. Save the imported test to persist it.';
-	      nbmeFigureCropSetStatus(msg, result.duplicate);
-	      ngjSetSuggestionCardStatus(st.importTarget.suggestionKey, msg, result.duplicate ? 'error' : 'ok');
-	      renderNbmeGeminiJsonFigureAttachSection();
+		      const isManual = st.importTarget?.mode === 'manual-upload';
+		      const result = ngjAttachPendingFigureImage(st.importTarget, st.figure, output.dataUrl, output.crop, isManual ? 'nbme-import-manual-upload-crop' : 'nbme-import-crop-suggestion');
+		      const msg = result.duplicate
+		        ? 'This exact crop is already attached for import save.'
+		        : (isManual ? 'Uploaded image replaced with cropped image. Save the imported test to persist it.' : 'Cropped image attached to this import question. Save the imported test to persist it.');
+		      nbmeFigureCropSetStatus(msg, result.duplicate);
+		      if (st.importTarget.suggestionKey) ngjSetSuggestionCardStatus(st.importTarget.suggestionKey, msg, result.duplicate ? 'error' : 'ok');
+		      renderNbmeGeminiJsonFigureAttachSection();
 	      if (!result.duplicate) setTimeout(() => nbmeFigureCropClose(), 350);
 	    } catch (err) {
 	      nbmeFigureCropSetStatus(err?.message || 'Cropped image attachment failed.', true);
@@ -25511,6 +25575,9 @@ const App = (() => {
 	        const thumbSrc = pendingDirect[0]?.dataUrl || attachments[fid] || '';
 	        if (thumbSrc) html += '<img id="ngj-fig-thumb-' + escapedFid + '" class="ngj-figure-thumb" src="' + thumbSrc + '" style="display:inline-block;">';
 	        html += '<span class="ngj-figure-status ok" id="ngj-fig-status-' + escapedFid + '">&#10003; Image attached' + (pendingDirect.length ? ' for import save' : '') + '</span>';
+	        if (attachments[fid]) {
+	          html += '<button type="button" class="btn-modal" style="font-size:11px;padding:3px 8px;" data-ngj-q-num="' + _ngjEsc(item.qNum) + '" data-ngj-figure-ref-id="' + escapedFid + '" onclick="App.ngjOpenManualUploadCrop(this)">Crop/Edit</button>';
+	        }
 	        html += '<button type="button" class="btn-modal" style="font-size:11px;padding:3px 8px;color:#c0392b;border-color:#c0392b;" onclick="App.ngjRemoveFigureAttachment(\'' + escapedFid + '\')">&#10005; Remove</button>';
 	      } else {
 	        html += '<span class="ngj-figure-status" id="ngj-fig-status-' + escapedFid + '">' + (hasVT ? '' : 'No image attached') + '</span>';
@@ -25523,22 +25590,37 @@ const App = (() => {
     list.innerHTML = html;
   }
 
-  function ngjHandleFigureUpload(input, figureId) {
-    const file = input.files && input.files[0];
-    if (!file) return;
+	  function ngjHandleFigureUpload(input, figureId) {
+	    const file = input.files && input.files[0];
+	    if (!file) return;
     const MAX_BYTES = 2.5 * 1024 * 1024; // 2.5 MB per image
     if (file.size > MAX_BYTES) {
       toast('Image too large (' + (file.size / 1024 / 1024).toFixed(1) + ' MB). Please crop or resize to under 2.5 MB.', 6000);
       input.value = '';
       return;
     }
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      if (!_nbmeGeminiJsonImport) return;
-      if (!_nbmeGeminiJsonImport.figureAttachments) _nbmeGeminiJsonImport.figureAttachments = {};
-      _nbmeGeminiJsonImport.figureAttachments[figureId] = e.target.result;
-      renderNbmeGeminiJsonFigureAttachSection();
-    };
+	    const reader = new FileReader();
+	    reader.onload = function(e) {
+	      if (!_nbmeGeminiJsonImport) return;
+	      if (!_nbmeGeminiJsonImport.figureAttachments) _nbmeGeminiJsonImport.figureAttachments = {};
+	      const dataUrl = String(e.target.result || '');
+	      _nbmeGeminiJsonImport.figureAttachments[figureId] = dataUrl;
+	      const qNum = ngjQuestionNumberForFigureRefId(figureId);
+	      if (qNum) {
+	        try {
+	          ngjAttachPendingFigureImage(
+	            { qNum, figureRefId: figureId, replaceExisting: true, mode: 'manual-upload' },
+	            { figureId, filePath: file.name || 'manual-upload', questionNumber: qNum, suggestedQuestionNumber: qNum },
+	            dataUrl,
+	            null,
+	            'nbme-import-manual-upload'
+	          );
+	        } catch (err) {
+	          toast(err?.message || 'Uploaded image could not be staged for import save.', 5000);
+	        }
+	      }
+	      renderNbmeGeminiJsonFigureAttachSection();
+	    };
     reader.readAsDataURL(file);
   }
 
@@ -26288,6 +26370,7 @@ const App = (() => {
 	    saveValidNbmeGeminiJsonQuestionsOnly,
 	    handleNbmeGeminiJsonFigureSuggestionsUpload,
 	    ngjOpenImportFigureCrop,
+	    ngjOpenManualUploadCrop,
 	    ngjAttachOriginalSuggestedFigure,
 	    ngjAttachCroppedSuggestedFigure,
 	    ngjHandleFigureUpload,
