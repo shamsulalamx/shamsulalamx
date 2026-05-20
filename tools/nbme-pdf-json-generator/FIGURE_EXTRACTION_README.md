@@ -40,6 +40,7 @@ python3 nbme_extract_figures.py --pdf input_pdfs/8A.pdf
 python3 nbme_extract_figures.py --pdf input_pdfs/8A.pdf --dpi 250
 python3 nbme_extract_figures.py --pdf input_pdfs/8A.pdf --max-pages 5
 python3 nbme_extract_figures.py --pdf input_pdfs/8A.pdf --contact-sheet
+python3 nbme_extract_figures.py --pdf input_pdfs/8A.pdf --review-html
 python3 nbme_extract_figures.py --pdf input_pdfs/8A.pdf --conservative
 python3 nbme_extract_figures.py --pdf input_pdfs/8A.pdf --strict-text-filter
 python3 nbme_extract_figures.py --pdf input_pdfs/8A.pdf --min-visual-score 0.50
@@ -52,6 +53,7 @@ Defaults:
 --dpi 200
 --conservative true
 --contact-sheet true
+--review-html true
 --strict-text-filter false
 --min-visual-score 0.42
 --debug-rejected false
@@ -72,6 +74,8 @@ The script creates:
 extracted_figures/<source>_p###_fig###.png
 figure_manifests/<source>_figure_manifest.json
 figure_manifests/<source>_contact_sheet.png
+figure_manifests/<source>_figure_review.csv
+figure_manifests/<source>_figure_review.html
 ```
 
 These are generated review artifacts and are ignored by git by default.
@@ -144,6 +148,41 @@ The second pass uses image statistics and connected components rather than OCR. 
 - `kept`: true for candidates written to `extracted_figures/`.
 
 Default behavior is conservative but not maximal. It keeps uncertain medical-looking figures while rejecting obvious answer-choice and text blocks. Use `--strict-text-filter` only when review sheets still contain too many text crops.
+
+## Manual Review Workflow
+
+1. Run the extractor:
+
+```bash
+cd tools/nbme-pdf-json-generator
+python3 nbme_extract_figures.py --pdf input_pdfs/8A.pdf --debug-rejected
+```
+
+2. Open the contact sheet first:
+
+```text
+figure_manifests/8A_contact_sheet.png
+```
+
+Use it to quickly decide whether the kept crops are mostly real clinical figures.
+
+3. Open the static HTML review page second:
+
+```text
+figure_manifests/8A_figure_review.html
+```
+
+This page shows each kept PNG beside its metadata, suggested question number, confidence, score, and file path. The checkboxes are for manual review labels only: accept, reject, wrong question, and needs crop. The page is static HTML and does not require a server.
+
+4. Use the CSV as the tracking sheet:
+
+```text
+figure_manifests/8A_figure_review.csv
+```
+
+Fill `userDecision` and `notes` while reviewing. Use the PNG `filePath` from the CSV or HTML page when manually attaching images later.
+
+No auto-attachment happens in this milestone. The extractor does not inject `figureRefs` and does not modify app-ready JSON.
 
 ## Association Limits
 

@@ -15,7 +15,9 @@ weak review hint.
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
+import html
 import json
 import math
 import re
@@ -945,8 +947,8 @@ def _candidate_to_manifest(c: Candidate) -> dict[str, Any]:
 
 def _make_contact_sheet(figures: list[dict[str, Any]], out_path: Path) -> None:
     thumb_w = 320
-    thumb_h = 210
-    label_h = 92
+    thumb_h = 220
+    label_h = 108
     pad = 18
     cols = 3 if len(figures) >= 3 else max(1, len(figures))
     if not figures:
@@ -979,9 +981,9 @@ def _make_contact_sheet(figures: list[dict[str, Any]], out_path: Path) -> None:
         label_y = y + thumb_h + 8
         label_lines = [
             fig["figureId"],
-            f"page {fig['page']}  bbox {fig['bbox']}",
+            f"page {fig['page']}  suggested Q {fig['suggestedQuestionNumber'] or 'unknown'}",
             f"confidence {fig['confidence']}  score {fig['score']}",
-            f"question {fig['suggestedQuestionNumber'] or 'unknown'}",
+            f"bbox {fig['bbox']}",
         ]
         for line in label_lines:
             draw.text((x, label_y), line, fill=(0, 0, 0))
@@ -990,12 +992,301 @@ def _make_contact_sheet(figures: list[dict[str, Any]], out_path: Path) -> None:
     sheet.save(out_path)
 
 
+def _write_review_csv(figures: list[dict[str, Any]], out_path: Path) -> None:
+    columns = [
+        "figureId",
+        "page",
+        "filePath",
+        "confidence",
+        "score",
+        "suggestedQuestionNumber",
+        "needsReview",
+        "width",
+        "height",
+        "bbox",
+        "visualScore",
+        "textLikeScore",
+        "rejectionReasons",
+        "notes",
+        "userDecision",
+    ]
+    with out_path.open("w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=columns)
+        writer.writeheader()
+        for fig in figures:
+            writer.writerow({
+                "figureId": fig.get("figureId", ""),
+                "page": fig.get("page", ""),
+                "filePath": fig.get("filePath", ""),
+                "confidence": fig.get("confidence", ""),
+                "score": fig.get("score", ""),
+                "suggestedQuestionNumber": fig.get("suggestedQuestionNumber") or "",
+                "needsReview": fig.get("needsReview", ""),
+                "width": fig.get("width", ""),
+                "height": fig.get("height", ""),
+                "bbox": json.dumps(fig.get("bbox", []), separators=(",", ":")),
+                "visualScore": fig.get("visualScore", ""),
+                "textLikeScore": fig.get("textLikeScore", ""),
+                "rejectionReasons": "; ".join(fig.get("rejectionReasons") or []),
+                "notes": "",
+                "userDecision": "",
+            })
+
+
+def _html_escape(value: Any) -> str:
+    return html.escape("" if value is None else str(value), quote=True)
+
+
+def _write_review_html(
+    figures: list[dict[str, Any]],
+    out_path: Path,
+    manifest_path: Path,
+    csv_path: Path,
+    contact_path: Path,
+    summary: dict[str, Any],
+) -> None:
+    rows = []
+    for fig in figures:
+        image_src = "../" + fig["filePath"]
+        suggested = fig.get("suggestedQuestionNumber") or "unknown"
+        reasons = fig.get("reasons") or []
+        rejection_reasons = fig.get("rejectionReasons") or []
+        rows.append(f"""
+        <article class="figure-card" id="{_html_escape(fig.get('figureId'))}">
+          <div class="figure-image-wrap">
+            <img src="{_html_escape(image_src)}" alt="{_html_escape(fig.get('figureId'))}">
+          </div>
+          <div class="figure-meta">
+            <h2>{_html_escape(fig.get('figureId'))}</h2>
+            <dl>
+              <div><dt>Page</dt><dd>{_html_escape(fig.get('page'))}</dd></div>
+              <div><dt>Suggested Q</dt><dd>{_html_escape(suggested)}</dd></div>
+              <div><dt>Confidence</dt><dd>{_html_escape(fig.get('confidence'))}</dd></div>
+              <div><dt>Score</dt><dd>{_html_escape(fig.get('score'))}</dd></div>
+              <div><dt>Visual Score</dt><dd>{_html_escape(fig.get('visualScore'))}</dd></div>
+              <div><dt>Text-Like Score</dt><dd>{_html_escape(fig.get('textLikeScore'))}</dd></div>
+              <div><dt>Needs Review</dt><dd>{_html_escape(fig.get('needsReview'))}</dd></div>
+              <div><dt>Size</dt><dd>{_html_escape(fig.get('width'))} x {_html_escape(fig.get('height'))}</dd></div>
+              <div><dt>BBox</dt><dd>{_html_escape(fig.get('bbox'))}</dd></div>
+              <div><dt>File</dt><dd><code>{_html_escape(fig.get('filePath'))}</code></dd></div>
+            </dl>
+            <fieldset>
+              <legend>Review decision</legend>
+              <label><input type="checkbox"> accept</label>
+              <label><input type="checkbox"> reject</label>
+              <label><input type="checkbox"> wrong question</label>
+              <label><input type="checkbox"> needs crop</label>
+            </fieldset>
+            <div class="notes">
+              <label>Notes</label>
+              <textarea aria-label="Review notes for {_html_escape(fig.get('figureId'))}"></textarea>
+            </div>
+            <details>
+              <summary>Detection reasons</summary>
+              <p><strong>Reasons:</strong> {_html_escape('; '.join(reasons) or 'none')}</p>
+              <p><strong>Rejection flags:</strong> {_html_escape('; '.join(rejection_reasons) or 'none')}</p>
+            </details>
+          </div>
+        </article>
+        """)
+
+    if not rows:
+        rows.append("""
+        <article class="empty">
+          <h2>No kept candidates</h2>
+          <p>The extractor did not keep any figure candidates for this run.</p>
+        </article>
+        """)
+
+    html_text = f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NBME Figure Review</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      --border: #d7dde5;
+      --muted: #5f6b7a;
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --ink: #17202a;
+      --accent: #1f5f99;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+    }}
+    header {{
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      padding: 18px 24px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+    }}
+    h1 {{
+      margin: 0 0 8px;
+      font-size: 22px;
+      letter-spacing: 0;
+    }}
+    .summary {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 14px;
+    }}
+    .links {{
+      margin-top: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }}
+    a {{
+      color: var(--accent);
+      text-decoration: none;
+      border-bottom: 1px solid currentColor;
+    }}
+    main {{
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 20px;
+    }}
+    .figure-card {{
+      display: grid;
+      grid-template-columns: minmax(280px, 46%) minmax(320px, 1fr);
+      gap: 18px;
+      padding: 16px;
+      margin-bottom: 18px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }}
+    .figure-image-wrap {{
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      overflow: auto;
+      max-height: 620px;
+      border: 1px solid var(--border);
+      background: #fff;
+    }}
+    img {{
+      max-width: 100%;
+      height: auto;
+      display: block;
+    }}
+    h2 {{
+      margin: 0 0 12px;
+      font-size: 18px;
+      letter-spacing: 0;
+    }}
+    dl {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px 14px;
+      margin: 0 0 14px;
+    }}
+    dt {{
+      color: var(--muted);
+      font-size: 12px;
+    }}
+    dd {{
+      margin: 2px 0 0;
+      font-size: 14px;
+      overflow-wrap: anywhere;
+    }}
+    fieldset {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin: 0 0 14px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }}
+    legend {{
+      color: var(--muted);
+      font-size: 13px;
+      padding: 0 4px;
+    }}
+    label {{
+      font-size: 14px;
+    }}
+    input {{
+      margin-right: 6px;
+    }}
+    textarea {{
+      width: 100%;
+      min-height: 72px;
+      margin-top: 6px;
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font: inherit;
+      resize: vertical;
+    }}
+    details {{
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }}
+    code {{
+      font-size: 13px;
+      white-space: normal;
+    }}
+    .empty {{
+      padding: 20px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }}
+    @media (max-width: 860px) {{
+      .figure-card {{
+        grid-template-columns: 1fr;
+      }}
+      dl {{
+        grid-template-columns: 1fr;
+      }}
+    }}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>NBME Figure Review</h1>
+    <div class="summary">
+      <span>Kept: {_html_escape(summary.get('figuresKept'))}</span>
+      <span>Ignored: {_html_escape(summary.get('figuresIgnored'))}</span>
+      <span>Needs review: {_html_escape(summary.get('needsReview'))}</span>
+      <span>Text-like kept: {_html_escape(summary.get('textLikeKept'))}</span>
+    </div>
+    <div class="links">
+      <a href="{_html_escape(manifest_path.name)}">Manifest JSON</a>
+      <a href="{_html_escape(csv_path.name)}">Review CSV</a>
+      <a href="{_html_escape(contact_path.name)}">Contact Sheet</a>
+    </div>
+  </header>
+  <main>
+    {''.join(rows)}
+  </main>
+</body>
+</html>
+"""
+    out_path.write_text(html_text, encoding="utf-8")
+
+
 def extract_figures(
     pdf_path: Path,
     dpi: int = DEFAULT_DPI,
     max_pages: Optional[int] = None,
     conservative: bool = True,
     contact_sheet: bool = True,
+    review_html: bool = True,
     strict_text_filter: bool = False,
     min_visual_score: float = 0.42,
     debug_rejected: bool = False,
@@ -1119,9 +1410,26 @@ def extract_figures(
     if contact_sheet:
         _make_contact_sheet(figures, contact_path)
 
+    review_csv_path = MANIFEST_DIR / f"{pdf_stem}_figure_review.csv"
+    _write_review_csv(figures, review_csv_path)
+
+    review_html_path = MANIFEST_DIR / f"{pdf_stem}_figure_review.html"
+    if review_html:
+        _write_review_html(
+            figures,
+            review_html_path,
+            manifest_path,
+            review_csv_path,
+            contact_path,
+            summary,
+        )
+
     print(f"Manifest: {_rel(manifest_path)}")
     if contact_sheet:
         print(f"Contact sheet: {_rel(contact_path)}")
+    print(f"Review CSV: {_rel(review_csv_path)}")
+    if review_html:
+        print(f"Review HTML: {_rel(review_html_path)}")
     print(
         "Summary: "
         f"{summary['pagesProcessed']} pages, "
@@ -1146,6 +1454,13 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Write a PNG contact sheet. Default: true",
+    )
+    parser.add_argument(
+        "--review-html",
+        dest="review_html",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Write a static HTML review page. Default: true",
     )
     parser.add_argument(
         "--conservative",
@@ -1192,6 +1507,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             max_pages=args.max_pages,
             conservative=args.conservative,
             contact_sheet=args.contact_sheet,
+            review_html=args.review_html,
             strict_text_filter=args.strict_text_filter,
             min_visual_score=args.min_visual_score,
             debug_rejected=args.debug_rejected,
