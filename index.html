@@ -2059,6 +2059,18 @@ body.quiz-fullscreen-mode .modal-overlay {
 .nbme-figure-crop-status { font-size: 12px; color: #5a6a7a; min-height: 18px; }
 .nbme-figure-crop-status.error { color: #b23b3b; }
 .nbme-figure-crop-checkbox { display: flex; gap: 7px; align-items: center; font-size: 12px; color: #31445a; }
+.nbme-figure-attach-panel { border: 1px solid var(--border); border-radius: 7px; background: #fff; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.nbme-figure-attach-title { font-size: 12px; font-weight: 700; color: #24384f; }
+.nbme-figure-attach-row { display: flex; gap: 7px; flex-wrap: wrap; }
+.nbme-figure-attach-panel input,
+.nbme-figure-attach-panel select {
+  width: 100%; border: 1px solid var(--border); border-radius: 6px; padding: 7px 8px;
+  font-size: 12px; background: #fff; color: #1f2f42;
+}
+.nbme-figure-attach-preview { min-height: 38px; border: 1px dashed var(--border); border-radius: 6px; padding: 8px; font-size: 11px; line-height: 1.35; color: #40546a; background: #f7f9fb; overflow-wrap: anywhere; }
+.nbme-figure-attach-status { min-height: 18px; font-size: 12px; color: #5a6a7a; line-height: 1.35; }
+.nbme-figure-attach-status.error { color: #b23b3b; }
+.nbme-figure-attach-status.ok { color: #23633a; }
 @media (max-width: 900px) {
   .nbme-figure-crop-layout { grid-template-columns: 1fr; }
   .nbme-figure-crop-stage-wrap { min-height: 300px; }
@@ -2142,7 +2154,7 @@ body.quiz-fullscreen-mode .modal-overlay {
 <div id="modal-nbme-figure-review" class="modal-overlay">
   <div class="modal-box nbme-figure-review-modal">
     <h3>NBME Figure Review</h3>
-    <p class="nbme-figure-review-note">Load a figure manifest or suggested figure links JSON for read-only review. This viewer does not save, attach, crop, or edit question data.</p>
+    <p class="nbme-figure-review-note">Load a figure manifest or suggested figure links JSON. Review figures here, then crop and explicitly attach a cropped copy from the crop editor.</p>
 
     <div class="nbme-figure-review-toolbar">
       <div class="form-group">
@@ -2196,6 +2208,17 @@ body.quiz-fullscreen-mode .modal-overlay {
           <button type="button" class="btn-modal" onclick="App.nbmeFigureCropZoomOut()">Zoom out</button>
           <button type="button" class="btn-modal" onclick="App.nbmeFigureCropZoomIn()">Zoom in</button>
           <button type="button" class="btn-modal" onclick="App.nbmeFigureCropReset()">Reset crop</button>
+        </div>
+        <div class="nbme-figure-attach-panel" aria-label="Attach cropped figure">
+          <div class="nbme-figure-attach-title">Attach cropped copy</div>
+          <button type="button" class="btn-modal primary" id="nbme-figure-attach-suggested-btn" onclick="App.nbmeFigureAttachToSuggestedQuestion()" disabled>Attach Crop To Suggested Question</button>
+          <input id="nbme-figure-attach-search" type="search" placeholder="Search tests or questions" oninput="App.nbmeFigureAttachFilterTargets(this.value)" autocomplete="off">
+          <select id="nbme-figure-attach-target-select" onchange="App.nbmeFigureAttachPreviewSelectedTarget()"></select>
+          <div id="nbme-figure-attach-target-preview" class="nbme-figure-attach-preview">Choose a loaded question before attaching.</div>
+          <div class="nbme-figure-attach-row">
+            <button type="button" class="btn-modal" id="nbme-figure-attach-manual-btn" onclick="App.nbmeFigureAttachToSelectedQuestion()" disabled>Attach Crop To Different Question</button>
+          </div>
+          <div id="nbme-figure-attach-status" class="nbme-figure-attach-status"></div>
         </div>
         <div id="nbme-figure-crop-status" class="nbme-figure-crop-status"></div>
         <div class="modal-actions" style="margin-top:0;">
@@ -23165,8 +23188,13 @@ const App = (() => {
     const refHtml = refs.length
       ? refs.map(ref => `<div>${_ngjEsc(ref.id || ref.figureId || 'figureRef')}: ${_ngjEsc(ref.placeholder || '')}</div>`).join('')
       : '<div>No existing figureRefs listed.</div>';
-    const figHtml = figs.length
-      ? `<div class="nbme-figure-review-grid">${figs.map(nbmeFigureReviewFigureCardHtml).join('')}</div>`
+    const linkedFigs = figs.map(fig => Object.assign({}, fig || {}, {
+      questionNumber: qNum === 'unknown' ? '' : qNum,
+      questionId: link?.questionId || '',
+      stemPreview: link?.stemPreview || ''
+    }));
+    const figHtml = linkedFigs.length
+      ? `<div class="nbme-figure-review-grid">${linkedFigs.map(nbmeFigureReviewFigureCardHtml).join('')}</div>`
       : '<div class="nbme-figure-review-empty">No suggested extracted figure for this question.</div>';
     return `
       <section class="nbme-figure-review-question">
@@ -23216,7 +23244,7 @@ const App = (() => {
     return `
       <div class="nbme-figure-review-thumb-wrap">
         <button type="button" class="nbme-figure-review-thumb-btn" onclick="App.nbmeFigureCropOpenFromElement(this)" title="Open crop editor">
-          <img class="nbme-figure-review-thumb" src="${_ngjEsc(resolved)}" alt="${_ngjEsc(alt)}" data-raw-path="${_ngjEsc(filePath)}" data-figure-id="${_ngjEsc(figureId)}" data-page="${_ngjEsc(fig?.page ?? '')}" data-suggested-question="${_ngjEsc(suggestedQ)}" data-confidence="${_ngjEsc(fig?.confidence || '')}" data-review-img-tried="0" onerror="App.nbmeFigureReviewHandleImageError(this)">
+          <img class="nbme-figure-review-thumb" src="${_ngjEsc(resolved)}" alt="${_ngjEsc(alt)}" data-raw-path="${_ngjEsc(filePath)}" data-figure-id="${_ngjEsc(figureId)}" data-page="${_ngjEsc(fig?.page ?? '')}" data-suggested-question="${_ngjEsc(suggestedQ)}" data-question-id="${_ngjEsc(fig?.questionId || '')}" data-stem-preview="${_ngjEsc(fig?.stemPreview || '')}" data-confidence="${_ngjEsc(fig?.confidence || '')}" data-review-img-tried="0" onerror="App.nbmeFigureReviewHandleImageError(this)">
         </button>
         <div class="nbme-figure-review-crop-hint">Click thumbnail to crop a local copy.</div>
         <div class="nbme-figure-review-img-fallback">Thumbnail unavailable. Path: ${_ngjEsc(filePath)}</div>
@@ -23265,6 +23293,9 @@ const App = (() => {
       filePath: rawPath,
       page: img.getAttribute('data-page') || '',
       suggestedQuestionNumber: img.getAttribute('data-suggested-question') || '',
+      questionNumber: img.getAttribute('data-suggested-question') || '',
+      questionId: img.getAttribute('data-question-id') || '',
+      stemPreview: img.getAttribute('data-stem-preview') || '',
       confidence: img.getAttribute('data-confidence') || ''
     };
     nbmeFigureCropOpen({ src, figure });
@@ -23289,15 +23320,21 @@ const App = (() => {
       aspectRatio: 1,
       raf: 0,
       listeners: [],
-      objectUrls: []
+      objectUrls: [],
+      attachTargets: [],
+      filteredAttachTargets: [],
+      suggestedTarget: null,
+      attaching: false
     };
 
     if (aspect) aspect.checked = false;
     if (saveBtn) saveBtn.disabled = true;
+    nbmeFigureAttachResetPanel();
     nbmeFigureCropSetStatus('Loading image...');
     nbmeFigureCropSetMeta();
     modal.style.display = 'flex';
     nbmeFigureCropBindListeners();
+    nbmeFigureAttachPopulateTargets();
 
     imgEl.onload = () => nbmeFigureCropImageLoaded();
     imgEl.onerror = () => nbmeFigureCropImageFailed();
@@ -23325,6 +23362,7 @@ const App = (() => {
     const modal = document.getElementById('modal-nbme-figure-crop');
     if (modal) modal.style.display = 'none';
     _nbmeFigureCropState = null;
+    nbmeFigureAttachResetPanel();
     if (!options?.silent) nbmeFigureCropSetStatus('');
   }
 
@@ -23366,6 +23404,7 @@ const App = (() => {
     st.aspectRatio = st.crop.w / st.crop.h;
     const saveBtn = document.getElementById('nbme-figure-crop-save-btn');
     if (saveBtn) saveBtn.disabled = false;
+    nbmeFigureAttachRefreshButtons();
     nbmeFigureCropApplyView();
     nbmeFigureCropSchedulePreview();
     nbmeFigureCropSetStatus('Ready.');
@@ -23375,6 +23414,7 @@ const App = (() => {
   function nbmeFigureCropImageFailed() {
     const saveBtn = document.getElementById('nbme-figure-crop-save-btn');
     if (saveBtn) saveBtn.disabled = true;
+    nbmeFigureAttachRefreshButtons();
     nbmeFigureCropSetStatus('Image could not be loaded. Check the file path or open the manifest from the project context.', true);
   }
 
@@ -23619,32 +23659,9 @@ const App = (() => {
   }
 
   function nbmeFigureCropSave() {
-    const st = _nbmeFigureCropState;
-    const imgEl = document.getElementById('nbme-figure-crop-img');
-    if (!st || !st.crop || !st.imageLoaded || !imgEl) {
-      nbmeFigureCropSetStatus('No valid crop is available.', true);
-      return;
-    }
-    const c = nbmeFigureCropNormalizedCrop();
-    if (c.w < 1 || c.h < 1) {
-      nbmeFigureCropSetStatus('Crop dimensions are invalid.', true);
-      return;
-    }
-    if (c.w * c.h > 30000000) {
-      nbmeFigureCropSetStatus('Crop is too large to export safely. Reduce the crop size first.', true);
-      return;
-    }
-    const canvas = document.createElement('canvas');
-    canvas.width = c.w;
-    canvas.height = c.h;
-    const ctx = canvas.getContext('2d', { alpha: false });
-    try {
-      ctx.drawImage(imgEl, c.x, c.y, c.w, c.h, 0, 0, c.w, c.h);
-    } catch (err) {
-      nbmeFigureCropSetStatus('Browser security blocked this crop export for the current image source.', true);
-      return;
-    }
-    canvas.toBlob(blob => {
+    const output = nbmeFigureCropBuildOutputCanvas();
+    if (!output) return;
+    output.canvas.toBlob(blob => {
       if (!blob || !blob.size) {
         nbmeFigureCropSetStatus('Crop export failed. No PNG was produced.', true);
         return;
@@ -23665,6 +23682,46 @@ const App = (() => {
     }, 'image/png');
   }
 
+  function nbmeFigureCropBuildOutputCanvas() {
+    const st = _nbmeFigureCropState;
+    const imgEl = document.getElementById('nbme-figure-crop-img');
+    if (!st || !st.crop || !st.imageLoaded || !imgEl) {
+      nbmeFigureCropSetStatus('No valid crop is available.', true);
+      return null;
+    }
+    const c = nbmeFigureCropNormalizedCrop();
+    if (c.w < 1 || c.h < 1) {
+      nbmeFigureCropSetStatus('Crop dimensions are invalid.', true);
+      return null;
+    }
+    if (c.w * c.h > 30000000) {
+      nbmeFigureCropSetStatus('Crop is too large to export safely. Reduce the crop size first.', true);
+      return null;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = c.w;
+    canvas.height = c.h;
+    const ctx = canvas.getContext('2d', { alpha: false });
+    try {
+      ctx.drawImage(imgEl, c.x, c.y, c.w, c.h, 0, 0, c.w, c.h);
+    } catch (err) {
+      nbmeFigureCropSetStatus('Browser security blocked this crop export for the current image source.', true);
+      return null;
+    }
+    return { canvas, crop: c };
+  }
+
+  function nbmeFigureCropDataUrl() {
+    const output = nbmeFigureCropBuildOutputCanvas();
+    if (!output) return null;
+    try {
+      return { dataUrl: output.canvas.toDataURL('image/png'), crop: output.crop };
+    } catch (err) {
+      nbmeFigureCropSetStatus('Browser security blocked this crop attachment for the current image source.', true);
+      return null;
+    }
+  }
+
   function nbmeFigureCropDefaultFilename() {
     const st = _nbmeFigureCropState;
     const raw = st?.figure?.filePath || st?.figure?.figureId || 'nbme_figure';
@@ -23680,6 +23737,265 @@ const App = (() => {
       String(now.getSeconds()).padStart(2, '0')
     ].join('');
     return `${safeBase}_crop_${stamp}.png`;
+  }
+
+  function nbmeFigureAttachResetPanel() {
+    const select = document.getElementById('nbme-figure-attach-target-select');
+    const search = document.getElementById('nbme-figure-attach-search');
+    const preview = document.getElementById('nbme-figure-attach-target-preview');
+    const status = document.getElementById('nbme-figure-attach-status');
+    if (search) search.value = '';
+    if (select) select.innerHTML = '<option value="">No loaded questions available</option>';
+    if (preview) preview.textContent = 'Choose a loaded question before attaching.';
+    if (status) {
+      status.className = 'nbme-figure-attach-status';
+      status.textContent = '';
+    }
+    nbmeFigureAttachRefreshButtons();
+  }
+
+  function nbmeFigureAttachSetStatus(message, kind) {
+    const el = document.getElementById('nbme-figure-attach-status');
+    if (!el) return;
+    el.className = 'nbme-figure-attach-status' + (kind ? ` ${kind}` : '');
+    el.textContent = message || '';
+  }
+
+  function nbmeFigureAttachAllTargets() {
+    const db = (typeof DB !== 'undefined' && DB?.get) ? DB.get() : null;
+    const tests = Array.isArray(db?.tests) ? db.tests : [];
+    const targets = [];
+    tests.forEach(test => {
+      const questions = Array.isArray(test?.questions) ? test.questions : [];
+      questions.forEach((q, idx) => {
+        const qNum = nbmeFigureAttachQuestionNumber(q, idx);
+        const stem = nbmeFigureAttachStemPreview(q);
+        targets.push({
+          key: `${test.id}::${idx}`,
+          testId: test.id,
+          testName: test.name || test.title || 'Untitled test',
+          questionIndex: idx,
+          questionNumber: qNum,
+          stem,
+          searchText: `${test.name || ''} ${test.title || ''} ${qNum} ${stem}`.toLowerCase()
+        });
+      });
+    });
+    return targets;
+  }
+
+  function nbmeFigureAttachQuestionNumber(q, idx) {
+    const candidates = [
+      q?.n,
+      q?.number,
+      q?.questionNumber,
+      q?.metadata?.questionNumber,
+      q?.metadata?.sourceQuestionNumber,
+      q?.metadata?.nbmeQuestionNumber,
+      idx + 1
+    ];
+    for (const value of candidates) {
+      const n = Number(value);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    return idx + 1;
+  }
+
+  function nbmeFigureAttachStemPreview(q) {
+    const raw = q?.stem || q?.question || q?.prompt || q?.text || '';
+    const plain = String(raw).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    return plain.slice(0, 180) || 'No stem preview available.';
+  }
+
+  function nbmeFigureAttachPopulateTargets() {
+    const st = _nbmeFigureCropState;
+    if (!st) return;
+    st.attachTargets = nbmeFigureAttachAllTargets();
+    st.suggestedTarget = nbmeFigureAttachResolveSuggestedTarget(st.attachTargets, st.figure);
+    nbmeFigureAttachRenderTargets(st.attachTargets);
+    nbmeFigureAttachPreviewSelectedTarget();
+    nbmeFigureAttachRefreshButtons();
+    if (!st.attachTargets.length) nbmeFigureAttachSetStatus('No loaded tests with questions were found. Import or open a test before attaching.', 'error');
+    else if (!st.suggestedTarget && nbmeFigureAttachSuggestedNumber(st.figure)) nbmeFigureAttachSetStatus('Suggested question was not uniquely found. Choose the target manually.', '');
+  }
+
+  function nbmeFigureAttachSuggestedNumber(figure) {
+    const n = Number(figure?.questionNumber || figure?.suggestedQuestionNumber || '');
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+
+  function nbmeFigureAttachResolveSuggestedTarget(targets, figure) {
+    const qNum = nbmeFigureAttachSuggestedNumber(figure);
+    if (!qNum) return null;
+    const matches = (targets || []).filter(t => Number(t.questionNumber) === qNum);
+    return matches.length === 1 ? matches[0] : null;
+  }
+
+  function nbmeFigureAttachRenderTargets(targets) {
+    const select = document.getElementById('nbme-figure-attach-target-select');
+    if (!select) return;
+    const list = Array.isArray(targets) ? targets : [];
+    if (!list.length) {
+      select.innerHTML = '<option value="">No loaded questions available</option>';
+      return;
+    }
+    select.innerHTML = '<option value="">Choose a question...</option>' + list.map(t => {
+      const label = `${t.testName} | Q${t.questionNumber} | ${t.stem.slice(0, 70)}`;
+      return `<option value="${_ngjEsc(t.key)}">${_ngjEsc(label)}</option>`;
+    }).join('');
+  }
+
+  function nbmeFigureAttachFilterTargets(query) {
+    const st = _nbmeFigureCropState;
+    if (!st) return;
+    const q = String(query || '').toLowerCase().trim();
+    const filtered = q ? (st.attachTargets || []).filter(t => t.searchText.includes(q)) : (st.attachTargets || []);
+    st.filteredAttachTargets = filtered;
+    nbmeFigureAttachRenderTargets(filtered);
+    nbmeFigureAttachPreviewSelectedTarget();
+    nbmeFigureAttachRefreshButtons();
+  }
+
+  function nbmeFigureAttachTargetByKey(key) {
+    const st = _nbmeFigureCropState;
+    const targets = (st?.filteredAttachTargets?.length ? st.filteredAttachTargets : st?.attachTargets) || [];
+    return targets.find(t => t.key === key) || (st?.attachTargets || []).find(t => t.key === key) || null;
+  }
+
+  function nbmeFigureAttachPreviewSelectedTarget() {
+    const select = document.getElementById('nbme-figure-attach-target-select');
+    const preview = document.getElementById('nbme-figure-attach-target-preview');
+    const target = nbmeFigureAttachTargetByKey(select?.value || '');
+    if (preview) {
+      preview.textContent = target
+        ? `${target.testName} | Q${target.questionNumber}: ${target.stem}`
+        : 'Choose a loaded question before attaching.';
+    }
+    nbmeFigureAttachRefreshButtons();
+  }
+
+  function nbmeFigureAttachRefreshButtons() {
+    const st = _nbmeFigureCropState;
+    const suggestedBtn = document.getElementById('nbme-figure-attach-suggested-btn');
+    const manualBtn = document.getElementById('nbme-figure-attach-manual-btn');
+    const select = document.getElementById('nbme-figure-attach-target-select');
+    const ready = !!(st && st.imageLoaded && !st.attaching && window.FigureStore);
+    if (suggestedBtn) suggestedBtn.disabled = !(ready && st.suggestedTarget);
+    if (manualBtn) manualBtn.disabled = !(ready && select?.value);
+  }
+
+  async function nbmeFigureAttachToSuggestedQuestion() {
+    const st = _nbmeFigureCropState;
+    if (!st?.suggestedTarget) {
+      nbmeFigureAttachSetStatus('No unique suggested question is available. Choose a target manually.', 'error');
+      return;
+    }
+    await nbmeFigureAttachToTarget(st.suggestedTarget);
+  }
+
+  async function nbmeFigureAttachToSelectedQuestion() {
+    const select = document.getElementById('nbme-figure-attach-target-select');
+    const target = nbmeFigureAttachTargetByKey(select?.value || '');
+    if (!target) {
+      nbmeFigureAttachSetStatus('Choose a question before attaching.', 'error');
+      return;
+    }
+    await nbmeFigureAttachToTarget(target);
+  }
+
+  async function nbmeFigureAttachToTarget(target) {
+    const st = _nbmeFigureCropState;
+    if (!st || st.attaching) return;
+    if (!window.FigureStore || typeof window.FigureStore.put !== 'function') {
+      nbmeFigureAttachSetStatus('Figure storage is unavailable in this browser session.', 'error');
+      return;
+    }
+    const output = nbmeFigureCropDataUrl();
+    if (!output?.dataUrl || !/^data:image\/png;base64,/.test(output.dataUrl)) {
+      nbmeFigureAttachSetStatus('Cropped PNG could not be prepared for attachment.', 'error');
+      return;
+    }
+    const test = (typeof DB !== 'undefined' && DB?.getTest) ? DB.getTest(target.testId) : null;
+    const q = test?.questions?.[target.questionIndex];
+    if (!test || !q) {
+      nbmeFigureAttachSetStatus('Target question is no longer available.', 'error');
+      return;
+    }
+    const cropSignature = nbmeFigureAttachCropSignature(st.figure, output.crop);
+    const images = Array.isArray(q.images) ? q.images : [];
+    if (images.some(img => img?.cropSignature === cropSignature)) {
+      nbmeFigureAttachSetStatus(`This exact crop is already attached to Q${target.questionNumber}.`, 'error');
+      return;
+    }
+    st.attaching = true;
+    nbmeFigureAttachRefreshButtons();
+    nbmeFigureAttachSetStatus('Attaching cropped copy...');
+    try {
+      q.images = images;
+      const imageIndex = nbmeFigureAttachNextImageIndex(q.images);
+      const figureKey = `${test.id}:${target.questionNumber}:${imageIndex}`;
+      await window.FigureStore.put(figureKey, output.dataUrl);
+      const figureId = nbmeFigureAttachFigureId(st.figure, target, imageIndex);
+      q.images.push({
+        figureKey,
+        isLabTable: false,
+        kind: 'figure',
+        source: 'nbme-figure-review-crop',
+        figureId,
+        originalFigureId: st.figure?.figureId || '',
+        cropSourcePath: st.figure?.filePath || '',
+        cropSignature,
+        cropBox: [output.crop.x, output.crop.y, output.crop.x + output.crop.w, output.crop.y + output.crop.h],
+        attachedAt: new Date().toISOString()
+      });
+      q.metadata = q.metadata && typeof q.metadata === 'object' ? q.metadata : {};
+      q.metadata.figureRefs = nbmeFigureAttachUpdatedFigureRefs(q.metadata.figureRefs, figureId, st.figure, output.crop);
+      DB.updateTest(test.id, { questions: test.questions });
+      nbmeFigureAttachSetStatus(`Attached cropped copy to ${target.testName} Q${target.questionNumber}. Save/export will use the existing figure storage path.`, 'ok');
+    } catch (err) {
+      nbmeFigureAttachSetStatus(`Attachment failed: ${err?.message || 'Unknown error.'}`, 'error');
+    } finally {
+      if (_nbmeFigureCropState) _nbmeFigureCropState.attaching = false;
+      nbmeFigureAttachRefreshButtons();
+    }
+  }
+
+  function nbmeFigureAttachCropSignature(figure, crop) {
+    const fig = figure?.figureId || 'figure';
+    const path = figure?.filePath || '';
+    return `${fig}|${path}|${crop.x},${crop.y},${crop.w},${crop.h}`;
+  }
+
+  function nbmeFigureAttachNextImageIndex(images) {
+    const used = new Set((images || []).map(img => {
+      const m = String(img?.figureKey || '').match(/:(\d+)$/);
+      return m ? Number(m[1]) : null;
+    }).filter(n => Number.isFinite(n)));
+    let idx = images?.length || 0;
+    while (used.has(idx)) idx += 1;
+    return idx;
+  }
+
+  function nbmeFigureAttachFigureId(figure, target, imageIndex) {
+    const base = figure?.figureId || `q${String(target.questionNumber).padStart(3, '0')}_figure`;
+    const safe = String(base).replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '') || 'nbme_figure';
+    return `${safe}_crop_${imageIndex}`;
+  }
+
+  function nbmeFigureAttachUpdatedFigureRefs(refs, figureId, figure, crop) {
+    const list = Array.isArray(refs) ? refs.slice() : [];
+    if (list.some(ref => (ref?.id || ref?.figureId) === figureId)) return list;
+    list.push({
+      id: figureId,
+      figureId,
+      placeholder: `[FIGURE: ${figureId}]`,
+      source: 'nbme-figure-review-crop',
+      originalFigureId: figure?.figureId || '',
+      filePath: figure?.filePath || '',
+      cropBox: [crop.x, crop.y, crop.x + crop.w, crop.y + crop.h],
+      needsReview: false
+    });
+    return list;
   }
 
   function openNbmeGeminiJsonImportModal() {
@@ -25297,6 +25613,10 @@ const App = (() => {
     nbmeFigureCropReset,
     nbmeFigureCropToggleAspect,
     nbmeFigureCropSave,
+    nbmeFigureAttachFilterTargets,
+    nbmeFigureAttachPreviewSelectedTarget,
+    nbmeFigureAttachToSuggestedQuestion,
+    nbmeFigureAttachToSelectedQuestion,
 	    openNbmeGeminiJsonImportModal,
     closeNbmeGeminiJsonImportModal,
     _onNgjFolderChange,
