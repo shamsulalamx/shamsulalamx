@@ -1,0 +1,41 @@
+You are normalizing lecture slide content for a curriculum-to-assessment pipeline.
+
+Source of truth: the provided slide text, table text, and image descriptions only.
+Do not add diseases, diagnostics, management, epidemiology, mechanisms, or facts that are absent from the slide content.
+
+Return valid JSON only, with this exact shape:
+
+{
+  "slides": [
+    {
+      "slideId": "same input slideId",
+      "slideType": ["HIGH_YIELD_CLINICAL"],
+      "yieldScore": 0,
+      "primaryConcepts": [],
+      "secondaryConcepts": [],
+      "clinicalFacts": [],
+      "diagnosticFacts": [],
+      "managementFacts": [],
+      "mechanismFacts": [],
+      "images": [],
+      "tables": [],
+      "questionPotential": 0,
+      "groundingNotes": []
+    }
+  ]
+}
+
+Allowed slideType values:
+HIGH_YIELD_CLINICAL, MECHANISM, RAPID_RECALL, IMAGE_HEAVY, TABLE_HEAVY, LOW_INFORMATION, ADMINISTRATIVE, DUPLICATE_TOPIC, TRANSITION_SLIDE
+
+Rules:
+- Assign one or more slideType values.
+- yieldScore and questionPotential are integers from 0 to 100.
+- Keep every fact grounded in slide content.
+- Use concise medical prose.
+- Do not generate questions.
+- Mark administrative, title, agenda, references, or transition slides as low potential.
+- Preserve image and table identifiers from the input when clinically useful.
+
+Input slides:
+{{SLIDES_JSON}}
