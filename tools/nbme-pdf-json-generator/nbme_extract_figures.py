@@ -117,6 +117,20 @@ def _rel(path: Path) -> str:
     return str(path.relative_to(SCRIPT_DIR))
 
 
+def _clear_previous_figure_crops(pdf_stem: str) -> int:
+    pattern = re.compile(rf"^{re.escape(pdf_stem)}_p\d{{3}}_fig\d{{3}}\.png$")
+    removed = 0
+    for path in EXTRACTED_DIR.glob(f"{pdf_stem}_p*_fig*.png"):
+        if not pattern.match(path.name):
+            continue
+        try:
+            path.unlink()
+            removed += 1
+        except OSError:
+            pass
+    return removed
+
+
 def _resolve_pdf(path_text: str) -> Path:
     pdf_path = Path(path_text)
     if not pdf_path.is_absolute():
@@ -246,6 +260,30 @@ def _expanded(box: tuple[int, int, int, int], margin: int, width: int, height: i
 
 def _intersects(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> bool:
     return not (a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1])
+
+
+def _box_area(box: tuple[int, int, int, int]) -> int:
+    return max(0, box[2] - box[0]) * max(0, box[3] - box[1])
+
+
+def _intersection_area(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> int:
+    x0 = max(a[0], b[0])
+    y0 = max(a[1], b[1])
+    x1 = min(a[2], b[2])
+    y1 = min(a[3], b[3])
+    return max(0, x1 - x0) * max(0, y1 - y0)
+
+
+def _iou(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> float:
+    inter = _intersection_area(a, b)
+    if inter <= 0:
+        return 0.0
+    union = _box_area(a) + _box_area(b) - inter
+    return inter / max(1, union)
+
+
+def _containment(inner: tuple[int, int, int, int], outer: tuple[int, int, int, int]) -> float:
+    return _intersection_area(inner, outer) / max(1, _box_area(inner))
 
 
 def _merge_boxes(
@@ -706,7 +744,7 @@ def _filter_and_score_boxes(
     min_visual_score: float,
     strict_text_filter: bool,
     debug_rejected: bool,
-) -> tuple[list[Candidate], int, list[Candidate]]:
+) -> tuple[list[Candidate], int, int, list[Candidate]]:
     page_h, page_w = rgb.shape[:2]
     mask = _non_background_mask(rgb)
     kept: list[Candidate] = []
@@ -833,7 +871,68 @@ def _filter_and_score_boxes(
             )
         )
 
-    return kept, ignored, rejected_candidates
+    kept, overlap_suppressed = _suppress_overlapping_candidates(kept)
+    ignored += overlap_suppressed
+    return kept, ignored, overlap_suppressed, rejected_candidates
+
+
+def _candidate_quality(candidate: Candidate) -> float:
+    area = _box_area(candidate.bbox)
+    compact_bonus = 0.035 if area < 900_000 else 0.0
+    return (
+        candidate.score
+        + 0.28 * candidate.visual_score
+        - 0.20 * candidate.text_like_score
+        + compact_bonus
+    )
+
+
+def _suppress_overlapping_candidates(candidates: list[Candidate]) -> tuple[list[Candidate], int]:
+    if len(candidates) < 2:
+        return candidates, 0
+
+    ordered = sorted(
+        candidates,
+        key=lambda c: (
+            _candidate_quality(c),
+            c.visual_score,
+            -c.text_like_score,
+            -_box_area(c.bbox),
+        ),
+        reverse=True,
+    )
+    kept: list[Candidate] = []
+    suppressed = 0
+
+    for candidate in ordered:
+        cand_quality = _candidate_quality(candidate)
+        cand_area = _box_area(candidate.bbox)
+        should_suppress = False
+
+        for existing in kept:
+            existing_quality = _candidate_quality(existing)
+            existing_area = _box_area(existing.bbox)
+            overlap = _iou(candidate.bbox, existing.bbox)
+            candidate_inside_existing = _containment(candidate.bbox, existing.bbox)
+            existing_inside_candidate = _containment(existing.bbox, candidate.bbox)
+
+            if overlap >= 0.58:
+                should_suppress = True
+            elif candidate_inside_existing >= 0.90 and cand_area <= existing_area and cand_quality <= existing_quality + 0.08:
+                should_suppress = True
+            elif existing_inside_candidate >= 0.94 and cand_area > existing_area * 1.18 and cand_quality <= existing_quality + 0.12:
+                should_suppress = True
+
+            if should_suppress:
+                suppressed += 1
+                candidate.rejection_reasons = sorted(set(candidate.rejection_reasons + ["overlapping or nested duplicate crop"]))
+                break
+
+        if not should_suppress:
+            kept.append(candidate)
+
+    kept.sort(key=lambda c: (c.page, c.bbox[1], c.bbox[0]))
+    return kept, suppressed
 
 
 def _associate_candidate(
@@ -1795,12 +1894,14 @@ def extract_figures(
     source_display = str(pdf_path.relative_to(SCRIPT_DIR)) if pdf_path.is_relative_to(SCRIPT_DIR) else str(pdf_path)
     pdf_stem = re.sub(r"[^A-Za-z0-9_-]+", "_", pdf_path.stem).strip("_") or "pdf"
     _merge_chunk_page_hints(pdf_stem, text_hints, warnings)
+    stale_crops_removed = _clear_previous_figure_crops(pdf_stem)
 
     figures: list[dict[str, Any]] = []
     seen_hashes: set[str] = set()
     duplicates_removed = 0
     figures_detected = 0
     figures_ignored = 0
+    overlap_duplicates_suppressed = 0
     pages_processed = 0
     per_page_ordinals: dict[int, int] = {}
     rejected_debug: list[dict[str, Any]] = []
@@ -1815,7 +1916,7 @@ def extract_figures(
             boxes, raw_box_count = _detect_boxes(rgb, dpi, conservative)
             figures_detected += raw_box_count
             page_hint = text_hints.get(page_num, PageTextHints())
-            candidates, ignored, rejected_candidates = _filter_and_score_boxes(
+            candidates, ignored, overlap_suppressed, rejected_candidates = _filter_and_score_boxes(
                 rgb,
                 boxes,
                 page_num,
@@ -1828,6 +1929,7 @@ def extract_figures(
                 debug_rejected,
             )
             figures_ignored += ignored
+            overlap_duplicates_suppressed += overlap_suppressed
 
             if debug_rejected:
                 for rejected in rejected_candidates:
@@ -1869,6 +1971,8 @@ def extract_figures(
         "figuresKept": len(figures),
         "figuresIgnored": figures_ignored,
         "duplicatesRemoved": duplicates_removed,
+        "overlapDuplicatesSuppressed": overlap_duplicates_suppressed,
+        "staleCropsRemoved": stale_crops_removed,
         "highConfidence": sum(1 for f in figures if f["confidence"] == "high"),
         "mediumConfidence": sum(1 for f in figures if f["confidence"] == "medium"),
         "lowConfidence": sum(1 for f in figures if f["confidence"] == "low"),

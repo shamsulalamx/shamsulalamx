@@ -2012,6 +2012,12 @@ body.quiz-fullscreen-mode .modal-overlay {
   text-align: left;
 }
 .nbme-figure-review-crop-hint { font-size: 10px; color: #5a6a7a; margin-top: 4px; }
+.nbme-figure-review-crop-btn {
+  margin-top: 7px; width: 100%; border: 1px solid #245c88; border-radius: 6px;
+  background: #245c88; color: #fff; padding: 7px 10px; font-size: 12px; font-weight: 700;
+  cursor: pointer;
+}
+.nbme-figure-review-crop-btn:disabled { opacity: .55; cursor: not-allowed; }
 .nbme-figure-review-path { font-size: 10px; color: #5a6a7a; margin-top: 5px; overflow-wrap: anywhere; }
 .nbme-figure-review-reasons { margin: 8px 0 0 0; padding-left: 17px; color: #40546a; font-size: 11px; line-height: 1.4; }
 .nbme-figure-review-stem { font-size: 12px; color: #31445a; line-height: 1.45; margin: 6px 0 8px; }
@@ -23241,12 +23247,13 @@ const App = (() => {
     if (!filePath) return '<div class="nbme-figure-review-img-fallback" style="display:block;">No image path provided.</div>';
     const figureId = fig?.figureId || '';
     const suggestedQ = fig?.suggestedQuestionNumber ?? fig?.questionNumber ?? '';
+    const dataAttrs = `data-raw-path="${_ngjEsc(filePath)}" data-resolved-src="${_ngjEsc(resolved)}" data-figure-id="${_ngjEsc(figureId)}" data-page="${_ngjEsc(fig?.page ?? '')}" data-suggested-question="${_ngjEsc(suggestedQ)}" data-question-id="${_ngjEsc(fig?.questionId || '')}" data-stem-preview="${_ngjEsc(fig?.stemPreview || '')}" data-confidence="${_ngjEsc(fig?.confidence || '')}"`;
     return `
       <div class="nbme-figure-review-thumb-wrap">
-        <button type="button" class="nbme-figure-review-thumb-btn" onclick="App.nbmeFigureCropOpenFromElement(this)" title="Open crop editor">
-          <img class="nbme-figure-review-thumb" src="${_ngjEsc(resolved)}" alt="${_ngjEsc(alt)}" data-raw-path="${_ngjEsc(filePath)}" data-figure-id="${_ngjEsc(figureId)}" data-page="${_ngjEsc(fig?.page ?? '')}" data-suggested-question="${_ngjEsc(suggestedQ)}" data-question-id="${_ngjEsc(fig?.questionId || '')}" data-stem-preview="${_ngjEsc(fig?.stemPreview || '')}" data-confidence="${_ngjEsc(fig?.confidence || '')}" data-review-img-tried="0" onerror="App.nbmeFigureReviewHandleImageError(this)">
+        <button type="button" class="nbme-figure-review-thumb-btn" onclick="App.nbmeFigureCropOpenFromElement(this)" title="Open crop editor" ${dataAttrs}>
+          <img class="nbme-figure-review-thumb" src="${_ngjEsc(resolved)}" alt="${_ngjEsc(alt)}" ${dataAttrs} data-review-img-tried="0" onerror="App.nbmeFigureReviewHandleImageError(this)">
         </button>
-        <div class="nbme-figure-review-crop-hint">Click thumbnail to crop a local copy.</div>
+        <button type="button" class="nbme-figure-review-crop-btn" onclick="App.nbmeFigureCropOpenFromElement(this)" ${dataAttrs}>Crop/Edit</button>
         <div class="nbme-figure-review-img-fallback">Thumbnail unavailable. Path: ${_ngjEsc(filePath)}</div>
         <div class="nbme-figure-review-path">${_ngjEsc(filePath)}</div>
       </div>
@@ -23285,18 +23292,20 @@ const App = (() => {
 
   function nbmeFigureCropOpenFromElement(el) {
     const img = el?.matches?.('img') ? el : el?.querySelector?.('img.nbme-figure-review-thumb');
-    if (!img) return;
-    const rawPath = img.getAttribute('data-raw-path') || '';
-    const src = img.currentSrc || img.src || nbmeFigureReviewResolveImagePath(rawPath);
+    const sourceEl = img || el;
+    if (!sourceEl) return;
+    const rawPath = sourceEl.getAttribute('data-raw-path') || '';
+    const resolvedSrc = sourceEl.getAttribute('data-resolved-src') || '';
+    const src = img?.currentSrc || img?.src || resolvedSrc || nbmeFigureReviewResolveImagePath(rawPath);
     const figure = {
-      figureId: img.getAttribute('data-figure-id') || '',
+      figureId: sourceEl.getAttribute('data-figure-id') || '',
       filePath: rawPath,
-      page: img.getAttribute('data-page') || '',
-      suggestedQuestionNumber: img.getAttribute('data-suggested-question') || '',
-      questionNumber: img.getAttribute('data-suggested-question') || '',
-      questionId: img.getAttribute('data-question-id') || '',
-      stemPreview: img.getAttribute('data-stem-preview') || '',
-      confidence: img.getAttribute('data-confidence') || ''
+      page: sourceEl.getAttribute('data-page') || '',
+      suggestedQuestionNumber: sourceEl.getAttribute('data-suggested-question') || '',
+      questionNumber: sourceEl.getAttribute('data-suggested-question') || '',
+      questionId: sourceEl.getAttribute('data-question-id') || '',
+      stemPreview: sourceEl.getAttribute('data-stem-preview') || '',
+      confidence: sourceEl.getAttribute('data-confidence') || ''
     };
     nbmeFigureCropOpen({ src, figure });
   }
