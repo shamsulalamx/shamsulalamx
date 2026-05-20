@@ -97,6 +97,10 @@ class Candidate:
     needs_review: bool
     width: int
     height: int
+    visual_score: float = 0.0
+    text_like_score: float = 0.0
+    rejection_reasons: list[str] = field(default_factory=list)
+    kept: bool = True
     crop_hash: str = ""
     file_path: str = ""
     figure_id: str = ""
@@ -286,25 +290,42 @@ def _component_stats(mask: np.ndarray) -> dict[str, float]:
     areas = []
     heights = []
     widths = []
+    small_textish = 0
+    line_like = 0
+    large_visual = 0
     for idx in range(1, count):
         area = float(stats[idx, cv2.CC_STAT_AREA])
         if area < 3:
             continue
+        w = float(stats[idx, cv2.CC_STAT_WIDTH])
+        h = float(stats[idx, cv2.CC_STAT_HEIGHT])
         areas.append(area)
-        widths.append(float(stats[idx, cv2.CC_STAT_WIDTH]))
-        heights.append(float(stats[idx, cv2.CC_STAT_HEIGHT]))
+        widths.append(w)
+        heights.append(h)
+        if 3 <= h <= 26 and 2 <= w <= 220 and area <= 1300:
+            small_textish += 1
+        if w >= 90 and h <= 12:
+            line_like += 1
+        if area >= 2200 or (w >= 90 and h >= 70):
+            large_visual += 1
     if not areas:
         return {
             "count": 0.0,
             "max_area": 0.0,
             "median_height": 0.0,
             "median_width": 0.0,
+            "small_textish": 0.0,
+            "line_like": 0.0,
+            "large_visual": 0.0,
         }
     return {
         "count": float(len(areas)),
         "max_area": float(max(areas)),
         "median_height": float(np.median(heights)),
         "median_width": float(np.median(widths)),
+        "small_textish": float(small_textish),
+        "line_like": float(line_like),
+        "large_visual": float(large_visual),
     }
 
 
@@ -314,15 +335,35 @@ def _box_features(rgb: np.ndarray, mask: np.ndarray, box: tuple[int, int, int, i
     crop_mask = mask[y0:y1, x0:x1]
     area = max(1, crop_mask.shape[0] * crop_mask.shape[1])
     gray = cv2.cvtColor(crop, cv2.COLOR_RGB2GRAY)
+    hsv = cv2.cvtColor(crop, cv2.COLOR_RGB2HSV)
+    saturation = hsv[:, :, 1]
     edges = cv2.Canny(gray, 80, 180)
     stats = _component_stats(crop_mask)
+    dark = gray < 160
+    white = gray > 245
+    colored = saturation > 40
+    row_counts = (crop_mask > 0).sum(axis=1)
+    active_rows = np.where(row_counts > max(12, crop_mask.shape[1] * 0.015))[0]
+    row_runs = 0
+    if active_rows.size:
+        gaps = np.diff(active_rows)
+        row_runs = int(np.count_nonzero(gaps > 2) + 1)
     return {
         "ink_density": float(np.count_nonzero(crop_mask) / area),
         "edge_density": float(np.count_nonzero(edges) / area),
+        "white_ratio": float(np.count_nonzero(white) / area),
+        "dark_ratio": float(np.count_nonzero(dark) / area),
+        "color_ratio": float(np.count_nonzero(colored) / area),
+        "gray_std": float(np.std(gray)),
+        "sat_std": float(np.std(saturation)),
+        "row_runs": float(row_runs),
         "component_count": stats["count"],
         "component_max_area_ratio": float(stats["max_area"] / area),
         "component_median_height": stats["median_height"],
         "component_median_width": stats["median_width"],
+        "small_textish_components": stats["small_textish"],
+        "line_like_components": stats["line_like"],
+        "large_visual_components": stats["large_visual"],
     }
 
 
@@ -340,6 +381,228 @@ def _is_text_only(features: dict[str, float], w: int, h: int, dpi: int) -> bool:
         and w > 260 * scale
     )
     return many_small_components or sparse_large_text_block
+
+
+def _line_density_score(features: dict[str, float], w: int, h: int) -> float:
+    row_run_density = features["row_runs"] / max(1.0, h / 22.0)
+    small_component_density = features["small_textish_components"] / max(1.0, features["component_count"])
+    return min(1.0, 0.55 * row_run_density + 0.45 * small_component_density)
+
+
+def _visual_text_scores(features: dict[str, float], w: int, h: int, area_ratio: float) -> tuple[float, float]:
+    line_density = _line_density_score(features, w, h)
+    color_score = min(1.0, features["color_ratio"] / 0.035)
+    tonal_score = min(1.0, features["gray_std"] / 55.0)
+    edge_score = min(1.0, features["edge_density"] / 0.08)
+    large_component_score = min(1.0, features["component_max_area_ratio"] / 0.11)
+    size_score = min(1.0, area_ratio / 0.045)
+
+    visual_score = (
+        0.22 * color_score
+        + 0.22 * tonal_score
+        + 0.20 * edge_score
+        + 0.24 * large_component_score
+        + 0.12 * size_score
+    )
+
+    white_text_score = 1.0 if features["white_ratio"] > 0.70 and features["color_ratio"] < 0.025 else 0.0
+    small_text_score = min(1.0, features["small_textish_components"] / 60.0)
+    paragraph_score = min(1.0, line_density)
+    low_photo_variance = 1.0 if features["gray_std"] < 44 and features["color_ratio"] < 0.018 else 0.0
+    line_table_score = min(1.0, features["line_like_components"] / 8.0)
+
+    text_like_score = (
+        0.28 * white_text_score
+        + 0.28 * small_text_score
+        + 0.24 * paragraph_score
+        + 0.12 * low_photo_variance
+        + 0.08 * line_table_score
+    )
+
+    # Visually dense or photo-like crops should not be rejected simply because
+    # they contain small labels, grid ticks, or ECG axis text.
+    if visual_score >= 0.68 and features["component_max_area_ratio"] >= 0.07:
+        text_like_score *= 0.65
+    if features["color_ratio"] >= 0.08 or features["gray_std"] >= 70:
+        text_like_score *= 0.75
+
+    return round(float(visual_score), 4), round(float(text_like_score), 4)
+
+
+def _answer_choice_overlap_reasons(
+    box: tuple[int, int, int, int],
+    page_h: int,
+    text_hint: PageTextHints,
+) -> list[str]:
+    if not text_hint.answer_choice_y:
+        return []
+    x0, y0, x1, y1 = box
+    scale_y = page_h / 792.0
+    answer_ys = [y * scale_y for y in text_hint.answer_choice_y if y > 0]
+    if not answer_ys:
+        return []
+    inside = [y for y in answer_ys if y0 <= y <= y1]
+    if len(inside) >= 3:
+        return ["overlaps multiple native answer-choice labels"]
+    first_choice = min(answer_ys)
+    if y0 >= first_choice - 12 and len(inside) >= 2:
+        return ["starts in answer-choice region"]
+    return []
+
+
+def _second_pass_decision(
+    features: dict[str, float],
+    box: tuple[int, int, int, int],
+    page_w: int,
+    page_h: int,
+    dpi: int,
+    text_hint: PageTextHints,
+    min_visual_score: float,
+    strict_text_filter: bool,
+) -> tuple[bool, float, float, list[str]]:
+    x0, y0, x1, y1 = box
+    w = x1 - x0
+    h = y1 - y0
+    area_ratio = (w * h) / max(1, page_w * page_h)
+    aspect = w / max(1, h)
+    visual_score, text_like_score = _visual_text_scores(features, w, h, area_ratio)
+    rejection_reasons = []
+    component_count = max(1.0, features["component_count"])
+    small_text_ratio = features["small_textish_components"] / component_count
+    text_dominated_layout = (
+        small_text_ratio >= 0.72
+        and features["component_count"] >= 35
+        and features["row_runs"] >= 5
+    )
+    likely_graph_or_diagram = (
+        features["large_visual_components"] >= 2
+        and features["component_count"] < 90
+        and features["component_max_area_ratio"] >= 0.018
+    )
+    highlighted_answer_layout = (
+        features["white_ratio"] > 0.55
+        and features["color_ratio"] > 0.08
+        and features["small_textish_components"] >= 35
+        and features["row_runs"] >= 5
+        and features["component_max_area_ratio"] < 0.28
+    )
+    compact_text_list = (
+        h < 260 * (dpi / DEFAULT_DPI)
+        and small_text_ratio >= 0.72
+        and features["row_runs"] >= 3
+        and features["large_visual_components"] <= 1
+    )
+    compact_highlight_list = (
+        features["white_ratio"] > 0.75
+        and features["color_ratio"] > 0.07
+        and features["gray_std"] < 52
+        and features["row_runs"] >= 6
+        and features["component_count"] >= 15
+        and features["component_max_area_ratio"] < 0.075
+    )
+    plain_text_table = (
+        features["color_ratio"] < 0.025
+        and small_text_ratio >= 0.60
+        and features["row_runs"] >= 4
+        and features["large_visual_components"] == 0
+    )
+
+    if visual_score < min_visual_score:
+        rejection_reasons.append("visual score below threshold")
+    if (
+        features["white_ratio"] > 0.78
+        and features["dark_ratio"] < 0.18
+        and features["color_ratio"] < 0.018
+        and not likely_graph_or_diagram
+    ):
+        rejection_reasons.append("mostly black text on white background")
+    if highlighted_answer_layout:
+        rejection_reasons.append("highlighted answer-choice/list layout")
+    if compact_text_list:
+        rejection_reasons.append("compact answer-choice/list crop")
+    if compact_highlight_list:
+        rejection_reasons.append("compact highlighted answer-choice crop")
+    if plain_text_table and not likely_graph_or_diagram:
+        rejection_reasons.append("plain text table crop")
+    if (
+        features["small_textish_components"] >= 55
+        and (features["large_visual_components"] <= 1 or text_dominated_layout)
+        and not likely_graph_or_diagram
+    ):
+        rejection_reasons.append("dense small text components")
+    if (
+        features["row_runs"] >= 8
+        and features["component_max_area_ratio"] < 0.045
+        and features["component_count"] >= 45
+        and not likely_graph_or_diagram
+    ):
+        rejection_reasons.append("paragraph or answer-list row layout")
+    if features["line_like_components"] >= 5 and visual_score < 0.62 and features["color_ratio"] < 0.035:
+        rejection_reasons.append("plain line/table artifact without visual signal")
+    if aspect > 7.5 and features["gray_std"] < 58:
+        rejection_reasons.append("decorative horizontal line")
+
+    rejection_reasons.extend(_answer_choice_overlap_reasons(box, page_h, text_hint))
+
+    has_medical_visual_signal = (
+        visual_score >= max(min_visual_score, 0.48)
+        and not text_dominated_layout
+        and (
+            features["component_max_area_ratio"] >= 0.06
+            or features["gray_std"] >= 62
+            or features["color_ratio"] >= 0.04
+            or likely_graph_or_diagram
+        )
+    )
+    text_cutoff = 0.64 if strict_text_filter else 0.72
+    if text_like_score >= text_cutoff and not has_medical_visual_signal:
+        rejection_reasons.append("text-like score above threshold")
+
+    # Keep uncertain medical-looking crops, but reject obvious text/list/table
+    # blocks when at least two independent text signals agree.
+    hard_reasons = [
+        r for r in rejection_reasons
+        if r in {
+            "visual score below threshold",
+            "mostly black text on white background",
+            "highlighted answer-choice/list layout",
+            "compact answer-choice/list crop",
+            "compact highlighted answer-choice crop",
+            "plain text table crop",
+            "dense small text components",
+            "paragraph or answer-list row layout",
+            "plain line/table artifact without visual signal",
+            "decorative horizontal line",
+            "overlaps multiple native answer-choice labels",
+            "starts in answer-choice region",
+            "text-like score above threshold",
+        }
+    ]
+    keep = True
+    if "visual score below threshold" in hard_reasons:
+        keep = False
+    elif "highlighted answer-choice/list layout" in hard_reasons:
+        keep = False
+    elif "compact answer-choice/list crop" in hard_reasons:
+        keep = False
+    elif "compact highlighted answer-choice crop" in hard_reasons:
+        keep = False
+    elif "plain text table crop" in hard_reasons:
+        keep = False
+    elif "overlaps multiple native answer-choice labels" in hard_reasons:
+        keep = False
+    elif "starts in answer-choice region" in hard_reasons:
+        keep = False
+    elif "paragraph or answer-list row layout" in hard_reasons:
+        keep = False
+    elif "mostly black text on white background" in hard_reasons:
+        keep = False
+    elif "decorative horizontal line" in hard_reasons and text_dominated_layout:
+        keep = False
+    elif len(hard_reasons) >= (1 if strict_text_filter else 2) and not has_medical_visual_signal:
+        keep = False
+
+    return keep, visual_score, text_like_score, sorted(set(rejection_reasons))
 
 
 def _score_candidate(
@@ -438,7 +701,10 @@ def _filter_and_score_boxes(
     conservative: bool,
     text_hint: PageTextHints,
     page_candidate_count: int,
-) -> tuple[list[Candidate], int]:
+    min_visual_score: float,
+    strict_text_filter: bool,
+    debug_rejected: bool,
+) -> tuple[list[Candidate], int, list[Candidate]]:
     page_h, page_w = rgb.shape[:2]
     mask = _non_background_mask(rgb)
     kept: list[Candidate] = []
@@ -447,6 +713,43 @@ def _filter_and_score_boxes(
     min_w = int((150 if conservative else 110) * scale)
     min_h = int((80 if conservative else 60) * scale)
     min_score = 0.44 if conservative else 0.34
+    rejected_candidates: list[Candidate] = []
+
+    def reject_candidate(
+        reject_box: tuple[int, int, int, int],
+        reject_reasons: list[str],
+        reject_features: Optional[dict[str, float]] = None,
+        reject_score: float = 0.0,
+    ) -> None:
+        if not debug_rejected:
+            return
+        rx0, ry0, rx1, ry1 = reject_box
+        if reject_features is not None:
+            visual_score, text_like_score = _visual_text_scores(
+                reject_features,
+                rx1 - rx0,
+                ry1 - ry0,
+                ((rx1 - rx0) * (ry1 - ry0)) / max(1, page_w * page_h),
+            )
+        else:
+            visual_score, text_like_score = 0.0, 0.0
+        rejected_candidates.append(
+            Candidate(
+                page=page_num,
+                bbox=reject_box,
+                score=round(float(reject_score), 4),
+                reasons=[],
+                suggested_question=None,
+                confidence="unknown",
+                needs_review=True,
+                width=rx1 - rx0,
+                height=ry1 - ry0,
+                visual_score=visual_score,
+                text_like_score=text_like_score,
+                rejection_reasons=sorted(set(reject_reasons)),
+                kept=False,
+            )
+        )
 
     for box in boxes:
         x0, y0, x1, y1 = box
@@ -457,28 +760,50 @@ def _filter_and_score_boxes(
 
         if w < min_w or h < min_h:
             ignored += 1
+            reject_candidate(box, ["below minimum size threshold"])
             continue
         if y0 < page_h * 0.10 and h < page_h * 0.08:
             ignored += 1
+            reject_candidate(box, ["top header or UI bar"])
             continue
         if y1 > page_h * 0.90 and h < page_h * 0.08:
             ignored += 1
+            reject_candidate(box, ["bottom footer or UI bar"])
             continue
         if h < 34 * scale or (aspect > 13 and h < 110 * scale):
             ignored += 1
+            reject_candidate(box, ["decorative horizontal line or tiny strip"])
             continue
         if area_ratio > 0.70:
             ignored += 1
+            reject_candidate(box, ["full-page background screenshot"])
             continue
 
         features = _box_features(rgb, mask, box)
         if _is_text_only(features, w, h, dpi):
             ignored += 1
+            reject_candidate(box, ["first-pass text-only component pattern"], features)
             continue
 
         score, reasons = _score_candidate(page_w, page_h, box, features)
         if score < min_score:
             ignored += 1
+            reject_candidate(box, ["first-pass score below threshold"], features, score)
+            continue
+
+        keep, visual_score, text_like_score, rejection_reasons = _second_pass_decision(
+            features,
+            box,
+            page_w,
+            page_h,
+            dpi,
+            text_hint,
+            min_visual_score,
+            strict_text_filter,
+        )
+        if not keep:
+            ignored += 1
+            reject_candidate(box, rejection_reasons, features, score)
             continue
 
         suggested, confidence, association_reasons = _associate_candidate(
@@ -499,10 +824,14 @@ def _filter_and_score_boxes(
                 needs_review=confidence != "high",
                 width=w,
                 height=h,
+                visual_score=visual_score,
+                text_like_score=text_like_score,
+                rejection_reasons=rejection_reasons,
+                kept=True,
             )
         )
 
-    return kept, ignored
+    return kept, ignored, rejected_candidates
 
 
 def _associate_candidate(
@@ -605,7 +934,11 @@ def _candidate_to_manifest(c: Candidate) -> dict[str, Any]:
         "suggestedQuestionNumber": c.suggested_question,
         "confidence": c.confidence,
         "score": c.score,
+        "visualScore": c.visual_score,
+        "textLikeScore": c.text_like_score,
         "reasons": c.reasons,
+        "rejectionReasons": c.rejection_reasons,
+        "kept": c.kept,
         "needsReview": c.needs_review,
     }
 
@@ -663,6 +996,9 @@ def extract_figures(
     max_pages: Optional[int] = None,
     conservative: bool = True,
     contact_sheet: bool = True,
+    strict_text_filter: bool = False,
+    min_visual_score: float = 0.42,
+    debug_rejected: bool = False,
 ) -> dict[str, Any]:
     ensure_dirs()
     warnings: list[str] = []
@@ -686,6 +1022,7 @@ def extract_figures(
     figures_ignored = 0
     pages_processed = 0
     per_page_ordinals: dict[int, int] = {}
+    rejected_debug: list[dict[str, Any]] = []
 
     with fitz.open(pdf_path) as doc:
         page_total = doc.page_count
@@ -697,10 +1034,33 @@ def extract_figures(
             boxes, raw_box_count = _detect_boxes(rgb, dpi, conservative)
             figures_detected += raw_box_count
             page_hint = text_hints.get(page_num, PageTextHints())
-            candidates, ignored = _filter_and_score_boxes(
-                rgb, boxes, page_num, dpi, conservative, page_hint, len(boxes)
+            candidates, ignored, rejected_candidates = _filter_and_score_boxes(
+                rgb,
+                boxes,
+                page_num,
+                dpi,
+                conservative,
+                page_hint,
+                len(boxes),
+                min_visual_score,
+                strict_text_filter,
+                debug_rejected,
             )
             figures_ignored += ignored
+
+            if debug_rejected:
+                for rejected in rejected_candidates:
+                    rejected_debug.append({
+                        "page": rejected.page,
+                        "bbox": list(rejected.bbox),
+                        "width": rejected.width,
+                        "height": rejected.height,
+                        "score": rejected.score,
+                        "visualScore": rejected.visual_score,
+                        "textLikeScore": rejected.text_like_score,
+                        "rejectionReasons": rejected.rejection_reasons,
+                        "kept": False,
+                    })
 
             for candidate in candidates:
                 x0, y0, x1, y1 = candidate.bbox
@@ -733,14 +1093,24 @@ def extract_figures(
         "lowConfidence": sum(1 for f in figures if f["confidence"] == "low"),
         "unknownConfidence": sum(1 for f in figures if f["confidence"] == "unknown"),
         "needsReview": sum(1 for f in figures if f["needsReview"]),
+        "textLikeKept": sum(1 for f in figures if f["textLikeScore"] >= 0.72),
+        "rejectedDebugCount": len(rejected_debug),
     }
     manifest = {
         "sourcePdf": source_display,
         "dpi": dpi,
+        "settings": {
+            "conservative": conservative,
+            "strictTextFilter": strict_text_filter,
+            "minVisualScore": min_visual_score,
+            "debugRejected": debug_rejected,
+        },
         "figures": figures,
         "summary": summary,
         "warnings": warnings,
     }
+    if debug_rejected:
+        manifest["rejectedCandidates"] = rejected_debug
 
     manifest_path = MANIFEST_DIR / f"{pdf_stem}_figure_manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -784,6 +1154,22 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         default=True,
         help="Prefer fewer false positives. Default: true",
     )
+    parser.add_argument(
+        "--strict-text-filter",
+        action="store_true",
+        help="Use stricter rejection for text-like crops.",
+    )
+    parser.add_argument(
+        "--min-visual-score",
+        type=float,
+        default=0.42,
+        help="Minimum second-pass visual score. Default: 0.42",
+    )
+    parser.add_argument(
+        "--debug-rejected",
+        action="store_true",
+        help="Include rejected candidate diagnostics in the manifest.",
+    )
     return parser.parse_args(argv)
 
 
@@ -795,6 +1181,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.max_pages is not None and args.max_pages < 1:
         print("ERROR: --max-pages must be >= 1", file=sys.stderr)
         return 2
+    if args.min_visual_score < 0 or args.min_visual_score > 1:
+        print("ERROR: --min-visual-score must be between 0 and 1", file=sys.stderr)
+        return 2
 
     try:
         extract_figures(
@@ -803,6 +1192,9 @@ def main(argv: Optional[list[str]] = None) -> int:
             max_pages=args.max_pages,
             conservative=args.conservative,
             contact_sheet=args.contact_sheet,
+            strict_text_filter=args.strict_text_filter,
+            min_visual_score=args.min_visual_score,
+            debug_rejected=args.debug_rejected,
         )
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

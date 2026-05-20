@@ -1,4 +1,4 @@
-# NBME Figure Extraction Milestone 1
+# NBME Figure Extraction
 
 This is an additive review utility for NBME PDFs. It extracts likely figure/image crop candidates from rendered PDF pages and writes a manifest plus contact sheet for rapid manual review.
 
@@ -8,7 +8,7 @@ It does not modify `index.html`, the app importer, raw text extraction, chunking
 
 The current milestone is screenshot elimination, not automatic image attachment.
 
-The script renders PDF pages and uses conservative OpenCV contour detection to find likely non-text visual regions. Each crop is saved as a PNG. The contact sheet lets you quickly decide which crops are real clinical figures before any future manual or automated attachment workflow.
+The script renders PDF pages and uses conservative OpenCV contour detection to find likely non-text visual regions. A second-pass scorer then rejects obvious text, answer-choice blocks, paragraph layouts, plain text tables, and decorative lines. Each kept crop is saved as a PNG. The contact sheet lets you quickly decide which crops are real clinical figures before any future manual or automated attachment workflow.
 
 ## Requirements
 
@@ -41,6 +41,9 @@ python3 nbme_extract_figures.py --pdf input_pdfs/8A.pdf --dpi 250
 python3 nbme_extract_figures.py --pdf input_pdfs/8A.pdf --max-pages 5
 python3 nbme_extract_figures.py --pdf input_pdfs/8A.pdf --contact-sheet
 python3 nbme_extract_figures.py --pdf input_pdfs/8A.pdf --conservative
+python3 nbme_extract_figures.py --pdf input_pdfs/8A.pdf --strict-text-filter
+python3 nbme_extract_figures.py --pdf input_pdfs/8A.pdf --min-visual-score 0.50
+python3 nbme_extract_figures.py --pdf input_pdfs/8A.pdf --debug-rejected
 ```
 
 Defaults:
@@ -49,6 +52,9 @@ Defaults:
 --dpi 200
 --conservative true
 --contact-sheet true
+--strict-text-filter false
+--min-visual-score 0.42
+--debug-rejected false
 ```
 
 Start real NBME testing with the limited smoke command first:
@@ -78,6 +84,12 @@ The manifest has this shape:
 {
   "sourcePdf": "input_pdfs/8A.pdf",
   "dpi": 200,
+  "settings": {
+    "conservative": true,
+    "strictTextFilter": false,
+    "minVisualScore": 0.42,
+    "debugRejected": false
+  },
   "figures": [
     {
       "figureId": "8A_p012_fig001",
@@ -90,11 +102,15 @@ The manifest has this shape:
       "suggestedQuestionNumber": 11,
       "confidence": "medium",
       "score": 0.62,
+      "visualScore": 0.84,
+      "textLikeScore": 0.05,
       "reasons": [
         "major non-text visual region",
         "same page as one extracted question number",
         "same page as image-reference phrase"
       ],
+      "rejectionReasons": [],
+      "kept": true,
       "needsReview": true
     }
   ],
@@ -108,11 +124,26 @@ The manifest has this shape:
     "mediumConfidence": 0,
     "lowConfidence": 0,
     "unknownConfidence": 0,
-    "needsReview": 0
+    "needsReview": 0,
+    "textLikeKept": 0,
+    "rejectedDebugCount": 0
   },
   "warnings": []
 }
 ```
+
+When `--debug-rejected` is used, the manifest also includes `rejectedCandidates[]` with page, bbox, visual/text scores, and rejection reasons. Rejected crops are not included in the contact sheet.
+
+## Second-Pass Filtering
+
+The second pass uses image statistics and connected components rather than OCR. It scores candidates with:
+
+- `visualScore`: higher for photo-like, graph-like, ECG-like, or image-dense regions.
+- `textLikeScore`: higher for black text on white background, dense paragraph rows, answer-list layouts, and plain text tables.
+- `rejectionReasons`: explains why a candidate was rejected or flagged.
+- `kept`: true for candidates written to `extracted_figures/`.
+
+Default behavior is conservative but not maximal. It keeps uncertain medical-looking figures while rejecting obvious answer-choice and text blocks. Use `--strict-text-filter` only when review sheets still contain too many text crops.
 
 ## Association Limits
 
