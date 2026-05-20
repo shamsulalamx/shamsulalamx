@@ -21814,7 +21814,72 @@ const App = (() => {
     if (isNewMain) setTimeout(function() { document.getElementById('lji-new-main-name').focus(); }, 80);
   }
 
-  function confirmLandingJsonImport() {
+  function _landingJsonQuestionFromLegacyAppReady(q, idx) {
+    const options = Array.isArray(q.options) ? q.options : [];
+    const labels = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+    const mappedOptions = options.map(function(opt, optIdx) {
+      if (opt && typeof opt === 'object') {
+        return {
+          l: String(opt.l || opt.label || opt.letter || labels[optIdx] || ''),
+          t: String(opt.t || opt.text || opt.value || '')
+        };
+      }
+      return { l: labels[optIdx] || '', t: String(opt || '') };
+    }).filter(function(opt) { return opt.l && opt.t; });
+    return Object.assign({}, q, {
+      n: q.n || q.questionNumber || (idx + 1),
+      t: String(q.t || q.stem || ''),
+      o: Array.isArray(q.o) ? q.o : mappedOptions,
+      c: String(q.c || q.correctAnswer || q.answer || ''),
+      explanation: q.explanation || '',
+      metadata: Object.assign({}, q.metadata || {})
+    });
+  }
+
+  function _landingJsonQuestionFromInternalAppReady(q, idx) {
+    return Object.assign({}, q, {
+      n: q.n || q.questionNumber || (idx + 1),
+      t: String(q.t || ''),
+      o: Array.isArray(q.o) ? q.o.map(function(opt) {
+        return { l: String(opt.l || opt.label || ''), t: String(opt.t || opt.text || '') };
+      }) : [],
+      c: String(q.c || ''),
+      metadata: Object.assign({}, q.metadata || {})
+    });
+  }
+
+  function _isInternalAppReadyQuestion(q) {
+    return !!(q && typeof q.t === 'string' && Array.isArray(q.o));
+  }
+
+  function _validateInternalAppReadyQuestions(qs) {
+    return Array.isArray(qs) && qs.length && qs.every(function(q) {
+      if (!q || !q.t || !Array.isArray(q.o) || q.o.length < 2) return false;
+      return q.o.every(function(opt) { return opt && opt.l && opt.t; });
+    });
+  }
+
+  async function _persistLandingJsonInlineImages(test) {
+    if (!test || !Array.isArray(test.questions) || !window.FigureStore) return 0;
+    let savedCount = 0;
+    for (const q of test.questions) {
+      const images = Array.isArray(q.images) ? q.images : [];
+      if (!images.length) continue;
+      images.forEach(function(img, idx) {
+        if (!img.figureKey) img.figureKey = `${test.id}:${q.n || 'q'}:${idx}`;
+      });
+      for (const img of images) {
+        if (!img || !img.dataUrl || !img.figureKey) continue;
+        await window.FigureStore.put(img.figureKey, img.dataUrl);
+        delete img.dataUrl;
+        savedCount += 1;
+      }
+    }
+    if (savedCount) DB.updateTest(test.id, { questions: test.questions });
+    return savedCount;
+  }
+
+  async function confirmLandingJsonImport() {
     const errEl = document.getElementById('lji-error');
     function showError(msg) { errEl.textContent = msg; errEl.style.display = 'block'; }
 
@@ -21878,17 +21943,25 @@ const App = (() => {
         });
         return out;
       });
+    } else if (parsed && Array.isArray(parsed.questions) && parsed.questions.length && parsed.questions.every(_isInternalAppReadyQuestion)) {
+      // Internal app-ready test object. Used by screenshot/table generators that
+      // need q.images[] persisted through FigureStore instead of manual upload.
+      questions = parsed.questions.map(_landingJsonQuestionFromInternalAppReady);
+      if (!_validateInternalAppReadyQuestions(questions)) {
+        showError('JSON questions are missing required internal fields (t, o).');
+        return;
+      }
     } else if (parsed && Array.isArray(parsed.questions) && parsed.questions.length) {
       // App-ready test object with questions array
       const qs = parsed.questions;
       const valid = qs.every(function(q) { return q.stem && Array.isArray(q.options); });
       if (!valid) { showError('JSON questions are missing required fields (stem, options).'); return; }
-      questions = qs;
+      questions = qs.map(_landingJsonQuestionFromLegacyAppReady);
     } else if (Array.isArray(parsed) && parsed.length && parsed[0] && parsed[0].stem) {
       // Bare array of question objects
       const valid = parsed.every(function(q) { return q.stem && Array.isArray(q.options); });
       if (!valid) { showError('JSON questions are missing required fields (stem, options).'); return; }
-      questions = parsed;
+      questions = parsed.map(_landingJsonQuestionFromLegacyAppReady);
     } else {
       showError('Unrecognized JSON schema. Expected a test object with a "questions" array, or NBME Gemini JSON format.');
       return;
@@ -21898,6 +21971,12 @@ const App = (() => {
 
     const test = DB.createTest(folderId, testName, questions);
     if (!test) { showError('Could not create test — storage may be full.'); return; }
+    try {
+      await _persistLandingJsonInlineImages(test);
+    } catch(err) {
+      showError('Imported questions were created, but image persistence failed: ' + (err.message || String(err)));
+      return;
+    }
 
     closeLandingJsonImportModal();
     _currentFolder = folderId;

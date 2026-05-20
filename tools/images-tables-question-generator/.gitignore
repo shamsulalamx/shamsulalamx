@@ -1,0 +1,11 @@
+input_images/*
+output_json/*
+output_assets/*
+logs/*
+intermediate/*
+!input_images/.gitkeep
+!output_json/app_ready/
+!output_json/app_ready/.gitkeep
+!output_assets/.gitkeep
+!logs/.gitkeep
+!intermediate/.gitkeep
