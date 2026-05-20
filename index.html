@@ -3954,6 +3954,11 @@ window.MiscDocStore = MiscDocStore;
       .concat(snapshot.trash || []);
   }
 
+  function questionImageCollections(q) {
+    if (!q) return [];
+    return [q.images, q.explanationImages].filter(Array.isArray);
+  }
+
   function applyDriveFileIdsForCollection(snapshotTests, localTests) {
     for (const snapTest of snapshotTests || []) {
       const localTest = (localTests || []).find(t => t.id === snapTest.id);
@@ -3962,9 +3967,11 @@ window.MiscDocStore = MiscDocStore;
         const snapQ = snapTest.questions[qi];
         const localQ = localTest.questions?.[qi];
         if (!snapQ || !localQ) continue;
-        for (let ii = 0; ii < (snapQ.images || []).length; ii++) {
-          if (snapQ.images[ii]?.driveFileId && localQ.images?.[ii]) {
-            localQ.images[ii].driveFileId = snapQ.images[ii].driveFileId;
+        for (const field of ['images', 'explanationImages']) {
+          for (let ii = 0; ii < (snapQ[field] || []).length; ii++) {
+            if (snapQ[field][ii]?.driveFileId && localQ[field]?.[ii]) {
+              localQ[field][ii].driveFileId = snapQ[field][ii].driveFileId;
+            }
           }
         }
       }
@@ -3989,7 +3996,7 @@ window.MiscDocStore = MiscDocStore;
     const folderId = await ensureDriveFolder();
     for (const test of snapshotTestsWithImages(snapshot)) {
       for (const q of test.questions || []) {
-        for (const img of q.images || []) {
+        for (const img of questionImageCollections(q).flat()) {
           if (!img.figureKey || img.driveFileId || !window.FigureStore) continue;
           const dataUrl = await window.FigureStore.get(img.figureKey).catch(() => null);
           const blob = dataUrl ? dataUrlToBlob(dataUrl) : null;
@@ -4067,7 +4074,7 @@ window.MiscDocStore = MiscDocStore;
     if (!window.FigureStore) return;
     for (const test of snapshotTestsWithImages(snapshot)) {
       for (const q of test.questions || []) {
-        for (const img of q.images || []) {
+        for (const img of questionImageCollections(q).flat()) {
           if (!img.figureKey || !img.driveFileId) continue;
           const existing = await window.FigureStore.get(img.figureKey).catch(() => null);
           if (existing) continue;
@@ -6182,14 +6189,10 @@ function getDisplayImagesForQuestion(q) {
   return images;
 }
 
-function renderImagesInto(q, topEl, bottomEl) {
-  if (!topEl || !bottomEl) return;
-  topEl.innerHTML = '';
-  bottomEl.innerHTML = '';
-  if (!q || !q.images || !q.images.length) return;
-  const displayImages = getDisplayImagesForQuestion(q);
+function renderStoredImagesInto(images, dest) {
+  if (!dest) return;
+  const displayImages = Array.isArray(images) ? images : [];
   for (const img of displayImages) {
-    const dest = bottomEl;
     const wrap = document.createElement('div');
     wrap.className = 'q-img-wrap';
     const el = document.createElement('img');
@@ -6198,7 +6201,6 @@ function renderImagesInto(q, topEl, bottomEl) {
     wrap.appendChild(el);
     dest.appendChild(wrap);
 
-    // Support both legacy dataUrl (in-memory, pre-save) and new figureKey (IndexedDB)
     if (img.dataUrl) {
       el.src = img.dataUrl;
     } else if (img.figureKey && window.FigureStore) {
@@ -6225,8 +6227,25 @@ function renderImagesInto(q, topEl, bottomEl) {
   }
 }
 
+function renderImagesInto(q, topEl, bottomEl) {
+  if (!topEl || !bottomEl) return;
+  topEl.innerHTML = '';
+  bottomEl.innerHTML = '';
+  if (!q || !q.images || !q.images.length) return;
+  renderStoredImagesInto(getDisplayImagesForQuestion(q), bottomEl);
+}
+
 function renderImages(q, topElId, bottomElId) {
   renderImagesInto(q, document.getElementById(topElId), document.getElementById(bottomElId));
+}
+
+function renderExplanationImagesInto(q, container) {
+  if (!container || !q || !Array.isArray(q.explanationImages) || !q.explanationImages.length) return;
+  const block = document.createElement('div');
+  block.className = 'q-explanation-images';
+  block.style.marginTop = '12px';
+  renderStoredImagesInto(q.explanationImages, block);
+  container.appendChild(block);
 }
 
 </script>
@@ -7014,6 +7033,10 @@ const Quiz = (() => {
       });
       container.appendChild(expDiv);
     }
+
+    if (typeof renderExplanationImagesInto === 'function') {
+      renderExplanationImagesInto(q, container);
+    }
   }
 
   function renderFlagButton() {
@@ -7219,6 +7242,10 @@ window.buildExplanationHTML = function(q, r, container) {
       expDiv.appendChild(p);
     });
     container.appendChild(expDiv);
+  }
+
+  if (typeof renderExplanationImagesInto === 'function') {
+    renderExplanationImagesInto(q, container);
   }
 };
 
@@ -21863,16 +21890,21 @@ const App = (() => {
     if (!test || !Array.isArray(test.questions) || !window.FigureStore) return 0;
     let savedCount = 0;
     for (const q of test.questions) {
-      const images = Array.isArray(q.images) ? q.images : [];
-      if (!images.length) continue;
-      images.forEach(function(img, idx) {
-        if (!img.figureKey) img.figureKey = `${test.id}:${q.n || 'q'}:${idx}`;
-      });
-      for (const img of images) {
-        if (!img || !img.dataUrl || !img.figureKey) continue;
-        await window.FigureStore.put(img.figureKey, img.dataUrl);
-        delete img.dataUrl;
-        savedCount += 1;
+      for (const field of ['images', 'explanationImages']) {
+        const images = Array.isArray(q[field]) ? q[field] : [];
+        if (!images.length) continue;
+        images.forEach(function(img, idx) {
+          if (!img.figureKey) {
+            const slot = field === 'images' ? idx : `explanation:${idx}`;
+            img.figureKey = `${test.id}:${q.n || 'q'}:${slot}`;
+          }
+        });
+        for (const img of images) {
+          if (!img || !img.dataUrl || !img.figureKey) continue;
+          await window.FigureStore.put(img.figureKey, img.dataUrl);
+          delete img.dataUrl;
+          savedCount += 1;
+        }
       }
     }
     if (savedCount) DB.updateTest(test.id, { questions: test.questions });

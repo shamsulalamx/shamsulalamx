@@ -3,7 +3,7 @@
 Images/Tables screenshot -> NBME app-ready JSON generator.
 
 Creates one Step 2-style question per screenshot and emits internal app-ready
-questions that the app imports through q.images[] + FigureStore.
+questions that the app imports through q.images[] / q.explanationImages[] + FigureStore.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ INTERMEDIATE_DIR = BASE_DIR / "intermediate"
 GEMINI_MODEL = "gemini-2.5-flash"
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 SOURCE_FORMAT = "images-tables"
-OUTPUT_SCHEMA_VERSION = "nbme-internal-app-ready-v1"
+OUTPUT_SCHEMA_VERSION = "nbme-internal-app-ready-v2"
 SUPPORTED_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
 IMAGE_RENDER_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 LABELS = ["A", "B", "C", "D"]
@@ -91,9 +91,9 @@ Output is written to:
 output_json/app_ready/
 ```
 
-The generated JSON uses `q.images[]` as the only image attachment route. The
-app importer stores temporary image data in `FigureStore` and removes inline
-data from the saved test.
+The generated JSON uses `q.images[]` for stem images and `q.explanationImages[]`
+for answer-explanation images. The app importer stores temporary image data in
+`FigureStore` and removes inline data from the saved test.
 """
 
 
@@ -217,7 +217,7 @@ def data_url(path: Path, mime: str) -> str:
 def build_prompt(schema_text: str) -> str:
     return f"""
 You are generating one Step 2-style medical question from one screenshot.
-The screenshot may be an image, table, tracing, ECG, radiology image, pathology image, dermatology image, clinical image, graph, mixed stimulus, or unclear.
+The screenshot may be a diagnostic image, table, tracing, ECG, radiology image, pathology image, dermatology image, clinical image, graph, process diagram, algorithm, pathway, concept map, mixed stimulus, or unclear.
 
 Return valid JSON only. Do not include markdown fences. Do not include commentary outside JSON.
 Do not hallucinate illegible table values. If the screenshot is too unclear to safely generate a question, return a failure object.
@@ -226,14 +226,21 @@ Use this normalized internal schema exactly:
 {schema_text}
 
 Rules:
-- Generate exactly one question object unless returning failure.
+- First decide whether showing the screenshot before answering would give away the answer.
+- Classify the screenshot as exactly one of: diagnostic_stem_image, explanation_only_image, explanation_only_table, unclear_skip.
+- Use diagnostic_stem_image only for diagnostic visual stimuli that must be interpreted before answering, such as CT, MRI, x-ray, ultrasound, ECG/EKG, tracing, pathology slide, histology, gross pathology, dermatology photo, clinical physical exam photo, fundoscopic image, or radiology image.
+- Use explanation_only_image for process diagrams, mechanism diagrams, pathways, flowcharts, management algorithms, concept maps, labeled explanatory figures, or images that directly name the diagnosis/pathway/process.
+- Use explanation_only_table for tables by default. Only use diagnostic_stem_image for a table if it is a diagnostic data display that must be interpreted before answering and does not directly reveal the answer.
+- Use unclear_skip when the screenshot is too unreadable or unsafe to use without hallucinating.
+- Generate exactly one question object unless returning unclear_skip.
 - Use exactly 4 answer choices labeled A, B, C, D.
-- The screenshot must be central to the question.
-- The stem must naturally refer to the image, table, tracing, or stimulus.
+- For diagnostic_stem_image, the screenshot must be necessary to answer and the stem must naturally refer to the image, tracing, or stimulus.
+- For explanation_only_image and explanation_only_table, generate a Step 2-style question from the concept shown, but do not reveal the screenshot in the stem before answering.
+- For tables, analyze the table and generate a clinical question based on the information in it. Do not ask "what does the table show?"
 - Ask about diagnosis, next best step, mechanism, complication, risk factor, management, interpretation, or prevention.
 - Do not merely describe the screenshot.
 - Do not include unsupported schema fields.
-- For unclear screenshots, return {{"status":"failure","reason":"specific reason","classification":"unclear"}}.
+- For unreadable screenshots, return {{"status":"failure","classification":"unclear_skip","reason":"specific reason"}}.
 """.strip()
 
 
@@ -241,7 +248,9 @@ def normalized_schema_text() -> str:
     return json.dumps(
         {
             "status": "ok | failure",
-            "classification": "image | table | mixed | ecg_tracing | radiology | pathology | dermatology | clinical_photo | graph | unclear",
+            "classification": "diagnostic_stem_image | explanation_only_image | explanation_only_table | unclear_skip",
+            "stimulusType": "ct | mri | xray | ultrasound | ecg | tracing | radiology | pathology | histology | dermatology | clinical_photo | fundoscopic | table | flowchart | algorithm | pathway | concept_map | diagram | graph | mixed | unclear",
+            "placementRationale": "brief reason for showing before answer or only after answer",
             "stem": "4-5 sentence clinical vignette ending in one question",
             "choices": [{"label": "A", "text": "choice text"}],
             "correctAnswer": "A",
@@ -359,9 +368,49 @@ def build_explanation(parsed: dict[str, Any]) -> str:
     return explanation
 
 
+def normalize_classification(parsed: dict[str, Any]) -> str:
+    raw = str(parsed.get("classification") or "").strip().lower()
+    aliases = {
+        "image": "diagnostic_stem_image",
+        "radiology": "diagnostic_stem_image",
+        "pathology": "diagnostic_stem_image",
+        "histology": "diagnostic_stem_image",
+        "dermatology": "diagnostic_stem_image",
+        "clinical_photo": "diagnostic_stem_image",
+        "ecg_tracing": "diagnostic_stem_image",
+        "graph": "explanation_only_image",
+        "mixed": "explanation_only_image",
+        "table": "explanation_only_table",
+        "unclear": "unclear_skip",
+        "failure": "unclear_skip",
+    }
+    placement = aliases.get(raw, raw)
+    allowed = {"diagnostic_stem_image", "explanation_only_image", "explanation_only_table", "unclear_skip"}
+    if placement not in allowed:
+        raise GeneratorError(f"Unsupported classification: {raw or '(missing)'}")
+    return placement
+
+
+def image_entry(src: Path, asset: Path, mime: str, parsed: dict[str, Any], placement: str) -> dict[str, Any]:
+    stimulus_type = str(parsed.get("stimulusType") or "").strip().lower() or placement
+    return {
+        "figureKey": None,
+        "dataUrl": data_url(asset, mime),
+        "isLabTable": placement == "explanation_only_table" or stimulus_type in {"table", "graph"},
+        "kind": "figure",
+        "source": "images-tables-generator",
+        "originalFileName": src.name,
+        "assetPath": str(asset.relative_to(BASE_DIR)),
+        "classification": placement,
+        "stimulusType": stimulus_type,
+        "placement": "stem" if placement == "diagnostic_stem_image" else "explanation",
+    }
+
+
 def adapt_question(parsed: dict[str, Any], src: Path, asset: Path, mime: str, q_num: int, warnings: list[str]) -> dict[str, Any] | None:
     status = str(parsed.get("status") or "ok").lower()
-    if status == "failure":
+    classification = normalize_classification(parsed)
+    if status == "failure" or classification == "unclear_skip":
         reason = str(parsed.get("reason") or "Gemini returned failure without reason.").strip()
         raise GeneratorError(f"Gemini skipped screenshot: {reason}")
 
@@ -376,18 +425,10 @@ def adapt_question(parsed: dict[str, Any], src: Path, asset: Path, mime: str, q_
         raise GeneratorError("Correct answer does not match one of the choices.")
 
     explanation = build_explanation(parsed)
-    classification = str(parsed.get("classification") or "unclear").strip().lower() or "unclear"
     question_id = f"images_tables_{q_num:03d}_{file_sha(src)[:8]}"
-    image = {
-        "figureKey": None,
-        "dataUrl": data_url(asset, mime),
-        "isLabTable": classification in {"table", "mixed", "graph"},
-        "kind": "figure",
-        "source": "images-tables-generator",
-        "originalFileName": src.name,
-        "assetPath": str(asset.relative_to(BASE_DIR)),
-        "classification": classification,
-    }
+    image = image_entry(src, asset, mime, parsed, classification)
+    stem_images = [image] if classification == "diagnostic_stem_image" else []
+    explanation_images = [image] if classification in {"explanation_only_image", "explanation_only_table"} else []
     return {
         "id": question_id,
         "n": q_num,
@@ -401,14 +442,19 @@ def adapt_question(parsed: dict[str, Any], src: Path, asset: Path, mime: str, q_
         "retrievalTag": str(parsed.get("retrievalTag") or classification).strip(),
         "reviewPearl": str(parsed.get("reviewPearl") or parsed.get("educationalObjective") or "").strip(),
         "educationalObjective": str(parsed.get("educationalObjective") or "").strip(),
-        "images": [image],
+        "images": stem_images,
+        "explanationImages": explanation_images,
         "metadata": {
             "sourceType": "images-tables-generator",
             "sourceFormat": SOURCE_FORMAT,
             "originalFileName": src.name,
             "assetPath": str(asset.relative_to(BASE_DIR)),
             "classification": classification,
-            "imageAttachments": 1,
+            "stimulusType": image.get("stimulusType") or "",
+            "stimulusPlacement": classification,
+            "placementRationale": str(parsed.get("placementRationale") or "").strip(),
+            "stemImageAttachments": len(stem_images),
+            "explanationImageAttachments": len(explanation_images),
             "figureAttachments": {},
             "extractionWarnings": warnings,
         },
@@ -439,21 +485,48 @@ def validate_payload(payload: dict[str, Any], base_dir: Path = BASE_DIR) -> list
         if not (q.get("explanation") or q.get("correctBlurb")):
             errors.append(f"{prefix}: missing explanation.")
         images = q.get("images")
-        if not isinstance(images, list) or len(images) != 1:
-            errors.append(f"{prefix}: must have exactly one screenshot attachment in q.images[].")
+        explanation_images = q.get("explanationImages", [])
+        if not isinstance(images, list):
+            errors.append(f"{prefix}: images must be an array.")
+            images = []
+        if not isinstance(explanation_images, list):
+            errors.append(f"{prefix}: explanationImages must be an array.")
+            explanation_images = []
+
+        placement = str(q.get("metadata", {}).get("stimulusPlacement") or "").strip()
+        if not placement:
+            placement = "diagnostic_stem_image" if len(images) == 1 and not explanation_images else ""
+        if placement == "diagnostic_stem_image":
+            if len(images) != 1 or len(explanation_images) != 0:
+                errors.append(f"{prefix}: diagnostic_stem_image requires exactly one stem image and zero explanation images.")
+        elif placement == "explanation_only_image":
+            if len(images) != 0 or len(explanation_images) != 1:
+                errors.append(f"{prefix}: explanation_only_image requires zero stem images and exactly one explanation image.")
+        elif placement == "explanation_only_table":
+            if len(images) != 0 or len(explanation_images) != 1:
+                errors.append(f"{prefix}: explanation_only_table requires zero stem images and exactly one explanation image.")
         else:
-            img = images[0]
-            if not isinstance(img, dict):
-                errors.append(f"{prefix}: image attachment is not an object.")
-            else:
+            errors.append(f"{prefix}: unsupported or missing stimulusPlacement.")
+
+        seen_refs = set()
+        for field, image_list in [("images", images), ("explanationImages", explanation_images)]:
+            for img_idx, img in enumerate(image_list):
+                if not isinstance(img, dict):
+                    errors.append(f"{prefix}: {field}[{img_idx}] is not an object.")
+                    continue
                 asset_path = img.get("assetPath")
                 if asset_path and not (base_dir / str(asset_path)).exists():
                     errors.append(f"{prefix}: referenced asset file missing: {asset_path}")
                 if not img.get("dataUrl") and not img.get("figureKey"):
-                    errors.append(f"{prefix}: image lacks dataUrl or figureKey.")
+                    errors.append(f"{prefix}: {field}[{img_idx}] lacks dataUrl or figureKey.")
+                ref_sig = img.get("assetPath") or img.get("figureKey") or img.get("dataUrl")
+                if ref_sig in seen_refs:
+                    errors.append(f"{prefix}: same image is stored in more than one placement.")
+                if ref_sig:
+                    seen_refs.add(ref_sig)
         figure_attachments = q.get("metadata", {}).get("figureAttachments") if isinstance(q.get("metadata"), dict) else None
         if figure_attachments:
-            errors.append(f"{prefix}: uses metadata.figureAttachments; q.images[] must be the only attachment route.")
+            errors.append(f"{prefix}: uses metadata.figureAttachments; it must not be a competing image route.")
     return errors
 
 
@@ -527,7 +600,7 @@ def generate(args: argparse.Namespace) -> Path | None:
         "sourceFormat": SOURCE_FORMAT,
         "expectedQuestionCount": len(files),
         "actualExtractedQuestionCount": len(questions),
-        "imageAttachmentStrategy": "q.images[] + FigureStore",
+        "imageAttachmentStrategy": "q.images[] for stem images; q.explanationImages[] for explanation images; both persisted through FigureStore",
         "generationWarnings": failures,
         "questions": questions,
     }
