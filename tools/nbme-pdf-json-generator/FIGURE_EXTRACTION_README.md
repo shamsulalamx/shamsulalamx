@@ -45,6 +45,9 @@ python3 nbme_extract_figures.py --pdf input_pdfs/8A.pdf --conservative
 python3 nbme_extract_figures.py --pdf input_pdfs/8A.pdf --strict-text-filter
 python3 nbme_extract_figures.py --pdf input_pdfs/8A.pdf --min-visual-score 0.50
 python3 nbme_extract_figures.py --pdf input_pdfs/8A.pdf --debug-rejected
+python3 nbme_extract_figures.py --pdf input_pdfs/8A.pdf --link-figures
+python3 nbme_extract_figures.py --pdf input_pdfs/8A.pdf --link-figures --app-ready output_json/app_ready/8A_app_ready.json
+python3 nbme_extract_figures.py --pdf input_pdfs/8A.pdf --link-figures --links-html
 ```
 
 Defaults:
@@ -76,6 +79,9 @@ figure_manifests/<source>_figure_manifest.json
 figure_manifests/<source>_contact_sheet.png
 figure_manifests/<source>_figure_review.csv
 figure_manifests/<source>_figure_review.html
+figure_manifests/<source>_suggested_figure_links.json
+figure_manifests/<source>_suggested_figure_links.csv
+figure_manifests/<source>_suggested_figure_links.html
 ```
 
 These are generated review artifacts and are ignored by git by default.
@@ -183,6 +189,42 @@ figure_manifests/8A_figure_review.csv
 Fill `userDecision` and `notes` while reviewing. Use the PNG `filePath` from the CSV or HTML page when manually attaching images later.
 
 No auto-attachment happens in this milestone. The extractor does not inject `figureRefs` and does not modify app-ready JSON.
+
+## Suggested Figure Links
+
+The optional bridge layer links kept figure candidates to existing app-ready questions for manual review only.
+
+```bash
+cd tools/nbme-pdf-json-generator
+python3 nbme_extract_figures.py --pdf input_pdfs/8A.pdf --link-figures
+```
+
+Optional explicit paths:
+
+```bash
+python3 nbme_extract_figures.py \
+  --pdf input_pdfs/8A.pdf \
+  --link-figures \
+  --app-ready output_json/app_ready/8A_app_ready.json \
+  --manifest figure_manifests/8A_figure_manifest.json
+```
+
+The link step reads:
+
+- `figure_manifests/<source>_figure_manifest.json`
+- `output_json/app_ready/<source>_app_ready.json`
+- `output_json/chunks/<source>_chunks.json` when available
+- `output_json/normalized/<source>_normalized.json` when available in future workflows
+
+It writes:
+
+- `figure_manifests/<source>_suggested_figure_links.json`
+- `figure_manifests/<source>_suggested_figure_links.csv`
+- `figure_manifests/<source>_suggested_figure_links.html`
+
+The link review page shows question number, stem preview, existing figure placeholders, suggested crop images, confidence, reasons, and file paths. Its checkboxes are visual labels only: accept, reject, wrong question, and needs crop.
+
+Suggested links are not app integration. The script does not auto-attach images, does not inject `figureRefs`, and does not rewrite app-ready JSON. Confidence is conservative: high requires multiple strong signals, and most links remain review-needed.
 
 ## Association Limits
 

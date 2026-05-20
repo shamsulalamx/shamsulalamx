@@ -71,7 +71,7 @@ IMAGE_PHRASE_RE = re.compile(
     r"\b("
     r"figure|photograph|photo|image|shown|pictured|radiograph|x-?ray|"
     r"chest x-?ray|ecg|ekg|electrocardiogram|ct|mri|ultrasound|"
-    r"graph|curve|plot|histology|biopsy|fundoscopic"
+    r"graph|curve|plot|histology|biopsy|fundoscopic|tracing|rash|lesion|roc|table"
     r")\b",
     re.IGNORECASE,
 )
@@ -1280,6 +1280,496 @@ def _write_review_html(
     out_path.write_text(html_text, encoding="utf-8")
 
 
+def _default_artifact_path(pdf_stem: str, subdir: str, suffix: str) -> Path:
+    return SCRIPT_DIR / "output_json" / subdir / f"{pdf_stem}_{suffix}.json"
+
+
+def _load_json_file(path: Path, warnings: list[str], label: str) -> Optional[dict[str, Any]]:
+    if not path.exists():
+        warnings.append(f"{label} not found: {_rel(path) if path.is_relative_to(SCRIPT_DIR) else path}")
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        warnings.append(f"Could not read {label}: {exc}")
+        return None
+
+
+def _stem_preview(text: str, limit: int = 220) -> str:
+    cleaned = re.sub(r"\s+", " ", text or "").strip()
+    if len(cleaned) <= limit:
+        return cleaned
+    return cleaned[: limit - 1].rstrip() + "..."
+
+
+def _question_has_image_language(question: dict[str, Any]) -> bool:
+    parts = [
+        question.get("stem", ""),
+        question.get("t", ""),
+        question.get("educationalObjective", "") or "",
+    ]
+    return bool(IMAGE_PHRASE_RE.search(" ".join(str(p) for p in parts if p)))
+
+
+def _question_figure_refs(question: dict[str, Any]) -> list[dict[str, str]]:
+    refs = question.get("figureRefs") or (question.get("metadata") or {}).get("figureRefs") or []
+    normalized = []
+    for ref in refs:
+        if not isinstance(ref, dict):
+            continue
+        fig_id = ref.get("id") or ref.get("figureId") or ""
+        placeholder = ref.get("placeholder") or (f"[FIGURE: {fig_id}]" if fig_id else "")
+        normalized.append({
+            "id": str(fig_id),
+            "placeholder": str(placeholder),
+        })
+    return normalized
+
+
+def _normalized_figure_refs(pdf_stem: str, warnings: list[str]) -> dict[int, list[dict[str, str]]]:
+    norm_path = SCRIPT_DIR / "output_json" / "normalized" / f"{pdf_stem}_normalized.json"
+    payload = _load_json_file(norm_path, warnings, "normalized JSON")
+    if not payload:
+        return {}
+    items = payload.get("items") or payload.get("questions") or []
+    refs_by_q: dict[int, list[dict[str, str]]] = {}
+    if not isinstance(items, list):
+        warnings.append("normalized JSON does not contain items[] or questions[]")
+        return refs_by_q
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        q_num = item.get("sourceQuestionNumber") or item.get("questionNumber")
+        if not isinstance(q_num, int):
+            continue
+        refs = []
+        for fig in item.get("figures") or []:
+            if not isinstance(fig, dict):
+                continue
+            fig_id = fig.get("figureId") or fig.get("id") or ""
+            if fig_id:
+                refs.append({
+                    "id": str(fig_id),
+                    "placeholder": f"[FIGURE: {fig_id}]",
+                })
+        if refs:
+            refs_by_q[q_num] = refs
+    return refs_by_q
+
+
+def _load_app_ready_questions(app_ready_path: Path, warnings: list[str]) -> list[dict[str, Any]]:
+    payload = _load_json_file(app_ready_path, warnings, "app-ready JSON")
+    if not payload:
+        return []
+    questions = payload.get("questions")
+    if not isinstance(questions, list):
+        warnings.append("app-ready JSON does not contain questions[]")
+        return []
+    return [q for q in questions if isinstance(q, dict)]
+
+
+def _load_manifest_figures(manifest_path: Path, warnings: list[str]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    payload = _load_json_file(manifest_path, warnings, "figure manifest")
+    if not payload:
+        return {}, []
+    figures = payload.get("figures")
+    if not isinstance(figures, list):
+        warnings.append("figure manifest does not contain figures[]")
+        return payload, []
+    return payload, [f for f in figures if isinstance(f, dict) and f.get("kept", True)]
+
+
+def _question_page_map(pdf_stem: str, warnings: list[str]) -> dict[int, int]:
+    raw_path = SCRIPT_DIR / "output_json" / "raw_text" / f"{pdf_stem}_raw.txt"
+    chunk_path = SCRIPT_DIR / "output_json" / "chunks" / f"{pdf_stem}_chunks.json"
+    mapping: dict[int, int] = {}
+    if not raw_path.exists() or not chunk_path.exists():
+        return mapping
+
+    try:
+        raw = raw_path.read_text(encoding="utf-8")
+        chunk_payload = json.loads(chunk_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        warnings.append(f"Could not build question/page map from raw/chunks: {exc}")
+        return mapping
+
+    page_texts: dict[int, str] = {}
+    parts = re.split(r"(?m)^## Page (\d+)\s*$", raw)
+    for i in range(1, len(parts), 2):
+        try:
+            page_num = int(parts[i])
+        except ValueError:
+            continue
+        if i + 1 < len(parts):
+            page_texts[page_num] = _norm_text(parts[i + 1])
+
+    for chunk in chunk_payload.get("chunks", []):
+        if not isinstance(chunk, dict):
+            continue
+        q_num = chunk.get("questionNumber")
+        chunk_text = _norm_text(chunk.get("rawText", ""))
+        if not isinstance(q_num, int) or len(chunk_text) < 60:
+            continue
+        snippet = chunk_text[:220]
+        for page_num, page_text in page_texts.items():
+            if snippet in page_text or chunk_text[:90] in page_text:
+                mapping.setdefault(q_num, page_num)
+                break
+
+    return mapping
+
+
+def _score_link_candidate(
+    question: dict[str, Any],
+    figure_refs: list[dict[str, str]],
+    has_image_language: bool,
+    figure: dict[str, Any],
+    q_page: Optional[int],
+    local_count: int,
+) -> tuple[str, float, list[str]]:
+    q_num = question.get("questionNumber") or question.get("sourceQuestionNumber") or question.get("n")
+    fig_page = figure.get("page")
+    suggested_q = figure.get("suggestedQuestionNumber")
+    reasons = []
+    score = 0.0
+    strong = 0
+
+    if figure_refs:
+        reasons.append("question already has figureRef")
+        score += 0.22
+        strong += 1
+    if has_image_language:
+        reasons.append("image-reference phrase in stem")
+        score += 0.18
+        strong += 1
+    if isinstance(q_num, int) and suggested_q == q_num:
+        reasons.append("manifest suggestedQuestionNumber matches question")
+        score += 0.30
+        strong += 1
+    if q_page and isinstance(fig_page, int):
+        distance = abs(fig_page - q_page)
+        if distance == 0:
+            reasons.append("figure candidate on mapped question page")
+            score += 0.24
+            strong += 1
+        elif distance <= 2:
+            reasons.append("figure candidate from nearby page")
+            score += 0.16
+        elif distance <= 5:
+            reasons.append("figure candidate within local page window")
+            score += 0.08
+    elif isinstance(q_num, int) and isinstance(fig_page, int):
+        # NBME answer/explanation PDFs often span multiple pages per question.
+        # This is deliberately weak and never enough on its own.
+        rough_expected = max(1, q_num * 2)
+        if abs(fig_page - rough_expected) <= 3:
+            reasons.append("weak page proximity by question order")
+            score += 0.06
+
+    if local_count == 1:
+        reasons.append("only kept figure candidate in local page window")
+        score += 0.10
+
+    visual = float(figure.get("visualScore") or 0.0)
+    text_like = float(figure.get("textLikeScore") or 0.0)
+    score += min(0.10, visual * 0.10)
+    if text_like >= 0.70:
+        reasons.append("candidate has high text-like score")
+        score -= 0.15
+
+    score = max(0.0, min(1.0, round(score, 4)))
+    if strong >= 3 and score >= 0.78:
+        confidence = "high"
+    elif strong >= 2 and score >= 0.52:
+        confidence = "medium"
+    elif score >= 0.28:
+        confidence = "low"
+    else:
+        confidence = "unknown"
+
+    return confidence, score, sorted(set(reasons))
+
+
+def _candidate_pool_for_question(
+    figures: list[dict[str, Any]],
+    q_num: int,
+    q_page: Optional[int],
+) -> list[dict[str, Any]]:
+    pool = []
+    for fig in figures:
+        if fig.get("suggestedQuestionNumber") == q_num:
+            pool.append(fig)
+            continue
+        fig_page = fig.get("page")
+        if q_page and isinstance(fig_page, int) and abs(fig_page - q_page) <= 2:
+            pool.append(fig)
+    if pool:
+        return pool
+
+    # Fallback for app-ready questions that have figureRefs but no page map.
+    # This remains weak and will be marked review-needed unless other signals agree.
+    for fig in figures:
+        fig_page = fig.get("page")
+        if isinstance(fig_page, int) and abs(fig_page - max(1, q_num * 2)) <= 4:
+            pool.append(fig)
+    return pool
+
+
+def _link_to_csv_row(link: dict[str, Any]) -> dict[str, Any]:
+    suggestions = link.get("suggestedFigures") or []
+    best = suggestions[0] if suggestions else {}
+    return {
+        "questionNumber": link.get("questionNumber", ""),
+        "questionId": link.get("questionId", ""),
+        "bestFigureId": link.get("bestFigureId") or "",
+        "bestFigurePath": best.get("filePath", ""),
+        "bestFigurePage": best.get("page", ""),
+        "confidence": best.get("confidence", "unknown") if best else "unknown",
+        "score": best.get("score", ""),
+        "needsReview": link.get("needsReview", True),
+        "existingFigureRefs": "; ".join(r.get("placeholder", "") for r in link.get("existingFigureRefs", [])),
+        "suggestionCount": len(suggestions),
+        "reasons": "; ".join(best.get("reasons", [])) if best else "",
+        "userDecision": "",
+        "notes": "",
+    }
+
+
+def _write_links_csv(links: list[dict[str, Any]], out_path: Path) -> None:
+    columns = [
+        "questionNumber",
+        "questionId",
+        "bestFigureId",
+        "bestFigurePath",
+        "bestFigurePage",
+        "confidence",
+        "score",
+        "needsReview",
+        "existingFigureRefs",
+        "suggestionCount",
+        "reasons",
+        "userDecision",
+        "notes",
+    ]
+    with out_path.open("w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=columns)
+        writer.writeheader()
+        for link in links:
+            writer.writerow(_link_to_csv_row(link))
+
+
+def _write_links_html(links: list[dict[str, Any]], out_path: Path, json_path: Path, csv_path: Path, summary: dict[str, Any]) -> None:
+    cards = []
+    for link in links:
+        refs = link.get("existingFigureRefs") or []
+        suggestions = link.get("suggestedFigures") or []
+        ref_text = "; ".join(r.get("placeholder") or r.get("id", "") for r in refs) or "none"
+        suggestion_html = []
+        for fig in suggestions:
+            img_src = "../" + fig.get("filePath", "")
+            suggestion_html.append(f"""
+            <div class="suggestion">
+              <img src="{_html_escape(img_src)}" alt="{_html_escape(fig.get('figureId'))}">
+              <dl>
+                <div><dt>Figure</dt><dd>{_html_escape(fig.get('figureId'))}</dd></div>
+                <div><dt>Path</dt><dd><code>{_html_escape(fig.get('filePath'))}</code></dd></div>
+                <div><dt>Page</dt><dd>{_html_escape(fig.get('page'))}</dd></div>
+                <div><dt>Confidence</dt><dd>{_html_escape(fig.get('confidence'))}</dd></div>
+                <div><dt>Score</dt><dd>{_html_escape(fig.get('score'))}</dd></div>
+                <div><dt>Reasons</dt><dd>{_html_escape('; '.join(fig.get('reasons', [])))}</dd></div>
+              </dl>
+            </div>
+            """)
+        if not suggestion_html:
+            suggestion_html.append('<p class="muted">No suggested figure candidate.</p>')
+
+        cards.append(f"""
+        <article class="link-card">
+          <section class="question">
+            <h2>Question {_html_escape(link.get('questionNumber'))}</h2>
+            <p class="qid">{_html_escape(link.get('questionId'))}</p>
+            <p>{_html_escape(link.get('stemPreview'))}</p>
+            <p><strong>Existing figureRefs:</strong> {_html_escape(ref_text)}</p>
+            <p><strong>Best figure:</strong> {_html_escape(link.get('bestFigureId') or 'none')}</p>
+            <p><strong>Needs review:</strong> {_html_escape(link.get('needsReview'))}</p>
+            <fieldset>
+              <legend>Review decision</legend>
+              <label><input type="checkbox"> accept</label>
+              <label><input type="checkbox"> reject</label>
+              <label><input type="checkbox"> wrong question</label>
+              <label><input type="checkbox"> needs crop</label>
+            </fieldset>
+          </section>
+          <section class="suggestions">
+            {''.join(suggestion_html)}
+          </section>
+        </article>
+        """)
+
+    html_text = f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NBME Suggested Figure Links</title>
+  <style>
+    :root {{ --border:#d7dde5; --muted:#5f6b7a; --bg:#f6f8fb; --panel:#fff; --ink:#17202a; --accent:#1f5f99; }}
+    * {{ box-sizing:border-box; }}
+    body {{ margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:var(--ink); background:var(--bg); }}
+    header {{ position:sticky; top:0; z-index:2; padding:18px 24px; background:var(--panel); border-bottom:1px solid var(--border); }}
+    h1 {{ margin:0 0 8px; font-size:22px; letter-spacing:0; }}
+    .summary,.links {{ display:flex; flex-wrap:wrap; gap:12px; color:var(--muted); font-size:14px; }}
+    .links {{ margin-top:10px; }}
+    a {{ color:var(--accent); text-decoration:none; border-bottom:1px solid currentColor; }}
+    main {{ max-width:1320px; margin:0 auto; padding:20px; }}
+    .link-card {{ display:grid; grid-template-columns:minmax(280px,38%) minmax(360px,1fr); gap:18px; margin-bottom:18px; padding:16px; background:var(--panel); border:1px solid var(--border); border-radius:8px; }}
+    h2 {{ margin:0; font-size:18px; letter-spacing:0; }}
+    .qid,.muted {{ color:var(--muted); }}
+    .suggestion {{ display:grid; grid-template-columns:minmax(220px,42%) 1fr; gap:14px; margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid var(--border); }}
+    img {{ max-width:100%; height:auto; display:block; border:1px solid var(--border); background:#fff; }}
+    dl {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 14px; margin:0; }}
+    dt {{ color:var(--muted); font-size:12px; }}
+    dd {{ margin:2px 0 0; font-size:14px; overflow-wrap:anywhere; }}
+    fieldset {{ display:flex; flex-wrap:wrap; gap:12px; margin-top:12px; padding:12px; border:1px solid var(--border); border-radius:6px; }}
+    legend {{ color:var(--muted); font-size:13px; padding:0 4px; }}
+    input {{ margin-right:6px; }}
+    code {{ white-space:normal; }}
+    @media (max-width:900px) {{ .link-card,.suggestion {{ grid-template-columns:1fr; }} dl {{ grid-template-columns:1fr; }} }}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>NBME Suggested Figure Links</h1>
+    <div class="summary">
+      <span>FigureRef questions: {_html_escape(summary.get('questionsWithFigureRefs'))}</span>
+      <span>Image-language questions: {_html_escape(summary.get('questionsWithImageLanguage'))}</span>
+      <span>Links suggested: {_html_escape(summary.get('linksSuggested'))}</span>
+      <span>Unlinked: {_html_escape(summary.get('unlinkedQuestions'))}</span>
+    </div>
+    <div class="links">
+      <a href="{_html_escape(json_path.name)}">Suggested Links JSON</a>
+      <a href="{_html_escape(csv_path.name)}">Suggested Links CSV</a>
+    </div>
+  </header>
+  <main>
+    {''.join(cards) if cards else '<p>No questions required figure-link review.</p>'}
+  </main>
+</body>
+</html>
+"""
+    out_path.write_text(html_text, encoding="utf-8")
+
+
+def build_suggested_figure_links(
+    pdf_stem: str,
+    source_pdf: str,
+    manifest_path: Path,
+    app_ready_path: Path,
+    links_html: bool = True,
+) -> dict[str, Any]:
+    warnings: list[str] = []
+    manifest_payload, figures = _load_manifest_figures(manifest_path, warnings)
+    questions = _load_app_ready_questions(app_ready_path, warnings)
+    q_page_map = _question_page_map(pdf_stem, warnings)
+    normalized_refs = _normalized_figure_refs(pdf_stem, warnings)
+
+    links: list[dict[str, Any]] = []
+    questions_with_refs = 0
+    questions_with_image_language = 0
+    confidence_counts = {"high": 0, "medium": 0, "low": 0, "unknown": 0}
+
+    for q in questions:
+        q_num = q.get("questionNumber") or q.get("sourceQuestionNumber") or q.get("n")
+        if not isinstance(q_num, int):
+            continue
+        figure_refs = _question_figure_refs(q) or normalized_refs.get(q_num, [])
+        has_image_language = _question_has_image_language(q)
+        if figure_refs:
+            questions_with_refs += 1
+        if has_image_language:
+            questions_with_image_language += 1
+        if not figure_refs and not has_image_language:
+            continue
+
+        q_page = q_page_map.get(q_num)
+        pool = _candidate_pool_for_question(figures, q_num, q_page)
+        local_count = len(pool)
+        suggestions = []
+        for fig in pool:
+            confidence, link_score, reasons = _score_link_candidate(
+                q, figure_refs, has_image_language, fig, q_page, local_count
+            )
+            if confidence == "unknown" and link_score < 0.20:
+                continue
+            suggestions.append({
+                "figureId": fig.get("figureId"),
+                "filePath": fig.get("filePath"),
+                "page": fig.get("page"),
+                "confidence": confidence,
+                "score": link_score,
+                "reasons": reasons,
+                "needsReview": confidence != "high",
+            })
+
+        suggestions.sort(
+            key=lambda item: (
+                {"high": 3, "medium": 2, "low": 1, "unknown": 0}.get(item["confidence"], 0),
+                item["score"],
+            ),
+            reverse=True,
+        )
+        suggestions = suggestions[:3]
+        best_id = suggestions[0]["figureId"] if suggestions else None
+        best_conf = suggestions[0]["confidence"] if suggestions else "unknown"
+        confidence_counts[best_conf] = confidence_counts.get(best_conf, 0) + (1 if suggestions else 0)
+        links.append({
+            "questionNumber": q_num,
+            "questionId": q.get("id") or q.get("questionId") or f"q{q_num:03d}",
+            "stemPreview": _stem_preview(q.get("stem") or q.get("t") or ""),
+            "existingFigureRefs": figure_refs,
+            "suggestedFigures": suggestions,
+            "bestFigureId": best_id,
+            "needsReview": not suggestions or best_conf != "high",
+        })
+
+    summary = {
+        "questionsWithFigureRefs": questions_with_refs,
+        "questionsWithImageLanguage": questions_with_image_language,
+        "linksSuggested": sum(1 for link in links if link.get("bestFigureId")),
+        "highConfidenceLinks": confidence_counts.get("high", 0),
+        "mediumConfidenceLinks": confidence_counts.get("medium", 0),
+        "lowConfidenceLinks": confidence_counts.get("low", 0),
+        "unlinkedQuestions": sum(1 for link in links if not link.get("bestFigureId")),
+    }
+    out = {
+        "sourcePdf": source_pdf,
+        "appReadyJson": _rel(app_ready_path) if app_ready_path.is_relative_to(SCRIPT_DIR) else str(app_ready_path),
+        "links": links,
+        "summary": summary,
+        "warnings": warnings,
+    }
+
+    json_path = MANIFEST_DIR / f"{pdf_stem}_suggested_figure_links.json"
+    csv_path = MANIFEST_DIR / f"{pdf_stem}_suggested_figure_links.csv"
+    html_path = MANIFEST_DIR / f"{pdf_stem}_suggested_figure_links.html"
+    json_path.write_text(json.dumps(out, indent=2, ensure_ascii=False), encoding="utf-8")
+    _write_links_csv(links, csv_path)
+    if links_html:
+        _write_links_html(links, html_path, json_path, csv_path, summary)
+
+    print(f"Suggested links JSON: {_rel(json_path)}")
+    print(f"Suggested links CSV: {_rel(csv_path)}")
+    if links_html:
+        print(f"Suggested links HTML: {_rel(html_path)}")
+    print(
+        "Link summary: "
+        f"{summary['questionsWithFigureRefs']} figureRef questions, "
+        f"{summary['linksSuggested']} linked, "
+        f"{summary['unlinkedQuestions']} unlinked"
+    )
+    return out
+
+
 def extract_figures(
     pdf_path: Path,
     dpi: int = DEFAULT_DPI,
@@ -1485,6 +1975,28 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         action="store_true",
         help="Include rejected candidate diagnostics in the manifest.",
     )
+    parser.add_argument(
+        "--link-figures",
+        action="store_true",
+        help="Write suggested figure-to-question link review artifacts without modifying app-ready JSON.",
+    )
+    parser.add_argument(
+        "--app-ready",
+        default=None,
+        help="Optional app-ready JSON path. Default: output_json/app_ready/<pdf_stem>_app_ready.json",
+    )
+    parser.add_argument(
+        "--manifest",
+        default=None,
+        help="Optional figure manifest path. Default: figure_manifests/<pdf_stem>_figure_manifest.json",
+    )
+    parser.add_argument(
+        "--links-html",
+        dest="links_html",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Write a static suggested-links HTML review page. Default: true",
+    )
     return parser.parse_args(argv)
 
 
@@ -1501,8 +2013,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 2
 
     try:
+        pdf_path = _resolve_pdf(args.pdf)
         extract_figures(
-            _resolve_pdf(args.pdf),
+            pdf_path,
             dpi=args.dpi,
             max_pages=args.max_pages,
             conservative=args.conservative,
@@ -1512,6 +2025,17 @@ def main(argv: Optional[list[str]] = None) -> int:
             min_visual_score=args.min_visual_score,
             debug_rejected=args.debug_rejected,
         )
+        if args.link_figures:
+            pdf_stem = re.sub(r"[^A-Za-z0-9_-]+", "_", pdf_path.stem).strip("_") or "pdf"
+            manifest_path = _resolve_pdf(args.manifest) if args.manifest else MANIFEST_DIR / f"{pdf_stem}_figure_manifest.json"
+            app_ready_path = _resolve_pdf(args.app_ready) if args.app_ready else _default_artifact_path(pdf_stem, "app_ready", "app_ready")
+            build_suggested_figure_links(
+                pdf_stem=pdf_stem,
+                source_pdf=pdf_path.name,
+                manifest_path=manifest_path,
+                app_ready_path=app_ready_path,
+                links_html=args.links_html,
+            )
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
