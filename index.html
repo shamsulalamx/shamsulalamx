@@ -23055,7 +23055,7 @@ const App = (() => {
   }
 
   function clearNbmeFigureReviewState() {
-    _nbmeFigureReviewState = { parsed: null, type: null, fileName: '' };
+    _nbmeFigureReviewState = { parsed: null, type: null, fileName: '', fileContext: nbmeFigureReviewEmptyFileContext() };
     const input = document.getElementById('nbme-figure-review-file-input');
     const name = document.getElementById('nbme-figure-review-file-name');
     const status = document.getElementById('nbme-figure-review-status');
@@ -23077,7 +23077,8 @@ const App = (() => {
   function handleNbmeFigureReviewFileUpload(input) {
     const file = input?.files?.[0];
     if (!file) return;
-    _nbmeFigureReviewState = { parsed: null, type: null, fileName: file.name };
+    const fileContext = nbmeFigureReviewBuildFileContext(file);
+    _nbmeFigureReviewState = { parsed: null, type: null, fileName: file.name, fileContext };
     const name = document.getElementById('nbme-figure-review-file-name');
     const status = document.getElementById('nbme-figure-review-status');
     if (name) name.textContent = file.name;
@@ -23091,7 +23092,7 @@ const App = (() => {
         const parsed = JSON.parse(String(reader.result || ''));
         const type = nbmeFigureReviewDetectType(parsed);
         if (!type) throw new Error('Unsupported JSON. Expected a figure manifest with a figures array or suggested figure links with a links array.');
-        _nbmeFigureReviewState = { parsed, type, fileName: file.name };
+        _nbmeFigureReviewState = { parsed, type, fileName: file.name, fileContext };
         nbmeFigureReviewRender(parsed, type);
       } catch (err) {
         nbmeFigureReviewSetError(err?.message || 'Could not load JSON.');
@@ -23099,6 +23100,38 @@ const App = (() => {
     };
     reader.onerror = () => nbmeFigureReviewSetError('Could not read the selected file.');
     reader.readAsText(file);
+  }
+
+  function nbmeFigureReviewEmptyFileContext() {
+    return {
+      fileName: '',
+      filePath: '',
+      webkitRelativePath: '',
+      manifestDir: '',
+      sourceRoot: '',
+      hasPathContext: false
+    };
+  }
+
+  function nbmeFigureReviewBuildFileContext(file) {
+    const ctx = nbmeFigureReviewEmptyFileContext();
+    ctx.fileName = file?.name || '';
+    ctx.filePath = nbmeFigureReviewNormalizeSeparators(file?.path || '');
+    ctx.webkitRelativePath = nbmeFigureReviewNormalizeSeparators(file?.webkitRelativePath || '');
+    const knownPath = ctx.filePath || ctx.webkitRelativePath;
+    if (knownPath) {
+      ctx.manifestDir = nbmeFigureReviewDirname(knownPath);
+      const manifestBase = nbmeFigureReviewBasename(ctx.manifestDir);
+      ctx.sourceRoot = manifestBase === 'figure_manifests'
+        ? nbmeFigureReviewDirname(ctx.manifestDir)
+        : ctx.manifestDir;
+      ctx.hasPathContext = true;
+    } else {
+      ctx.sourceRoot = 'tools/nbme-pdf-json-generator';
+      ctx.manifestDir = 'tools/nbme-pdf-json-generator/figure_manifests';
+      ctx.hasPathContext = false;
+    }
+    return ctx;
   }
 
   function nbmeFigureReviewDetectType(parsed) {
@@ -23222,6 +23255,8 @@ const App = (() => {
     const reasons = Array.isArray(fig?.reasons) ? fig.reasons : [];
     const bbox = Array.isArray(fig?.bbox) ? `[${fig.bbox.join(', ')}]` : 'unknown';
     const path = fig?.filePath || '';
+    const absolutePath = fig?.absoluteFilePath || '';
+    const fileUrl = fig?.fileUrl || '';
     return `
       <article class="nbme-figure-review-card">
         <div class="nbme-figure-review-head">
@@ -23236,6 +23271,8 @@ const App = (() => {
           <span>Needs review: ${fig?.needsReview === false ? 'no' : 'yes'}</span>
           <span>Size: ${_ngjEsc(fig?.width ?? '?')} x ${_ngjEsc(fig?.height ?? '?')}</span>
           <span>BBox: ${_ngjEsc(bbox)}</span>
+          ${absolutePath ? `<span>Absolute path: ${_ngjEsc(absolutePath)}</span>` : ''}
+          ${fileUrl ? `<span>File URL: ${_ngjEsc(fileUrl)}</span>` : ''}
         </div>
         ${reasons.length ? `<ul class="nbme-figure-review-reasons">${reasons.map(r => `<li>${_ngjEsc(r)}</li>`).join('')}</ul>` : ''}
       </article>
@@ -23243,11 +23280,11 @@ const App = (() => {
   }
 
   function nbmeFigureReviewImageHtml(filePath, alt, fig) {
-    const resolved = nbmeFigureReviewResolveImagePath(filePath);
+    const resolved = nbmeFigureReviewResolveFigureUrl(fig || { filePath });
     if (!filePath) return '<div class="nbme-figure-review-img-fallback" style="display:block;">No image path provided.</div>';
     const figureId = fig?.figureId || '';
     const suggestedQ = fig?.suggestedQuestionNumber ?? fig?.questionNumber ?? '';
-    const dataAttrs = `data-raw-path="${_ngjEsc(filePath)}" data-resolved-src="${_ngjEsc(resolved)}" data-figure-id="${_ngjEsc(figureId)}" data-page="${_ngjEsc(fig?.page ?? '')}" data-suggested-question="${_ngjEsc(suggestedQ)}" data-question-id="${_ngjEsc(fig?.questionId || '')}" data-stem-preview="${_ngjEsc(fig?.stemPreview || '')}" data-confidence="${_ngjEsc(fig?.confidence || '')}"`;
+    const dataAttrs = `data-raw-path="${_ngjEsc(filePath)}" data-absolute-file-path="${_ngjEsc(fig?.absoluteFilePath || '')}" data-file-url="${_ngjEsc(fig?.fileUrl || '')}" data-resolved-src="${_ngjEsc(resolved)}" data-figure-id="${_ngjEsc(figureId)}" data-page="${_ngjEsc(fig?.page ?? '')}" data-suggested-question="${_ngjEsc(suggestedQ)}" data-question-id="${_ngjEsc(fig?.questionId || '')}" data-stem-preview="${_ngjEsc(fig?.stemPreview || '')}" data-confidence="${_ngjEsc(fig?.confidence || '')}"`;
     return `
       <div class="nbme-figure-review-thumb-wrap">
         <button type="button" class="nbme-figure-review-thumb-btn" onclick="App.nbmeFigureCropOpenFromElement(this)" title="Open crop editor" ${dataAttrs}>
@@ -23260,26 +23297,123 @@ const App = (() => {
     `;
   }
 
+  function nbmeFigureReviewNormalizeSeparators(path) {
+    return String(path || '').trim().replace(/\\/g, '/');
+  }
+
+  function nbmeFigureReviewBasename(path) {
+    const clean = nbmeFigureReviewNormalizeSeparators(path).replace(/\/+$/g, '');
+    if (!clean) return '';
+    return clean.slice(clean.lastIndexOf('/') + 1);
+  }
+
+  function nbmeFigureReviewDirname(path) {
+    const clean = nbmeFigureReviewNormalizeSeparators(path).replace(/\/+$/g, '');
+    const idx = clean.lastIndexOf('/');
+    if (idx < 0) return '';
+    if (idx === 0) return '/';
+    return clean.slice(0, idx);
+  }
+
+  function nbmeFigureReviewIsAbsolutePath(path) {
+    return /^\/[^/]/.test(path) || /^[A-Za-z]:\//.test(path);
+  }
+
+  function nbmeFigureReviewIsUrl(path) {
+    return /^(data:|blob:|https?:|file:)/i.test(path);
+  }
+
+  function nbmeFigureReviewNormalizePath(path) {
+    const input = nbmeFigureReviewNormalizeSeparators(path);
+    if (!input) return '';
+    const isWindows = /^[A-Za-z]:\//.test(input);
+    const prefix = isWindows ? input.slice(0, 3) : (input.startsWith('/') ? '/' : '');
+    const rest = isWindows ? input.slice(3) : (input.startsWith('/') ? input.slice(1) : input);
+    const parts = [];
+    rest.split('/').forEach(part => {
+      if (!part || part === '.') return;
+      if (part === '..') {
+        if (parts.length && parts[parts.length - 1] !== '..') parts.pop();
+        else if (!prefix) parts.push(part);
+        return;
+      }
+      parts.push(part);
+    });
+    return prefix + parts.join('/');
+  }
+
+  function nbmeFigureReviewJoinPath(base, child) {
+    const b = nbmeFigureReviewNormalizeSeparators(base).replace(/\/+$/g, '');
+    const c = nbmeFigureReviewNormalizeSeparators(child).replace(/^\/+/g, '');
+    return nbmeFigureReviewNormalizePath(b ? `${b}/${c}` : c);
+  }
+
+  function nbmeFigureReviewLocalPathToUrl(path) {
+    const clean = nbmeFigureReviewNormalizePath(path);
+    if (!clean) return '';
+    if (!nbmeFigureReviewIsAbsolutePath(clean)) return clean;
+    const withSlash = /^[A-Za-z]:\//.test(clean) ? `/${clean}` : clean;
+    return `file://${withSlash.split('/').map((part, idx) => {
+      if (idx === 0) return '';
+      if (idx === 1 && /^[A-Za-z]:$/.test(part)) return part;
+      return encodeURIComponent(part);
+    }).join('/')}`;
+  }
+
+  function nbmeFigureReviewElectronLocalFigureUrl(pathOrUrl) {
+    const value = String(pathOrUrl || '').trim();
+    if (!value || !window.nbmeDesktop?.isElectron || !/^https?:$/i.test(window.location.protocol)) return '';
+    if (/^(data:|blob:|https?:)/i.test(value)) return '';
+    const localValue = /^file:/i.test(value) ? value : nbmeFigureReviewNormalizePath(value);
+    if (!/^file:/i.test(localValue) && !nbmeFigureReviewIsAbsolutePath(localValue)) return '';
+    return `${window.location.origin}/__nbme_local_figure__?path=${encodeURIComponent(localValue)}`;
+  }
+
   function nbmeFigureReviewResolveImagePath(filePath) {
     const path = String(filePath || '').trim();
     if (!path) return '';
-    if (/^(data:|blob:|https?:|file:)/i.test(path)) return path;
-    if (path.startsWith('tools/')) return path;
-    if (path.startsWith('/')) return `file://${path}`;
-    if (path.startsWith('extracted_figures/')) return `tools/nbme-pdf-json-generator/${path}`;
-    return path;
+    const clean = nbmeFigureReviewNormalizeSeparators(path);
+    if (nbmeFigureReviewIsUrl(clean)) return clean;
+    if (nbmeFigureReviewIsAbsolutePath(clean)) return nbmeFigureReviewLocalPathToUrl(clean);
+
+    const ctx = _nbmeFigureReviewState?.fileContext || nbmeFigureReviewEmptyFileContext();
+    const sourceRoot = ctx.sourceRoot || 'tools/nbme-pdf-json-generator';
+    const manifestDir = ctx.manifestDir || 'tools/nbme-pdf-json-generator/figure_manifests';
+    let resolvedPath = clean;
+
+    if (clean.startsWith('extracted_figures/')) {
+      resolvedPath = nbmeFigureReviewJoinPath(sourceRoot, clean);
+    } else if (clean.startsWith('./') || clean.startsWith('../')) {
+      resolvedPath = nbmeFigureReviewJoinPath(manifestDir, clean);
+    } else if (!clean.startsWith('tools/')) {
+      resolvedPath = nbmeFigureReviewJoinPath(sourceRoot, clean);
+    }
+
+    return nbmeFigureReviewIsAbsolutePath(resolvedPath)
+      ? nbmeFigureReviewLocalPathToUrl(resolvedPath)
+      : resolvedPath;
+  }
+
+  function nbmeFigureReviewResolveFigureUrl(fig) {
+    const fileUrl = String(fig?.fileUrl || '').trim();
+    if (fileUrl) return nbmeFigureReviewElectronLocalFigureUrl(fileUrl) || (nbmeFigureReviewIsUrl(fileUrl) ? fileUrl : nbmeFigureReviewResolveImagePath(fileUrl));
+    const absolutePath = String(fig?.absoluteFilePath || '').trim();
+    if (absolutePath) return nbmeFigureReviewElectronLocalFigureUrl(absolutePath) || nbmeFigureReviewLocalPathToUrl(absolutePath);
+    const relativePath = String(fig?.filePath || '').trim();
+    return nbmeFigureReviewResolveImagePath(relativePath) || relativePath;
   }
 
   function nbmeFigureReviewHandleImageError(img) {
     if (!img) return;
     const tried = Number(img.getAttribute('data-review-img-tried') || '0');
     const raw = img.getAttribute('data-raw-path') || '';
-    if (tried === 0 && raw && !raw.startsWith('tools/') && !raw.startsWith('/') && !/^(data:|blob:|https?:|file:)/i.test(raw)) {
+    const clean = nbmeFigureReviewNormalizeSeparators(raw);
+    if (tried === 0 && clean && !clean.startsWith('tools/') && !nbmeFigureReviewIsAbsolutePath(clean) && !nbmeFigureReviewIsUrl(clean)) {
       img.setAttribute('data-review-img-tried', '1');
-      img.src = `tools/nbme-pdf-json-generator/${raw}`;
+      img.src = `tools/nbme-pdf-json-generator/${clean.replace(/^\.?\//, '')}`;
       return;
     }
-    const fallback = img.parentElement?.querySelector('.nbme-figure-review-img-fallback');
+    const fallback = img.closest('.nbme-figure-review-thumb-wrap')?.querySelector('.nbme-figure-review-img-fallback');
     img.style.display = 'none';
     if (fallback) fallback.style.display = 'block';
   }
@@ -23291,12 +23425,29 @@ const App = (() => {
   }
 
   function nbmeFigureCropOpenFromElement(el) {
-    const img = el?.matches?.('img') ? el : el?.querySelector?.('img.nbme-figure-review-thumb');
+    const img = el?.matches?.('img')
+      ? el
+      : (el?.querySelector?.('img.nbme-figure-review-thumb') || el?.closest?.('.nbme-figure-review-thumb-wrap')?.querySelector?.('img.nbme-figure-review-thumb'));
     const sourceEl = img || el;
     if (!sourceEl) return;
     const rawPath = sourceEl.getAttribute('data-raw-path') || '';
+    const fileUrl = sourceEl.getAttribute('data-file-url') || '';
+    const absolutePath = sourceEl.getAttribute('data-absolute-file-path') || '';
     const resolvedSrc = sourceEl.getAttribute('data-resolved-src') || '';
-    const src = img?.currentSrc || img?.src || resolvedSrc || nbmeFigureReviewResolveImagePath(rawPath);
+    const imgUsable = !!(img && img.style.display !== 'none' && img.complete && img.naturalWidth > 0);
+    const primaryResolved = nbmeFigureReviewResolveFigureUrl({ fileUrl, absoluteFilePath: absolutePath, filePath: rawPath });
+    const srcCandidates = [
+      primaryResolved,
+      nbmeFigureReviewElectronLocalFigureUrl(fileUrl),
+      absolutePath ? nbmeFigureReviewElectronLocalFigureUrl(absolutePath) : '',
+      fileUrl,
+      absolutePath ? nbmeFigureReviewLocalPathToUrl(absolutePath) : '',
+      resolvedSrc,
+      imgUsable ? (img.currentSrc || img.src) : '',
+      nbmeFigureReviewResolveImagePath(rawPath),
+      rawPath
+    ].filter(Boolean).filter((value, idx, arr) => arr.indexOf(value) === idx);
+    const src = srcCandidates[0] || '';
     const figure = {
       figureId: sourceEl.getAttribute('data-figure-id') || '',
       filePath: rawPath,
@@ -23307,7 +23458,7 @@ const App = (() => {
       stemPreview: sourceEl.getAttribute('data-stem-preview') || '',
       confidence: sourceEl.getAttribute('data-confidence') || ''
     };
-    nbmeFigureCropOpen({ src, figure });
+    nbmeFigureCropOpen({ src, srcCandidates, figure });
   }
 
   function nbmeFigureCropOpen(payload) {
@@ -23320,6 +23471,8 @@ const App = (() => {
 
     _nbmeFigureCropState = {
       src: payload?.src || '',
+      srcCandidates: Array.isArray(payload?.srcCandidates) ? payload.srcCandidates.slice() : [payload?.src || ''].filter(Boolean),
+      srcCandidateIndex: 0,
       figure: Object.assign({}, payload?.figure || {}),
       imageLoaded: false,
       zoom: 1,
@@ -23421,6 +23574,16 @@ const App = (() => {
   }
 
   function nbmeFigureCropImageFailed() {
+    const st = _nbmeFigureCropState;
+    const imgEl = document.getElementById('nbme-figure-crop-img');
+    if (st && imgEl && Array.isArray(st.srcCandidates) && st.srcCandidateIndex < st.srcCandidates.length - 1) {
+      st.srcCandidateIndex += 1;
+      st.src = st.srcCandidates[st.srcCandidateIndex];
+      nbmeFigureCropSetStatus('Primary image path failed. Trying alternate local path...');
+      imgEl.removeAttribute('src');
+      imgEl.src = st.src;
+      return;
+    }
     const saveBtn = document.getElementById('nbme-figure-crop-save-btn');
     if (saveBtn) saveBtn.disabled = true;
     nbmeFigureAttachRefreshButtons();

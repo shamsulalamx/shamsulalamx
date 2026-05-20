@@ -117,6 +117,10 @@ def _rel(path: Path) -> str:
     return str(path.relative_to(SCRIPT_DIR))
 
 
+def _file_url(path: Path) -> str:
+    return path.resolve().as_uri()
+
+
 def _clear_previous_figure_crops(pdf_stem: str) -> int:
     pattern = re.compile(rf"^{re.escape(pdf_stem)}_p\d{{3}}_fig\d{{3}}\.png$")
     removed = 0
@@ -1024,9 +1028,12 @@ def _write_crop(pdf_stem: str, candidate: Candidate, crop_rgb: np.ndarray, ordin
 
 
 def _candidate_to_manifest(c: Candidate) -> dict[str, Any]:
+    absolute_path = (SCRIPT_DIR / c.file_path).resolve()
     return {
         "figureId": c.figure_id,
         "filePath": c.file_path,
+        "absoluteFilePath": str(absolute_path),
+        "fileUrl": _file_url(absolute_path),
         "page": c.page,
         "bbox": list(c.bbox),
         "width": c.width,
@@ -1096,6 +1103,8 @@ def _write_review_csv(figures: list[dict[str, Any]], out_path: Path) -> None:
         "figureId",
         "page",
         "filePath",
+        "absoluteFilePath",
+        "fileUrl",
         "confidence",
         "score",
         "suggestedQuestionNumber",
@@ -1117,6 +1126,8 @@ def _write_review_csv(figures: list[dict[str, Any]], out_path: Path) -> None:
                 "figureId": fig.get("figureId", ""),
                 "page": fig.get("page", ""),
                 "filePath": fig.get("filePath", ""),
+                "absoluteFilePath": fig.get("absoluteFilePath", ""),
+                "fileUrl": fig.get("fileUrl", ""),
                 "confidence": fig.get("confidence", ""),
                 "score": fig.get("score", ""),
                 "suggestedQuestionNumber": fig.get("suggestedQuestionNumber") or "",
@@ -1146,7 +1157,7 @@ def _write_review_html(
 ) -> None:
     rows = []
     for fig in figures:
-        image_src = "../" + fig["filePath"]
+        image_src = fig.get("fileUrl") or ("../" + fig["filePath"])
         suggested = fig.get("suggestedQuestionNumber") or "unknown"
         reasons = fig.get("reasons") or []
         rejection_reasons = fig.get("rejectionReasons") or []
@@ -1168,6 +1179,8 @@ def _write_review_html(
               <div><dt>Size</dt><dd>{_html_escape(fig.get('width'))} x {_html_escape(fig.get('height'))}</dd></div>
               <div><dt>BBox</dt><dd>{_html_escape(fig.get('bbox'))}</dd></div>
               <div><dt>File</dt><dd><code>{_html_escape(fig.get('filePath'))}</code></dd></div>
+              <div><dt>Absolute File</dt><dd><code>{_html_escape(fig.get('absoluteFilePath'))}</code></dd></div>
+              <div><dt>File URL</dt><dd><code>{_html_escape(fig.get('fileUrl'))}</code></dd></div>
             </dl>
             <fieldset>
               <legend>Review decision</legend>
@@ -1622,6 +1635,8 @@ def _link_to_csv_row(link: dict[str, Any]) -> dict[str, Any]:
         "questionId": link.get("questionId", ""),
         "bestFigureId": link.get("bestFigureId") or "",
         "bestFigurePath": best.get("filePath", ""),
+        "bestFigureAbsolutePath": best.get("absoluteFilePath", ""),
+        "bestFigureUrl": best.get("fileUrl", ""),
         "bestFigurePage": best.get("page", ""),
         "confidence": best.get("confidence", "unknown") if best else "unknown",
         "score": best.get("score", ""),
@@ -1640,6 +1655,8 @@ def _write_links_csv(links: list[dict[str, Any]], out_path: Path) -> None:
         "questionId",
         "bestFigureId",
         "bestFigurePath",
+        "bestFigureAbsolutePath",
+        "bestFigureUrl",
         "bestFigurePage",
         "confidence",
         "score",
@@ -1665,13 +1682,15 @@ def _write_links_html(links: list[dict[str, Any]], out_path: Path, json_path: Pa
         ref_text = "; ".join(r.get("placeholder") or r.get("id", "") for r in refs) or "none"
         suggestion_html = []
         for fig in suggestions:
-            img_src = "../" + fig.get("filePath", "")
+            img_src = fig.get("fileUrl") or ("../" + fig.get("filePath", ""))
             suggestion_html.append(f"""
             <div class="suggestion">
               <img src="{_html_escape(img_src)}" alt="{_html_escape(fig.get('figureId'))}">
               <dl>
                 <div><dt>Figure</dt><dd>{_html_escape(fig.get('figureId'))}</dd></div>
                 <div><dt>Path</dt><dd><code>{_html_escape(fig.get('filePath'))}</code></dd></div>
+                <div><dt>Absolute File</dt><dd><code>{_html_escape(fig.get('absoluteFilePath'))}</code></dd></div>
+                <div><dt>File URL</dt><dd><code>{_html_escape(fig.get('fileUrl'))}</code></dd></div>
                 <div><dt>Page</dt><dd>{_html_escape(fig.get('page'))}</dd></div>
                 <div><dt>Confidence</dt><dd>{_html_escape(fig.get('confidence'))}</dd></div>
                 <div><dt>Score</dt><dd>{_html_escape(fig.get('score'))}</dd></div>
@@ -1803,6 +1822,8 @@ def build_suggested_figure_links(
             suggestions.append({
                 "figureId": fig.get("figureId"),
                 "filePath": fig.get("filePath"),
+                "absoluteFilePath": fig.get("absoluteFilePath"),
+                "fileUrl": fig.get("fileUrl"),
                 "page": fig.get("page"),
                 "confidence": confidence,
                 "score": link_score,

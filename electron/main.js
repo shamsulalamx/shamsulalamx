@@ -565,12 +565,20 @@ const MIME = {
   '.png':   'image/png',
   '.jpg':   'image/jpeg',
   '.jpeg':  'image/jpeg',
+  '.webp':  'image/webp',
   '.svg':   'image/svg+xml',
   '.pdf':   'application/pdf',
   '.woff':  'font/woff',
   '.woff2': 'font/woff2',
   '.wasm':  'application/wasm',
   '.txt':   'text/plain; charset=utf-8'
+};
+
+const LOCAL_FIGURE_MIME = {
+  '.png':  'image/png',
+  '.jpg':  'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp'
 };
 
 function resolveLocalPath(rawUrl) {
@@ -602,9 +610,45 @@ function serveIndexHtml(res, reason) {
   });
 }
 
+function resolveExternalFigurePath(rawPath) {
+  const raw = String(rawPath || '').trim();
+  if (!raw) return null;
+  try {
+    if (/^file:/i.test(raw)) return decodeURIComponent(new URL(raw).pathname);
+    return path.resolve(raw);
+  } catch (_) {
+    return null;
+  }
+}
+
+function serveExternalFigure(req, res) {
+  let parsed;
+  try {
+    parsed = new URL(req.url, 'http://127.0.0.1');
+  } catch (_) {
+    res.writeHead(400); res.end(); return;
+  }
+  const localPath = resolveExternalFigurePath(parsed.searchParams.get('path'));
+  if (!localPath) { res.writeHead(400); res.end(); return; }
+  const ext = path.extname(localPath).toLowerCase();
+  const contentType = LOCAL_FIGURE_MIME[ext];
+  if (!contentType) { res.writeHead(403); res.end(); return; }
+  fs.stat(localPath, (err, stat) => {
+    if (err || !stat.isFile()) { res.writeHead(404); res.end(); return; }
+    fs.readFile(localPath, (readErr, data) => {
+      if (readErr) { res.writeHead(500); res.end(); return; }
+      res.writeHead(200, { 'Content-Type': contentType, 'Cache-Control': 'no-cache' });
+      res.end(data);
+    });
+  });
+}
+
 function createRequestHandler() {
   return function (req, res) {
     console.log('[NBME REQUEST]', req.method, req.url);
+    if ((req.url || '').startsWith('/__nbme_local_figure__')) {
+      return serveExternalFigure(req, res);
+    }
     const localPath = resolveLocalPath(req.url);
     if (!localPath) return serveIndexHtml(res, 'bad URL'); // bad URL → SPA fallback
 
