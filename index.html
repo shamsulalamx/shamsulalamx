@@ -1314,6 +1314,9 @@ body.quiz-fullscreen-mode .modal-overlay {
             <button class="btn-generate" id="btn-landing-json-import" onclick="App.openLandingJsonImportModal()" style="background:#1a4a7a;" title="Import any app-ready or NBME Gemini JSON file">
               &#x2B06; Import JSON
             </button>
+            <button class="btn-generate" id="btn-nbme-figure-review" onclick="App.openNbmeFigureReviewModal()" style="background:#5a3f7a;" title="View NBME figure manifests without saving or attaching images">
+              NBME Figure Review
+            </button>
           </div>
         </div>
         <div id="home-content">
@@ -1955,6 +1958,61 @@ body.quiz-fullscreen-mode .modal-overlay {
 .misc-doc-move-label { font-size: 11px; color: var(--muted); white-space: nowrap; }
 .misc-doc-move-select { font-size: 11px; border: 1px solid var(--border); border-radius: 3px; padding: 2px 5px; color: var(--navy); background: white; max-width: 160px; }
 
+/* ── NBME Figure Review viewer ───────────────────────────── */
+.nbme-figure-review-modal {
+  width: min(1120px, calc(100vw - 32px));
+  max-width: min(1120px, calc(100vw - 32px));
+  max-height: calc(100vh - 36px);
+  overflow: auto;
+}
+.nbme-figure-review-note { font-size: 12px; color: #5a6a7a; margin-bottom: 12px; line-height: 1.45; }
+.nbme-figure-review-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 10px; }
+.nbme-figure-review-toolbar .form-group { flex: 1 1 300px; margin-bottom: 0; }
+.nbme-figure-review-status { font-size: 12px; color: #5a6a7a; margin: 8px 0; }
+.nbme-figure-review-status.error { color: #b23b3b; }
+.nbme-figure-review-summary {
+  display: none; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px;
+  margin: 10px 0 12px;
+}
+.nbme-figure-review-stat {
+  border: 1px solid var(--border); border-radius: 6px; background: #f8fafc; padding: 8px 10px;
+}
+.nbme-figure-review-stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.nbme-figure-review-stat-value { font-size: 18px; font-weight: 700; color: var(--navy); margin-top: 2px; }
+.nbme-figure-review-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.nbme-figure-review-card {
+  border: 1px solid var(--border); border-radius: 7px; background: #fff; padding: 10px;
+}
+.nbme-figure-review-question {
+  border: 1px solid var(--border); border-radius: 7px; background: #fff; padding: 12px; margin-bottom: 12px;
+}
+.nbme-figure-review-head { display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; margin-bottom: 8px; }
+.nbme-figure-review-title { font-size: 13px; font-weight: 700; color: var(--navy); overflow-wrap: anywhere; }
+.nbme-figure-review-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 22px; padding: 3px 7px; border-radius: 999px;
+  background: #eef2f6; color: #31445a; font-size: 11px; font-weight: 700; white-space: nowrap;
+}
+.nbme-figure-review-badge.high { background: #e7f6ee; color: #17663a; }
+.nbme-figure-review-badge.medium { background: #fff4df; color: #8a5a00; }
+.nbme-figure-review-badge.low, .nbme-figure-review-badge.unknown { background: #f5e9e9; color: #8a2f2f; }
+.nbme-figure-review-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 8px; margin: 7px 0; font-size: 11px; color: #40546a; }
+.nbme-figure-review-meta span { min-width: 0; overflow-wrap: anywhere; }
+.nbme-figure-review-thumb-wrap { margin: 8px 0; }
+.nbme-figure-review-thumb {
+  display: block; max-width: 100%; width: 100%; max-height: 210px; object-fit: contain;
+  border: 1px solid var(--border); border-radius: 5px; background: #f8fafc;
+}
+.nbme-figure-review-img-fallback {
+  display: none; border: 1px dashed var(--border); border-radius: 5px; padding: 10px;
+  background: #fafafa; color: #5a6a7a; font-size: 11px; overflow-wrap: anywhere;
+}
+.nbme-figure-review-path { font-size: 10px; color: #5a6a7a; margin-top: 5px; overflow-wrap: anywhere; }
+.nbme-figure-review-reasons { margin: 8px 0 0 0; padding-left: 17px; color: #40546a; font-size: 11px; line-height: 1.4; }
+.nbme-figure-review-stem { font-size: 12px; color: #31445a; line-height: 1.45; margin: 6px 0 8px; }
+.nbme-figure-review-refs { font-size: 11px; color: #40546a; margin: 6px 0; }
+.nbme-figure-review-empty { padding: 18px; border: 1px dashed var(--border); border-radius: 7px; color: #5a6a7a; font-size: 12px; background: #fafafa; }
+
 </style>
 <div id="modal-nbme-gemini-json" class="modal-overlay">
   <div class="modal-box ngj-modal-box">
@@ -2026,6 +2084,32 @@ body.quiz-fullscreen-mode .modal-overlay {
       <button type="button" class="btn-modal primary" id="ngj-save-btn" onclick="App.createTestFromNbmeGeminiJsonImport()" disabled>Save Test</button>
       <button type="button" class="btn-modal" id="ngj-save-valid-btn" onclick="App.saveValidNbmeGeminiJsonQuestionsOnly()" disabled style="display:none;border-color:#c0392b;color:#c0392b;" title="Testing only: saves valid questions, excludes questions with blocking errors">Save valid questions only</button>
       <button type="button" class="btn-modal" onclick="App.closeNbmeGeminiJsonImportModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-nbme-figure-review" class="modal-overlay">
+  <div class="modal-box nbme-figure-review-modal">
+    <h3>NBME Figure Review</h3>
+    <p class="nbme-figure-review-note">Load a figure manifest or suggested figure links JSON for read-only review. This viewer does not save, attach, crop, or edit question data.</p>
+
+    <div class="nbme-figure-review-toolbar">
+      <div class="form-group">
+        <label class="form-label">Manifest or suggested-links JSON</label>
+        <input type="file" class="form-input" id="nbme-figure-review-file-input" accept=".json,application/json" onchange="App.handleNbmeFigureReviewFileUpload(this)">
+        <div id="nbme-figure-review-file-name" style="font-size:11px;color:#5a6a7a;margin-top:3px;"></div>
+      </div>
+      <button type="button" class="btn-modal" onclick="App.clearNbmeFigureReviewState()">Clear</button>
+    </div>
+
+    <div id="nbme-figure-review-status" class="nbme-figure-review-status">No file loaded.</div>
+    <div id="nbme-figure-review-summary" class="nbme-figure-review-summary"></div>
+    <div id="nbme-figure-review-body">
+      <div class="nbme-figure-review-empty">Choose a figure manifest JSON or suggested figure links JSON to review extracted figures.</div>
+    </div>
+
+    <div class="modal-actions" style="margin-top:12px;">
+      <button type="button" class="btn-modal" onclick="App.closeNbmeFigureReviewModal()">Close</button>
     </div>
   </div>
 </div>
@@ -8107,6 +8191,7 @@ const App = (() => {
   let _noteHighlightSeq = 0;
   let _notesImportPreview = null;
   let _nbmeGeminiJsonImport = null;
+  let _nbmeFigureReviewState = null;
   let _ankiImportPreview = null;
   let _omeImportPreview = null;
   let _mehlmanImportPreview = null;
@@ -22835,6 +22920,242 @@ const App = (() => {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  function openNbmeFigureReviewModal() {
+    clearNbmeFigureReviewState();
+    const modal = document.getElementById('modal-nbme-figure-review');
+    if (modal) modal.style.display = 'flex';
+  }
+
+  function closeNbmeFigureReviewModal() {
+    const modal = document.getElementById('modal-nbme-figure-review');
+    if (modal) modal.style.display = 'none';
+  }
+
+  function clearNbmeFigureReviewState() {
+    _nbmeFigureReviewState = { parsed: null, type: null, fileName: '' };
+    const input = document.getElementById('nbme-figure-review-file-input');
+    const name = document.getElementById('nbme-figure-review-file-name');
+    const status = document.getElementById('nbme-figure-review-status');
+    const summary = document.getElementById('nbme-figure-review-summary');
+    const body = document.getElementById('nbme-figure-review-body');
+    if (input) input.value = '';
+    if (name) name.textContent = '';
+    if (status) {
+      status.className = 'nbme-figure-review-status';
+      status.textContent = 'No file loaded.';
+    }
+    if (summary) {
+      summary.style.display = 'none';
+      summary.innerHTML = '';
+    }
+    if (body) body.innerHTML = '<div class="nbme-figure-review-empty">Choose a figure manifest JSON or suggested figure links JSON to review extracted figures.</div>';
+  }
+
+  function handleNbmeFigureReviewFileUpload(input) {
+    const file = input?.files?.[0];
+    if (!file) return;
+    _nbmeFigureReviewState = { parsed: null, type: null, fileName: file.name };
+    const name = document.getElementById('nbme-figure-review-file-name');
+    const status = document.getElementById('nbme-figure-review-status');
+    if (name) name.textContent = file.name;
+    if (status) {
+      status.className = 'nbme-figure-review-status';
+      status.textContent = 'Reading JSON...';
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result || ''));
+        const type = nbmeFigureReviewDetectType(parsed);
+        if (!type) throw new Error('Unsupported JSON. Expected a figure manifest with a figures array or suggested figure links with a links array.');
+        _nbmeFigureReviewState = { parsed, type, fileName: file.name };
+        nbmeFigureReviewRender(parsed, type);
+      } catch (err) {
+        nbmeFigureReviewSetError(err?.message || 'Could not load JSON.');
+      }
+    };
+    reader.onerror = () => nbmeFigureReviewSetError('Could not read the selected file.');
+    reader.readAsText(file);
+  }
+
+  function nbmeFigureReviewDetectType(parsed) {
+    if (parsed && Array.isArray(parsed.figures)) return 'manifest';
+    if (parsed && Array.isArray(parsed.links)) return 'links';
+    return '';
+  }
+
+  function nbmeFigureReviewSetError(message) {
+    const status = document.getElementById('nbme-figure-review-status');
+    const summary = document.getElementById('nbme-figure-review-summary');
+    const body = document.getElementById('nbme-figure-review-body');
+    if (status) {
+      status.className = 'nbme-figure-review-status error';
+      status.textContent = message;
+    }
+    if (summary) {
+      summary.style.display = 'none';
+      summary.innerHTML = '';
+    }
+    if (body) body.innerHTML = `<div class="nbme-figure-review-empty">${_ngjEsc(message)}</div>`;
+  }
+
+  function nbmeFigureReviewRender(parsed, type) {
+    if (type === 'manifest') nbmeFigureReviewRenderManifest(parsed);
+    else if (type === 'links') nbmeFigureReviewRenderLinks(parsed);
+  }
+
+  function nbmeFigureReviewSetStatus(message) {
+    const status = document.getElementById('nbme-figure-review-status');
+    if (status) {
+      status.className = 'nbme-figure-review-status';
+      status.textContent = message;
+    }
+  }
+
+  function nbmeFigureReviewRenderSummary(items) {
+    const summary = document.getElementById('nbme-figure-review-summary');
+    if (!summary) return;
+    summary.style.display = 'grid';
+    summary.innerHTML = items.map(item => `
+      <div class="nbme-figure-review-stat">
+        <div class="nbme-figure-review-stat-label">${_ngjEsc(item.label)}</div>
+        <div class="nbme-figure-review-stat-value">${_ngjEsc(item.value)}</div>
+      </div>
+    `).join('');
+  }
+
+  function nbmeFigureReviewRenderManifest(manifest) {
+    const body = document.getElementById('nbme-figure-review-body');
+    const figures = Array.isArray(manifest.figures) ? manifest.figures.filter(f => f && f.kept !== false) : [];
+    const sourcePdf = manifest.sourcePdf || 'unknown PDF';
+    const reviewCount = figures.filter(f => !!f.needsReview).length;
+    nbmeFigureReviewSetStatus(`Loaded figure manifest for ${sourcePdf}.`);
+    nbmeFigureReviewRenderSummary([
+      { label: 'Figures shown', value: figures.length },
+      { label: 'Needs review', value: reviewCount },
+      { label: 'DPI', value: manifest.dpi || 'unknown' },
+      { label: 'Warnings', value: Array.isArray(manifest.warnings) ? manifest.warnings.length : 0 }
+    ]);
+    if (!body) return;
+    if (!figures.length) {
+      body.innerHTML = '<div class="nbme-figure-review-empty">This manifest has no kept figures to display.</div>';
+      return;
+    }
+    body.innerHTML = `<div class="nbme-figure-review-grid">${figures.map(nbmeFigureReviewFigureCardHtml).join('')}</div>`;
+  }
+
+  function nbmeFigureReviewRenderLinks(payload) {
+    const body = document.getElementById('nbme-figure-review-body');
+    const links = Array.isArray(payload.links) ? payload.links : [];
+    const suggestedCount = links.reduce((sum, link) => sum + (Array.isArray(link.suggestedFigures) ? link.suggestedFigures.length : 0), 0);
+    const linkedQuestions = links.filter(link => Array.isArray(link.suggestedFigures) && link.suggestedFigures.length).length;
+    nbmeFigureReviewSetStatus(`Loaded suggested figure links for ${payload.sourcePdf || 'unknown PDF'}.`);
+    nbmeFigureReviewRenderSummary([
+      { label: 'Questions shown', value: links.length },
+      { label: 'Linked questions', value: linkedQuestions },
+      { label: 'Suggested figures', value: suggestedCount },
+      { label: 'Warnings', value: Array.isArray(payload.warnings) ? payload.warnings.length : 0 }
+    ]);
+    if (!body) return;
+    if (!links.length) {
+      body.innerHTML = '<div class="nbme-figure-review-empty">This suggested-links file has no question links to display.</div>';
+      return;
+    }
+    body.innerHTML = links.map(nbmeFigureReviewQuestionHtml).join('');
+  }
+
+  function nbmeFigureReviewQuestionHtml(link) {
+    const qNum = link?.questionNumber ?? 'unknown';
+    const refs = Array.isArray(link?.existingFigureRefs) ? link.existingFigureRefs : [];
+    const figs = Array.isArray(link?.suggestedFigures) ? link.suggestedFigures : [];
+    const refHtml = refs.length
+      ? refs.map(ref => `<div>${_ngjEsc(ref.id || ref.figureId || 'figureRef')}: ${_ngjEsc(ref.placeholder || '')}</div>`).join('')
+      : '<div>No existing figureRefs listed.</div>';
+    const figHtml = figs.length
+      ? `<div class="nbme-figure-review-grid">${figs.map(nbmeFigureReviewFigureCardHtml).join('')}</div>`
+      : '<div class="nbme-figure-review-empty">No suggested extracted figure for this question.</div>';
+    return `
+      <section class="nbme-figure-review-question">
+        <div class="nbme-figure-review-head">
+          <div class="nbme-figure-review-title">Question ${_ngjEsc(qNum)} ${link?.questionId ? `(${_ngjEsc(link.questionId)})` : ''}</div>
+          <span class="nbme-figure-review-badge ${_ngjEsc(nbmeFigureReviewConfidenceClass(link?.confidence || 'unknown'))}">${_ngjEsc(link?.confidence || 'review')}</span>
+        </div>
+        <div class="nbme-figure-review-stem">${_ngjEsc(link?.stemPreview || 'No stem preview available.')}</div>
+        <div class="nbme-figure-review-refs">${refHtml}</div>
+        ${figHtml}
+      </section>
+    `;
+  }
+
+  function nbmeFigureReviewFigureCardHtml(fig) {
+    const confidence = fig?.confidence || 'unknown';
+    const suggestedQ = fig?.suggestedQuestionNumber ?? fig?.questionNumber ?? 'unknown';
+    const score = Number.isFinite(Number(fig?.score)) ? Number(fig.score).toFixed(2) : 'unknown';
+    const reasons = Array.isArray(fig?.reasons) ? fig.reasons : [];
+    const bbox = Array.isArray(fig?.bbox) ? `[${fig.bbox.join(', ')}]` : 'unknown';
+    const path = fig?.filePath || '';
+    return `
+      <article class="nbme-figure-review-card">
+        <div class="nbme-figure-review-head">
+          <div class="nbme-figure-review-title">${_ngjEsc(fig?.figureId || 'unnamed figure')}</div>
+          <span class="nbme-figure-review-badge ${_ngjEsc(nbmeFigureReviewConfidenceClass(confidence))}">${_ngjEsc(confidence)}</span>
+        </div>
+        ${nbmeFigureReviewImageHtml(path, fig?.figureId || 'NBME figure')}
+        <div class="nbme-figure-review-meta">
+          <span>Page: ${_ngjEsc(fig?.page ?? 'unknown')}</span>
+          <span>Suggested Q: ${_ngjEsc(suggestedQ)}</span>
+          <span>Score: ${_ngjEsc(score)}</span>
+          <span>Needs review: ${fig?.needsReview === false ? 'no' : 'yes'}</span>
+          <span>Size: ${_ngjEsc(fig?.width ?? '?')} x ${_ngjEsc(fig?.height ?? '?')}</span>
+          <span>BBox: ${_ngjEsc(bbox)}</span>
+        </div>
+        ${reasons.length ? `<ul class="nbme-figure-review-reasons">${reasons.map(r => `<li>${_ngjEsc(r)}</li>`).join('')}</ul>` : ''}
+      </article>
+    `;
+  }
+
+  function nbmeFigureReviewImageHtml(filePath, alt) {
+    const resolved = nbmeFigureReviewResolveImagePath(filePath);
+    if (!filePath) return '<div class="nbme-figure-review-img-fallback" style="display:block;">No image path provided.</div>';
+    return `
+      <div class="nbme-figure-review-thumb-wrap">
+        <img class="nbme-figure-review-thumb" src="${_ngjEsc(resolved)}" alt="${_ngjEsc(alt)}" data-raw-path="${_ngjEsc(filePath)}" data-review-img-tried="0" onerror="App.nbmeFigureReviewHandleImageError(this)">
+        <div class="nbme-figure-review-img-fallback">Thumbnail unavailable. Path: ${_ngjEsc(filePath)}</div>
+        <div class="nbme-figure-review-path">${_ngjEsc(filePath)}</div>
+      </div>
+    `;
+  }
+
+  function nbmeFigureReviewResolveImagePath(filePath) {
+    const path = String(filePath || '').trim();
+    if (!path) return '';
+    if (/^(data:|blob:|https?:|file:)/i.test(path)) return path;
+    if (path.startsWith('tools/')) return path;
+    if (path.startsWith('/')) return `file://${path}`;
+    if (path.startsWith('extracted_figures/')) return `tools/nbme-pdf-json-generator/${path}`;
+    return path;
+  }
+
+  function nbmeFigureReviewHandleImageError(img) {
+    if (!img) return;
+    const tried = Number(img.getAttribute('data-review-img-tried') || '0');
+    const raw = img.getAttribute('data-raw-path') || '';
+    if (tried === 0 && raw && !raw.startsWith('tools/') && !raw.startsWith('/') && !/^(data:|blob:|https?:|file:)/i.test(raw)) {
+      img.setAttribute('data-review-img-tried', '1');
+      img.src = `tools/nbme-pdf-json-generator/${raw}`;
+      return;
+    }
+    const fallback = img.parentElement?.querySelector('.nbme-figure-review-img-fallback');
+    img.style.display = 'none';
+    if (fallback) fallback.style.display = 'block';
+  }
+
+  function nbmeFigureReviewConfidenceClass(confidence) {
+    const c = String(confidence || '').toLowerCase();
+    if (c === 'high' || c === 'medium' || c === 'low' || c === 'unknown') return c;
+    return 'unknown';
+  }
+
   function openNbmeGeminiJsonImportModal() {
     _nbmeGeminiJsonImport = {
       rawText: '', parsed: null, validation: null,
@@ -24437,8 +24758,13 @@ const App = (() => {
     closeLandingJsonImportModal,
     handleLandingJsonFileUpload,
     _onLandingJsonFolderChange,
-    confirmLandingJsonImport,
-    openNbmeGeminiJsonImportModal,
+	    confirmLandingJsonImport,
+    openNbmeFigureReviewModal,
+    closeNbmeFigureReviewModal,
+    clearNbmeFigureReviewState,
+    handleNbmeFigureReviewFileUpload,
+    nbmeFigureReviewHandleImageError,
+	    openNbmeGeminiJsonImportModal,
     closeNbmeGeminiJsonImportModal,
     _onNgjFolderChange,
     clearNbmeGeminiJsonImportState,
