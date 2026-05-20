@@ -14,3 +14,7 @@ reports/
 # Known-good regression reference lives in test-assets/known-good/ instead.
 # There is intentionally no committed "safe" test PDF for this tool.
 input_pdfs/
+
+# Rendered-page figure extraction artifacts
+extracted_figures/
+figure_manifests/
