@@ -6393,20 +6393,25 @@ function renderImages(q, topElId, bottomElId) {
 
   // ── Figure rendering helpers (nbme-gemini-json / chatgpt-pro-json) ──────────
 
-  window._ngjFigureToHTML = function(figureId, q) {
-    const refs = q?.metadata?.figureRefs || [];
-    const ref = refs.find(function(r) { return r.figureId === figureId; });
-    const attachments = q?.metadata?.figureAttachments || {};
-    const dataUrl = attachments[figureId];
+	  window._ngjFigureToHTML = function(figureId, q) {
+	    const refs = q?.metadata?.figureRefs || [];
+	    const ref = refs.find(function(r) { return r.figureId === figureId; });
+	    const attachments = q?.metadata?.figureAttachments || {};
+	    const dataUrl = attachments[figureId];
 
-    if (dataUrl) {
-      return '<div class="nbme-figure-attached">' +
-        '<img src="' + dataUrl + '" alt="' + figureId + '" ' +
-        'style="max-width:100%;display:block;margin:8px 0;border:1px solid #dde3ea;border-radius:3px;">' +
-        '</div>';
-    }
+	    if (dataUrl) {
+	      return '<div class="nbme-figure-attached">' +
+	        '<img src="' + dataUrl + '" alt="' + figureId + '" ' +
+	        'style="max-width:100%;display:block;margin:8px 0;border:1px solid #dde3ea;border-radius:3px;">' +
+	        '</div>';
+	    }
 
-    // Render visibleText as a lab-values table if available
+	    const hasStoredImage = Array.isArray(q?.images) && q.images.some(function(img) {
+	      return img && (img.figureRefId === figureId || img.figureId === figureId || img.originalFigureId === figureId);
+	    });
+	    if (hasStoredImage) return '';
+
+	    // Render visibleText as a lab-values table if available
     const visibleText = ref && Array.isArray(ref.visibleText) && ref.visibleText.length ? ref.visibleText : null;
     if (visibleText) {
       const rows = visibleText.map(function(line) {
@@ -25279,6 +25284,10 @@ const App = (() => {
 	    return (st?.figureImageAttachments || {})[key] || [];
 	  }
 
+	  function ngjHasPendingFigureAttachment(qNum, figureRefId) {
+	    return ngjPendingFigureAttachments(qNum, figureRefId).length > 0;
+	  }
+
 	  function ngjSuggestionDataAttrs(fig, qNum, figureRefId) {
 	    const resolved = nbmeFigureReviewResolveFigureUrl(fig);
 	    return [
@@ -25472,7 +25481,9 @@ const App = (() => {
 		      cropBox,
 		      attachedAt: new Date().toISOString()
 		    };
-		    const nextList = target?.replaceExisting ? [entry] : list.concat(entry);
+		    const nextList = target?.replaceExisting
+		      ? [entry]
+		      : list.filter(item => item && !(item.figureRefId === figureRefId && item.cropSignature === signature)).concat(entry);
 		    _nbmeGeminiJsonImport.figureImageAttachments[key] = nextList;
 		    if (target?.replaceExisting) _nbmeGeminiJsonImport.figureAttachments[figureRefId] = dataUrl;
 		    return { duplicate: false, count: nextList.length };
@@ -25639,8 +25650,20 @@ const App = (() => {
 	    const st = _nbmeGeminiJsonImport;
 	    const prefix = ngjImportQuestionKey(qNum) + '::';
 	    const result = [];
+	    const seen = new Set();
 	    Object.keys(st?.figureImageAttachments || {}).forEach(key => {
-	      if (key.startsWith(prefix)) result.push(...(st.figureImageAttachments[key] || []));
+	      if (!key.startsWith(prefix)) return;
+	      (st.figureImageAttachments[key] || []).forEach(item => {
+	        const sig = [
+	          item?.figureRefId || '',
+	          item?.cropSignature || '',
+	          String(item?.dataUrl || '').slice(0, 96),
+	          String(item?.dataUrl || '').length
+	        ].join('|');
+	        if (seen.has(sig)) return;
+	        seen.add(sig);
+	        result.push(item);
+	      });
 	    });
 	    return result;
 	  }
@@ -25653,21 +25676,33 @@ const App = (() => {
 	      throw new Error('FigureStore is unavailable, so attached figure images cannot be persisted.');
 	    }
 	    let attachedCount = 0;
-	    for (const q of (test.questions || [])) {
-	      const qNum = Number(q?.n || q?.number || q?.questionNumber || 0);
-	      const items = ngjPendingImportImagesForQuestion(qNum);
-	      if (!items.length) continue;
-	      q.images = Array.isArray(q.images) ? q.images : [];
-	      q.metadata = q.metadata && typeof q.metadata === 'object' ? q.metadata : {};
-	      q.metadata.figureRefs = Array.isArray(q.metadata.figureRefs) ? q.metadata.figureRefs : [];
-	      for (const item of items) {
-	        if (!item?.dataUrl) continue;
-	        if (q.images.some(img => img?.cropSignature === item.cropSignature)) continue;
+		    for (const q of (test.questions || [])) {
+		      const qNum = Number(q?.n || q?.number || q?.questionNumber || 0);
+		      const items = ngjPendingImportImagesForQuestion(qNum);
+		      if (!items.length) continue;
+		      q.images = Array.isArray(q.images) ? q.images : [];
+		      q.metadata = q.metadata && typeof q.metadata === 'object' ? q.metadata : {};
+		      q.metadata.figureRefs = Array.isArray(q.metadata.figureRefs) ? q.metadata.figureRefs : [];
+		      if (q.metadata.figureAttachments && typeof q.metadata.figureAttachments === 'object') {
+		        items.forEach(item => {
+		          if (item?.figureRefId) delete q.metadata.figureAttachments[item.figureRefId];
+		        });
+		      }
+		      const savedKeys = new Set(q.images.map(img => [
+		        img?.figureRefId || '',
+		        img?.cropSignature || '',
+		        img?.source || ''
+		      ].join('|')));
+		      for (const item of items) {
+		        if (!item?.dataUrl) continue;
+		        const savedKey = [item.figureRefId || '', item.cropSignature || '', item.source || ''].join('|');
+		        if (savedKeys.has(savedKey)) continue;
+		        if (q.images.some(img => img?.figureRefId === item.figureRefId && img?.cropSignature === item.cropSignature)) continue;
 	        const imageIndex = nbmeFigureAttachNextImageIndex(q.images);
 	        const figureKey = `${test.id}:${qNum || q.n || 'q'}:${imageIndex}`;
 	        await window.FigureStore.put(figureKey, item.dataUrl);
 	        const figureId = nbmeFigureAttachFigureId({ figureId: item.figureId || item.originalFigureId, filePath: item.filePath }, { questionNumber: qNum || q.n || 0 }, imageIndex);
-	        q.images.push({
+		        q.images.push({
 	          figureKey,
 	          isLabTable: false,
 	          kind: 'figure',
@@ -25681,7 +25716,8 @@ const App = (() => {
 	          cropSignature: item.cropSignature || '',
 	          cropBox: item.cropBox || null,
 	          attachedAt: item.attachedAt || new Date().toISOString()
-	        });
+		        });
+		        savedKeys.add(savedKey);
 	        if (item.figureRefId && !q.metadata.figureRefs.some(ref => (ref?.id || ref?.figureId) === item.figureRefId)) {
 	          q.metadata.figureRefs.push({
 	            id: item.figureRefId,
@@ -25734,11 +25770,11 @@ const App = (() => {
     const questions = items.map(q => {
       const out = Object.assign({}, q);
       // Collect figureAttachments for this question's figureRefs
-      const qFigureAttachments = {};
-      ((out.metadata && out.metadata.figureRefs) || []).forEach(fr => {
-        const fid = fr.id || fr.figureId;
-        if (fid && figAttachGlobal[fid]) qFigureAttachments[fid] = figAttachGlobal[fid];
-      });
+	      const qFigureAttachments = {};
+	      ((out.metadata && out.metadata.figureRefs) || []).forEach(fr => {
+	        const fid = fr.id || fr.figureId;
+	        if (fid && figAttachGlobal[fid] && !ngjHasPendingFigureAttachment(out.n, fid)) qFigureAttachments[fid] = figAttachGlobal[fid];
+	      });
       out.metadata = Object.assign({}, out.metadata || {}, {
         sourceType: 'nbme-gemini-json',
         sourceFormat: payload.sourceFormat || null,
@@ -25850,11 +25886,11 @@ const App = (() => {
     const importedAt = new Date().toISOString();
     const questions = items.map(q => {
       const out = Object.assign({}, q);
-      const qFigureAttachments = {};
-      ((out.metadata && out.metadata.figureRefs) || []).forEach(fr => {
-        const fid = fr.id || fr.figureId;
-        if (fid && figAttachGlobal[fid]) qFigureAttachments[fid] = figAttachGlobal[fid];
-      });
+	      const qFigureAttachments = {};
+	      ((out.metadata && out.metadata.figureRefs) || []).forEach(fr => {
+	        const fid = fr.id || fr.figureId;
+	        if (fid && figAttachGlobal[fid] && !ngjHasPendingFigureAttachment(out.n, fid)) qFigureAttachments[fid] = figAttachGlobal[fid];
+	      });
       out.metadata = Object.assign({}, out.metadata || {}, {
         sourceType: 'nbme-gemini-json',
         sourceFormat: payload.sourceFormat || null,
