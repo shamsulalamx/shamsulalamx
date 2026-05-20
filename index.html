@@ -24958,6 +24958,8 @@ const App = (() => {
         reviewPearl,
         educationalObjective: q.educationalObjective ? String(q.educationalObjective) : '',
         correctBlurb: correctBlurb || '',
+        images: Array.isArray(q.images) ? JSON.parse(JSON.stringify(q.images)) : [],
+        explanationImages: Array.isArray(q.explanationImages) ? JSON.parse(JSON.stringify(q.explanationImages)) : [],
         metadata: {
           sourceType: 'nbme-gemini-json',
           sourceQuestionNumber: q.sourceQuestionNumber ?? null,
@@ -25929,7 +25931,8 @@ const App = (() => {
 
 	    let persistedFigureCount = 0;
 	    try {
-	      persistedFigureCount = await ngjPersistPendingFigureImagesToTest(test);
+	      persistedFigureCount += await _persistLandingJsonInlineImages(test);
+	      persistedFigureCount += await ngjPersistPendingFigureImagesToTest(test);
 	    } catch (err) {
 	      const msg = err?.message || 'Attached figure images could not be persisted.';
 	      st.lastSaveError = msg;
@@ -26046,7 +26049,8 @@ const App = (() => {
 
 	    let persistedFigureCount = 0;
 	    try {
-	      persistedFigureCount = await ngjPersistPendingFigureImagesToTest(test);
+	      persistedFigureCount += await _persistLandingJsonInlineImages(test);
+	      persistedFigureCount += await ngjPersistPendingFigureImagesToTest(test);
 	    } catch (err) {
 	      const msg = err?.message || 'Attached figure images could not be persisted.';
 	      st.lastSaveError = msg;

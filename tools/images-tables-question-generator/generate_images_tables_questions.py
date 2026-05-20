@@ -429,8 +429,25 @@ def adapt_question(parsed: dict[str, Any], src: Path, asset: Path, mime: str, q_
     image = image_entry(src, asset, mime, parsed, classification)
     stem_images = [image] if classification == "diagnostic_stem_image" else []
     explanation_images = [image] if classification in {"explanation_only_image", "explanation_only_table"} else []
+    answer_choices = [{"label": c["l"], "text": c["t"]} for c in choices]
+    explanation_sections = [
+        {
+            "heading": "Answer Explanation",
+            "body": [part for part in explanation.split("\n\n") if part.strip()],
+        }
+    ]
     return {
         "id": question_id,
+        "questionNumber": q_num,
+        "sourceQuestionNumber": q_num,
+        "stem": stem,
+        "answerChoices": answer_choices,
+        "correctAnswer": correct,
+        "explanationSections": explanation_sections,
+        "hasEmbeddedFigure": False,
+        "figureRefs": [],
+        "tables": [],
+        "extractionWarnings": warnings,
         "n": q_num,
         "t": stem,
         "o": choices,
@@ -466,11 +483,57 @@ def validate_payload(payload: dict[str, Any], base_dir: Path = BASE_DIR) -> list
     questions = payload.get("questions")
     if not isinstance(questions, list) or not questions:
         return ["Final app-ready JSON has no questions."]
+    seen_question_numbers: set[int] = set()
     for idx, q in enumerate(questions, start=1):
         prefix = f"Q{idx}"
         if not isinstance(q, dict):
             errors.append(f"{prefix}: question is not an object.")
             continue
+        question_number = q.get("questionNumber")
+        if not isinstance(question_number, int):
+            errors.append(f"{prefix}: missing required field questionNumber.")
+        elif question_number != idx:
+            errors.append(f"{prefix}: questionNumber must be {idx}; found {question_number}.")
+        elif question_number in seen_question_numbers:
+            errors.append(f"{prefix}: duplicate questionNumber {question_number}.")
+        else:
+            seen_question_numbers.add(question_number)
+        stem = q.get("stem")
+        if not isinstance(stem, str) or not stem.strip():
+            errors.append(f"{prefix}: missing required field stem.")
+        answer_choices = q.get("answerChoices")
+        if not isinstance(answer_choices, list):
+            errors.append(f"{prefix}: missing required field answerChoices.")
+        elif len(answer_choices) != 4:
+            errors.append(f"{prefix}: answerChoices must contain exactly four choices.")
+        else:
+            canonical_labels = []
+            for choice_idx, choice in enumerate(answer_choices):
+                if not isinstance(choice, dict):
+                    errors.append(f"{prefix}: answerChoices[{choice_idx}] is not an object.")
+                    continue
+                label = choice.get("label")
+                text = choice.get("text")
+                canonical_labels.append(label)
+                if not isinstance(label, str) or not label.strip():
+                    errors.append(f"{prefix}: answerChoices[{choice_idx}].label is missing.")
+                if not isinstance(text, str) or not text.strip():
+                    errors.append(f"{prefix}: answerChoices[{choice_idx}].text is missing.")
+            if canonical_labels == LABELS and q.get("correctAnswer") not in canonical_labels:
+                errors.append(f"{prefix}: correctAnswer does not match answerChoices.")
+        correct_answer = q.get("correctAnswer")
+        if not isinstance(correct_answer, str) or not correct_answer.strip():
+            errors.append(f"{prefix}: missing required field correctAnswer.")
+        if q.get("hasEmbeddedFigure") is not False:
+            errors.append(f"{prefix}: hasEmbeddedFigure must be false for direct q.images[]/q.explanationImages[] attachments.")
+        if not isinstance(q.get("figureRefs"), list):
+            errors.append(f"{prefix}: figureRefs must be an array.")
+        if not isinstance(q.get("tables"), list):
+            errors.append(f"{prefix}: tables must be an array.")
+        if "explanationSections" not in q:
+            errors.append(f"{prefix}: missing required field explanationSections.")
+        elif not isinstance(q.get("explanationSections"), list):
+            errors.append(f"{prefix}: explanationSections must be an array.")
         if not q.get("t"):
             errors.append(f"{prefix}: missing stem t.")
         choices = q.get("o")
