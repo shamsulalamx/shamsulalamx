@@ -2007,11 +2007,62 @@ body.quiz-fullscreen-mode .modal-overlay {
   display: none; border: 1px dashed var(--border); border-radius: 5px; padding: 10px;
   background: #fafafa; color: #5a6a7a; font-size: 11px; overflow-wrap: anywhere;
 }
+.nbme-figure-review-thumb-btn {
+  display: block; width: 100%; padding: 0; border: 0; background: transparent; cursor: zoom-in;
+  text-align: left;
+}
+.nbme-figure-review-crop-hint { font-size: 10px; color: #5a6a7a; margin-top: 4px; }
 .nbme-figure-review-path { font-size: 10px; color: #5a6a7a; margin-top: 5px; overflow-wrap: anywhere; }
 .nbme-figure-review-reasons { margin: 8px 0 0 0; padding-left: 17px; color: #40546a; font-size: 11px; line-height: 1.4; }
 .nbme-figure-review-stem { font-size: 12px; color: #31445a; line-height: 1.45; margin: 6px 0 8px; }
 .nbme-figure-review-refs { font-size: 11px; color: #40546a; margin: 6px 0; }
 .nbme-figure-review-empty { padding: 18px; border: 1px dashed var(--border); border-radius: 7px; color: #5a6a7a; font-size: 12px; background: #fafafa; }
+.nbme-figure-crop-overlay { background: rgba(9, 14, 22, .78); z-index: 12000; }
+.nbme-figure-crop-modal {
+  width: min(1180px, calc(100vw - 28px)); max-width: min(1180px, calc(100vw - 28px));
+  max-height: calc(100vh - 28px); overflow: auto; background: #f7f9fb;
+}
+.nbme-figure-crop-layout { display: grid; grid-template-columns: minmax(420px, 1fr) 320px; gap: 14px; align-items: start; }
+.nbme-figure-crop-meta { font-size: 11px; color: #40546a; margin: 6px 0 10px; overflow-wrap: anywhere; }
+.nbme-figure-crop-stage-wrap {
+  border: 1px solid var(--border); border-radius: 7px; background: #18202a; padding: 10px;
+  min-height: 360px; display: flex; align-items: center; justify-content: center; overflow: auto;
+}
+.nbme-figure-crop-stage { position: relative; display: inline-block; line-height: 0; user-select: none; touch-action: none; }
+.nbme-figure-crop-img { display: block; max-width: none; transform-origin: top left; image-rendering: auto; }
+.nbme-figure-crop-box {
+  position: absolute; border: 2px solid #f4c542; box-shadow: 0 0 0 9999px rgba(0,0,0,.42);
+  cursor: move; min-width: 24px; min-height: 24px; box-sizing: border-box;
+}
+.nbme-figure-crop-box::after {
+  content: ''; position: absolute; inset: 33.333% 0 33.333% 0;
+  border-top: 1px solid rgba(255,255,255,.55); border-bottom: 1px solid rgba(255,255,255,.55); pointer-events: none;
+}
+.nbme-figure-crop-box::before {
+  content: ''; position: absolute; inset: 0 33.333% 0 33.333%;
+  border-left: 1px solid rgba(255,255,255,.55); border-right: 1px solid rgba(255,255,255,.55); pointer-events: none;
+}
+.nbme-figure-crop-handle {
+  position: absolute; width: 12px; height: 12px; border-radius: 2px; background: #f4c542;
+  border: 1px solid #3b2d00; box-sizing: border-box; z-index: 2;
+}
+.nbme-figure-crop-handle.nw { left: -7px; top: -7px; cursor: nwse-resize; }
+.nbme-figure-crop-handle.ne { right: -7px; top: -7px; cursor: nesw-resize; }
+.nbme-figure-crop-handle.sw { left: -7px; bottom: -7px; cursor: nesw-resize; }
+.nbme-figure-crop-handle.se { right: -7px; bottom: -7px; cursor: nwse-resize; }
+.nbme-figure-crop-side { display: flex; flex-direction: column; gap: 10px; }
+.nbme-figure-crop-preview-wrap { border: 1px solid var(--border); border-radius: 7px; background: white; padding: 10px; }
+.nbme-figure-crop-preview { width: 100%; max-height: 260px; object-fit: contain; background: #f2f5f8; border: 1px solid var(--border); border-radius: 5px; }
+.nbme-figure-crop-controls { display: flex; flex-wrap: wrap; gap: 7px; }
+.nbme-figure-crop-controls .btn-modal { font-size: 12px; padding: 6px 10px; }
+.nbme-figure-crop-dims { font-size: 12px; color: #31445a; line-height: 1.45; }
+.nbme-figure-crop-status { font-size: 12px; color: #5a6a7a; min-height: 18px; }
+.nbme-figure-crop-status.error { color: #b23b3b; }
+.nbme-figure-crop-checkbox { display: flex; gap: 7px; align-items: center; font-size: 12px; color: #31445a; }
+@media (max-width: 900px) {
+  .nbme-figure-crop-layout { grid-template-columns: 1fr; }
+  .nbme-figure-crop-stage-wrap { min-height: 300px; }
+}
 
 </style>
 <div id="modal-nbme-gemini-json" class="modal-overlay">
@@ -2110,6 +2161,48 @@ body.quiz-fullscreen-mode .modal-overlay {
 
     <div class="modal-actions" style="margin-top:12px;">
       <button type="button" class="btn-modal" onclick="App.closeNbmeFigureReviewModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-nbme-figure-crop" class="modal-overlay nbme-figure-crop-overlay" role="dialog" aria-modal="true" aria-label="Crop NBME figure">
+  <div class="modal-box nbme-figure-crop-modal">
+    <h3>Crop Figure</h3>
+    <div id="nbme-figure-crop-meta" class="nbme-figure-crop-meta">No figure selected.</div>
+    <div class="nbme-figure-crop-layout">
+      <div>
+        <div class="nbme-figure-crop-stage-wrap">
+          <div id="nbme-figure-crop-stage" class="nbme-figure-crop-stage">
+            <img id="nbme-figure-crop-img" class="nbme-figure-crop-img" alt="Selected NBME figure">
+            <div id="nbme-figure-crop-box" class="nbme-figure-crop-box" tabindex="0" aria-label="Crop rectangle">
+              <span class="nbme-figure-crop-handle nw" data-crop-handle="nw"></span>
+              <span class="nbme-figure-crop-handle ne" data-crop-handle="ne"></span>
+              <span class="nbme-figure-crop-handle sw" data-crop-handle="sw"></span>
+              <span class="nbme-figure-crop-handle se" data-crop-handle="se"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <aside class="nbme-figure-crop-side">
+        <div class="nbme-figure-crop-preview-wrap">
+          <canvas id="nbme-figure-crop-preview" class="nbme-figure-crop-preview"></canvas>
+        </div>
+        <div id="nbme-figure-crop-dims" class="nbme-figure-crop-dims">Crop: unavailable</div>
+        <label class="nbme-figure-crop-checkbox">
+          <input type="checkbox" id="nbme-figure-crop-lock-aspect" onchange="App.nbmeFigureCropToggleAspect(this.checked)">
+          <span>Preserve aspect ratio</span>
+        </label>
+        <div class="nbme-figure-crop-controls">
+          <button type="button" class="btn-modal" onclick="App.nbmeFigureCropZoomOut()">Zoom out</button>
+          <button type="button" class="btn-modal" onclick="App.nbmeFigureCropZoomIn()">Zoom in</button>
+          <button type="button" class="btn-modal" onclick="App.nbmeFigureCropReset()">Reset crop</button>
+        </div>
+        <div id="nbme-figure-crop-status" class="nbme-figure-crop-status"></div>
+        <div class="modal-actions" style="margin-top:0;">
+          <button type="button" class="btn-modal primary" id="nbme-figure-crop-save-btn" onclick="App.nbmeFigureCropSave()">Save Cropped Copy</button>
+          <button type="button" class="btn-modal" onclick="App.nbmeFigureCropClose()">Cancel</button>
+        </div>
+      </aside>
     </div>
   </div>
 </div>
@@ -8192,6 +8285,7 @@ const App = (() => {
   let _notesImportPreview = null;
   let _nbmeGeminiJsonImport = null;
   let _nbmeFigureReviewState = null;
+  let _nbmeFigureCropState = null;
   let _ankiImportPreview = null;
   let _omeImportPreview = null;
   let _mehlmanImportPreview = null;
@@ -23100,7 +23194,7 @@ const App = (() => {
           <div class="nbme-figure-review-title">${_ngjEsc(fig?.figureId || 'unnamed figure')}</div>
           <span class="nbme-figure-review-badge ${_ngjEsc(nbmeFigureReviewConfidenceClass(confidence))}">${_ngjEsc(confidence)}</span>
         </div>
-        ${nbmeFigureReviewImageHtml(path, fig?.figureId || 'NBME figure')}
+        ${nbmeFigureReviewImageHtml(path, fig?.figureId || 'NBME figure', fig)}
         <div class="nbme-figure-review-meta">
           <span>Page: ${_ngjEsc(fig?.page ?? 'unknown')}</span>
           <span>Suggested Q: ${_ngjEsc(suggestedQ)}</span>
@@ -23114,12 +23208,17 @@ const App = (() => {
     `;
   }
 
-  function nbmeFigureReviewImageHtml(filePath, alt) {
+  function nbmeFigureReviewImageHtml(filePath, alt, fig) {
     const resolved = nbmeFigureReviewResolveImagePath(filePath);
     if (!filePath) return '<div class="nbme-figure-review-img-fallback" style="display:block;">No image path provided.</div>';
+    const figureId = fig?.figureId || '';
+    const suggestedQ = fig?.suggestedQuestionNumber ?? fig?.questionNumber ?? '';
     return `
       <div class="nbme-figure-review-thumb-wrap">
-        <img class="nbme-figure-review-thumb" src="${_ngjEsc(resolved)}" alt="${_ngjEsc(alt)}" data-raw-path="${_ngjEsc(filePath)}" data-review-img-tried="0" onerror="App.nbmeFigureReviewHandleImageError(this)">
+        <button type="button" class="nbme-figure-review-thumb-btn" onclick="App.nbmeFigureCropOpenFromElement(this)" title="Open crop editor">
+          <img class="nbme-figure-review-thumb" src="${_ngjEsc(resolved)}" alt="${_ngjEsc(alt)}" data-raw-path="${_ngjEsc(filePath)}" data-figure-id="${_ngjEsc(figureId)}" data-page="${_ngjEsc(fig?.page ?? '')}" data-suggested-question="${_ngjEsc(suggestedQ)}" data-confidence="${_ngjEsc(fig?.confidence || '')}" data-review-img-tried="0" onerror="App.nbmeFigureReviewHandleImageError(this)">
+        </button>
+        <div class="nbme-figure-review-crop-hint">Click thumbnail to crop a local copy.</div>
         <div class="nbme-figure-review-img-fallback">Thumbnail unavailable. Path: ${_ngjEsc(filePath)}</div>
         <div class="nbme-figure-review-path">${_ngjEsc(filePath)}</div>
       </div>
@@ -23154,6 +23253,433 @@ const App = (() => {
     const c = String(confidence || '').toLowerCase();
     if (c === 'high' || c === 'medium' || c === 'low' || c === 'unknown') return c;
     return 'unknown';
+  }
+
+  function nbmeFigureCropOpenFromElement(el) {
+    const img = el?.matches?.('img') ? el : el?.querySelector?.('img.nbme-figure-review-thumb');
+    if (!img) return;
+    const rawPath = img.getAttribute('data-raw-path') || '';
+    const src = img.currentSrc || img.src || nbmeFigureReviewResolveImagePath(rawPath);
+    const figure = {
+      figureId: img.getAttribute('data-figure-id') || '',
+      filePath: rawPath,
+      page: img.getAttribute('data-page') || '',
+      suggestedQuestionNumber: img.getAttribute('data-suggested-question') || '',
+      confidence: img.getAttribute('data-confidence') || ''
+    };
+    nbmeFigureCropOpen({ src, figure });
+  }
+
+  function nbmeFigureCropOpen(payload) {
+    nbmeFigureCropClose({ silent: true });
+    const modal = document.getElementById('modal-nbme-figure-crop');
+    const imgEl = document.getElementById('nbme-figure-crop-img');
+    const saveBtn = document.getElementById('nbme-figure-crop-save-btn');
+    const aspect = document.getElementById('nbme-figure-crop-lock-aspect');
+    if (!modal || !imgEl) return;
+
+    _nbmeFigureCropState = {
+      src: payload?.src || '',
+      figure: Object.assign({}, payload?.figure || {}),
+      imageLoaded: false,
+      zoom: 1,
+      crop: null,
+      drag: null,
+      aspectLocked: false,
+      aspectRatio: 1,
+      raf: 0,
+      listeners: [],
+      objectUrls: []
+    };
+
+    if (aspect) aspect.checked = false;
+    if (saveBtn) saveBtn.disabled = true;
+    nbmeFigureCropSetStatus('Loading image...');
+    nbmeFigureCropSetMeta();
+    modal.style.display = 'flex';
+    nbmeFigureCropBindListeners();
+
+    imgEl.onload = () => nbmeFigureCropImageLoaded();
+    imgEl.onerror = () => nbmeFigureCropImageFailed();
+    imgEl.removeAttribute('src');
+    imgEl.src = _nbmeFigureCropState.src;
+  }
+
+  function nbmeFigureCropClose(options) {
+    const st = _nbmeFigureCropState;
+    if (st) {
+      (st.listeners || []).forEach(item => item.target.removeEventListener(item.type, item.handler, item.options));
+      (st.objectUrls || []).forEach(url => {
+        try { URL.revokeObjectURL(url); } catch (_) {}
+      });
+      if (st.raf) cancelAnimationFrame(st.raf);
+    }
+    const imgEl = document.getElementById('nbme-figure-crop-img');
+    if (imgEl) {
+      imgEl.onload = null;
+      imgEl.onerror = null;
+      imgEl.removeAttribute('src');
+      imgEl.style.width = '';
+      imgEl.style.height = '';
+    }
+    const modal = document.getElementById('modal-nbme-figure-crop');
+    if (modal) modal.style.display = 'none';
+    _nbmeFigureCropState = null;
+    if (!options?.silent) nbmeFigureCropSetStatus('');
+  }
+
+  function nbmeFigureCropBindListeners() {
+    const st = _nbmeFigureCropState;
+    const box = document.getElementById('nbme-figure-crop-box');
+    if (!st || !box) return;
+    const add = (target, type, handler, options) => {
+      target.addEventListener(type, handler, options);
+      st.listeners.push({ target, type, handler, options });
+    };
+    add(box, 'pointerdown', nbmeFigureCropPointerDown);
+    add(document, 'pointermove', nbmeFigureCropPointerMove);
+    add(document, 'pointerup', nbmeFigureCropPointerUp);
+    add(box, 'keydown', nbmeFigureCropKeyDown);
+    add(document, 'keydown', nbmeFigureCropDocumentKeyDown);
+  }
+
+  function nbmeFigureCropImageLoaded() {
+    const st = _nbmeFigureCropState;
+    const imgEl = document.getElementById('nbme-figure-crop-img');
+    if (!st || !imgEl || !imgEl.naturalWidth || !imgEl.naturalHeight) {
+      nbmeFigureCropImageFailed();
+      return;
+    }
+    st.imageLoaded = true;
+    const maxW = Math.min(760, Math.max(360, window.innerWidth - 420));
+    const maxH = Math.min(560, Math.max(260, window.innerHeight - 230));
+    st.zoom = Math.min(1, maxW / imgEl.naturalWidth, maxH / imgEl.naturalHeight);
+    if (!Number.isFinite(st.zoom) || st.zoom <= 0) st.zoom = 1;
+    const marginX = Math.round(imgEl.naturalWidth * 0.08);
+    const marginY = Math.round(imgEl.naturalHeight * 0.08);
+    st.crop = {
+      x: marginX,
+      y: marginY,
+      w: Math.max(24, imgEl.naturalWidth - marginX * 2),
+      h: Math.max(24, imgEl.naturalHeight - marginY * 2)
+    };
+    st.aspectRatio = st.crop.w / st.crop.h;
+    const saveBtn = document.getElementById('nbme-figure-crop-save-btn');
+    if (saveBtn) saveBtn.disabled = false;
+    nbmeFigureCropApplyView();
+    nbmeFigureCropSchedulePreview();
+    nbmeFigureCropSetStatus('Ready.');
+    document.getElementById('nbme-figure-crop-box')?.focus();
+  }
+
+  function nbmeFigureCropImageFailed() {
+    const saveBtn = document.getElementById('nbme-figure-crop-save-btn');
+    if (saveBtn) saveBtn.disabled = true;
+    nbmeFigureCropSetStatus('Image could not be loaded. Check the file path or open the manifest from the project context.', true);
+  }
+
+  function nbmeFigureCropSetMeta() {
+    const st = _nbmeFigureCropState;
+    const el = document.getElementById('nbme-figure-crop-meta');
+    if (!el || !st) return;
+    const fig = st.figure || {};
+    const parts = [
+      fig.figureId ? `Figure: ${fig.figureId}` : '',
+      fig.page ? `Page: ${fig.page}` : '',
+      fig.suggestedQuestionNumber ? `Suggested Q: ${fig.suggestedQuestionNumber}` : '',
+      fig.confidence ? `Confidence: ${fig.confidence}` : '',
+      fig.filePath ? `Path: ${fig.filePath}` : ''
+    ].filter(Boolean);
+    el.textContent = parts.join('  |  ') || 'Selected figure';
+  }
+
+  function nbmeFigureCropSetStatus(message, isError) {
+    const el = document.getElementById('nbme-figure-crop-status');
+    if (!el) return;
+    el.className = 'nbme-figure-crop-status' + (isError ? ' error' : '');
+    el.textContent = message || '';
+  }
+
+  function nbmeFigureCropApplyView() {
+    const st = _nbmeFigureCropState;
+    const imgEl = document.getElementById('nbme-figure-crop-img');
+    const box = document.getElementById('nbme-figure-crop-box');
+    if (!st || !st.crop || !imgEl || !box) return;
+    const z = st.zoom;
+    imgEl.style.width = Math.max(1, Math.round(imgEl.naturalWidth * z)) + 'px';
+    imgEl.style.height = Math.max(1, Math.round(imgEl.naturalHeight * z)) + 'px';
+    box.style.left = Math.round(st.crop.x * z) + 'px';
+    box.style.top = Math.round(st.crop.y * z) + 'px';
+    box.style.width = Math.round(st.crop.w * z) + 'px';
+    box.style.height = Math.round(st.crop.h * z) + 'px';
+    nbmeFigureCropUpdateDims();
+  }
+
+  function nbmeFigureCropUpdateDims() {
+    const st = _nbmeFigureCropState;
+    const el = document.getElementById('nbme-figure-crop-dims');
+    if (!st || !st.crop || !el) return;
+    const c = nbmeFigureCropNormalizedCrop();
+    el.textContent = `Crop: ${c.w} x ${c.h}px  |  x:${c.x}, y:${c.y}  |  zoom:${Math.round(st.zoom * 100)}%`;
+  }
+
+  function nbmeFigureCropNormalizedCrop() {
+    const st = _nbmeFigureCropState;
+    const imgEl = document.getElementById('nbme-figure-crop-img');
+    const iw = imgEl?.naturalWidth || 0;
+    const ih = imgEl?.naturalHeight || 0;
+    const c = st?.crop || { x: 0, y: 0, w: 0, h: 0 };
+    const x = Math.max(0, Math.min(iw - 1, Math.round(c.x)));
+    const y = Math.max(0, Math.min(ih - 1, Math.round(c.y)));
+    const w = Math.max(1, Math.min(iw - x, Math.round(c.w)));
+    const h = Math.max(1, Math.min(ih - y, Math.round(c.h)));
+    return { x, y, w, h };
+  }
+
+  function nbmeFigureCropPointerDown(e) {
+    const st = _nbmeFigureCropState;
+    if (!st || !st.crop || !st.imageLoaded) return;
+    e.preventDefault();
+    const handle = e.target?.getAttribute?.('data-crop-handle') || '';
+    st.drag = {
+      mode: handle ? 'resize' : 'move',
+      handle,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      startCrop: Object.assign({}, st.crop)
+    };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
+  }
+
+  function nbmeFigureCropPointerMove(e) {
+    const st = _nbmeFigureCropState;
+    if (!st || !st.drag || !st.crop) return;
+    e.preventDefault();
+    const dx = (e.clientX - st.drag.startClientX) / st.zoom;
+    const dy = (e.clientY - st.drag.startClientY) / st.zoom;
+    if (st.drag.mode === 'move') nbmeFigureCropMove(dx, dy);
+    else nbmeFigureCropResize(dx, dy);
+    nbmeFigureCropApplyView();
+    nbmeFigureCropSchedulePreview();
+  }
+
+  function nbmeFigureCropPointerUp() {
+    const st = _nbmeFigureCropState;
+    if (!st) return;
+    st.drag = null;
+  }
+
+  function nbmeFigureCropMove(dx, dy) {
+    const st = _nbmeFigureCropState;
+    const imgEl = document.getElementById('nbme-figure-crop-img');
+    const c = st.drag.startCrop;
+    st.crop.x = Math.max(0, Math.min(imgEl.naturalWidth - c.w, c.x + dx));
+    st.crop.y = Math.max(0, Math.min(imgEl.naturalHeight - c.h, c.y + dy));
+    st.crop.w = c.w;
+    st.crop.h = c.h;
+  }
+
+  function nbmeFigureCropResize(dx, dy) {
+    const st = _nbmeFigureCropState;
+    const imgEl = document.getElementById('nbme-figure-crop-img');
+    const minSize = 24;
+    const s = st.drag.startCrop;
+    let x = s.x, y = s.y, w = s.w, h = s.h;
+    if (st.drag.handle.includes('e')) w = s.w + dx;
+    if (st.drag.handle.includes('s')) h = s.h + dy;
+    if (st.drag.handle.includes('w')) { x = s.x + dx; w = s.w - dx; }
+    if (st.drag.handle.includes('n')) { y = s.y + dy; h = s.h - dy; }
+
+    if (st.aspectLocked && st.aspectRatio > 0) {
+      if (Math.abs(dx) >= Math.abs(dy)) h = w / st.aspectRatio;
+      else w = h * st.aspectRatio;
+      if (st.drag.handle.includes('w')) x = s.x + s.w - w;
+      if (st.drag.handle.includes('n')) y = s.y + s.h - h;
+    }
+
+    if (w < minSize) {
+      if (st.drag.handle.includes('w')) x -= (minSize - w);
+      w = minSize;
+    }
+    if (h < minSize) {
+      if (st.drag.handle.includes('n')) y -= (minSize - h);
+      h = minSize;
+    }
+    if (x < 0) { w += x; x = 0; }
+    if (y < 0) { h += y; y = 0; }
+    if (x + w > imgEl.naturalWidth) {
+      if (st.drag.handle.includes('w')) x = imgEl.naturalWidth - w;
+      else w = imgEl.naturalWidth - x;
+    }
+    if (y + h > imgEl.naturalHeight) {
+      if (st.drag.handle.includes('n')) y = imgEl.naturalHeight - h;
+      else h = imgEl.naturalHeight - y;
+    }
+    st.crop = {
+      x: Math.max(0, x),
+      y: Math.max(0, y),
+      w: Math.max(minSize, Math.min(w, imgEl.naturalWidth - Math.max(0, x))),
+      h: Math.max(minSize, Math.min(h, imgEl.naturalHeight - Math.max(0, y)))
+    };
+  }
+
+  function nbmeFigureCropKeyDown(e) {
+    const st = _nbmeFigureCropState;
+    if (!st || !st.crop || !st.imageLoaded) return;
+    if (e.key === 'Escape') { e.preventDefault(); nbmeFigureCropClose(); return; }
+    const step = e.shiftKey ? 10 : 1;
+    let dx = 0, dy = 0;
+    if (e.key === 'ArrowLeft') dx = -step;
+    else if (e.key === 'ArrowRight') dx = step;
+    else if (e.key === 'ArrowUp') dy = -step;
+    else if (e.key === 'ArrowDown') dy = step;
+    else return;
+    e.preventDefault();
+    st.drag = { startCrop: Object.assign({}, st.crop) };
+    nbmeFigureCropMove(dx, dy);
+    st.drag = null;
+    nbmeFigureCropApplyView();
+    nbmeFigureCropSchedulePreview();
+  }
+
+  function nbmeFigureCropDocumentKeyDown(e) {
+    const modal = document.getElementById('modal-nbme-figure-crop');
+    if (e.key === 'Escape' && modal && modal.style.display === 'flex') {
+      e.preventDefault();
+      nbmeFigureCropClose();
+    }
+  }
+
+  function nbmeFigureCropSchedulePreview() {
+    const st = _nbmeFigureCropState;
+    if (!st || st.raf) return;
+    st.raf = requestAnimationFrame(() => {
+      st.raf = 0;
+      nbmeFigureCropDrawPreview();
+    });
+  }
+
+  function nbmeFigureCropDrawPreview() {
+    const st = _nbmeFigureCropState;
+    const imgEl = document.getElementById('nbme-figure-crop-img');
+    const canvas = document.getElementById('nbme-figure-crop-preview');
+    if (!st || !st.crop || !imgEl || !canvas || !imgEl.naturalWidth) return;
+    const c = nbmeFigureCropNormalizedCrop();
+    const maxPreview = 800;
+    const scale = Math.min(1, maxPreview / c.w, maxPreview / c.h);
+    canvas.width = Math.max(1, Math.round(c.w * scale));
+    canvas.height = Math.max(1, Math.round(c.h * scale));
+    const ctx = canvas.getContext('2d', { alpha: false });
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    try {
+      ctx.drawImage(imgEl, c.x, c.y, c.w, c.h, 0, 0, canvas.width, canvas.height);
+      nbmeFigureCropSetStatus('Ready.');
+    } catch (err) {
+      nbmeFigureCropSetStatus('Preview unavailable for this image source. Saving may be blocked by browser security.', true);
+    }
+  }
+
+  function nbmeFigureCropZoomIn() {
+    nbmeFigureCropSetZoom((_nbmeFigureCropState?.zoom || 1) * 1.2);
+  }
+
+  function nbmeFigureCropZoomOut() {
+    nbmeFigureCropSetZoom((_nbmeFigureCropState?.zoom || 1) / 1.2);
+  }
+
+  function nbmeFigureCropSetZoom(value) {
+    const st = _nbmeFigureCropState;
+    if (!st || !st.imageLoaded) return;
+    st.zoom = Math.max(0.05, Math.min(4, Number(value) || 1));
+    nbmeFigureCropApplyView();
+  }
+
+  function nbmeFigureCropReset() {
+    const st = _nbmeFigureCropState;
+    const imgEl = document.getElementById('nbme-figure-crop-img');
+    if (!st || !st.imageLoaded || !imgEl) return;
+    const marginX = Math.round(imgEl.naturalWidth * 0.08);
+    const marginY = Math.round(imgEl.naturalHeight * 0.08);
+    st.crop = {
+      x: marginX,
+      y: marginY,
+      w: Math.max(24, imgEl.naturalWidth - marginX * 2),
+      h: Math.max(24, imgEl.naturalHeight - marginY * 2)
+    };
+    st.aspectRatio = st.crop.w / st.crop.h;
+    nbmeFigureCropApplyView();
+    nbmeFigureCropSchedulePreview();
+  }
+
+  function nbmeFigureCropToggleAspect(checked) {
+    const st = _nbmeFigureCropState;
+    if (!st || !st.crop) return;
+    st.aspectLocked = !!checked;
+    st.aspectRatio = st.crop.w / st.crop.h;
+  }
+
+  function nbmeFigureCropSave() {
+    const st = _nbmeFigureCropState;
+    const imgEl = document.getElementById('nbme-figure-crop-img');
+    if (!st || !st.crop || !st.imageLoaded || !imgEl) {
+      nbmeFigureCropSetStatus('No valid crop is available.', true);
+      return;
+    }
+    const c = nbmeFigureCropNormalizedCrop();
+    if (c.w < 1 || c.h < 1) {
+      nbmeFigureCropSetStatus('Crop dimensions are invalid.', true);
+      return;
+    }
+    if (c.w * c.h > 30000000) {
+      nbmeFigureCropSetStatus('Crop is too large to export safely. Reduce the crop size first.', true);
+      return;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = c.w;
+    canvas.height = c.h;
+    const ctx = canvas.getContext('2d', { alpha: false });
+    try {
+      ctx.drawImage(imgEl, c.x, c.y, c.w, c.h, 0, 0, c.w, c.h);
+    } catch (err) {
+      nbmeFigureCropSetStatus('Browser security blocked this crop export for the current image source.', true);
+      return;
+    }
+    canvas.toBlob(blob => {
+      if (!blob || !blob.size) {
+        nbmeFigureCropSetStatus('Crop export failed. No PNG was produced.', true);
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      if (_nbmeFigureCropState) _nbmeFigureCropState.objectUrls.push(url);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = nbmeFigureCropDefaultFilename();
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      nbmeFigureCropSetStatus(`Cropped copy prepared for download: ${a.download}`);
+      setTimeout(() => {
+        try { URL.revokeObjectURL(url); } catch (_) {}
+        if (_nbmeFigureCropState) _nbmeFigureCropState.objectUrls = (_nbmeFigureCropState.objectUrls || []).filter(u => u !== url);
+      }, 30000);
+    }, 'image/png');
+  }
+
+  function nbmeFigureCropDefaultFilename() {
+    const st = _nbmeFigureCropState;
+    const raw = st?.figure?.filePath || st?.figure?.figureId || 'nbme_figure';
+    const base = String(raw).split(/[\\/]/).pop().replace(/\.[a-z0-9]+$/i, '') || 'nbme_figure';
+    const safeBase = base.replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '') || 'nbme_figure';
+    const now = new Date();
+    const stamp = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getDate()).padStart(2, '0'),
+      String(now.getHours()).padStart(2, '0'),
+      String(now.getMinutes()).padStart(2, '0'),
+      String(now.getSeconds()).padStart(2, '0')
+    ].join('');
+    return `${safeBase}_crop_${stamp}.png`;
   }
 
   function openNbmeGeminiJsonImportModal() {
@@ -24764,6 +25290,13 @@ const App = (() => {
     clearNbmeFigureReviewState,
     handleNbmeFigureReviewFileUpload,
     nbmeFigureReviewHandleImageError,
+    nbmeFigureCropOpenFromElement,
+    nbmeFigureCropClose,
+    nbmeFigureCropZoomIn,
+    nbmeFigureCropZoomOut,
+    nbmeFigureCropReset,
+    nbmeFigureCropToggleAspect,
+    nbmeFigureCropSave,
 	    openNbmeGeminiJsonImportModal,
     closeNbmeGeminiJsonImportModal,
     _onNgjFolderChange,
