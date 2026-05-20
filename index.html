@@ -2077,9 +2077,28 @@ body.quiz-fullscreen-mode .modal-overlay {
 .nbme-figure-attach-status { min-height: 18px; font-size: 12px; color: #5a6a7a; line-height: 1.35; }
 .nbme-figure-attach-status.error { color: #b23b3b; }
 .nbme-figure-attach-status.ok { color: #23633a; }
+.ngj-figure-suggestion-toolbar {
+  border: 1px solid var(--border); border-radius: 7px; background: #f7f9fb;
+  padding: 9px; margin-bottom: 10px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+}
+.ngj-figure-suggestion-card {
+  display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 10px;
+  border: 1px solid var(--border); border-radius: 7px; background: #fff; padding: 8px; margin-top: 8px;
+}
+.ngj-figure-suggestion-thumb {
+  width: 112px; height: 88px; object-fit: contain; border: 1px solid var(--border);
+  border-radius: 5px; background: #f8fafc;
+}
+.ngj-figure-suggestion-meta { font-size: 11px; color: #40546a; line-height: 1.4; overflow-wrap: anywhere; }
+.ngj-figure-suggestion-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.ngj-figure-suggestion-status { font-size: 11px; color: #5a6a7a; margin-top: 4px; min-height: 15px; }
+.ngj-figure-suggestion-status.ok { color: #23633a; }
+.ngj-figure-suggestion-status.error { color: #b23b3b; }
 @media (max-width: 900px) {
   .nbme-figure-crop-layout { grid-template-columns: 1fr; }
   .nbme-figure-crop-stage-wrap { min-height: 300px; }
+  .ngj-figure-suggestion-card { grid-template-columns: 1fr; }
+  .ngj-figure-suggestion-thumb { width: 100%; height: 150px; }
 }
 
 </style>
@@ -2119,6 +2138,13 @@ body.quiz-fullscreen-mode .modal-overlay {
 
       <div id="ngj-figure-attach-section" style="display:none;">
         <div class="ngj-section-title">&#128247; Figure Attachment</div>
+        <div class="ngj-figure-suggestion-toolbar">
+          <label class="btn-modal" style="cursor:pointer;font-size:11px;padding:4px 10px;" title="Load suggested extracted NBME figure links">
+            Load NBME Figure Suggestions
+            <input type="file" id="ngj-figure-suggestions-input" accept=".json,application/json" style="display:none;" onchange="App.handleNbmeGeminiJsonFigureSuggestionsUpload(this)">
+          </label>
+          <span id="ngj-figure-suggestions-status" style="font-size:12px;color:#5a6a7a;">No figure suggestions loaded.</span>
+        </div>
         <div id="ngj-figure-attach-list"></div>
       </div>
 
@@ -2228,6 +2254,7 @@ body.quiz-fullscreen-mode .modal-overlay {
         </div>
         <div id="nbme-figure-crop-status" class="nbme-figure-crop-status"></div>
         <div class="modal-actions" style="margin-top:0;">
+          <button type="button" class="btn-modal primary" id="nbme-figure-crop-import-attach-btn" onclick="App.ngjAttachCroppedSuggestedFigure()" style="display:none;">Attach Cropped Image</button>
           <button type="button" class="btn-modal primary" id="nbme-figure-crop-save-btn" onclick="App.nbmeFigureCropSave()">Save Cropped Copy</button>
           <button type="button" class="btn-modal" onclick="App.nbmeFigureCropClose()">Cancel</button>
         </div>
@@ -23463,10 +23490,12 @@ const App = (() => {
 
   function nbmeFigureCropOpen(payload) {
     nbmeFigureCropClose({ silent: true });
-    const modal = document.getElementById('modal-nbme-figure-crop');
-    const imgEl = document.getElementById('nbme-figure-crop-img');
-    const saveBtn = document.getElementById('nbme-figure-crop-save-btn');
-    const aspect = document.getElementById('nbme-figure-crop-lock-aspect');
+	    const modal = document.getElementById('modal-nbme-figure-crop');
+	    const imgEl = document.getElementById('nbme-figure-crop-img');
+	    const saveBtn = document.getElementById('nbme-figure-crop-save-btn');
+	    const importAttachBtn = document.getElementById('nbme-figure-crop-import-attach-btn');
+	    const existingAttachPanel = document.querySelector('#modal-nbme-figure-crop .nbme-figure-attach-panel');
+	    const aspect = document.getElementById('nbme-figure-crop-lock-aspect');
     if (!modal || !imgEl) return;
 
     _nbmeFigureCropState = {
@@ -23483,20 +23512,27 @@ const App = (() => {
       raf: 0,
       listeners: [],
       objectUrls: [],
-      attachTargets: [],
-      filteredAttachTargets: [],
-      suggestedTarget: null,
-      attaching: false
-    };
+	      attachTargets: [],
+	      filteredAttachTargets: [],
+	      suggestedTarget: null,
+	      importTarget: payload?.importTarget || null,
+	      attaching: false
+	    };
 
-    if (aspect) aspect.checked = false;
-    if (saveBtn) saveBtn.disabled = true;
-    nbmeFigureAttachResetPanel();
+	    if (aspect) aspect.checked = false;
+	    if (saveBtn) saveBtn.disabled = true;
+	    if (saveBtn) saveBtn.style.display = _nbmeFigureCropState.importTarget ? 'none' : '';
+	    if (importAttachBtn) {
+	      importAttachBtn.style.display = _nbmeFigureCropState.importTarget ? '' : 'none';
+	      importAttachBtn.disabled = true;
+	    }
+	    if (existingAttachPanel) existingAttachPanel.style.display = _nbmeFigureCropState.importTarget ? 'none' : '';
+	    nbmeFigureAttachResetPanel();
     nbmeFigureCropSetStatus('Loading image...');
     nbmeFigureCropSetMeta();
-    modal.style.display = 'flex';
-    nbmeFigureCropBindListeners();
-    nbmeFigureAttachPopulateTargets();
+	    modal.style.display = 'flex';
+	    nbmeFigureCropBindListeners();
+	    if (!_nbmeFigureCropState.importTarget) nbmeFigureAttachPopulateTargets();
 
     imgEl.onload = () => nbmeFigureCropImageLoaded();
     imgEl.onerror = () => nbmeFigureCropImageFailed();
@@ -23513,7 +23549,10 @@ const App = (() => {
       });
       if (st.raf) cancelAnimationFrame(st.raf);
     }
-    const imgEl = document.getElementById('nbme-figure-crop-img');
+	    const imgEl = document.getElementById('nbme-figure-crop-img');
+	    const saveBtn = document.getElementById('nbme-figure-crop-save-btn');
+	    const importAttachBtn = document.getElementById('nbme-figure-crop-import-attach-btn');
+	    const existingAttachPanel = document.querySelector('#modal-nbme-figure-crop .nbme-figure-attach-panel');
     if (imgEl) {
       imgEl.onload = null;
       imgEl.onerror = null;
@@ -23521,10 +23560,13 @@ const App = (() => {
       imgEl.style.width = '';
       imgEl.style.height = '';
     }
-    const modal = document.getElementById('modal-nbme-figure-crop');
-    if (modal) modal.style.display = 'none';
-    _nbmeFigureCropState = null;
-    nbmeFigureAttachResetPanel();
+	    const modal = document.getElementById('modal-nbme-figure-crop');
+	    if (modal) modal.style.display = 'none';
+	    _nbmeFigureCropState = null;
+	    if (saveBtn) saveBtn.style.display = '';
+	    if (importAttachBtn) importAttachBtn.style.display = 'none';
+	    if (existingAttachPanel) existingAttachPanel.style.display = '';
+	    nbmeFigureAttachResetPanel();
     if (!options?.silent) nbmeFigureCropSetStatus('');
   }
 
@@ -23564,12 +23606,14 @@ const App = (() => {
       h: Math.max(24, imgEl.naturalHeight - marginY * 2)
     };
     st.aspectRatio = st.crop.w / st.crop.h;
-    const saveBtn = document.getElementById('nbme-figure-crop-save-btn');
-    if (saveBtn) saveBtn.disabled = false;
-    nbmeFigureAttachRefreshButtons();
+	    const saveBtn = document.getElementById('nbme-figure-crop-save-btn');
+	    if (saveBtn) saveBtn.disabled = false;
+	    const importAttachBtn = document.getElementById('nbme-figure-crop-import-attach-btn');
+	    if (importAttachBtn) importAttachBtn.disabled = !st.importTarget;
+	    nbmeFigureAttachRefreshButtons();
     nbmeFigureCropApplyView();
     nbmeFigureCropSchedulePreview();
-    nbmeFigureCropSetStatus('Ready.');
+	    nbmeFigureCropSetStatus(st.importTarget ? 'Ready. Crop, then attach directly to this import question.' : 'Ready.');
     document.getElementById('nbme-figure-crop-box')?.focus();
   }
 
@@ -23584,9 +23628,11 @@ const App = (() => {
       imgEl.src = st.src;
       return;
     }
-    const saveBtn = document.getElementById('nbme-figure-crop-save-btn');
-    if (saveBtn) saveBtn.disabled = true;
-    nbmeFigureAttachRefreshButtons();
+	    const saveBtn = document.getElementById('nbme-figure-crop-save-btn');
+	    if (saveBtn) saveBtn.disabled = true;
+	    const importAttachBtn = document.getElementById('nbme-figure-crop-import-attach-btn');
+	    if (importAttachBtn) importAttachBtn.disabled = true;
+	    nbmeFigureAttachRefreshButtons();
     nbmeFigureCropSetStatus('Image could not be loaded. Check the file path or open the manifest from the project context.', true);
   }
 
@@ -24174,17 +24220,28 @@ const App = (() => {
     _nbmeGeminiJsonImport = {
       rawText: '', parsed: null, validation: null,
       normalizedItems: [], fileName: '', testName: '',
-      targetFolder: '', confirmed: false,
-      figureAttachments: {},
-      lastSaveResult: null, lastSaveError: null
-    };
+	      targetFolder: '', confirmed: false,
+	      figureAttachments: {},
+	      figureImageAttachments: {},
+	      figureSuggestionsPayload: null,
+	      figureSuggestionsType: '',
+	      figureSuggestionsFileName: '',
+	      figureSuggestionsError: '',
+	      figureSuggestionsByQuestion: {},
+	      figureSuggestionsByKey: {},
+	      lastSaveResult: null, lastSaveError: null
+	    };
     const ta = document.getElementById('ngj-raw-text');
     if (ta) ta.value = '';
     const fi = document.getElementById('ngj-file-input');
     if (fi) fi.value = '';
-    const fn = document.getElementById('ngj-file-name');
-    if (fn) fn.textContent = '';
-    document.getElementById('ngj-validation-area').style.display = 'none';
+	    const fn = document.getElementById('ngj-file-name');
+	    if (fn) fn.textContent = '';
+	    const si = document.getElementById('ngj-figure-suggestions-input');
+	    if (si) si.value = '';
+	    const ss = document.getElementById('ngj-figure-suggestions-status');
+	    if (ss) ss.textContent = 'No figure suggestions loaded.';
+	    document.getElementById('ngj-validation-area').style.display = 'none';
     document.getElementById('ngj-save-error').style.display = 'none';
     document.getElementById('ngj-save-btn').disabled = true;
 
@@ -24251,17 +24308,28 @@ const App = (() => {
     _nbmeGeminiJsonImport = {
       rawText: '', parsed: null, validation: null,
       normalizedItems: [], fileName: '', testName: '',
-      targetFolder: '', confirmed: false,
-      figureAttachments: {},
-      lastSaveResult: null, lastSaveError: null
-    };
+	      targetFolder: '', confirmed: false,
+	      figureAttachments: {},
+	      figureImageAttachments: {},
+	      figureSuggestionsPayload: null,
+	      figureSuggestionsType: '',
+	      figureSuggestionsFileName: '',
+	      figureSuggestionsError: '',
+	      figureSuggestionsByQuestion: {},
+	      figureSuggestionsByKey: {},
+	      lastSaveResult: null, lastSaveError: null
+	    };
     const ta = document.getElementById('ngj-raw-text');
     if (ta) ta.value = '';
     const fi = document.getElementById('ngj-file-input');
     if (fi) fi.value = '';
-    const fn = document.getElementById('ngj-file-name');
-    if (fn) fn.textContent = '';
-    document.getElementById('ngj-validation-area').style.display = 'none';
+	    const fn = document.getElementById('ngj-file-name');
+	    if (fn) fn.textContent = '';
+	    const si = document.getElementById('ngj-figure-suggestions-input');
+	    if (si) si.value = '';
+	    const ss = document.getElementById('ngj-figure-suggestions-status');
+	    if (ss) ss.textContent = 'No figure suggestions loaded.';
+	    document.getElementById('ngj-validation-area').style.display = 'none';
     document.getElementById('ngj-save-error').style.display = 'none';
     document.getElementById('ngj-save-btn').disabled = true;
   }
@@ -24797,9 +24865,20 @@ const App = (() => {
     const ta = document.getElementById('ngj-raw-text');
     const rawText = (ta ? ta.value : '').trim();
     _nbmeGeminiJsonImport.rawText = rawText;
-    _nbmeGeminiJsonImport.parsed = null;
-    _nbmeGeminiJsonImport.validation = null;
-    _nbmeGeminiJsonImport.normalizedItems = [];
+	    _nbmeGeminiJsonImport.parsed = null;
+	    _nbmeGeminiJsonImport.validation = null;
+	    _nbmeGeminiJsonImport.normalizedItems = [];
+	    _nbmeGeminiJsonImport.figureAttachments = {};
+	    _nbmeGeminiJsonImport.figureImageAttachments = {};
+	    _nbmeGeminiJsonImport.figureSuggestionsPayload = null;
+	    _nbmeGeminiJsonImport.figureSuggestionsType = '';
+	    _nbmeGeminiJsonImport.figureSuggestionsFileName = '';
+	    _nbmeGeminiJsonImport.figureSuggestionsError = '';
+	    _nbmeGeminiJsonImport.figureSuggestionsByQuestion = {};
+	    _nbmeGeminiJsonImport.figureSuggestionsByKey = {};
+	    const suggestionInput = document.getElementById('ngj-figure-suggestions-input');
+	    if (suggestionInput) suggestionInput.value = '';
+	    ngjSuggestionStatus('No figure suggestions loaded.');
 
     const bodyEl = document.getElementById('ngj-validation-body');
     const areaEl = document.getElementById('ngj-validation-area');
@@ -25061,16 +25140,321 @@ const App = (() => {
 
   // ── Figure attachment helpers (ngj) ─────────────────────────────────────────
 
-  function _ngjAllFigureRefs(parsed) {
-    const result = [];
-    (parsed.questions || []).forEach(function(q) {
-      const qNum = q.questionNumber || 0;
-      (q.figureRefs || []).forEach(function(fr) {
-        result.push({ qNum: qNum, ref: fr, hasVisibleText: Array.isArray(fr.visibleText) && fr.visibleText.length > 0 });
-      });
-    });
-    return result;
-  }
+	  function _ngjAllFigureRefs(parsed) {
+	    const result = [];
+	    (parsed.questions || []).forEach(function(q) {
+	      const qNum = q.questionNumber || 0;
+	      (q.figureRefs || []).forEach(function(fr) {
+	        result.push({ qNum: qNum, ref: fr, hasVisibleText: Array.isArray(fr.visibleText) && fr.visibleText.length > 0 });
+	      });
+	    });
+	    return result;
+	  }
+
+	  function ngjFigureRefId(ref) {
+	    return String(ref?.id || ref?.figureId || '').trim();
+	  }
+
+	  function ngjImportQuestionKey(qNum) {
+	    const n = Number(qNum);
+	    return Number.isFinite(n) && n > 0 ? String(n) : String(qNum || '');
+	  }
+
+	  function ngjImportFigureAttachmentKey(qNum, figureRefId) {
+	    return `${ngjImportQuestionKey(qNum)}::${String(figureRefId || '').trim()}`;
+	  }
+
+	  function ngjSuggestionStatus(message, kind) {
+	    const el = document.getElementById('ngj-figure-suggestions-status');
+	    if (!el) return;
+	    el.className = kind ? `ngj-figure-suggestion-status ${kind}` : '';
+	    el.textContent = message || '';
+	  }
+
+	  function ngjSuggestionFigureKey(fig, qNum, idx) {
+	    const base = fig?.figureId || fig?.filePath || fig?.absoluteFilePath || `q${qNum || 'unknown'}_${idx}`;
+	    return String(base).replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '') + '_' + idx;
+	  }
+
+	  function ngjBuildFigureSuggestionState(payload) {
+	    const byQuestion = {};
+	    const byKey = {};
+	    const type = nbmeFigureReviewDetectType(payload);
+	    if (type === 'links') {
+	      (payload.links || []).forEach((link, linkIdx) => {
+	        const qNum = Number(link?.questionNumber || 0);
+	        if (!Number.isFinite(qNum) || qNum <= 0) return;
+	        const qKey = ngjImportQuestionKey(qNum);
+	        const refs = Array.isArray(link?.existingFigureRefs) ? link.existingFigureRefs : [];
+	        const refIds = refs.map(ngjFigureRefId).filter(Boolean);
+	        (link.suggestedFigures || []).forEach((fig, figIdx) => {
+	          const entry = Object.assign({}, fig || {}, {
+	            questionNumber: qNum,
+	            questionId: link?.questionId || '',
+	            stemPreview: link?.stemPreview || '',
+	            linkRefIds: refIds,
+	            linkExistingFigureRefs: refs
+	          });
+	          const key = ngjSuggestionFigureKey(entry, qNum, linkIdx + '-' + figIdx);
+	          entry._ngjSuggestionKey = key;
+	          if (!byQuestion[qKey]) byQuestion[qKey] = [];
+	          byQuestion[qKey].push(entry);
+	          byKey[key] = entry;
+	        });
+	      });
+	      return { type, byQuestion, byKey };
+	    }
+	    if (type === 'manifest') {
+	      (payload.figures || []).filter(fig => fig && fig.kept !== false).forEach((fig, idx) => {
+	        const qNum = Number(fig?.suggestedQuestionNumber || 0);
+	        if (!Number.isFinite(qNum) || qNum <= 0) return;
+	        const qKey = ngjImportQuestionKey(qNum);
+	        const entry = Object.assign({}, fig || {}, { questionNumber: qNum });
+	        const key = ngjSuggestionFigureKey(entry, qNum, idx);
+	        entry._ngjSuggestionKey = key;
+	        if (!byQuestion[qKey]) byQuestion[qKey] = [];
+	        byQuestion[qKey].push(entry);
+	        byKey[key] = entry;
+	      });
+	      return { type, byQuestion, byKey };
+	    }
+	    throw new Error('Unsupported suggestions JSON. Expected suggested figure links or a figure manifest.');
+	  }
+
+	  function handleNbmeGeminiJsonFigureSuggestionsUpload(input) {
+	    const file = input?.files?.[0];
+	    if (!file) return;
+	    if (!_nbmeGeminiJsonImport || !_nbmeGeminiJsonImport.parsed) {
+	      ngjSuggestionStatus('Load and validate the NBME JSON before loading figure suggestions.', 'error');
+	      if (input) input.value = '';
+	      return;
+	    }
+	    ngjSuggestionStatus('Reading figure suggestions...');
+	    const reader = new FileReader();
+	    reader.onload = () => {
+	      try {
+	        const payload = JSON.parse(String(reader.result || ''));
+	        const built = ngjBuildFigureSuggestionState(payload);
+	        const count = Object.keys(built.byKey).length;
+	        if (!count) throw new Error('Suggestions file loaded, but no usable figure suggestions matched question numbers.');
+	        _nbmeGeminiJsonImport.figureSuggestionsPayload = payload;
+	        _nbmeGeminiJsonImport.figureSuggestionsType = built.type;
+	        _nbmeGeminiJsonImport.figureSuggestionsFileName = file.name;
+	        _nbmeGeminiJsonImport.figureSuggestionsError = '';
+	        _nbmeGeminiJsonImport.figureSuggestionsByQuestion = built.byQuestion;
+	        _nbmeGeminiJsonImport.figureSuggestionsByKey = built.byKey;
+	        ngjSuggestionStatus(`Loaded ${count} figure suggestion(s) from ${file.name}.`, 'ok');
+	        renderNbmeGeminiJsonFigureAttachSection();
+	      } catch (err) {
+	        _nbmeGeminiJsonImport.figureSuggestionsPayload = null;
+	        _nbmeGeminiJsonImport.figureSuggestionsType = '';
+	        _nbmeGeminiJsonImport.figureSuggestionsFileName = '';
+	        _nbmeGeminiJsonImport.figureSuggestionsError = err?.message || 'Could not load figure suggestions.';
+	        _nbmeGeminiJsonImport.figureSuggestionsByQuestion = {};
+	        _nbmeGeminiJsonImport.figureSuggestionsByKey = {};
+	        ngjSuggestionStatus(_nbmeGeminiJsonImport.figureSuggestionsError, 'error');
+	        renderNbmeGeminiJsonFigureAttachSection();
+	      }
+	    };
+	    reader.onerror = () => ngjSuggestionStatus('Could not read the selected figure suggestions file.', 'error');
+	    reader.readAsText(file);
+	  }
+
+	  function ngjSuggestionsForFigureRef(qNum, figureRefId) {
+	    const st = _nbmeGeminiJsonImport;
+	    const list = (st?.figureSuggestionsByQuestion || {})[ngjImportQuestionKey(qNum)] || [];
+	    const fid = String(figureRefId || '').trim();
+	    return list.filter(fig => {
+	      const ids = Array.isArray(fig.linkRefIds) ? fig.linkRefIds.filter(Boolean) : [];
+	      return !ids.length || !fid || ids.includes(fid);
+	    });
+	  }
+
+	  function ngjPendingFigureAttachments(qNum, figureRefId) {
+	    const st = _nbmeGeminiJsonImport;
+	    const key = ngjImportFigureAttachmentKey(qNum, figureRefId);
+	    return (st?.figureImageAttachments || {})[key] || [];
+	  }
+
+	  function ngjSuggestionDataAttrs(fig, qNum, figureRefId) {
+	    const resolved = nbmeFigureReviewResolveFigureUrl(fig);
+	    return [
+	      `data-ngj-suggestion-key="${_ngjEsc(fig?._ngjSuggestionKey || '')}"`,
+	      `data-ngj-q-num="${_ngjEsc(qNum)}"`,
+	      `data-ngj-figure-ref-id="${_ngjEsc(figureRefId || '')}"`,
+	      `data-raw-path="${_ngjEsc(fig?.filePath || '')}"`,
+	      `data-absolute-file-path="${_ngjEsc(fig?.absoluteFilePath || '')}"`,
+	      `data-file-url="${_ngjEsc(fig?.fileUrl || '')}"`,
+	      `data-resolved-src="${_ngjEsc(resolved)}"`
+	    ].join(' ');
+	  }
+
+	  function ngjRenderSuggestionCards(qNum, figureRefId) {
+	    const figs = ngjSuggestionsForFigureRef(qNum, figureRefId);
+	    if (!figs.length) return '';
+	    return figs.map(fig => {
+	      const attrs = ngjSuggestionDataAttrs(fig, qNum, figureRefId);
+	      const resolved = nbmeFigureReviewResolveFigureUrl(fig);
+	      const reasons = Array.isArray(fig.reasons) ? fig.reasons.slice(0, 3).join('; ') : '';
+	      const score = Number.isFinite(Number(fig.score)) ? Number(fig.score).toFixed(2) : 'unknown';
+	      return `
+	        <div class="ngj-figure-suggestion-card">
+	          <img class="ngj-figure-suggestion-thumb" src="${_ngjEsc(resolved)}" alt="${_ngjEsc(fig.figureId || 'Suggested figure')}" ${attrs} data-review-img-tried="0" onerror="App.nbmeFigureReviewHandleImageError(this)">
+	          <div class="ngj-figure-suggestion-meta">
+	            <div><strong>${_ngjEsc(fig.figureId || 'Suggested figure')}</strong></div>
+	            <div>Confidence: ${_ngjEsc(fig.confidence || 'unknown')} · Score: ${_ngjEsc(score)}</div>
+	            <div>Path: ${_ngjEsc(fig.filePath || fig.absoluteFilePath || '')}</div>
+	            ${reasons ? `<div>Reasons: ${_ngjEsc(reasons)}</div>` : ''}
+	            <div class="ngj-figure-suggestion-actions">
+	              <button type="button" class="btn-modal" style="font-size:11px;padding:3px 8px;" onclick="App.ngjOpenImportFigureCrop(this)" ${attrs}>Crop/Edit</button>
+	              <button type="button" class="btn-modal" style="font-size:11px;padding:3px 8px;" onclick="App.ngjAttachOriginalSuggestedFigure(this)" ${attrs}>Attach Original</button>
+	            </div>
+	            <div class="ngj-figure-suggestion-status" id="ngj-suggestion-status-${_ngjEsc(fig._ngjSuggestionKey)}"></div>
+	          </div>
+	        </div>
+	      `;
+	    }).join('');
+	  }
+
+	  function ngjSuggestionFromElement(el) {
+	    const st = _nbmeGeminiJsonImport;
+	    const key = el?.getAttribute?.('data-ngj-suggestion-key') || '';
+	    const fig = (st?.figureSuggestionsByKey || {})[key];
+	    if (!fig) return null;
+	    return {
+	      key,
+	      qNum: Number(el.getAttribute('data-ngj-q-num') || fig.questionNumber || 0),
+	      figureRefId: el.getAttribute('data-ngj-figure-ref-id') || '',
+	      figure: fig
+	    };
+	  }
+
+	  function ngjOpenImportFigureCrop(el) {
+	    const data = ngjSuggestionFromElement(el);
+	    if (!data || !data.qNum || !data.figureRefId) {
+	      toast('This figure suggestion is not linked to an import question.', 4000);
+	      return;
+	    }
+	    const fig = data.figure;
+	    const rawPath = fig.filePath || '';
+	    const fileUrl = fig.fileUrl || '';
+	    const absolutePath = fig.absoluteFilePath || '';
+	    const resolvedSrc = nbmeFigureReviewResolveFigureUrl(fig);
+	    const srcCandidates = [
+	      resolvedSrc,
+	      nbmeFigureReviewElectronLocalFigureUrl(fileUrl),
+	      absolutePath ? nbmeFigureReviewElectronLocalFigureUrl(absolutePath) : '',
+	      fileUrl,
+	      absolutePath ? nbmeFigureReviewLocalPathToUrl(absolutePath) : '',
+	      nbmeFigureReviewResolveImagePath(rawPath),
+	      rawPath
+	    ].filter(Boolean).filter((value, idx, arr) => arr.indexOf(value) === idx);
+	    nbmeFigureCropOpen({
+	      src: srcCandidates[0] || '',
+	      srcCandidates,
+	      figure: Object.assign({}, fig, { suggestedQuestionNumber: data.qNum, questionNumber: data.qNum }),
+	      importTarget: {
+	        qNum: data.qNum,
+	        figureRefId: data.figureRefId,
+	        suggestionKey: data.key
+	      }
+	    });
+	  }
+
+	  async function ngjImageUrlToDataUrl(url) {
+	    const clean = String(url || '').trim();
+	    if (!clean) throw new Error('No image URL is available.');
+	    if (/^data:image\//i.test(clean)) return clean;
+	    const response = await fetch(clean);
+	    if (!response.ok) throw new Error('Suggested image could not be loaded.');
+	    const blob = await response.blob();
+	    if (!/^image\//i.test(blob.type || '')) throw new Error('Suggested file is not an image.');
+	    if (blob.size > 8 * 1024 * 1024) throw new Error('Suggested image is too large to attach directly. Crop it first.');
+	    return await new Promise((resolve, reject) => {
+	      const reader = new FileReader();
+	      reader.onload = () => resolve(String(reader.result || ''));
+	      reader.onerror = () => reject(new Error('Suggested image could not be converted for attachment.'));
+	      reader.readAsDataURL(blob);
+	    });
+	  }
+
+	  function ngjSetSuggestionCardStatus(key, message, kind) {
+	    const el = document.getElementById('ngj-suggestion-status-' + key);
+	    if (!el) return;
+	    el.className = 'ngj-figure-suggestion-status' + (kind ? ` ${kind}` : '');
+	    el.textContent = message || '';
+	  }
+
+	  function ngjAttachPendingFigureImage(target, figure, dataUrl, crop, source) {
+	    if (!_nbmeGeminiJsonImport) throw new Error('No active NBME JSON import is open.');
+	    const qNum = Number(target?.qNum || 0);
+	    const figureRefId = String(target?.figureRefId || '').trim();
+	    if (!Number.isFinite(qNum) || qNum <= 0 || !figureRefId) throw new Error('Attachment target is incomplete.');
+	    if (!/^data:image\/(png|jpeg|jpg|webp);base64,/i.test(dataUrl || '')) throw new Error('Image data is not a valid data URL.');
+	    const key = ngjImportFigureAttachmentKey(qNum, figureRefId);
+	    if (!_nbmeGeminiJsonImport.figureImageAttachments) _nbmeGeminiJsonImport.figureImageAttachments = {};
+	    const list = _nbmeGeminiJsonImport.figureImageAttachments[key] || [];
+	    const cropBox = crop ? [crop.x, crop.y, crop.x + crop.w, crop.y + crop.h] : null;
+	    const signature = crop
+	      ? nbmeFigureAttachCropSignature(figure, crop)
+	      : `${figure?.figureId || 'figure'}|${figure?.filePath || ''}|original`;
+	    if (list.some(item => item.cropSignature === signature)) return { duplicate: true, count: list.length };
+	    list.push({
+	      qNum,
+	      figureRefId,
+	      figureId: figure?.figureId || figureRefId,
+	      originalFigureId: figure?.figureId || '',
+	      dataUrl,
+	      source: source || 'nbme-import-figure-suggestion',
+	      filePath: figure?.filePath || '',
+	      absoluteFilePath: figure?.absoluteFilePath || '',
+	      fileUrl: figure?.fileUrl || '',
+	      cropSignature: signature,
+	      cropBox,
+	      attachedAt: new Date().toISOString()
+	    });
+	    _nbmeGeminiJsonImport.figureImageAttachments[key] = list;
+	    return { duplicate: false, count: list.length };
+	  }
+
+	  async function ngjAttachOriginalSuggestedFigure(el) {
+	    const data = ngjSuggestionFromElement(el);
+	    if (!data) { toast('Suggestion target not found.', 4000); return; }
+	    const key = data.key;
+	    ngjSetSuggestionCardStatus(key, 'Attaching original image...');
+	    try {
+	      const url = nbmeFigureReviewResolveFigureUrl(data.figure);
+	      const dataUrl = await ngjImageUrlToDataUrl(url);
+	      const result = ngjAttachPendingFigureImage({ qNum: data.qNum, figureRefId: data.figureRefId }, data.figure, dataUrl, null, 'nbme-import-original-suggestion');
+	      ngjSetSuggestionCardStatus(key, result.duplicate ? 'This image is already attached for import save.' : 'Original image attached for import save.', result.duplicate ? 'error' : 'ok');
+	      renderNbmeGeminiJsonFigureAttachSection();
+	    } catch (err) {
+	      ngjSetSuggestionCardStatus(key, err?.message || 'Original image attachment failed.', 'error');
+	    }
+	  }
+
+	  function ngjAttachCroppedSuggestedFigure() {
+	    const st = _nbmeFigureCropState;
+	    if (!st?.importTarget || st.attaching) return;
+	    const output = nbmeFigureCropDataUrl();
+	    if (!output?.dataUrl) return;
+	    st.attaching = true;
+	    const btn = document.getElementById('nbme-figure-crop-import-attach-btn');
+	    if (btn) btn.disabled = true;
+	    try {
+	      const result = ngjAttachPendingFigureImage(st.importTarget, st.figure, output.dataUrl, output.crop, 'nbme-import-crop-suggestion');
+	      const msg = result.duplicate ? 'This exact crop is already attached for import save.' : 'Cropped image attached to this import question. Save the imported test to persist it.';
+	      nbmeFigureCropSetStatus(msg, result.duplicate);
+	      ngjSetSuggestionCardStatus(st.importTarget.suggestionKey, msg, result.duplicate ? 'error' : 'ok');
+	      renderNbmeGeminiJsonFigureAttachSection();
+	      if (!result.duplicate) setTimeout(() => nbmeFigureCropClose(), 350);
+	    } catch (err) {
+	      nbmeFigureCropSetStatus(err?.message || 'Cropped image attachment failed.', true);
+	    } finally {
+	      if (_nbmeFigureCropState) _nbmeFigureCropState.attaching = false;
+	      if (btn && _nbmeFigureCropState?.imageLoaded) btn.disabled = false;
+	    }
+	  }
 
   function renderNbmeGeminiJsonFigureAttachSection() {
     const st = _nbmeGeminiJsonImport;
@@ -25083,14 +25467,23 @@ const App = (() => {
     const allRefs = _ngjAllFigureRefs(st.parsed);
     if (!allRefs.length) { section.style.display = 'none'; return; }
 
-    section.style.display = '';
-    const attachments = st.figureAttachments || {};
-    let html = '';
-    allRefs.forEach(function(item) {
-      const fr = item.ref;
-      const fid = fr.id || fr.figureId || '';
-      const attached = !!attachments[fid];
-      const hasVT = item.hasVisibleText;
+	    section.style.display = '';
+	    const attachments = st.figureAttachments || {};
+	    if (st.figureSuggestionsError) {
+	      ngjSuggestionStatus(st.figureSuggestionsError, 'error');
+	    } else if (st.figureSuggestionsFileName) {
+	      const count = Object.keys(st.figureSuggestionsByKey || {}).length;
+	      ngjSuggestionStatus(`Loaded ${count} figure suggestion(s) from ${st.figureSuggestionsFileName}.`, 'ok');
+	    } else {
+	      ngjSuggestionStatus('No figure suggestions loaded.');
+	    }
+	    let html = '';
+	    allRefs.forEach(function(item) {
+	      const fr = item.ref;
+	      const fid = fr.id || fr.figureId || '';
+	      const pendingDirect = ngjPendingFigureAttachments(item.qNum, fid);
+	      const attached = !!attachments[fid] || pendingDirect.length > 0;
+	      const hasVT = item.hasVisibleText;
       const escapedFid = fid.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       const escapedPH  = (fr.placeholder||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       const escapedDesc = (fr.description||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -25114,16 +25507,18 @@ const App = (() => {
       html += '&#128228; ' + (attached ? 'Replace image' : 'Upload image (optional)');
       html += '<input type="file" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="App.ngjHandleFigureUpload(this,\'' + escapedFid + '\')">';
       html += '</label>';
-      if (attached) {
-        html += '<img id="ngj-fig-thumb-' + escapedFid + '" class="ngj-figure-thumb" src="' + attachments[fid] + '" style="display:inline-block;">';
-        html += '<span class="ngj-figure-status ok" id="ngj-fig-status-' + escapedFid + '">&#10003; Image attached</span>';
-        html += '<button type="button" class="btn-modal" style="font-size:11px;padding:3px 8px;color:#c0392b;border-color:#c0392b;" onclick="App.ngjRemoveFigureAttachment(\'' + escapedFid + '\')">&#10005; Remove</button>';
-      } else {
-        html += '<span class="ngj-figure-status" id="ngj-fig-status-' + escapedFid + '">' + (hasVT ? '' : 'No image attached') + '</span>';
-      }
-      html += '</div>';
-      html += '</div>';
-    });
+	      if (attached) {
+	        const thumbSrc = pendingDirect[0]?.dataUrl || attachments[fid] || '';
+	        if (thumbSrc) html += '<img id="ngj-fig-thumb-' + escapedFid + '" class="ngj-figure-thumb" src="' + thumbSrc + '" style="display:inline-block;">';
+	        html += '<span class="ngj-figure-status ok" id="ngj-fig-status-' + escapedFid + '">&#10003; Image attached' + (pendingDirect.length ? ' for import save' : '') + '</span>';
+	        html += '<button type="button" class="btn-modal" style="font-size:11px;padding:3px 8px;color:#c0392b;border-color:#c0392b;" onclick="App.ngjRemoveFigureAttachment(\'' + escapedFid + '\')">&#10005; Remove</button>';
+	      } else {
+	        html += '<span class="ngj-figure-status" id="ngj-fig-status-' + escapedFid + '">' + (hasVT ? '' : 'No image attached') + '</span>';
+	      }
+	      html += '</div>';
+	      html += ngjRenderSuggestionCards(item.qNum, fid);
+	      html += '</div>';
+	    });
 
     list.innerHTML = html;
   }
@@ -25147,13 +25542,84 @@ const App = (() => {
     reader.readAsDataURL(file);
   }
 
-  function ngjRemoveFigureAttachment(figureId) {
-    if (!_nbmeGeminiJsonImport || !_nbmeGeminiJsonImport.figureAttachments) return;
-    delete _nbmeGeminiJsonImport.figureAttachments[figureId];
-    renderNbmeGeminiJsonFigureAttachSection();
-  }
+	  function ngjRemoveFigureAttachment(figureId) {
+	    if (!_nbmeGeminiJsonImport || !_nbmeGeminiJsonImport.figureAttachments) return;
+	    delete _nbmeGeminiJsonImport.figureAttachments[figureId];
+	    if (_nbmeGeminiJsonImport.figureImageAttachments) {
+	      Object.keys(_nbmeGeminiJsonImport.figureImageAttachments).forEach(key => {
+	        if (key.endsWith('::' + figureId)) delete _nbmeGeminiJsonImport.figureImageAttachments[key];
+	      });
+	    }
+	    renderNbmeGeminiJsonFigureAttachSection();
+	  }
 
-  function createTestFromNbmeGeminiJsonImport() {
+	  function ngjPendingImportImagesForQuestion(qNum) {
+	    const st = _nbmeGeminiJsonImport;
+	    const prefix = ngjImportQuestionKey(qNum) + '::';
+	    const result = [];
+	    Object.keys(st?.figureImageAttachments || {}).forEach(key => {
+	      if (key.startsWith(prefix)) result.push(...(st.figureImageAttachments[key] || []));
+	    });
+	    return result;
+	  }
+
+	  async function ngjPersistPendingFigureImagesToTest(test) {
+	    const st = _nbmeGeminiJsonImport;
+	    const pending = st?.figureImageAttachments || {};
+	    if (!test || !Object.keys(pending).length) return 0;
+	    if (!window.FigureStore || typeof window.FigureStore.put !== 'function') {
+	      throw new Error('FigureStore is unavailable, so attached figure images cannot be persisted.');
+	    }
+	    let attachedCount = 0;
+	    for (const q of (test.questions || [])) {
+	      const qNum = Number(q?.n || q?.number || q?.questionNumber || 0);
+	      const items = ngjPendingImportImagesForQuestion(qNum);
+	      if (!items.length) continue;
+	      q.images = Array.isArray(q.images) ? q.images : [];
+	      q.metadata = q.metadata && typeof q.metadata === 'object' ? q.metadata : {};
+	      q.metadata.figureRefs = Array.isArray(q.metadata.figureRefs) ? q.metadata.figureRefs : [];
+	      for (const item of items) {
+	        if (!item?.dataUrl) continue;
+	        if (q.images.some(img => img?.cropSignature === item.cropSignature)) continue;
+	        const imageIndex = nbmeFigureAttachNextImageIndex(q.images);
+	        const figureKey = `${test.id}:${qNum || q.n || 'q'}:${imageIndex}`;
+	        await window.FigureStore.put(figureKey, item.dataUrl);
+	        const figureId = nbmeFigureAttachFigureId({ figureId: item.figureId || item.originalFigureId, filePath: item.filePath }, { questionNumber: qNum || q.n || 0 }, imageIndex);
+	        q.images.push({
+	          figureKey,
+	          isLabTable: false,
+	          kind: 'figure',
+	          source: item.source || 'nbme-import-figure-suggestion',
+	          figureId,
+	          originalFigureId: item.originalFigureId || '',
+	          figureRefId: item.figureRefId || '',
+	          cropSourcePath: item.filePath || '',
+	          absoluteFilePath: item.absoluteFilePath || '',
+	          fileUrl: item.fileUrl || '',
+	          cropSignature: item.cropSignature || '',
+	          cropBox: item.cropBox || null,
+	          attachedAt: item.attachedAt || new Date().toISOString()
+	        });
+	        if (item.figureRefId && !q.metadata.figureRefs.some(ref => (ref?.id || ref?.figureId) === item.figureRefId)) {
+	          q.metadata.figureRefs.push({
+	            id: item.figureRefId,
+	            figureId: item.figureRefId,
+	            placeholder: `[FIGURE: ${item.figureRefId}]`,
+	            source: 'nbme-import-figure-suggestion',
+	            originalFigureId: item.originalFigureId || '',
+	            filePath: item.filePath || '',
+	            cropBox: item.cropBox || null,
+	            needsReview: false
+	          });
+	        }
+	        attachedCount += 1;
+	      }
+	    }
+	    if (attachedCount) DB.updateTest(test.id, { questions: test.questions });
+	    return attachedCount;
+	  }
+
+	  async function createTestFromNbmeGeminiJsonImport() {
     const st = _nbmeGeminiJsonImport;
     if (!st || !st.validation || !st.validation.isValid) { toast('Validation errors must be resolved first.', 4000); return; }
 
@@ -25215,7 +25681,7 @@ const App = (() => {
     }
 
     // Attach test-level metadata that can't go on individual questions
-    DB.updateTest(test.id, {
+	    DB.updateTest(test.id, {
       sourceType: 'nbme-gemini-json',
       importMetadata: {
         sourceType: 'nbme-gemini-json',
@@ -25229,10 +25695,21 @@ const App = (() => {
         topLevelExtractionWarnings: Array.isArray(payload.extractionWarnings) ? payload.extractionWarnings : [],
         expectedQuestionCount: payload.expectedQuestionCount ?? null,
         actualExtractedQuestionCount: payload.actualExtractedQuestionCount ?? null
-      }
-    });
+	      }
+	    });
 
-    st.lastSaveResult = test;
+	    let persistedFigureCount = 0;
+	    try {
+	      persistedFigureCount = await ngjPersistPendingFigureImagesToTest(test);
+	    } catch (err) {
+	      const msg = err?.message || 'Attached figure images could not be persisted.';
+	      st.lastSaveError = msg;
+	      if (errEl) { errEl.style.display = 'block'; errEl.textContent = msg; }
+	      toast(msg, 6000);
+	      return;
+	    }
+
+	    st.lastSaveResult = test;
     st.lastSaveError = null;
     if (errEl) errEl.style.display = 'none';
 
@@ -25240,10 +25717,10 @@ const App = (() => {
     _currentFolder = folderId;
     renderSidebar();
     renderHomeGrid();
-    toast(`✓ "${testName}" created with ${questions.length} questions (nbme-gemini-json).`);
-  }
+	    toast(`✓ "${testName}" created with ${questions.length} questions${persistedFigureCount ? ` and ${persistedFigureCount} attached figure image(s)` : ''}.`);
+	  }
 
-  function saveValidNbmeGeminiJsonQuestionsOnly() {
+	  async function saveValidNbmeGeminiJsonQuestionsOnly() {
     console.log('[Block Validate Save] clicked');
     const st = _nbmeGeminiJsonImport;
     if (!st || !st.validation) { toast('No validation data. Upload and validate a JSON file first.', 4000); return; }
@@ -25320,7 +25797,7 @@ const App = (() => {
     }
 
     const skippedCount = allItems.length - items.length;
-    DB.updateTest(test.id, {
+	    DB.updateTest(test.id, {
       sourceType: 'nbme-gemini-json',
       importMetadata: {
         sourceType: 'nbme-gemini-json',
@@ -25335,8 +25812,19 @@ const App = (() => {
         topLevelExtractionWarnings: Array.isArray(payload.extractionWarnings) ? payload.extractionWarnings : [],
         expectedQuestionCount: payload.expectedQuestionCount ?? null,
         actualExtractedQuestionCount: payload.actualExtractedQuestionCount ?? null
-      }
-    });
+	      }
+	    });
+
+	    let persistedFigureCount = 0;
+	    try {
+	      persistedFigureCount = await ngjPersistPendingFigureImagesToTest(test);
+	    } catch (err) {
+	      const msg = err?.message || 'Attached figure images could not be persisted.';
+	      st.lastSaveError = msg;
+	      if (errEl) { errEl.style.display = 'block'; errEl.textContent = msg; }
+	      toast(msg, 6000);
+	      return;
+	    }
 
     st.lastSaveResult = test;
     st.lastSaveError = null;
@@ -25346,8 +25834,8 @@ const App = (() => {
     _currentFolder = folderId;
     renderSidebar();
     renderHomeGrid();
-    toast(`✓ "${testName}" created with ${questions.length} valid question(s). ${skippedCount} invalid question(s) skipped.`);
-  }
+	    toast(`✓ "${testName}" created with ${questions.length} valid question(s)${persistedFigureCount ? ` and ${persistedFigureCount} attached figure image(s)` : ''}. ${skippedCount} invalid question(s) skipped.`);
+	  }
 
   // ── Miscellaneous Documents ────────────────────────────────
   function showMiscDocs() {
@@ -25796,9 +26284,13 @@ const App = (() => {
     handleNbmeGeminiJsonFileUpload,
     parseNbmeGeminiJson,
     updateNbmeGeminiJsonSaveReadiness,
-    createTestFromNbmeGeminiJsonImport,
-    saveValidNbmeGeminiJsonQuestionsOnly,
-    ngjHandleFigureUpload,
+	    createTestFromNbmeGeminiJsonImport,
+	    saveValidNbmeGeminiJsonQuestionsOnly,
+	    handleNbmeGeminiJsonFigureSuggestionsUpload,
+	    ngjOpenImportFigureCrop,
+	    ngjAttachOriginalSuggestedFigure,
+	    ngjAttachCroppedSuggestedFigure,
+	    ngjHandleFigureUpload,
     ngjRemoveFigureAttachment,
     showMiscDocs,
     miscDocUpload,
