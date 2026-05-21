@@ -1314,6 +1314,9 @@ body.quiz-fullscreen-mode .modal-overlay {
             <button class="btn-generate" id="btn-landing-json-import" onclick="App.openLandingJsonImportModal()" style="background:#1a4a7a;" title="Import any app-ready or NBME Gemini JSON file">
               &#x2B06; Import JSON
             </button>
+            <button class="btn-generate" id="btn-batch-import-center" onclick="App.openBatchImportCenter()" style="background:#425466;" title="Open Batch Import Center foundation">
+              Batch Import
+            </button>
             <button class="btn-generate" id="btn-nbme-figure-review" onclick="App.openNbmeFigureReviewModal()" style="background:#5a3f7a;" title="View NBME figure manifests without saving or attaching images">
               NBME Figure Review
             </button>
@@ -2259,6 +2262,55 @@ body.quiz-fullscreen-mode .modal-overlay {
           <button type="button" class="btn-modal" onclick="App.nbmeFigureCropClose()">Cancel</button>
         </div>
       </aside>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ BATCH IMPORT CENTER PLACEHOLDER ═══ -->
+<div id="modal-batch-import-center" class="modal-overlay">
+  <div class="modal-box" style="max-width:680px;">
+    <h3>Batch Import Center</h3>
+    <p style="font-size:12px;color:#5a6a7a;margin-bottom:12px;">Foundation only. Registered local Python pipelines can dry-run and report discovered app-ready JSON outputs. Full batch UI is not implemented yet.</p>
+
+    <div class="notes-import-section-title">Registered Sources</div>
+    <div id="bic-registry-status" class="notes-import-summary">Registry not loaded.</div>
+
+    <div class="notes-import-section-title">Job Setup</div>
+    <div class="form-group">
+      <label class="form-label">Source Type</label>
+      <select class="form-input" id="bic-source-type" onchange="App.onBatchImportSourceChange()">
+        <option value="emma_holiday_pdf">Emma Holiday PDF</option>
+        <option value="fast_facts_pptx">Fast Facts PPTX</option>
+        <option value="amboss_pdf">Amboss PDF</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Files</label>
+      <button type="button" class="btn-modal" onclick="App.selectBatchImportFiles()">Choose Files</button>
+      <div id="bic-selected-files" class="notes-import-summary">No files selected.</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Target Folder</label>
+      <select class="form-input" id="bic-target-folder"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Run Mode</label>
+      <select class="form-input" id="bic-run-mode">
+        <option value="dry-run">dry-run</option>
+        <option value="generate">generate</option>
+        <option value="generate-auto-import">generate + auto-import</option>
+      </select>
+    </div>
+    <div id="bic-run-status" class="notes-import-summary">No job run yet.</div>
+    <div id="bic-progress-log" class="notes-import-preview">
+      <div class="notes-import-empty">Progress events will appear here.</div>
+    </div>
+    <div class="notes-import-section-title">Completion Report</div>
+    <div id="bic-completion-report" class="notes-import-summary">Completion report placeholder.</div>
+
+    <div class="modal-actions">
+      <button class="btn-modal primary" onclick="App.launchBatchImportJob()">Run</button>
+      <button class="btn-modal" onclick="App.closeBatchImportCenter()">Close</button>
     </div>
   </div>
 </div>
@@ -8374,6 +8426,8 @@ const App = (() => {
   let _nbmeGeminiJsonImport = null;
   let _nbmeFigureReviewState = null;
   let _nbmeFigureCropState = null;
+  let _batchImportState = null;
+  let _batchImportProgressUnsubscribe = null;
   let _ankiImportPreview = null;
   let _omeImportPreview = null;
   let _mehlmanImportPreview = null;
@@ -8385,6 +8439,11 @@ const App = (() => {
   const NOTES_BATCH_MAX_LIVE_REFINEMENTS = 25;
   const NOTES_BATCH_MAX_ATTEMPTS = 2;
   const NOTES_BATCH_MAX_CONSECUTIVE_FAILURES = 3;
+  const BATCH_IMPORT_SOURCE_LABELS = {
+    emma_holiday_pdf: 'Emma Holiday PDF',
+    fast_facts_pptx: 'Fast Facts PPTX',
+    amboss_pdf: 'Amboss PDF'
+  };
   // ── Init ───────────────────────────────────────────────────
   function init() {
     window.toast = toast;
@@ -22017,6 +22076,376 @@ const App = (() => {
     toast('✓ “' + testName + '” imported with ' + questions.length + ' question(s).');
   }
 
+  function openBatchImportCenter() {
+    const modal = document.getElementById('modal-batch-import-center');
+    const registryStatus = document.getElementById('bic-registry-status');
+    const runStatus = document.getElementById('bic-run-status');
+    const log = document.getElementById('bic-progress-log');
+    const report = document.getElementById('bic-completion-report');
+    _batchImportState = { lastResult: null, progress: [], files: [], registry: null };
+    if (registryStatus) registryStatus.textContent = 'Loading registry...';
+    if (runStatus) runStatus.textContent = 'No job run yet.';
+    if (log) log.innerHTML = '<div class="notes-import-empty">Progress events will appear here.</div>';
+    if (report) report.textContent = 'Completion report placeholder.';
+    renderBatchImportSelectedFiles();
+    populateBatchImportTargetFolders();
+    if (modal) modal.style.display = 'flex';
+
+    const api = window.nbmeDesktop && window.nbmeDesktop.batchImport;
+    if (!api) {
+      if (registryStatus) registryStatus.textContent = 'Batch Import Center is available only in the Electron app.';
+      return;
+    }
+
+    api.getRegistry().then(function(result) {
+      if (!result || !result.ok) {
+        if (registryStatus) registryStatus.textContent = result?.message || 'Registry could not be loaded.';
+        return;
+      }
+      if (_batchImportState) _batchImportState.registry = result.registry || null;
+      const sources = result.registry?.sources || {};
+      const active = Object.keys(sources).filter(key => sources[key]?.status === 'active');
+      if (registryStatus) registryStatus.textContent = active.length
+        ? 'Active: ' + active.join(', ')
+        : 'No active sources registered.';
+    }).catch(function(err) {
+      if (registryStatus) registryStatus.textContent = err?.message || 'Registry could not be loaded.';
+    });
+  }
+
+  function populateBatchImportTargetFolders() {
+    const sel = document.getElementById('bic-target-folder');
+    if (!sel) return;
+    sel.innerHTML = '';
+    const sourceFolders = DB.getSourceFolders();
+    const allFolders = DB.getFolders();
+    sourceFolders.forEach(function(src) {
+      const folders = allFolders.filter(function(folder) { return (folder.sourceId || 'src-nbme') === src.id; });
+      if (!folders.length) return;
+      const group = document.createElement('optgroup');
+      group.label = src.name;
+      folders.forEach(function(folder) {
+        const opt = document.createElement('option');
+        opt.value = folder.id;
+        opt.textContent = folder.name;
+        group.appendChild(opt);
+      });
+      sel.appendChild(group);
+    });
+    if (_currentFolder && Array.from(sel.options).some(function(opt) { return opt.value === _currentFolder; })) {
+      sel.value = _currentFolder;
+    }
+    if (!sel.options.length) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'Create a folder first';
+      sel.appendChild(opt);
+    }
+  }
+
+  function renderBatchImportSelectedFiles() {
+    const target = document.getElementById('bic-selected-files');
+    if (!target) return;
+    const files = Array.isArray(_batchImportState?.files) ? _batchImportState.files : [];
+    if (!files.length) {
+      target.textContent = 'No files selected.';
+      return;
+    }
+    target.innerHTML = files.map(function(filePath) {
+      const name = String(filePath || '').split(/[\\/]/).pop() || filePath;
+      return `<div>${escapeHTML(name)}</div>`;
+    }).join('');
+  }
+
+  function onBatchImportSourceChange() {
+    if (_batchImportState) _batchImportState.files = [];
+    renderBatchImportSelectedFiles();
+  }
+
+  async function selectBatchImportFiles() {
+    const api = window.nbmeDesktop && window.nbmeDesktop.batchImport;
+    const runStatus = document.getElementById('bic-run-status');
+    const sourceType = (document.getElementById('bic-source-type')?.value || '').trim();
+    if (!api) {
+      if (runStatus) runStatus.textContent = 'Native file selection is available only in the Electron app.';
+      return;
+    }
+    const result = await api.selectFiles({ sourceType });
+    if (!result || !result.ok) {
+      if (runStatus) runStatus.textContent = result?.message || 'File selection failed.';
+      return;
+    }
+    if (result.canceled) return;
+    if (!_batchImportState) _batchImportState = { lastResult: null, progress: [], files: [], registry: null };
+    _batchImportState.files = result.filePaths || [];
+    renderBatchImportSelectedFiles();
+    if (runStatus) runStatus.textContent = _batchImportState.files.length + ' file(s) selected.';
+  }
+
+  function closeBatchImportCenter() {
+    if (_batchImportProgressUnsubscribe) {
+      _batchImportProgressUnsubscribe();
+      _batchImportProgressUnsubscribe = null;
+    }
+    const modal = document.getElementById('modal-batch-import-center');
+    if (modal) modal.style.display = 'none';
+  }
+
+  function appendBatchImportProgress(event) {
+    const log = document.getElementById('bic-progress-log');
+    if (!log) return;
+    if (log.querySelector('.notes-import-empty')) log.innerHTML = '';
+    const row = document.createElement('div');
+    row.className = 'notes-import-block';
+    const type = String(event?.type || 'event');
+    const msg = event?.message || event?.error || (event?.outputs ? `${event.outputs.length} output(s)` : '');
+    row.innerHTML = `<div class="notes-import-block-head"><span class="notes-import-type">${escapeHTML(type)}</span><span class="notes-import-path">${escapeHTML(event?.timestamp || '')}</span></div><div class="notes-import-text">${escapeHTML(msg || JSON.stringify(event))}</div>`;
+    log.appendChild(row);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  async function launchBatchImportJob() {
+    const api = window.nbmeDesktop && window.nbmeDesktop.batchImport;
+    const runStatus = document.getElementById('bic-run-status');
+    const report = document.getElementById('bic-completion-report');
+    const sourceType = (document.getElementById('bic-source-type')?.value || '').trim();
+    const runMode = (document.getElementById('bic-run-mode')?.value || 'dry-run').trim();
+    const folderId = (document.getElementById('bic-target-folder')?.value || '').trim();
+    const inputPaths = Array.isArray(_batchImportState?.files) ? _batchImportState.files.slice() : [];
+    if (!api) {
+      if (runStatus) runStatus.textContent = 'Batch Import Center is available only in the Electron app.';
+      return;
+    }
+    if (!inputPaths.length) {
+      if (runStatus) runStatus.textContent = 'Choose at least one file.';
+      return;
+    }
+    if (runMode === 'generate-auto-import' && !folderId) {
+      if (runStatus) runStatus.textContent = 'Choose a target folder before auto-import.';
+      return;
+    }
+
+    if (_batchImportProgressUnsubscribe) _batchImportProgressUnsubscribe();
+    if (_batchImportState) _batchImportState.progress = [];
+    const log = document.getElementById('bic-progress-log');
+    if (log) log.innerHTML = '<div class="notes-import-empty">Progress events will appear here.</div>';
+    _batchImportProgressUnsubscribe = api.onProgress(function(event) {
+      if (_batchImportState) _batchImportState.progress.push(event);
+      appendBatchImportProgress(event);
+    });
+
+    const isDryRun = runMode === 'dry-run';
+    if (runStatus) runStatus.textContent = isDryRun ? 'Dry-run in progress...' : 'Generation in progress...';
+    if (report) report.textContent = 'Waiting for completion.';
+
+    const result = await api.launchJob({
+      sourceType,
+      inputPaths,
+      dryRun: isDryRun,
+      executePipeline: !isDryRun,
+      destination: {
+        folderId,
+        testName: ''
+      }
+    });
+    _batchImportState = Object.assign(_batchImportState || {}, { lastResult: result });
+    if (!result?.ok) {
+      if (runStatus) runStatus.textContent = result?.message || 'Batch job failed.';
+      renderBatchImportCompletionReport({
+        sourceType,
+        folderId,
+        outputPath: '',
+        questionCount: 0,
+        imageCount: 0,
+        warnings: [],
+        errors: [result?.message || 'Batch job failed.']
+      });
+      return;
+    }
+
+    const outputs = Array.isArray(result.outputs) ? result.outputs : [];
+    const validations = [];
+    for (const outputPath of outputs) {
+      const read = await api.readOutputJson(outputPath);
+      if (!read || !read.ok) {
+        validations.push({ ok: false, outputPath, errors: [read?.message || 'Output JSON could not be read.'], warnings: [], questionCount: 0, imageCount: 0 });
+        continue;
+      }
+      validations.push(validateBatchOutputJsonText(read.text, outputPath));
+    }
+
+    let importResult = null;
+    if (runMode === 'generate-auto-import') {
+      const firstValid = validations.find(function(item) { return item.ok; });
+      if (firstValid) {
+        importResult = await importValidatedBatchOutputJsonText(firstValid.rawText, {
+          folderId,
+          testName: firstValid.testName || ''
+        });
+      } else {
+        importResult = { ok: false, error: 'No valid output was available to auto-import.' };
+      }
+    }
+
+    const primary = validations[0] || { ok: true, outputPath: '', warnings: [], errors: [], questionCount: 0, imageCount: 0 };
+    const errors = primary.errors ? primary.errors.slice() : [];
+    const warnings = primary.warnings ? primary.warnings.slice() : [];
+    if (runMode === 'generate-auto-import' && importResult && !importResult.ok) errors.push(importResult.error || 'Auto-import failed.');
+    if (runMode === 'generate-auto-import' && importResult?.ok) warnings.push('Auto-import completed.');
+
+    renderBatchImportCompletionReport({
+      sourceType,
+      folderId,
+      outputPath: primary.outputPath || '',
+      questionCount: primary.questionCount || 0,
+      imageCount: primary.imageCount || 0,
+      warnings,
+      errors
+    });
+    if (runStatus) runStatus.textContent = isDryRun
+      ? 'Dry-run completed.'
+      : (runMode === 'generate-auto-import' && importResult?.ok ? 'Generation and auto-import completed.' : 'Generation completed.');
+  }
+
+  async function autoImportBatchOutputJson(outputPath, destination) {
+    const api = window.nbmeDesktop && window.nbmeDesktop.batchImport;
+    if (!api) return { ok: false, error: 'Batch Import Center is available only in the Electron app.' };
+    const read = await api.readOutputJson(outputPath);
+    if (!read || !read.ok) return { ok: false, error: read?.message || 'Output JSON could not be read.' };
+    return importValidatedBatchOutputJsonText(read.text, destination || {});
+  }
+
+  function validateBatchOutputJsonText(rawText, outputPath) {
+    let parsed;
+    try {
+      parsed = JSON.parse(rawText || '');
+    } catch(err) {
+      return { ok: false, outputPath, rawText, testName: '', questionCount: 0, imageCount: 0, warnings: [], errors: ['Invalid JSON: ' + (err.message || String(err))] };
+    }
+
+    let warnings = [];
+    let errors = [];
+    let questionCount = 0;
+    let imageCount = 0;
+    let testName = String(parsed?.testTitle || parsed?.name || 'Batch Import').trim();
+
+    if (parsed && parsed.testTitle !== undefined && Array.isArray(parsed.questions)) {
+      const validation = validateNbmeGeminiJsonImport(parsed);
+      warnings = (validation.warnings || []).slice();
+      errors = validation.isValid ? [] : (validation.blockingErrors || ['NBME Gemini JSON validation failed.']).slice();
+      questionCount = parsed.questions.length;
+      imageCount = parsed.questions.reduce(function(sum, q) {
+        return sum
+          + (Array.isArray(q.figureRefs) ? q.figureRefs.length : 0)
+          + (Array.isArray(q.images) ? q.images.length : 0)
+          + (Array.isArray(q.explanationImages) ? q.explanationImages.length : 0);
+      }, 0);
+      return { ok: validation.isValid, outputPath, rawText, testName, questionCount, imageCount, warnings, errors };
+    }
+
+    if (parsed && Array.isArray(parsed.questions) && parsed.questions.length && parsed.questions.every(_isInternalAppReadyQuestion)) {
+      const questions = parsed.questions.map(_landingJsonQuestionFromInternalAppReady);
+      const ok = _validateInternalAppReadyQuestions(questions);
+      questionCount = questions.length;
+      imageCount = questions.reduce(function(sum, q) {
+        return sum + (Array.isArray(q.images) ? q.images.length : 0) + (Array.isArray(q.explanationImages) ? q.explanationImages.length : 0);
+      }, 0);
+      return { ok, outputPath, rawText, testName, questionCount, imageCount, warnings, errors: ok ? [] : ['JSON questions are missing required internal fields (t, o).'] };
+    }
+
+    if (parsed && Array.isArray(parsed.questions) && parsed.questions.length) {
+      const ok = parsed.questions.every(function(q) { return q.stem && Array.isArray(q.options); });
+      questionCount = parsed.questions.length;
+      return { ok, outputPath, rawText, testName, questionCount, imageCount, warnings, errors: ok ? [] : ['JSON questions are missing required fields (stem, options).'] };
+    }
+
+    if (Array.isArray(parsed) && parsed.length && parsed[0] && parsed[0].stem) {
+      const ok = parsed.every(function(q) { return q.stem && Array.isArray(q.options); });
+      questionCount = parsed.length;
+      return { ok, outputPath, rawText, testName, questionCount, imageCount, warnings, errors: ok ? [] : ['JSON questions are missing required fields (stem, options).'] };
+    }
+
+    return { ok: false, outputPath, rawText, testName, questionCount: 0, imageCount: 0, warnings, errors: ['Unrecognized JSON schema.'] };
+  }
+
+  function renderBatchImportCompletionReport(report) {
+    const target = document.getElementById('bic-completion-report');
+    if (!target) return;
+    const lbl = _sourceLabelForFolder(report.folderId || '');
+    const sourceLabel = BATCH_IMPORT_SOURCE_LABELS[report.sourceType] || report.sourceType || 'Unknown source';
+    const warnings = Array.isArray(report.warnings) ? report.warnings : [];
+    const errors = Array.isArray(report.errors) ? report.errors : [];
+    target.innerHTML = `
+      <div><strong>Source type:</strong> ${escapeHTML(sourceLabel)}</div>
+      <div><strong>Target folder:</strong> ${escapeHTML(report.folderId ? `${lbl.srcName} / ${lbl.fldName}` : 'Not selected')}</div>
+      <div><strong>Output path:</strong> ${escapeHTML(report.outputPath || 'None discovered')}</div>
+      <div><strong>Question count:</strong> ${Number(report.questionCount || 0)}</div>
+      <div><strong>Image count:</strong> ${Number(report.imageCount || 0)}</div>
+      <div><strong>Warnings:</strong> ${warnings.length ? escapeHTML(warnings.join('; ')) : 'None'}</div>
+      <div><strong>Errors:</strong> ${errors.length ? escapeHTML(errors.join('; ')) : 'None'}</div>
+    `;
+  }
+
+  async function importValidatedBatchOutputJsonText(rawText, destination) {
+    let parsed;
+    try {
+      parsed = JSON.parse(rawText || '');
+    } catch(err) {
+      return { ok: false, error: 'Invalid JSON: ' + (err.message || String(err)) };
+    }
+
+    const folderId = String(destination.folderId || '').trim();
+    const testName = String(destination.testName || parsed.testTitle || parsed.name || 'Batch Import').trim();
+    if (!folderId) return { ok: false, error: 'Destination folder is required.' };
+    if (!testName) return { ok: false, error: 'Test name is required.' };
+
+    let questions;
+    if (parsed && parsed.testTitle !== undefined && Array.isArray(parsed.questions)) {
+      const validation = validateNbmeGeminiJsonImport(parsed);
+      if (!validation.isValid) {
+        return { ok: false, error: 'NBME Gemini JSON validation failed: ' + ((validation.blockingErrors || []).slice(0, 3).join('; ') || 'unknown error') };
+      }
+      const normalizedItems = normalizeNbmeGeminiJsonImport(parsed);
+      const importedAt = new Date().toISOString();
+      questions = normalizedItems.map(function(q) {
+        const out = Object.assign({}, q);
+        out.metadata = Object.assign({}, out.metadata || {}, {
+          sourceType: 'nbme-gemini-json',
+          sourceFormat: parsed.sourceFormat || null,
+          importedAt,
+          originalTestTitle: parsed.testTitle || null,
+          schemaVersion: 'nbme-gemini-json-v1',
+          figureAttachments: {}
+        });
+        return out;
+      });
+    } else if (parsed && Array.isArray(parsed.questions) && parsed.questions.length && parsed.questions.every(_isInternalAppReadyQuestion)) {
+      questions = parsed.questions.map(_landingJsonQuestionFromInternalAppReady);
+      if (!_validateInternalAppReadyQuestions(questions)) return { ok: false, error: 'JSON questions are missing required internal fields (t, o).' };
+    } else if (parsed && Array.isArray(parsed.questions) && parsed.questions.length) {
+      if (!parsed.questions.every(function(q) { return q.stem && Array.isArray(q.options); })) {
+        return { ok: false, error: 'JSON questions are missing required fields (stem, options).' };
+      }
+      questions = parsed.questions.map(_landingJsonQuestionFromLegacyAppReady);
+    } else if (Array.isArray(parsed) && parsed.length && parsed[0] && parsed[0].stem) {
+      if (!parsed.every(function(q) { return q.stem && Array.isArray(q.options); })) {
+        return { ok: false, error: 'JSON questions are missing required fields (stem, options).' };
+      }
+      questions = parsed.map(_landingJsonQuestionFromLegacyAppReady);
+    } else {
+      return { ok: false, error: 'Unrecognized JSON schema.' };
+    }
+
+    if (!questions || !questions.length) return { ok: false, error: 'No questions found in JSON.' };
+    const test = DB.createTest(folderId, testName, questions);
+    if (!test) return { ok: false, error: 'Could not create test.' };
+    await _persistLandingJsonInlineImages(test);
+    _currentFolder = folderId;
+    renderSidebar();
+    renderHomeGrid();
+    return { ok: true, testId: test.id, questionCount: questions.length };
+  }
+
   // ─── END LANDING JSON IMPORT ────────────────────────────────────────────────
 
   function createIncorrectsTestFromTest(testId) {
@@ -26489,6 +26918,13 @@ const App = (() => {
     saveSelectedExplanationNote,
     openSettings,
     toggleSidebar,
+    openBatchImportCenter,
+    closeBatchImportCenter,
+    onBatchImportSourceChange,
+    selectBatchImportFiles,
+    launchBatchImportJob,
+    autoImportBatchOutputJson,
+    importValidatedBatchOutputJsonText,
     openLandingJsonImportModal,
     closeLandingJsonImportModal,
     handleLandingJsonFileUpload,

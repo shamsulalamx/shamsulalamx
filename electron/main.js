@@ -1,12 +1,18 @@
-const { app, BrowserWindow, ipcMain, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, dialog } = require('electron');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
+const os = require('os');
+const { spawn } = require('child_process');
 
 const DEFAULT_DEV_URL = 'http://localhost:8888';
 const GEMINI_MODEL = 'gemini-2.5-flash';
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 let resolvedDevUrl = null; // set at startup; see startEmbeddedServer / NBME_ELECTRON_URL override
+
+const BATCH_IMPORT_RUNNER = path.join(app.getAppPath(), 'tools', 'batch-import-center', 'run_pipeline_job.py');
+const BATCH_IMPORT_REGISTRY = path.join(app.getAppPath(), 'tools', 'batch-import-center', 'pipeline_registry.json');
+const BATCH_JOB_MANIFEST_VERSION = 'batch-import-job-v1';
 
 ipcMain.handle('nbme:ai:get-status', async () => ({
   available: true,
@@ -15,6 +21,170 @@ ipcMain.handle('nbme:ai:get-status', async () => ({
   hasApiKey: !!process.env.GEMINI_API_KEY,
   desktopMode: true
 }));
+
+function readBatchRegistry() {
+  const raw = fs.readFileSync(BATCH_IMPORT_REGISTRY, 'utf8');
+  return JSON.parse(raw);
+}
+
+function sanitizeBatchJobPayload(payload) {
+  const sourceType = String(payload?.sourceType || '').trim();
+  const inputPaths = Array.isArray(payload?.inputPaths) ? payload.inputPaths : [];
+  const folderId = String(payload?.destination?.folderId || '').trim();
+  const testName = String(payload?.destination?.testName || '').trim();
+  const dryRun = payload?.dryRun !== false;
+  const executePipeline = payload?.executePipeline === true;
+
+  if (!sourceType) throw new Error('sourceType is required.');
+  if (!inputPaths.length) throw new Error('At least one input file is required.');
+
+  return {
+    manifestVersion: BATCH_JOB_MANIFEST_VERSION,
+    jobId: `batch-${Date.now().toString(36)}`,
+    sourceType,
+    inputs: inputPaths.map(inputPath => ({ path: String(inputPath || '').trim() })).filter(item => item.path),
+    dryRun,
+    executePipeline,
+    destination: { folderId, testName },
+    createdAt: new Date().toISOString()
+  };
+}
+
+function writeBatchManifest(manifest) {
+  const jobDir = path.join(os.tmpdir(), 'nbme-batch-import-center');
+  fs.mkdirSync(jobDir, { recursive: true });
+  const manifestPath = path.join(jobDir, `${manifest.jobId}.json`);
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf8');
+  return manifestPath;
+}
+
+ipcMain.handle('nbme:batch-import:get-registry', async () => {
+  try {
+    return { ok: true, registry: readBatchRegistry() };
+  } catch (err) {
+    return safeError('BATCH_REGISTRY_UNAVAILABLE', err.message || String(err));
+  }
+});
+
+ipcMain.handle('nbme:batch-import:select-files', async (_event, payload) => {
+  try {
+    const sourceType = String(payload?.sourceType || '').trim();
+    if (!sourceType) return safeError('BATCH_SOURCE_REQUIRED', 'Choose a source type first.');
+    const registry = readBatchRegistry();
+    const source = registry.sources?.[sourceType];
+    if (!source || source.status !== 'active') {
+      return safeError('BATCH_SOURCE_UNKNOWN', `Source type is not registered: ${sourceType}`);
+    }
+    const extensions = Array.isArray(source.inputExtensions)
+      ? source.inputExtensions.map(ext => String(ext).replace(/^\./, '').trim()).filter(Boolean)
+      : [];
+    const result = await dialog.showOpenDialog({
+      title: `Select ${source.label || sourceType} file`,
+      properties: ['openFile', 'multiSelections'],
+      filters: extensions.length
+        ? [{ name: source.label || sourceType, extensions }, { name: 'All Files', extensions: ['*'] }]
+        : [{ name: 'All Files', extensions: ['*'] }]
+    });
+    if (result.canceled) return { ok: true, canceled: true, filePaths: [] };
+    return { ok: true, canceled: false, filePaths: result.filePaths || [] };
+  } catch (err) {
+    return safeError('BATCH_FILE_PICKER_FAILED', err.message || String(err));
+  }
+});
+
+ipcMain.handle('nbme:batch-import:launch-job', async (event, payload) => {
+  let manifest;
+  let manifestPath;
+  try {
+    manifest = sanitizeBatchJobPayload(payload);
+    manifestPath = writeBatchManifest(manifest);
+  } catch (err) {
+    return safeError('BATCH_JOB_INVALID', err.message || String(err));
+  }
+
+  return await new Promise(resolve => {
+    const progress = [];
+    const sendProgress = eventPayload => {
+      progress.push(eventPayload);
+      event.sender.send('nbme:batch-import:progress', eventPayload);
+    };
+
+    const proc = spawn('python3', [BATCH_IMPORT_RUNNER, manifestPath], {
+      cwd: app.getAppPath(),
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+
+    let stdoutBuffer = '';
+    let stderrBuffer = '';
+    let finalEvent = null;
+
+    function consumeLine(line, streamName) {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed.type === 'job_complete') finalEvent = parsed;
+        sendProgress(parsed);
+      } catch (_) {
+        sendProgress({ type: 'log', stream: streamName, message: trimmed, timestamp: new Date().toISOString() });
+      }
+    }
+
+    proc.stdout.on('data', chunk => {
+      stdoutBuffer += chunk.toString();
+      const lines = stdoutBuffer.split(/\r?\n/);
+      stdoutBuffer = lines.pop() || '';
+      lines.forEach(line => consumeLine(line, 'stdout'));
+    });
+
+    proc.stderr.on('data', chunk => {
+      stderrBuffer += chunk.toString();
+      const lines = stderrBuffer.split(/\r?\n/);
+      stderrBuffer = lines.pop() || '';
+      lines.forEach(line => consumeLine(line, 'stderr'));
+    });
+
+    proc.on('error', err => {
+      resolve(safeError('BATCH_JOB_LAUNCH_FAILED', err.message || String(err)));
+    });
+
+    proc.on('close', code => {
+      consumeLine(stdoutBuffer, 'stdout');
+      consumeLine(stderrBuffer, 'stderr');
+      const ok = code === 0 && (!finalEvent || finalEvent.ok !== false);
+      resolve({
+        ok,
+        exitCode: code,
+        manifestPath,
+        manifest,
+        outputs: Array.isArray(finalEvent?.outputs) ? finalEvent.outputs : [],
+        progress,
+        errorCode: ok ? null : 'BATCH_JOB_FAILED',
+        message: ok ? null : (finalEvent?.error || `Batch job exited with code ${code}.`)
+      });
+    });
+  });
+});
+
+ipcMain.handle('nbme:batch-import:read-output-json', async (_event, outputPath) => {
+  try {
+    const resolved = path.resolve(String(outputPath || ''));
+    if (!resolved.endsWith('_app_ready.json')) {
+      return safeError('BATCH_OUTPUT_REJECTED', 'Only *_app_ready.json outputs can be read for auto-import.');
+    }
+    if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
+      return safeError('BATCH_OUTPUT_MISSING', 'Output file was not found.');
+    }
+    return {
+      ok: true,
+      path: resolved,
+      text: fs.readFileSync(resolved, 'utf8')
+    };
+  } catch (err) {
+    return safeError('BATCH_OUTPUT_READ_FAILED', err.message || String(err));
+  }
+});
 
 function safeError(errorCode, message) {
   return { ok: false, errorCode, message };

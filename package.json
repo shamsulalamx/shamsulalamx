@@ -26,6 +26,7 @@
       "style.css",
       "js/**",
       "electron/**",
+      "tools/**",
       "package.json"
     ],
     "mac": {

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "batch-import-job-manifest-v1",
+  "requiredFields": ["manifestVersion", "jobId", "sourceType", "inputs", "dryRun", "destination"],
+  "example": {
+    "manifestVersion": "batch-import-job-v1",
+    "jobId": "batch-20260520-001",
+    "sourceType": "fast_facts_pptx",
+    "inputs": [
+      {
+        "path": "/absolute/path/to/source.pptx"
+      }
+    ],
+    "dryRun": true,
+    "executePipeline": false,
+    "destination": {
+      "folderId": "folder-id-selected-in-app",
+      "testName": "Generated test name"
+    },
+    "createdAt": "2026-05-20T00:00:00.000Z"
+  },
+  "notes": [
+    "The manifest is orchestration metadata only. It does not alter canonical app-ready JSON schema.",
+    "dryRun true defaults to runner-level validation unless executePipeline is explicitly true.",
+    "Auto-import is an Electron renderer decision after output JSON validates through the existing importer logic."
+  ]
+}

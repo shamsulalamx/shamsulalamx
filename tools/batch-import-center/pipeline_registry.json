@@ -1,0 +1,70 @@
+{
+  "registryVersion": "batch-import-pipeline-registry-v1",
+  "sources": {
+    "emma_holiday_pdf": {
+      "label": "Emma Holiday PDF",
+      "status": "active",
+      "inputExtensions": [".pdf"],
+      "workingDirectory": "tools/nbme-pdf-json-generator",
+      "pythonExecutable": "python3",
+      "dryRunSteps": [
+        { "args": ["extract_pdfs.py", "--normalize-dry-run"] },
+        { "args": ["normalized_to_app_json.py", "--dry-run"] }
+      ],
+      "liveSteps": [
+        { "args": ["extract_pdfs.py", "--normalize-gemini"] },
+        { "args": ["normalized_to_app_json.py"] }
+      ],
+      "outputDirectories": ["output_json/app_ready"],
+      "notes": "Registered against the existing NBME PDF toolchain. The registry does not modify the extraction, normalization, or app-ready schema."
+    },
+    "fast_facts_pptx": {
+      "label": "Fast Facts PPTX",
+      "status": "active",
+      "inputExtensions": [".pptx"],
+      "workingDirectory": "tools/lecture-slide-question-generator",
+      "pythonExecutable": "python3",
+      "dryRunSteps": [
+        { "args": ["generate_lecture_slide_questions.py", "--fast-facts-profile", "--input-file", "{inputFile}", "--limit", "10"] }
+      ],
+      "liveSteps": [
+        { "args": ["generate_lecture_slide_questions.py", "--fast-facts-profile", "--generate", "--input-file", "{inputFile}", "--limit", "10"] }
+      ],
+      "outputDirectories": ["output_json/app_ready"],
+      "notes": "Uses the existing FAST_FACTS_PROFILE in the lecture-slide generator."
+    },
+    "amboss_pdf": {
+      "label": "AMBOSS PDF",
+      "status": "active",
+      "inputExtensions": [".pdf"],
+      "workingDirectory": "tools/lecture-slide-question-generator",
+      "pythonExecutable": "python3",
+      "dryRunSteps": [
+        { "args": ["generate_lecture_slide_questions.py", "--amboss-profile", "--input-file", "{inputFile}", "--limit", "5"] }
+      ],
+      "liveSteps": [
+        { "args": ["generate_lecture_slide_questions.py", "--amboss-profile", "--input-file", "{inputFile}", "--limit", "5"] }
+      ],
+      "outputDirectories": ["output_json/app_ready"],
+      "notes": "Uses the existing AMBOSS_PROFILE deterministic extraction path."
+    }
+  },
+  "placeholders": {
+    "uworld_notes": {
+      "status": "placeholder",
+      "notes": "Existing external notes pipeline exists, but it is not part of the initial Batch Import Center registry."
+    },
+    "anki_notes": {
+      "status": "placeholder",
+      "notes": "Existing wrapper pipeline exists, but it is not part of the initial Batch Import Center registry."
+    },
+    "ome_pdf": {
+      "status": "placeholder",
+      "notes": "External OME generator exists separately. It is intentionally not registered in the initial source set."
+    },
+    "divine_transcript": {
+      "status": "placeholder",
+      "notes": "Current Divine workflow remains in-app and is not registered as a local Python pipeline here."
+    }
+  }
+}
