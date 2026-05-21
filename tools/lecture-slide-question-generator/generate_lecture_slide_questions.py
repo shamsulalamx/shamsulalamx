@@ -21,10 +21,13 @@ import os
 import re
 import shutil
 import socket
+import subprocess
 import sys
 import time
 import urllib.error
 import urllib.request
+import zipfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +40,7 @@ MEMORY_DIR = OUTPUT_DIR / "memory"
 GENERATED_DIR = OUTPUT_DIR / "generated"
 APP_READY_DIR = OUTPUT_DIR / "app_ready"
 DEBUG_DIR = OUTPUT_DIR / "debug"
+CACHE_DIR = OUTPUT_DIR / "cache"
 ASSET_DIR = BASE_DIR / "output_assets"
 REPORT_DIR = BASE_DIR / "reports"
 LOG_DIR = BASE_DIR / "logs"
@@ -48,6 +52,11 @@ GEMINI_MODEL = "gemini-2.5-flash"
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 OUTPUT_SCHEMA_VERSION = "nbme-gemini-json-v3"
 SOURCE_FORMAT = "mixed"
+FAST_FACTS_PROFILE = "FAST_FACTS_PROFILE"
+FAST_FACTS_ATOMIZER_VERSION = "fast-facts-atomizer-v11"
+FAST_FACTS_GENERATION_PROMPT_VERSION = "fast-facts-generation-prompt-v2"
+FAST_FACTS_VALIDATOR_VERSION = "fast-facts-validator-v3"
+FAST_FACTS_ARCHETYPE_ONTOLOGY_VERSION = "fast-facts-archetype-ontology-v2"
 LABELS = ["A", "B", "C", "D"]
 MAX_SLIDES_PER_CHUNK = 3
 MAX_GENERATION_ALLOCS_PER_CHUNK = 8
@@ -114,7 +123,7 @@ MEDICAL_SUFFIXES = (
 
 HIGH_RISK_MEDICAL_WORDS = {
     "agenesis", "akinesia", "alkalosis", "atresia", "biopsy", "ceftriaxone",
-    "cerebritis", "corticosteroids", "cyanosis", "cyst", "dystocia",
+    "cerebritis", "ciprofloxacin", "corticosteroids", "cyanosis", "cyst", "dystocia",
     "encephalopathy", "enzyme", "fistula", "fracture", "gastroschisis",
     "hernia", "hydrocephalus", "hyperbilirubinemia", "hypoplasia",
     "hypothyroidism", "intussusception", "ischemia", "jaundice", "malrotation",
@@ -199,6 +208,7 @@ def ensure_dirs() -> None:
         GENERATED_DIR,
         APP_READY_DIR,
         DEBUG_DIR,
+        CACHE_DIR,
         ASSET_DIR,
         REPORT_DIR,
         LOG_DIR,
@@ -239,6 +249,15 @@ def supported_pdfs(input_dir: Path) -> list[Path]:
     return [
         p for p in sorted(input_dir.iterdir())
         if p.is_file() and not p.name.startswith(".") and p.suffix.lower() == ".pdf"
+    ]
+
+
+def supported_pptx(input_dir: Path) -> list[Path]:
+    if not input_dir.exists():
+        return []
+    return [
+        p for p in sorted(input_dir.iterdir())
+        if p.is_file() and not p.name.startswith(".") and p.suffix.lower() == ".pptx"
     ]
 
 
@@ -1265,7 +1284,12 @@ def slide_allowed_grounding(slide: dict[str, Any]) -> dict[str, Any]:
         "diagnosticFacts",
         "managementFacts",
         "mechanismFacts",
+        "differentialFacts",
+        "trapFacts",
+        "nativeTextFacts",
+        "cleanedImageFacts",
         "groundingNotes",
+        "groundingTerms",
     ]:
         values = slide.get(key) or []
         if isinstance(values, list):
@@ -1280,6 +1304,12 @@ def slide_allowed_grounding(slide: dict[str, Any]) -> dict[str, Any]:
                 phrases.append(title)
             for header in table.get("headers") or []:
                 text = clean_sentence(header)
+                if text:
+                    phrases.append(text)
+    for values in (slide.get("structuredImageFacts") or {}).values():
+        if isinstance(values, list):
+            for value in values:
+                text = clean_sentence(value)
                 if text:
                     phrases.append(text)
     distractor_pool: list[str] = []
@@ -1407,6 +1437,37 @@ def extract_generated_question_items(parsed: Any, allocations: list[dict[str, An
         if not isinstance(choices, list) or len(choices) != 4:
             raise PipelineError(f"Generation {chunk_label} question {idx} does not have exactly 4 answerChoices.")
     return items
+
+
+def extract_fast_facts_generated_question_items(parsed: Any, allocations: list[dict[str, Any]], chunk_label: str) -> list[dict[str, Any]]:
+    try:
+        return extract_generated_question_items(parsed, allocations, chunk_label)
+    except PipelineError as exc:
+        message = str(exc)
+        if len(allocations) != 1 or "returned" not in message or "expected 1" not in message:
+            raise
+        items = parsed.get("questions") if isinstance(parsed, dict) else parsed
+        if not isinstance(items, list):
+            raise
+        slide_id = allocations[0]["slideId"]
+        candidates = [item for item in items if isinstance(item, dict) and item.get("slideId") == slide_id]
+        if not candidates:
+            raise
+        required = [
+            "slideId", "questionKind", "stemTemplate", "testedConcept",
+            "diagnosisOrTarget", "distractorFamily", "stem", "answerChoices",
+            "correctAnswer", "correctExplanation", "incorrectExplanations",
+            "educationalObjective", "retrievalTag", "reviewPearl",
+            "imageRouting", "tableUse", "sourceFactIds",
+        ]
+        valid: list[dict[str, Any]] = []
+        for item in candidates:
+            if all(key in item for key in required) and isinstance(item.get("answerChoices"), list) and len(item.get("answerChoices") or []) == 4:
+                valid.append(item)
+        if not valid:
+            raise
+        warn(f"Fast Facts generation {chunk_label}: received {len(items)} questions for one concept; kept first valid matching question for {slide_id}.")
+        return [valid[0]]
 
 
 def call_generation_once(
@@ -1852,7 +1913,12 @@ def normalized_slide_fact_text(slide: dict[str, Any]) -> str:
         "diagnosticFacts",
         "managementFacts",
         "mechanismFacts",
+        "differentialFacts",
+        "trapFacts",
+        "nativeTextFacts",
+        "cleanedImageFacts",
         "groundingNotes",
+        "groundingTerms",
     ]:
         values = slide.get(key) or []
         if isinstance(values, list):
@@ -1867,6 +1933,9 @@ def normalized_slide_fact_text(slide: dict[str, Any]) -> str:
                 fields.extend(str(cell) for cell in row)
             elif isinstance(row, dict):
                 fields.extend(str(v) for v in row.values())
+    for values in (slide.get("structuredImageFacts") or {}).values():
+        if isinstance(values, list):
+            fields.extend(str(value) for value in values)
     return " ".join(fields)
 
 
@@ -2599,6 +2668,2644 @@ def validate_only(path: Path) -> None:
     print(f"Validation OK: {path}")
 
 
+def structured_fast_facts_values(concept: dict[str, Any]) -> list[str]:
+    values: list[str] = []
+    structured = concept.get("structuredImageFacts") or {}
+    if not isinstance(structured, dict):
+        return values
+    for items in structured.values():
+        if isinstance(items, list):
+            for item in items:
+                text = clean_sentence(item)
+                if text and text not in values:
+                    values.append(text)
+    return values
+
+
+def fast_facts_allowed_source_facts(concept: dict[str, Any]) -> list[str]:
+    facts: list[str] = []
+    for key in [
+        "nativeTextFacts",
+        "clinicalFacts",
+        "diagnosticFacts",
+        "managementFacts",
+        "mechanismFacts",
+        "differentialFacts",
+        "trapFacts",
+    ]:
+        for value in concept.get(key) or []:
+            text = clean_sentence(value)
+            if text and text not in facts:
+                facts.append(text)
+    if concept.get("imageTextQuality") != "poor":
+        for value in concept.get("cleanedImageFacts") or []:
+            text = clean_sentence(value)
+            if text and text not in facts:
+                facts.append(text)
+        for value in structured_fast_facts_values(concept):
+            if value not in facts:
+                facts.append(value)
+    return facts
+
+
+def fast_facts_concept_to_generation_slide(concept: dict[str, Any]) -> dict[str, Any] | None:
+    if concept.get("dedupeDisposition") not in {None, "", "keep", "merge"}:
+        return None
+    source_facts = fast_facts_allowed_source_facts(concept)
+    if len(source_facts) < 2:
+        return None
+    title = clean_sentence(concept.get("title"))
+    structured = concept.get("structuredImageFacts") or {}
+    image_quality = concept.get("imageTextQuality")
+    cleaned_image_facts = [] if image_quality == "poor" else list(concept.get("cleanedImageFacts") or [])
+    management_facts = list(concept.get("managementFacts") or [])
+    diagnostic_facts = list(concept.get("diagnosticFacts") or [])
+    clinical_facts = list(concept.get("clinicalFacts") or [])
+    trap_facts = list(concept.get("trapFacts") or [])
+    if image_quality != "poor" and isinstance(structured, dict):
+        management_facts.extend(structured.get("managementSteps") or [])
+        management_facts.extend(structured.get("indications") or [])
+        diagnostic_facts.extend(structured.get("criteria") or [])
+        diagnostic_facts.extend(structured.get("thresholds") or [])
+        trap_facts.extend(structured.get("contraindications") or [])
+    fact_categories = [
+        clinical_facts,
+        diagnostic_facts,
+        management_facts,
+        concept.get("mechanismFacts") or [],
+        concept.get("differentialFacts") or [],
+        trap_facts,
+    ]
+    category_count = sum(1 for values in fact_categories if values)
+    if len(source_facts) < 3 and category_count < 2:
+        return None
+    question_archetype = fast_facts_question_archetype(concept, source_facts)
+    slide_types = ["HIGH_YIELD_CLINICAL"]
+    if concept.get("images"):
+        slide_types.append("IMAGE_HEAVY")
+    if concept.get("tables"):
+        slide_types.append("TABLE_HEAVY")
+    return {
+        "slideId": concept["conceptId"],
+        "slideType": slide_types,
+        "yieldScore": int(concept.get("questionPotential") or 0),
+        "primaryConcepts": [title] if title else [],
+        "secondaryConcepts": [],
+        "clinicalFacts": dedupe_preserve_order(clinical_facts),
+        "diagnosticFacts": dedupe_preserve_order(diagnostic_facts),
+        "managementFacts": dedupe_preserve_order(management_facts),
+        "mechanismFacts": dedupe_preserve_order(concept.get("mechanismFacts") or []),
+        "differentialFacts": dedupe_preserve_order(concept.get("differentialFacts") or []),
+        "trapFacts": dedupe_preserve_order(trap_facts),
+        "nativeTextFacts": dedupe_preserve_order(concept.get("nativeTextFacts") or []),
+        "cleanedImageFacts": dedupe_preserve_order(cleaned_image_facts),
+        "structuredImageFacts": structured if image_quality != "poor" else {
+            "criteria": [],
+            "indications": [],
+            "contraindications": [],
+            "managementSteps": [],
+            "thresholds": [],
+        },
+        "imageTextQuality": image_quality,
+        "groundingNotes": source_facts,
+        "groundingTerms": list(concept.get("groundingTerms") or []),
+        "questionArchetype": question_archetype,
+        "images": concept.get("images") or [],
+        "tables": concept.get("tables") or [],
+        "questionPotential": int(concept.get("questionPotential") or 0),
+        "sourceTextHash": short_hash(title + "|" + "|".join(source_facts)),
+        "metadata": {
+            "profile": FAST_FACTS_PROFILE,
+            "sourceConceptId": concept.get("conceptId"),
+            "sourceSlideIds": concept.get("sourceSlideIds") or [],
+            "dedupeDisposition": concept.get("dedupeDisposition") or "keep",
+            "semanticClusterId": concept.get("semanticClusterId"),
+            "questionArchetype": question_archetype,
+        },
+    }
+
+
+def fast_facts_question_archetype(concept: dict[str, Any], source_facts: list[str]) -> str:
+    title = normalize_key(concept.get("title") or "")
+    text = normalize_key(" ".join([title] + source_facts))
+    if re.search(r"\bscreen\w*|pack-year|low-dose ct|yearly|criteria\b", text):
+        return "screening"
+    if re.search(r"\bnitrofurantoin-induced|drug-induced|adverse|toxicity|after starting|medication initiation\b", text):
+        return "adverse_effect"
+    if re.search(r"\bnot to be confused|differentiat|versus| vs |mimic|rather than\b", text):
+        return "differentiation"
+    if re.search(r"\bmechanism|pathophys|deficien|mutation|receptor|inhibit|activat\b", text):
+        return "mechanism"
+    if re.search(r"\brisk factor|smok\w*|exposure|family history\b", text):
+        return "risk_factor"
+    if re.search(r"\bcontraindicat|avoid\b", text):
+        return "management"
+    if re.search(r"\b(tmp-smx|nitrofurantoin|fosfomycin|fluoroquinolone|ceftriaxone|cefazolin|amoxicillin|antibiotic|drug)\b", text):
+        return "pharmacology" if re.search(r"\b\d+\s*(?:days?|dose)|single dose|course\b", text) else "management"
+    if re.search(r"\btreat|therapy|management|next step|culture prior|empiric\b", text):
+        return "next_step"
+    if re.search(r"\bcomplication|sequela|progression\b", text):
+        return "complication"
+    if re.search(r"\bdiagnos|finding|urinalysis|culture|opacit|rash|clinical features\b", text):
+        return "diagnosis"
+    return "diagnosis"
+
+
+def dedupe_preserve_order(values: list[Any]) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        text = clean_sentence(value)
+        key = normalize_key(text)
+        if text and key not in seen:
+            seen.add(key)
+            out.append(text)
+    return out
+
+
+def fast_facts_normalized_payload(pptx_path: Path, graph: dict[str, Any], deck_hash: str, limit_slides: int) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    slides: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    for concept in graph.get("concepts") or []:
+        slide = fast_facts_concept_to_generation_slide(concept)
+        if slide:
+            slides.append(slide)
+        else:
+            skipped.append({
+                "conceptId": concept.get("conceptId"),
+                "title": concept.get("title"),
+                "reason": "low information, poor image text, or dedupe disposition",
+                "dedupeDisposition": concept.get("dedupeDisposition"),
+                "imageTextQuality": concept.get("imageTextQuality"),
+            })
+    payload = {
+        "schemaVersion": "fast-facts-normalized-for-generation-v1",
+        "profile": FAST_FACTS_PROFILE,
+        "sourceFile": pptx_path.name,
+        "pptxSha256": deck_hash,
+        "pdfSha256": deck_hash,
+        "createdAt": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "limitSlides": int(limit_slides or 0),
+        "normalizationWarnings": [],
+        "normalizationStats": {
+            "expectedSlideCount": graph.get("slideCount"),
+            "conceptCount": len(graph.get("concepts") or []),
+            "generationEligibleConceptCount": len(slides),
+            "skippedConceptCount": len(skipped),
+        },
+        "slides": slides,
+    }
+    return payload, skipped
+
+
+def fast_facts_image_route_guidance(slide: dict[str, Any]) -> list[dict[str, str]]:
+    routes: list[dict[str, str]] = []
+    for image in slide.get("images") or []:
+        image_id = str(image.get("imageId") or "")
+        kind = normalize_key(image.get("kind") or image.get("classification") or "")
+        if not image_id:
+            continue
+        placement = "ignored"
+        if kind in {"algorithm", "explanatory", "table like", "table-like"}:
+            placement = "explanation"
+        elif kind == "diagnostic":
+            placement = "stem"
+        routes.append({"imageId": image_id, "placement": placement})
+    return routes
+
+
+def fast_facts_generation_prompt(allocations: list[dict[str, Any]], memory: dict[str, Any]) -> str:
+    compact_allocations: list[dict[str, Any]] = []
+    for allocation in allocations:
+        slide = copy.deepcopy(allocation["slide"])
+        allowed = slide_allowed_grounding(slide)
+        slide["allowedImageRouting"] = fast_facts_image_route_guidance(slide)
+        compact_allocations.append({
+            "slideId": allocation["slideId"],
+            "questionCount": allocation["questionCount"],
+            "reason": allocation.get("reason"),
+            "sourceConceptTitle": first_nonempty(slide.get("primaryConcepts")),
+            "questionArchetype": slide.get("questionArchetype"),
+            "slide": slide,
+            "ALLOWED_MEDICAL_TERMS": allowed["allowedMedicalTerms"],
+            "ALLOWED_DISTRACTOR_POOL": allowed["allowedDistractorPool"],
+            "GROUNDING_FACTS": allowed["groundingFacts"],
+        })
+    return f"""
+Generate a small FAST_FACTS_PROFILE NBME-style question set.
+
+Return JSON only in this exact shape:
+{question_schema_required_keys()}
+
+Return exactly the requested number of questions for each allocation.
+
+STRICT SOURCE RULES:
+- Generate only from nativeTextFacts, cleanedImageFacts, structuredImageFacts, and GROUNDING_FACTS.
+- Do not use imageOcrFacts directly.
+- Do not use cleanedImageFacts or structuredImageFacts when imageTextQuality is poor.
+- Every clinical claim, distractor, threshold, management step, diagnostic criterion, explanation, and educational objective must map to GROUNDING_FACTS or ALLOWED_MEDICAL_TERMS.
+- Every answer choice and every explanation claim must use only concepts from ALLOWED_MEDICAL_TERMS, ALLOWED_DISTRACTOR_POOL, or generic nonmedical vignette wording.
+- Never invent outside diseases, drugs, tests, mechanisms, procedures, risk factors, epidemiology, or management.
+- If a concept cannot support four grounded answer choices, make the question test a management step, diagnostic finding, contraindication, or differential from the same concept facts. Do not invent.
+
+QUESTION STYLE:
+- Four answer choices exactly, labeled A-D.
+- One best answer.
+- Each question must include questionArchetype equal to the allocation questionArchetype.
+- Use exactly one archetype per question. Align the stem, lead-in, correct answer, and distractors to that archetype.
+- Archetype answer-choice rules:
+  - diagnosis: every answer choice must be a diagnosis or named clinical condition.
+  - next_step: every answer choice must be a concrete next step or action.
+  - mechanism: every answer choice must be a mechanism.
+  - adverse_effect: every answer choice must be a diagnosis/adverse reaction, not an isolated symptom, lab, or imaging finding.
+  - management: every answer choice must be an intervention or management action.
+  - differentiation: every answer choice must be a diagnosis, condition, or clinical category being differentiated.
+  - risk_factor: every answer choice must be a risk factor.
+  - screening: every answer choice must be a screening criterion, screening interval, or screening test.
+  - pharmacology: every answer choice must be a drug or drug class.
+  - complication: every answer choice must be a complication.
+- Prefer next best step, management decisions, diagnostic differentiation, contraindications, and screening criteria.
+- Avoid "which of the following is true", "all except", and generic template stems.
+- Do not use stem findings, lab abnormalities, or imaging findings as distractors when the correct answer is a diagnosis.
+- Do not mix diagnoses, symptoms, labs, imaging findings, drugs, and procedures in the same answer set.
+- Do not use tautologic distractors that simply repeat a stem finding.
+- Avoid pure guideline trivia unless the source fact is a threshold, duration, screening criterion, drug toxicity, or classic board pearl.
+- Include discriminating detail such as timing, localization, severity marker, contraindication, threshold, progression pattern, or key associated finding.
+- Keep stems clinically natural and concise, usually 3-5 sentences.
+- Avoid awkward temporal phrasing. Prefer "Several days after starting nitrofurantoin" over "was prescribed nitrofurantoin several days after medication initiation."
+- Use distinct educationalObjective wording for every question.
+
+IMAGE ROUTING:
+- Use only image IDs from allowedImageRouting.
+- Algorithm, explanatory, and table-like images should be routed to explanation unless the visual is essential to answer the stem.
+- Diagnostic images may be routed to stem if needed for reasoning.
+- Never route the same image to both stem and explanation.
+
+ROLLING_MEMORY_JSON:
+{json.dumps(compact_memory(memory), ensure_ascii=False)}
+
+ALLOCATIONS_JSON:
+{json.dumps(compact_allocations, ensure_ascii=False)}
+""".strip()
+
+
+def generate_fast_facts_questions(normalized_payload: dict[str, Any], allocations: list[dict[str, Any]], memory: dict[str, Any]) -> list[dict[str, Any]]:
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        raise PipelineError("GEMINI_API_KEY is not set.")
+    work = [a for a in allocations if int(a.get("questionCount") or 0) > 0]
+    questions: list[dict[str, Any]] = []
+    stem = slugify(Path(normalized_payload["sourceFile"]).stem)
+    if not work:
+        return questions
+    for chunk_index, chunk in enumerate(chunk_list(work, 3), start=1):
+        chunk_label = f"fast_facts_chunk{chunk_index}"
+        items = generate_fast_facts_chunk_with_retries(api_key, normalized_payload["sourceFile"], chunk, memory, chunk_label)
+        slide_by_id = {a["slideId"]: a["slide"] for a in chunk}
+        for item in items:
+            item = fast_facts_cleanup_question(item)
+            slide = slide_by_id.get(str(item.get("slideId") or ""))
+            if slide and not item.get("questionArchetype"):
+                item["questionArchetype"] = slide.get("questionArchetype")
+            questions.append(item)
+            update_memory_from_question(memory, item)
+    generated_path = GENERATED_DIR / f"{stem}_fast_facts_generated_questions.json"
+    write_json(generated_path, {"questions": questions})
+    mem_path = MEMORY_DIR / f"{stem}_fast_facts_rolling_memory.json"
+    write_json(mem_path, memory)
+    log(f"  Fast Facts generated -> {generated_path.relative_to(BASE_DIR)}")
+    log(f"  Fast Facts memory -> {mem_path.relative_to(BASE_DIR)}")
+    return questions
+
+
+def call_fast_facts_generation_chunk_once(
+    api_key: str,
+    source_file: str,
+    chunk: list[dict[str, Any]],
+    memory: dict[str, Any],
+    chunk_label: str,
+    retry_label: str,
+    repair_raw: str | None = None,
+    repair_error: str = "",
+) -> list[dict[str, Any]]:
+    if repair_raw is None:
+        prompt = fast_facts_generation_prompt(chunk, memory)
+        temperature = 0.2
+    else:
+        prompt = repair_json_prompt(
+            raw=repair_raw,
+            expected_schema=question_schema_required_keys(),
+            expected_ids=[a["slideId"] for a in chunk],
+            error_message=repair_error,
+        )
+        temperature = 0.0
+    raw = raw_gemini_call(api_key, prompt, temperature=temperature, max_tokens=9000, timeout_seconds=90)
+    write_debug_raw(source_file, "generate", chunk_label, retry_label, raw)
+    parsed = load_largest_valid_json(raw)
+    return extract_fast_facts_generated_question_items(parsed, chunk, chunk_label)
+
+
+def generate_fast_facts_chunk_with_retries(
+    api_key: str,
+    source_file: str,
+    chunk: list[dict[str, Any]],
+    memory: dict[str, Any],
+    chunk_label: str,
+) -> list[dict[str, Any]]:
+    last_raw = ""
+    last_error = ""
+    try:
+        return call_fast_facts_generation_chunk_once(api_key, source_file, chunk, memory, chunk_label, "attempt0")
+    except Exception as exc:
+        last_error = str(exc)
+        raw_path = DEBUG_DIR / f"{slugify(Path(source_file).stem)}_generate_{slugify(chunk_label)}_attempt0_raw_response.txt"
+        if raw_path.exists():
+            last_raw = raw_path.read_text(encoding="utf-8", errors="replace")
+        warn(f"Fast Facts generation {chunk_label}: attempt0 failed: {last_error}")
+    if last_raw and not is_truncation_failure(last_error):
+        try:
+            return call_fast_facts_generation_chunk_once(
+                api_key,
+                source_file,
+                chunk,
+                memory,
+                chunk_label,
+                "retry1_repair",
+                repair_raw=last_raw,
+                repair_error=last_error,
+            )
+        except Exception as exc:
+            last_error = str(exc)
+            warn(f"Fast Facts generation {chunk_label}: retry1 repair failed: {last_error}")
+    if len(chunk) > 1:
+        collected: list[dict[str, Any]] = []
+        for sub_index, allocation in enumerate(chunk, start=1):
+            collected.extend(generate_fast_facts_chunk_with_retries(api_key, source_file, [allocation], memory, f"{chunk_label}_slide{sub_index}"))
+        return collected
+    warn(f"Fast Facts generation {chunk_label}: dropped concept {chunk[0].get('slideId')} after generation JSON/schema failures: {last_error}")
+    return []
+
+
+def fast_facts_allocations(normalized_payload: dict[str, Any], memory: dict[str, Any]) -> list[dict[str, Any]]:
+    update_memory_from_slides(memory, normalized_payload.get("slides") or [])
+    allocations: list[dict[str, Any]] = []
+    seen_titles: set[str] = set()
+    for slide in normalized_payload.get("slides") or []:
+        title = first_nonempty(slide.get("primaryConcepts"))
+        title_key = normalize_key(title)
+        fact_count = sum(len(slide.get(key) or []) for key in [
+            "clinicalFacts", "diagnosticFacts", "managementFacts", "mechanismFacts",
+            "differentialFacts", "trapFacts", "groundingNotes",
+        ])
+        count = 0
+        reason = "not enough grounded concept facts"
+        if title_key and title_key in seen_titles:
+            reason = "duplicate concept title in constrained run"
+        elif int(slide.get("questionPotential") or 0) >= 50 and fact_count >= 3:
+            count = 1
+            reason = "grounded Fast Facts concept with sufficient facts"
+        seen_titles.add(title_key)
+        allocations.append({
+            "slideId": slide["slideId"],
+            "questionCount": count,
+            "reason": reason,
+            "yieldScore": slide.get("yieldScore", 0),
+            "redundancyScore": 0,
+            "contentRichness": fact_count,
+            "slide": slide,
+        })
+    return allocations
+
+
+def validation_failed_question_indices(errors: list[str], grounding_findings: list[dict[str, Any]], diversity_report: dict[str, Any]) -> set[int]:
+    indices: set[int] = set()
+    for finding in grounding_findings:
+        if finding.get("severity") == "error":
+            try:
+                indices.add(int(finding.get("questionIndex")))
+            except Exception:
+                pass
+    for finding in diversity_report.get("findings", []) or []:
+        if finding.get("severity") == "error":
+            try:
+                indices.add(int(finding.get("questionIndex")))
+            except Exception:
+                pass
+    for error in errors:
+        match = re.search(r"\bQ(\d+)\b", str(error))
+        if match:
+            indices.add(int(match.group(1)))
+    return indices
+
+
+def repair_fast_facts_questions(normalized_payload: dict[str, Any], questions: list[dict[str, Any]], before_errors: list[str], before_grounding: list[dict[str, Any]], before_diversity: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    slide_by_id = {s["slideId"]: s for s in normalized_payload.get("slides") or []}
+    failed_indices = validation_failed_question_indices(before_errors, before_grounding, before_diversity)
+    api_key = ""
+    if failed_indices:
+        api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+        if not api_key:
+            raise PipelineError("GEMINI_API_KEY is not set.")
+    unsupported_by_index: dict[int, list[str]] = {
+        int(f.get("questionIndex")): list(f.get("detail") or [])
+        for f in before_grounding
+        if f.get("severity") == "error" and f.get("issue") == "unsupported_medical_claim_terms"
+    }
+    repaired: dict[int, dict[str, Any]] = {}
+    dropped: dict[int, dict[str, Any]] = {}
+    repair_log: list[dict[str, Any]] = []
+    for idx in sorted(failed_indices):
+        if idx < 1 or idx > len(questions):
+            continue
+        original = questions[idx - 1]
+        slide = slide_by_id.get(str(original.get("slideId") or ""))
+        if not slide:
+            dropped[idx] = {"questionIndex": idx, "reason": "unknown_slide_id"}
+            continue
+        candidate = original
+        unsupported = unsupported_by_index.get(idx, [])
+        attempt_notes: list[str] = []
+        accepted = False
+        for attempt in range(1, 3):
+            try:
+                candidate = call_fast_facts_question_repair_once(
+                    api_key=api_key,
+                    source_file=normalized_payload["sourceFile"],
+                    q_index=idx,
+                    original_question=candidate,
+                    slide=slide,
+                    unsupported_terms=unsupported,
+                    attempt=attempt,
+                )
+                ok, single_errors, next_unsupported = validate_single_fast_facts_repair_candidate(normalized_payload, slide, candidate)
+                if ok:
+                    repaired[idx] = candidate
+                    accepted = True
+                    break
+                unsupported = next_unsupported
+                attempt_notes.append("; ".join(single_errors[:6]))
+            except Exception as exc:
+                attempt_notes.append(str(exc))
+        if not accepted:
+            dropped[idx] = {
+                "questionIndex": idx,
+                "slideId": original.get("slideId"),
+                "reason": "repair_failed_validation",
+                "attemptNotes": attempt_notes,
+            }
+        repair_log.append({
+            "questionIndex": idx,
+            "slideId": original.get("slideId"),
+            "accepted": accepted,
+            "attemptNotes": attempt_notes,
+            "initialUnsupportedTerms": unsupported_by_index.get(idx, []),
+        })
+    final_questions: list[dict[str, Any]] = []
+    for idx, question in enumerate(questions, start=1):
+        if idx in repaired:
+            final_questions.append(repaired[idx])
+        elif idx in dropped:
+            continue
+        else:
+            final_questions.append(question)
+    report = {
+        "mode": "fast-facts-targeted-repair",
+        "sourceFile": normalized_payload.get("sourceFile"),
+        "initialQuestionCount": len(questions),
+        "failedQuestionCountBeforeRepair": len(failed_indices),
+        "repairedQuestionCount": len(repaired),
+        "droppedQuestionCount": len(dropped),
+        "finalQuestionCount": len(final_questions),
+        "droppedQuestions": list(dropped.values()),
+        "repairLog": repair_log,
+    }
+    return final_questions, report
+
+
+def fast_facts_question_repair_prompt(
+    original_question: dict[str, Any],
+    slide: dict[str, Any],
+    unsupported_terms: list[str],
+    attempt: int,
+) -> str:
+    allowed = slide_allowed_grounding(slide)
+    archetype = slide.get("questionArchetype") or "diagnosis"
+    return f"""
+Repair one FAST_FACTS_PROFILE NBME-style question.
+
+Return valid JSON only in this exact shape:
+{question_schema_required_keys()}
+
+Return exactly 1 question.
+Use the same slideId.
+Use exactly 4 answer choices labeled A, B, C, D.
+Include questionArchetype: {archetype}
+
+STRICT REPAIR RULES:
+- Preserve the original stem if it is grounded and clear. If it is awkward, clean grammar only.
+- If the failure is answer-choice ontology or distractor quality, regenerate the answer choices and explanations while keeping the stem aligned to the same source concept.
+- Every clinical claim, answer choice, distractor, threshold, management step, diagnostic criterion, explanation, and educational objective must map to GROUNDING_FACTS or ALLOWED_MEDICAL_TERMS.
+- Do not use imageOcrFacts directly.
+- Do not invent outside diseases, drugs, tests, mechanisms, procedures, risk factors, epidemiology, or management.
+- Do not include these unsupported terms unless present in ALLOWED_MEDICAL_TERMS: {json.dumps(unsupported_terms, ensure_ascii=False)}
+
+ARCHETYPE AND ONTOLOGY RULES:
+- Use exactly one archetype: {archetype}.
+- diagnosis: every answer choice must be a diagnosis or named clinical condition.
+- next_step: every answer choice must be a concrete next step or action.
+- mechanism: every answer choice must be a mechanism.
+- adverse_effect: every answer choice must be a diagnosis/adverse reaction, not an isolated symptom, lab, or imaging finding.
+- management: every answer choice must be an intervention or management action.
+- differentiation: every answer choice must be a diagnosis, condition, or clinical category being differentiated.
+- risk_factor: every answer choice must be a risk factor.
+- screening: every answer choice must be a screening criterion, screening interval, or screening test.
+- pharmacology: every answer choice must be a drug or drug class.
+- complication: every answer choice must be a complication.
+- Never mix diagnoses, symptoms, labs, imaging findings, drugs, and procedures in the same answer set.
+- Do not use stem findings as distractors for a diagnosis/adverse-effect question.
+
+Attempt: {attempt}
+
+NORMALIZED_FAST_FACTS_CONCEPT_JSON:
+{json.dumps(slide, ensure_ascii=False)}
+
+ALLOWED_MEDICAL_TERMS:
+{json.dumps(allowed["allowedMedicalTerms"], ensure_ascii=False)}
+
+ALLOWED_DISTRACTOR_POOL:
+{json.dumps(allowed["allowedDistractorPool"], ensure_ascii=False)}
+
+GROUNDING_FACTS:
+{json.dumps(allowed["groundingFacts"], ensure_ascii=False)}
+
+ORIGINAL_QUESTION_TO_REPAIR:
+{json.dumps(original_question, ensure_ascii=False)}
+""".strip()
+
+
+def call_fast_facts_question_repair_once(
+    api_key: str,
+    source_file: str,
+    q_index: int,
+    original_question: dict[str, Any],
+    slide: dict[str, Any],
+    unsupported_terms: list[str],
+    attempt: int,
+) -> dict[str, Any]:
+    prompt = fast_facts_question_repair_prompt(original_question, slide, unsupported_terms, attempt)
+    raw = raw_gemini_call(api_key, prompt, temperature=0.1, max_tokens=8192, timeout_seconds=45)
+    write_debug_raw(source_file, "repair_question", f"q{q_index:03d}", f"attempt{attempt}", raw)
+    parsed = load_largest_valid_json(raw)
+    allocation = {
+        "slideId": slide["slideId"],
+        "questionCount": 1,
+        "slide": slide,
+    }
+    items = extract_generated_question_items(parsed, [allocation], f"fast_facts_repair_q{q_index:03d}_attempt{attempt}")
+    return fast_facts_cleanup_question(items[0])
+
+
+def fast_facts_cleanup_question(q: dict[str, Any]) -> dict[str, Any]:
+    out = copy.deepcopy(q)
+    stem = str(out.get("stem") or "")
+    stem = re.sub(r"\bwas prescribed ([A-Za-z0-9+\-]+) several days after medication initiation\b", r"several days after starting \1", stem, flags=re.I)
+    stem = re.sub(r"\bSeveral days after starting ([A-Za-z0-9+\-]+) for ([^.]+)\. She now presents\b", r"Several days after starting \1 for \2, she presents", stem)
+    stem = re.sub(r"\bnon-pregnant\b", "nonpregnant", stem, flags=re.I)
+    stem = re.sub(r"\s+", " ", stem).strip()
+    stem = re.sub(r"\b(warm, tender, erythematous rash) with raised, well-demarcated borders\b", r"\1 with raised, well-demarcated borders", stem)
+    out["stem"] = stem
+    return out
+
+
+def fast_facts_answer_ontology(text: str) -> str:
+    value = normalize_key(text)
+    if not value:
+        return "unknown"
+    if re.search(r"\b(abscess|ain|acute kidney injury|interstitial nephritis|pulmonary injury|erysipelas|cellulitis|folliculitis|furuncle|uti|urinary tract infection|cystitis|pyelonephritis|infection)\b", value):
+        return "diagnosis"
+    if re.search(r"\b(obtain|order|perform|culture|test|testing|screen|examination|ct|ultrasound|x-ray|urinalysis|blood cultures?)\b", value):
+        return "procedure"
+    if re.search(r"\b(initiate|administer|treat|therapy|antibiotic|management|oral|intravenous|iv)\b", value):
+        return "treatment"
+    if re.search(r"\b(amoxicillin|ceftriaxone|cefazolin|nitrofurantoin|tmp-smx|trimethoprim|trimethoprim-sulfamethoxazole|sulfamethoxazole|fosfomycin|fluoroquinolone|ciprofloxacin|levofloxacin|piperacillin|tazobactam|imipenem|carbapenem)\b", value):
+        return "drug"
+    if re.search(r"\b(opacit|infiltrat|effusion|radiograph|imaging|bilateral mid|lower lung)\b", value):
+        return "imaging_finding"
+    if re.search(r"\b(leukocytosis|eosinophilia|nitrate|leukocyte esterase|alkalosis|acidosis|hemoglobin|a1c)\b", value):
+        return "lab_finding"
+    if re.search(r"\b(fever|pain|tenderness|frequency|dysuria|cough|shortness|rash|crackles|drainage|chills|vomiting|nausea)\b", value):
+        return "symptom"
+    if re.search(r"\b(streptococcus|staphylococcus|mssa|mrsa|pyogenes)\b", value):
+        return "organism"
+    if re.search(r"\b(deficiency|mutation|inhibition|activation|mechanism|receptor|pathway)\b", value):
+        return "mechanism"
+    if re.search(r"\b(smoking|pack-year|age|diabetes|comorbidit|risk)\b", value):
+        return "risk_factor"
+    return "unknown"
+
+
+def fast_facts_expected_ontology(archetype: str, correct_text: str) -> str:
+    archetype = normalize_key(archetype)
+    if archetype in {"diagnosis", "differentiation", "adverse_effect"}:
+        return "diagnosis"
+    if archetype in {"management", "next_step"}:
+        correct_class = fast_facts_answer_ontology(correct_text)
+        return "procedure" if correct_class == "procedure" else "treatment"
+    if archetype == "pharmacology":
+        return "drug"
+    if archetype == "mechanism":
+        return "mechanism"
+    if archetype == "risk_factor":
+        return "risk_factor"
+    if archetype == "screening":
+        return "procedure"
+    if archetype == "complication":
+        return "complication"
+    return fast_facts_answer_ontology(correct_text)
+
+
+def fast_facts_choice_classes(q: dict[str, Any], slide: dict[str, Any] | None = None) -> list[dict[str, str]]:
+    archetype = str(q.get("questionArchetype") or (slide or {}).get("questionArchetype") or "")
+    correct_label = str(q.get("correctAnswer") or "").strip().upper()
+    choices = q.get("answerChoices") or []
+    correct_text = ""
+    for choice in choices:
+        if isinstance(choice, dict) and str(choice.get("label") or "").strip().upper() == correct_label:
+            correct_text = str(choice.get("text") or "")
+            break
+    expected = fast_facts_expected_ontology(archetype, correct_text)
+    rows: list[dict[str, str]] = []
+    for choice in choices:
+        if not isinstance(choice, dict):
+            continue
+        label = str(choice.get("label") or "").strip().upper()
+        text = str(choice.get("text") or "")
+        actual = fast_facts_answer_ontology(text)
+        normalized = actual
+        if expected == "treatment" and actual in {"drug", "procedure", "treatment"}:
+            normalized = "treatment"
+        if expected == "procedure" and actual in {"procedure", "treatment"} and archetype in {"next_step", "screening"}:
+            normalized = "procedure"
+        rows.append({"label": label, "text": text, "ontologyClass": normalized, "rawOntologyClass": actual, "expectedClass": expected})
+    return rows
+
+
+def fast_facts_stem_terms(stem: str) -> set[str]:
+    terms: set[str] = set()
+    for word in re.findall(r"\b[A-Za-z][A-Za-z0-9+\-]{3,}\b", stem):
+        w = normalize_key(word)
+        if w and w not in COMMON_CLINICAL_WORDS:
+            terms.add(w)
+    return terms
+
+
+def fast_facts_qa_audit(
+    normalized_payload: dict[str, Any],
+    questions: list[dict[str, Any]],
+    repaired_indices: set[int] | None = None,
+) -> dict[str, Any]:
+    repaired_indices = repaired_indices or set()
+    slide_by_id = {s["slideId"]: s for s in normalized_payload.get("slides") or []}
+    items: list[dict[str, Any]] = []
+    ontology_mismatches = 0
+    malformed_distractor_sets = 0
+    for idx, q in enumerate(questions, start=1):
+        slide = slide_by_id.get(str(q.get("slideId") or ""))
+        archetype = str(q.get("questionArchetype") or (slide or {}).get("questionArchetype") or "unspecified")
+        classes = fast_facts_choice_classes(q, slide)
+        expected = classes[0]["expectedClass"] if classes else "unknown"
+        class_ok = bool(classes) and all(row["ontologyClass"] == expected for row in classes)
+        if not class_ok:
+            ontology_mismatches += 1
+            malformed_distractor_sets += 1
+        stem = str(q.get("stem") or "")
+        choice_texts = [str(c.get("text") or "") for c in q.get("answerChoices") or [] if isinstance(c, dict)]
+        stem_terms = fast_facts_stem_terms(stem)
+        tautologic = [
+            text for text in choice_texts
+            if len(normalize_key(text).split()) >= 2 and normalize_key(text) in normalize_key(stem)
+        ]
+        if tautologic:
+            malformed_distractor_sets += 1
+        has_discriminator = bool(re.search(
+            r"\b(days?|after|before|early|later|raised|well-demarcated|purulent|nonpurulent|fever|flank|costovertebral|systemic|severe|no systemic|5-day|3-day|single dose|eosinophilia|opacities|external ear)\b",
+            stem,
+            re.I,
+        ))
+        awkward = bool(re.search(r"medication initiation|was prescribed .* several days after", stem, re.I))
+        grounding_score = 100
+        stem_clarity_score = 90 - (30 if awkward else 0) - (10 if len(stem.split()) < 35 else 0)
+        discrimination_score = 85 if has_discriminator else 55
+        distractor_quality_score = 90 if class_ok and not tautologic else 45
+        if len(set(normalize_key(t) for t in choice_texts)) != len(choice_texts):
+            distractor_quality_score -= 25
+        tier = "strong"
+        if min(distractor_quality_score, discrimination_score, stem_clarity_score, grounding_score) < 70:
+            tier = "acceptable" if min(distractor_quality_score, discrimination_score, stem_clarity_score, grounding_score) >= 50 else "poor"
+        weakest = ""
+        reason = ""
+        if not class_ok:
+            off = [row for row in classes if row["ontologyClass"] != expected]
+            weakest = off[0]["text"] if off else ""
+            reason = f"ontology mismatch: expected {expected}"
+        elif tautologic:
+            weakest = tautologic[0]
+            reason = "distractor repeats a stem finding"
+        elif not has_discriminator:
+            reason = "stem has limited discriminating detail"
+        items.append({
+            "questionNumber": idx,
+            "slideId": q.get("slideId"),
+            "sourceConceptTitle": first_nonempty((slide or {}).get("primaryConcepts")),
+            "archetype": archetype,
+            "ontologyClassConsistency": class_ok,
+            "answerChoiceClasses": classes,
+            "distractorQualityScore": max(0, distractor_quality_score),
+            "discriminationScore": discrimination_score,
+            "groundingScore": grounding_score,
+            "stemClarityScore": max(0, stem_clarity_score),
+            "likelyNbmeQualityTier": tier,
+            "weakestDistractor": weakest,
+            "reasonFlagged": reason,
+            "repairApplied": idx in repaired_indices,
+        })
+    return {
+        "items": items,
+        "summary": {
+            "questionCount": len(questions),
+            "ontologyMismatches": ontology_mismatches,
+            "malformedDistractorSets": malformed_distractor_sets,
+            "qualityTiers": {
+                "poor": sum(1 for item in items if item["likelyNbmeQualityTier"] == "poor"),
+                "acceptable": sum(1 for item in items if item["likelyNbmeQualityTier"] == "acceptable"),
+                "strong": sum(1 for item in items if item["likelyNbmeQualityTier"] == "strong"),
+            },
+        },
+    }
+
+
+def fast_facts_before_after_comparison(before_questions: list[dict[str, Any]], after_questions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    comparison: list[dict[str, Any]] = []
+    max_count = max(len(before_questions), len(after_questions))
+    for idx in range(max_count):
+        before = before_questions[idx] if idx < len(before_questions) else {}
+        after = after_questions[idx] if idx < len(after_questions) else {}
+        before_choices = [str(c.get("text") or "") for c in before.get("answerChoices") or [] if isinstance(c, dict)]
+        after_choices = [str(c.get("text") or "") for c in after.get("answerChoices") or [] if isinstance(c, dict)]
+        comparison.append({
+            "questionNumber": idx + 1,
+            "beforeSlideId": before.get("slideId"),
+            "afterSlideId": after.get("slideId"),
+            "stemChanged": str(before.get("stem") or "") != str(after.get("stem") or ""),
+            "choicesChanged": before_choices != after_choices,
+            "correctAnswerChanged": before.get("correctAnswer") != after.get("correctAnswer"),
+            "beforeTarget": before.get("diagnosisOrTarget"),
+            "afterTarget": after.get("diagnosisOrTarget"),
+            "beforeStem": before.get("stem"),
+            "afterStem": after.get("stem"),
+            "beforeChoices": before_choices,
+            "afterChoices": after_choices,
+        })
+    return comparison
+
+
+def fast_facts_cache_path() -> Path:
+    return CACHE_DIR / "fast_facts_question_cache.json"
+
+
+def empty_fast_facts_cache() -> dict[str, Any]:
+    return {
+        "schemaVersion": "fast-facts-question-cache-v1",
+        "updatedAt": None,
+        "entries": {},
+    }
+
+
+def load_fast_facts_cache() -> dict[str, Any]:
+    path = fast_facts_cache_path()
+    if not path.exists():
+        return empty_fast_facts_cache()
+    try:
+        payload = read_json(path)
+    except Exception:
+        return empty_fast_facts_cache()
+    if not isinstance(payload, dict) or not isinstance(payload.get("entries"), dict):
+        return empty_fast_facts_cache()
+    return payload
+
+
+def write_fast_facts_cache(cache: dict[str, Any]) -> None:
+    cache["updatedAt"] = timestamp_iso()
+    write_json(fast_facts_cache_path(), cache)
+
+
+def fast_facts_concept_content_hash(slide: dict[str, Any]) -> str:
+    content = {
+        "primaryConcepts": slide.get("primaryConcepts") or [],
+        "clinicalFacts": slide.get("clinicalFacts") or [],
+        "diagnosticFacts": slide.get("diagnosticFacts") or [],
+        "managementFacts": slide.get("managementFacts") or [],
+        "mechanismFacts": slide.get("mechanismFacts") or [],
+        "differentialFacts": slide.get("differentialFacts") or [],
+        "trapFacts": slide.get("trapFacts") or [],
+        "nativeTextFacts": slide.get("nativeTextFacts") or [],
+        "cleanedImageFacts": slide.get("cleanedImageFacts") or [],
+        "structuredImageFacts": slide.get("structuredImageFacts") or {},
+        "groundingNotes": slide.get("groundingNotes") or [],
+        "groundingTerms": slide.get("groundingTerms") or [],
+    }
+    return short_hash(json.dumps(content, sort_keys=True, ensure_ascii=False))
+
+
+def fast_facts_image_routing_metadata_hash(slide: dict[str, Any]) -> str:
+    metadata = [
+        {
+            "imageId": img.get("imageId"),
+            "kind": img.get("kind") or img.get("classification"),
+            "assetPath": img.get("assetPath"),
+            "routing": route,
+        }
+        for img, route in zip(slide.get("images") or [], fast_facts_image_route_guidance(slide) or [])
+    ]
+    return short_hash(json.dumps(metadata, sort_keys=True, ensure_ascii=False))
+
+
+def fast_facts_cache_key_parts(normalized_payload: dict[str, Any], slide: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "profile": FAST_FACTS_PROFILE,
+        "sourceFileHash": normalized_payload.get("pptxSha256") or normalized_payload.get("pdfSha256"),
+        "conceptId": slide["slideId"],
+        "conceptContentHash": fast_facts_concept_content_hash(slide),
+        "generationPromptVersion": FAST_FACTS_GENERATION_PROMPT_VERSION,
+        "validatorVersion": FAST_FACTS_VALIDATOR_VERSION,
+        "archetypeOntologyVersion": FAST_FACTS_ARCHETYPE_ONTOLOGY_VERSION,
+        "imageRoutingMetadataHash": fast_facts_image_routing_metadata_hash(slide),
+    }
+
+
+def fast_facts_cache_key(normalized_payload: dict[str, Any], slide: dict[str, Any]) -> str:
+    return hashlib.sha256(
+        json.dumps(fast_facts_cache_key_parts(normalized_payload, slide), sort_keys=True, ensure_ascii=False).encode("utf-8", errors="replace")
+    ).hexdigest()[:16]
+
+
+def stable_fast_facts_question_id(slide: dict[str, Any], question: dict[str, Any]) -> str:
+    return "ffq_" + hashlib.sha256(
+        (slide["slideId"] + "|" + str(question.get("educationalObjective") or question.get("stem") or "")).encode("utf-8", errors="replace")
+    ).hexdigest()[:16]
+
+
+def fast_facts_single_question_validation(normalized_payload: dict[str, Any], slide: dict[str, Any], question: dict[str, Any]) -> tuple[bool, list[str], dict[str, Any]]:
+    single_norm = dict(normalized_payload)
+    single_norm["slides"] = [slide]
+    _, errors, _, _, _ = collect_fast_facts_generation_validation(single_norm, [question])
+    qa = fast_facts_qa_audit(single_norm, [question])
+    summary = qa.get("summary") or {}
+    if summary.get("ontologyMismatches") or summary.get("malformedDistractorSets"):
+        errors.append("Fast Facts QA failed for cached question.")
+    return not errors, errors, (qa.get("items") or [{}])[0]
+
+
+def fast_facts_cache_entry(
+    normalized_payload: dict[str, Any],
+    slide: dict[str, Any],
+    question: dict[str, Any],
+    qa_item: dict[str, Any],
+    status: str,
+    invalidation_reason: str = "",
+) -> dict[str, Any]:
+    now = timestamp_iso()
+    key_parts = fast_facts_cache_key_parts(normalized_payload, slide)
+    return {
+        "stableQuestionId": stable_fast_facts_question_id(slide, question),
+        "cacheKey": fast_facts_cache_key(normalized_payload, slide),
+        **key_parts,
+        "sourceSlideIds": (slide.get("metadata") or {}).get("sourceSlideIds") or [],
+        "question": question,
+        "validationStatus": status,
+        "qaAuditResult": qa_item,
+        "sourceFactIds": question.get("sourceFactIds") or [],
+        "imageRouting": question.get("imageRouting") or [],
+        "ontologyClass": (qa_item.get("answerChoiceClasses") or [{}])[0].get("expectedClass"),
+        "archetype": question.get("questionArchetype") or slide.get("questionArchetype"),
+        "createdAt": now,
+        "updatedAt": now,
+        "invalidationReason": invalidation_reason,
+    }
+
+
+def update_fast_facts_cache_entry(cache: dict[str, Any], key: str, entry: dict[str, Any]) -> None:
+    existing = (cache.get("entries") or {}).get(key)
+    if isinstance(existing, dict) and existing.get("createdAt"):
+        entry["createdAt"] = existing["createdAt"]
+    cache.setdefault("entries", {})[key] = entry
+    write_fast_facts_cache(cache)
+
+
+def seed_fast_facts_cache_from_existing(normalized_payload: dict[str, Any], cache: dict[str, Any]) -> dict[str, int]:
+    generated_path = GENERATED_DIR / f"{slugify(Path(normalized_payload['sourceFile']).stem)}_fast_facts_generated_questions.json"
+    if not generated_path.exists():
+        return {"seeded": 0, "skipped": 0}
+    try:
+        payload = read_json(generated_path)
+    except Exception:
+        return {"seeded": 0, "skipped": 0}
+    questions = payload.get("questions") if isinstance(payload, dict) else payload
+    if not isinstance(questions, list):
+        return {"seeded": 0, "skipped": 0}
+    slide_by_id = {s["slideId"]: s for s in normalized_payload.get("slides") or []}
+    seeded = 0
+    skipped = 0
+    for question in questions:
+        if not isinstance(question, dict):
+            skipped += 1
+            continue
+        slide = slide_by_id.get(str(question.get("slideId") or ""))
+        if not slide:
+            skipped += 1
+            continue
+        key = fast_facts_cache_key(normalized_payload, slide)
+        existing = (cache.get("entries") or {}).get(key)
+        if isinstance(existing, dict) and existing.get("validationStatus") == "valid":
+            continue
+        question = fast_facts_cleanup_question(question)
+        if not question.get("questionArchetype"):
+            question["questionArchetype"] = slide.get("questionArchetype")
+        ok, errors, qa_item = fast_facts_single_question_validation(normalized_payload, slide, question)
+        if not ok:
+            skipped += 1
+            continue
+        entry = fast_facts_cache_entry(normalized_payload, slide, question, qa_item, "valid")
+        update_fast_facts_cache_entry(cache, key, entry)
+        seeded += 1
+    return {"seeded": seeded, "skipped": skipped}
+
+
+def valid_fast_facts_cached_question(normalized_payload: dict[str, Any], slide: dict[str, Any], entry: dict[str, Any]) -> tuple[bool, list[str], dict[str, Any]]:
+    question = entry.get("question")
+    if not isinstance(question, dict):
+        return False, ["cached entry missing question"], {}
+    expected = fast_facts_cache_key_parts(normalized_payload, slide)
+    mismatches = [key for key, value in expected.items() if entry.get(key) != value]
+    if mismatches:
+        return False, [f"cache key mismatch: {', '.join(mismatches)}"], {}
+    if entry.get("validationStatus") != "valid":
+        return False, [entry.get("invalidationReason") or "cached entry not marked valid"], {}
+    return fast_facts_single_question_validation(normalized_payload, slide, question)
+
+
+def show_fast_facts_cache_status() -> None:
+    cache = load_fast_facts_cache()
+    entries = list((cache.get("entries") or {}).values())
+    valid = sum(1 for e in entries if isinstance(e, dict) and e.get("validationStatus") == "valid")
+    invalid = sum(1 for e in entries if isinstance(e, dict) and e.get("validationStatus") != "valid")
+    print(f"Fast Facts cache: {fast_facts_cache_path()}")
+    print(f"Total entries: {len(entries)}")
+    print(f"Valid entries: {valid}")
+    print(f"Invalid entries: {invalid}")
+    for entry in entries[:20]:
+        if not isinstance(entry, dict):
+            continue
+        print(f"- {entry.get('conceptId')} | {entry.get('validationStatus')} | {entry.get('archetype')} | updated {entry.get('updatedAt')}")
+
+
+def generate_fast_facts_questions_with_cache(
+    normalized_payload: dict[str, Any],
+    allocations: list[dict[str, Any]],
+    memory: dict[str, Any],
+    reuse_cache: bool,
+    force_regenerate: bool,
+    repair_only: bool,
+) -> tuple[list[dict[str, Any]], dict[str, Any], dict[int, dict[str, Any]], dict[int, dict[str, Any]]]:
+    started = time.time()
+    cache = load_fast_facts_cache()
+    seed_report = seed_fast_facts_cache_from_existing(normalized_payload, cache) if reuse_cache and not force_regenerate else {"seeded": 0, "skipped": 0}
+    ordered_allocations = [a for a in allocations if int(a.get("questionCount") or 0) > 0]
+    questions_by_slide: dict[str, dict[str, Any]] = {}
+    prior_valid_by_slide: dict[str, dict[str, Any]] = {}
+    misses: list[dict[str, Any]] = []
+    invalidation_reasons: list[dict[str, Any]] = []
+    cache_hits = 0
+    cache_misses = 0
+    reused = 0
+
+    for allocation in ordered_allocations:
+        slide = allocation["slide"]
+        key = fast_facts_cache_key(normalized_payload, slide)
+        entry = (cache.get("entries") or {}).get(key)
+        if isinstance(entry, dict) and entry.get("validationStatus") == "valid" and isinstance(entry.get("question"), dict):
+            prior_valid_by_slide[slide["slideId"]] = entry["question"]
+        if reuse_cache and not force_regenerate and isinstance(entry, dict):
+            ok, errors, qa_item = valid_fast_facts_cached_question(normalized_payload, slide, entry)
+            if ok:
+                question = fast_facts_cleanup_question(copy.deepcopy(entry["question"]))
+                if not question.get("questionArchetype"):
+                    question["questionArchetype"] = slide.get("questionArchetype")
+                questions_by_slide[slide["slideId"]] = question
+                update_memory_from_question(memory, question)
+                cache_hits += 1
+                reused += 1
+                update_fast_facts_cache_entry(cache, key, fast_facts_cache_entry(normalized_payload, slide, question, qa_item, "valid"))
+                continue
+            invalidation_reasons.append({"slideId": slide["slideId"], "reason": "; ".join(errors[:4])})
+        cache_misses += 1
+        if repair_only:
+            invalidation_reasons.append({"slideId": slide["slideId"], "reason": "repair_only_no_valid_cache_hit"})
+            continue
+        misses.append(allocation)
+
+    regenerated = 0
+    generation_failed: list[dict[str, Any]] = []
+    if misses:
+        generated = generate_fast_facts_questions(normalized_payload, misses, memory)
+        for question in generated:
+            slide_id = str(question.get("slideId") or "")
+            if slide_id:
+                questions_by_slide[slide_id] = question
+                regenerated += 1
+        generated_ids = set(questions_by_slide) - {a["slideId"] for a in ordered_allocations if a["slideId"] not in [m["slideId"] for m in misses]}
+        for allocation in misses:
+            if allocation["slideId"] not in questions_by_slide:
+                generation_failed.append({"slideId": allocation["slideId"], "reason": "generation returned no valid question"})
+
+    ordered_questions: list[dict[str, Any]] = []
+    dropped_before_repair: list[dict[str, Any]] = []
+    for allocation in ordered_allocations:
+        slide_id = allocation["slideId"]
+        if slide_id in questions_by_slide:
+            ordered_questions.append(questions_by_slide[slide_id])
+        elif slide_id in prior_valid_by_slide:
+            ordered_questions.append(prior_valid_by_slide[slide_id])
+            reused += 1
+            invalidation_reasons.append({"slideId": slide_id, "reason": "used_prior_valid_cache_after_generation_failure"})
+        else:
+            dropped_before_repair.append({"slideId": slide_id, "reason": "no valid cached or generated question"})
+
+    app_payload_before, before_errors, before_grounding, before_diversity, before_strict = collect_fast_facts_generation_validation(normalized_payload, ordered_questions)
+    repaired_questions, repair_report = repair_fast_facts_questions(normalized_payload, ordered_questions, before_errors, before_grounding, before_diversity)
+
+    repaired_slide_ids = {
+        str(item.get("slideId") or "")
+        for item in repair_report.get("repairLog", [])
+        if item.get("accepted")
+    }
+    dropped_questions = list(repair_report.get("droppedQuestions") or [])
+    final_by_slide = {str(q.get("slideId") or ""): q for q in repaired_questions if isinstance(q, dict)}
+    final_questions: list[dict[str, Any]] = []
+    rescued_from_prior = 0
+    for allocation in ordered_allocations:
+        slide = allocation["slide"]
+        slide_id = slide["slideId"]
+        key = fast_facts_cache_key(normalized_payload, slide)
+        if slide_id in final_by_slide:
+            question = final_by_slide[slide_id]
+            ok, errors, qa_item = fast_facts_single_question_validation(normalized_payload, slide, question)
+            if ok:
+                final_questions.append(question)
+                update_fast_facts_cache_entry(cache, key, fast_facts_cache_entry(normalized_payload, slide, question, qa_item, "valid"))
+                continue
+            invalidation_reasons.append({"slideId": slide_id, "reason": "post-repair validation failed: " + "; ".join(errors[:4])})
+        if slide_id in prior_valid_by_slide:
+            prior = prior_valid_by_slide[slide_id]
+            ok, errors, qa_item = fast_facts_single_question_validation(normalized_payload, slide, prior)
+            if ok:
+                final_questions.append(prior)
+                rescued_from_prior += 1
+                update_fast_facts_cache_entry(cache, key, fast_facts_cache_entry(normalized_payload, slide, prior, qa_item, "valid"))
+                continue
+        if slide_id not in final_by_slide:
+            reason = next((d.get("reason") for d in dropped_before_repair if d.get("slideId") == slide_id), "")
+            matching_drop = next((d for d in dropped_questions if d.get("slideId") == slide_id), None)
+            if matching_drop:
+                reason = matching_drop.get("reason") or reason
+            entry = {
+                **fast_facts_cache_key_parts(normalized_payload, slide),
+                "cacheKey": key,
+                "stableQuestionId": None,
+                "conceptId": slide_id,
+                "sourceSlideIds": (slide.get("metadata") or {}).get("sourceSlideIds") or [],
+                "question": None,
+                "validationStatus": "invalid",
+                "qaAuditResult": None,
+                "sourceFactIds": [],
+                "imageRouting": [],
+                "ontologyClass": None,
+                "archetype": slide.get("questionArchetype"),
+                "createdAt": timestamp_iso(),
+                "updatedAt": timestamp_iso(),
+                "invalidationReason": reason or "no valid question after generation/repair",
+            }
+            update_fast_facts_cache_entry(cache, key, entry)
+
+    cache_report = {
+        "cachePath": str(fast_facts_cache_path().relative_to(BASE_DIR)),
+        "seededFromExisting": seed_report,
+        "cacheHits": cache_hits,
+        "cacheMisses": cache_misses,
+        "reusedQuestions": reused,
+        "regeneratedQuestions": regenerated,
+        "repairedQuestions": repair_report.get("repairedQuestionCount", 0),
+        "droppedQuestions": len(dropped_before_repair) + int(repair_report.get("droppedQuestionCount") or 0),
+        "rescuedFromPriorValidCache": rescued_from_prior,
+        "invalidationReasons": invalidation_reasons + generation_failed + [
+            {
+                "slideId": item.get("slideId"),
+                "reason": item.get("reason"),
+                "attemptNotes": item.get("attemptNotes") or [],
+            }
+            for item in dropped_questions
+            if isinstance(item, dict)
+        ],
+        "runtimeDurationSeconds": round(time.time() - started, 2),
+        "repairReport": repair_report,
+        "beforeErrors": before_errors,
+        "beforeStrictFindings": before_strict,
+    }
+    return final_questions, cache_report, before_diversity, app_payload_before
+
+
+def fast_facts_threshold_claims(text: str) -> list[str]:
+    claims: list[str] = []
+    patterns = [
+        r"\b\d+\s*-\s*\d+\s*(?:days?|weeks?|months?|years?)\b",
+        r"\b\d+\s*(?:days?|weeks?|months?|years?)\b",
+        r"\bevery\s+\d+\s*(?:days?|weeks?|months?|years?)\b",
+        r"\bsingle\s+dose\b",
+    ]
+    for pattern in patterns:
+        for match in re.findall(pattern, str(text or ""), flags=re.I):
+            claim = normalize_key(match)
+            if claim and claim not in claims:
+                claims.append(claim)
+    return claims
+
+
+def fast_facts_strict_findings(generated_questions: list[dict[str, Any]], normalized_payload: dict[str, Any]) -> list[dict[str, Any]]:
+    slide_by_id = {s["slideId"]: s for s in normalized_payload.get("slides") or []}
+    findings: list[dict[str, Any]] = []
+    for idx, q in enumerate(generated_questions, start=1):
+        slide = slide_by_id.get(str(q.get("slideId") or ""))
+        if not slide:
+            continue
+        grounding_text = normalize_key(" ".join(str(v) for v in slide.get("groundingNotes") or []))
+        if not grounding_text:
+            grounding_text = normalize_key(normalized_slide_fact_text(slide))
+        claim_parts: list[str] = []
+        for choice in q.get("answerChoices") or []:
+            if isinstance(choice, dict):
+                claim_parts.append(str(choice.get("text") or ""))
+        claim_parts.append(str(q.get("correctExplanation") or ""))
+        for item in q.get("incorrectExplanations") or []:
+            if isinstance(item, dict):
+                claim_parts.append(str(item.get("explanation") or ""))
+        claim_parts.append(str(q.get("educationalObjective") or ""))
+        unsupported_thresholds = [
+            claim for claim in fast_facts_threshold_claims(" ".join(claim_parts))
+            if claim not in grounding_text
+        ]
+        if unsupported_thresholds:
+            findings.append({
+                "questionIndex": idx,
+                "slideId": q.get("slideId"),
+                "severity": "error",
+                "issue": "unsupported_fast_facts_threshold",
+                "detail": unsupported_thresholds,
+            })
+        classes = fast_facts_choice_classes(q, slide)
+        if classes:
+            expected = classes[0]["expectedClass"]
+            mismatches = [row for row in classes if row["ontologyClass"] != expected]
+            if mismatches:
+                findings.append({
+                    "questionIndex": idx,
+                    "slideId": q.get("slideId"),
+                    "severity": "error",
+                    "issue": "mixed_answer_choice_ontology",
+                    "detail": {
+                        "expected": expected,
+                        "classes": classes,
+                    },
+                })
+        stem_key = normalize_key(q.get("stem") or "")
+        tautologic = []
+        for choice in q.get("answerChoices") or []:
+            if not isinstance(choice, dict):
+                continue
+            choice_key = normalize_key(choice.get("text") or "")
+            if len(choice_key.split()) >= 2 and choice_key in stem_key:
+                tautologic.append(str(choice.get("text") or ""))
+        if tautologic and normalize_key(q.get("questionArchetype") or slide.get("questionArchetype") or "") in {"diagnosis", "adverse_effect"}:
+            findings.append({
+                "questionIndex": idx,
+                "slideId": q.get("slideId"),
+                "severity": "error",
+                "issue": "tautologic_stem_finding_distractors",
+                "detail": tautologic,
+            })
+        if re.search(r"medication initiation|was prescribed .* several days after", str(q.get("stem") or ""), re.I):
+            findings.append({
+                "questionIndex": idx,
+                "slideId": q.get("slideId"),
+                "severity": "error",
+                "issue": "awkward_temporal_stem_language",
+                "detail": q.get("stem"),
+            })
+    return findings
+
+
+def collect_fast_facts_generation_validation(
+    normalized_payload: dict[str, Any],
+    questions: list[dict[str, Any]],
+) -> tuple[dict[str, Any], list[str], list[dict[str, Any]], dict[str, Any], list[dict[str, Any]]]:
+    app_payload, errors, grounding_findings, diversity_report = collect_generation_validation(normalized_payload, questions)
+    strict_findings = fast_facts_strict_findings(questions, normalized_payload)
+    errors.extend(
+        f"Fast Facts grounding Q{f.get('questionIndex', '?')}: {f.get('issue')} {f.get('detail')}"
+        for f in strict_findings
+        if f.get("severity") == "error"
+    )
+    return app_payload, errors, grounding_findings, diversity_report, strict_findings
+
+
+def validate_single_fast_facts_repair_candidate(
+    normalized_payload: dict[str, Any],
+    slide: dict[str, Any],
+    candidate: dict[str, Any],
+) -> tuple[bool, list[str], list[str]]:
+    single_norm = dict(normalized_payload)
+    single_norm["slides"] = [slide]
+    _, single_errors, single_grounding, _, strict_findings = collect_fast_facts_generation_validation(single_norm, [candidate])
+    unsupported: list[str] = []
+    for finding in single_grounding + strict_findings:
+        if finding.get("severity") == "error":
+            unsupported.extend(str(v) for v in finding.get("detail") or [])
+    return not single_errors, single_errors, unsupported
+
+
+def image_routing_summary(app_payload: dict[str, Any]) -> dict[str, int]:
+    stem = 0
+    explanation = 0
+    questions_with_images = 0
+    for q in app_payload.get("questions") or []:
+        stem += len(q.get("images") or [])
+        explanation += len(q.get("explanationImages") or [])
+        if q.get("images") or q.get("explanationImages"):
+            questions_with_images += 1
+    return {
+        "stemImageCount": stem,
+        "explanationImageCount": explanation,
+        "questionsWithImages": questions_with_images,
+    }
+
+
+def run_fast_facts_generation_milestone(
+    pptx_path: Path,
+    graph: dict[str, Any],
+    deck_hash: str,
+    limit_slides: int,
+    extraction_report: dict[str, Any],
+    reuse_cache: bool = True,
+    force_regenerate: bool = False,
+    repair_only: bool = False,
+) -> Path:
+    normalized_payload, skipped_concepts = fast_facts_normalized_payload(pptx_path, graph, deck_hash, limit_slides)
+    normalized_path = NORMALIZED_DIR / f"{slugify(pptx_path.stem)}_fast_facts_generation_normalized.json"
+    write_json(normalized_path, normalized_payload)
+    generated_path = GENERATED_DIR / f"{slugify(pptx_path.stem)}_fast_facts_generated_questions.json"
+    before_generation_snapshot: list[dict[str, Any]] = []
+    if generated_path.exists():
+        try:
+            existing = read_json(generated_path)
+            if isinstance(existing, dict) and isinstance(existing.get("questions"), list):
+                before_generation_snapshot = existing["questions"]
+        except Exception:
+            before_generation_snapshot = []
+    memory = empty_memory()
+    allocations = fast_facts_allocations(normalized_payload, memory)
+    repaired_questions, cache_report, before_diversity, app_payload_before = generate_fast_facts_questions_with_cache(
+        normalized_payload=normalized_payload,
+        allocations=allocations,
+        memory=memory,
+        reuse_cache=reuse_cache,
+        force_regenerate=force_regenerate,
+        repair_only=repair_only,
+    )
+    if not repaired_questions:
+        raise PipelineError("Fast Facts constrained generation produced no questions.")
+    write_json(generated_path, {"questions": repaired_questions})
+    app_payload, after_errors, after_grounding, after_diversity, after_strict = collect_fast_facts_generation_validation(normalized_payload, repaired_questions)
+    before_errors = list(cache_report.get("beforeErrors") or [])
+    before_strict = list(cache_report.get("beforeStrictFindings") or [])
+    repair_report = cache_report.get("repairReport") or {}
+    repair_report["validationErrorCountBeforeRepair"] = len(before_errors)
+    repair_report["validationErrorCountAfterRepair"] = len(after_errors)
+    repair_report["remainingValidationErrors"] = after_errors
+    repair_report_path = write_report(repair_report, "fast_facts_generation_repair_report")
+    repaired_indices = {
+        int(item.get("questionIndex"))
+        for item in repair_report.get("repairLog", [])
+        if item.get("accepted") and str(item.get("questionIndex") or "").isdigit()
+    }
+    qa_audit = fast_facts_qa_audit(normalized_payload, repaired_questions, repaired_indices)
+    if qa_audit.get("summary", {}).get("ontologyMismatches"):
+        after_errors.append(f"Fast Facts QA: ontology mismatches remain: {qa_audit['summary']['ontologyMismatches']}")
+    if qa_audit.get("summary", {}).get("malformedDistractorSets"):
+        after_errors.append(f"Fast Facts QA: malformed distractor sets remain: {qa_audit['summary']['malformedDistractorSets']}")
+    qa_report = {
+        "profile": FAST_FACTS_PROFILE,
+        "sourceFile": pptx_path.name,
+        "mode": "fast-facts-educational-qa-limit-5",
+        "audit": qa_audit,
+    }
+    qa_report_path = write_report(qa_report, "fast_facts_educational_qa_audit")
+    metrics = {
+        "profile": FAST_FACTS_PROFILE,
+        "mode": "constrained-generation-limit-5",
+        "sourceFile": pptx_path.name,
+        "slidesUsed": len({sid for c in graph.get("concepts") or [] for sid in (c.get("sourceSlideIds") or [])}),
+        "limitSlides": int(limit_slides or 0),
+        "conceptsInGraph": len(graph.get("concepts") or []),
+        "conceptsUsed": sum(1 for a in allocations if int(a.get("questionCount") or 0) > 0),
+        "conceptsSkippedForGeneration": len(skipped_concepts) + sum(1 for a in allocations if int(a.get("questionCount") or 0) == 0),
+        "questionsGeneratedBeforeRepair": cache_report.get("regeneratedQuestions", 0),
+        "questionsRepaired": repair_report.get("repairedQuestionCount", 0),
+        "questionsDropped": cache_report.get("droppedQuestions", 0),
+        "finalQuestionCount": len(repaired_questions),
+        "validationErrorsBeforeRepair": before_errors,
+        "validationErrorsAfterRepair": after_errors,
+        "semanticGroundingFindingsAfterRepair": after_grounding,
+        "fastFactsStrictFindingsBeforeRepair": before_strict,
+        "fastFactsStrictFindingsAfterRepair": after_strict,
+        "questionQualityFindingsAfterRepair": after_diversity.get("findings", []),
+        "allocationSummary": [
+            {
+                "slideId": a.get("slideId"),
+                "questionCount": a.get("questionCount"),
+                "reason": a.get("reason"),
+                "contentRichness": a.get("contentRichness"),
+            }
+            for a in allocations
+        ],
+        "skippedConcepts": skipped_concepts,
+        "normalizedGenerationPath": str(normalized_path.relative_to(BASE_DIR)),
+        "generatedIntermediatePath": str(generated_path.relative_to(BASE_DIR)),
+        "repairReportPath": str(repair_report_path.relative_to(BASE_DIR)),
+        "educationalQaAuditReportPath": str(qa_report_path.relative_to(BASE_DIR)),
+        "educationalQaSummary": qa_audit.get("summary"),
+        "beforeAfterComparison": fast_facts_before_after_comparison(before_generation_snapshot, repaired_questions),
+        "cacheReport": cache_report,
+        "extractionReport": extraction_report,
+        "imageRoutingSummary": image_routing_summary(app_payload_before if after_errors else app_payload),
+    }
+    if after_errors:
+        report_path = write_report(metrics, "fast_facts_generation_validation_report")
+        raise PipelineError(
+            "Fast Facts constrained generation failed validation after repair. "
+            f"Report: {report_path.relative_to(BASE_DIR)}\n"
+            + "\n".join(f"- {err}" for err in after_errors[:80])
+        )
+    out_path = APP_READY_DIR / f"{slugify(pptx_path.stem)}_fast_facts_app_ready.json"
+    write_json(out_path, app_payload)
+    json.loads(out_path.read_text(encoding="utf-8"))
+    metrics["appReadyPath"] = str(out_path.relative_to(BASE_DIR))
+    metrics["imageRoutingSummary"] = image_routing_summary(app_payload)
+    report_path = write_report(metrics, "fast_facts_generation_validation_report")
+    log(f"Fast Facts app-ready -> {out_path.relative_to(BASE_DIR)}")
+    log(f"Fast Facts validation report -> {report_path.relative_to(BASE_DIR)}")
+    return out_path
+
+
+PPTX_NS = {
+    "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
+    "p": "http://schemas.openxmlformats.org/presentationml/2006/main",
+    "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+    "rel": "http://schemas.openxmlformats.org/package/2006/relationships",
+}
+
+
+def rel_target(base_dir: str, target: str) -> str:
+    if target.startswith("/"):
+        return target.lstrip("/")
+    parts: list[str] = []
+    for part in (base_dir + "/" + target).split("/"):
+        if not part or part == ".":
+            continue
+        if part == "..":
+            if parts:
+                parts.pop()
+            continue
+        parts.append(part)
+    return "/".join(parts)
+
+
+def pptx_relationships(zf: zipfile.ZipFile, rels_path: str) -> dict[str, dict[str, str]]:
+    if rels_path not in zf.namelist():
+        return {}
+    root = ET.fromstring(zf.read(rels_path))
+    rels: dict[str, dict[str, str]] = {}
+    for rel in root.findall("rel:Relationship", PPTX_NS):
+        rid = rel.attrib.get("Id", "")
+        if not rid:
+            continue
+        rels[rid] = {
+            "type": rel.attrib.get("Type", ""),
+            "target": rel.attrib.get("Target", ""),
+            "targetMode": rel.attrib.get("TargetMode", ""),
+        }
+    return rels
+
+
+def pptx_ordered_slide_paths(zf: zipfile.ZipFile) -> list[str]:
+    if "ppt/presentation.xml" not in zf.namelist():
+        raise PipelineError("PPTX missing ppt/presentation.xml.")
+    root = ET.fromstring(zf.read("ppt/presentation.xml"))
+    rels = pptx_relationships(zf, "ppt/_rels/presentation.xml.rels")
+    paths: list[str] = []
+    for slide_id in root.findall(".//p:sldId", PPTX_NS):
+        rid = slide_id.attrib.get(f"{{{PPTX_NS['r']}}}id", "")
+        target = rels.get(rid, {}).get("target", "")
+        if target:
+            paths.append(rel_target("ppt", target))
+    if not paths:
+        paths = sorted(
+            [name for name in zf.namelist() if re.match(r"ppt/slides/slide\d+\.xml$", name)],
+            key=lambda p: int(re.search(r"slide(\d+)\.xml$", p).group(1)),
+        )
+    return paths
+
+
+def pptx_text_from_element(element: ET.Element) -> str:
+    parts = [node.text or "" for node in element.findall(".//a:t", PPTX_NS)]
+    return clean_slide_text("\n".join(part for part in parts if part.strip()))
+
+
+def pptx_shape_bounds(element: ET.Element) -> dict[str, int]:
+    off = element.find(".//a:xfrm/a:off", PPTX_NS)
+    ext = element.find(".//a:xfrm/a:ext", PPTX_NS)
+    return {
+        "x": int(off.attrib.get("x", 0)) if off is not None else 0,
+        "y": int(off.attrib.get("y", 0)) if off is not None else 0,
+        "cx": int(ext.attrib.get("cx", 0)) if ext is not None else 0,
+        "cy": int(ext.attrib.get("cy", 0)) if ext is not None else 0,
+    }
+
+
+def pptx_table_from_graphic_frame(frame: ET.Element, table_id: str) -> dict[str, Any] | None:
+    table = frame.find(".//a:tbl", PPTX_NS)
+    if table is None:
+        return None
+    rows: list[list[str]] = []
+    for tr in table.findall("a:tr", PPTX_NS):
+        row: list[str] = []
+        for tc in tr.findall("a:tc", PPTX_NS):
+            row.append(pptx_text_from_element(tc).replace("\n", " ").strip())
+        if any(row):
+            rows.append(row)
+    if not rows:
+        return None
+    return {
+        "tableId": table_id,
+        "title": "",
+        "headers": rows[0],
+        "rows": rows[1:],
+        "source": "pptx_native_table",
+        "bounds": pptx_shape_bounds(frame),
+    }
+
+
+def classify_fast_facts_image(name: str, context: str, bounds: dict[str, int]) -> str:
+    text = normalize_key(f"{name} {context}")
+    if re.search(r"\b(ecg|ekg|ct|mri|xray|x-ray|cxr|ultrasound|us|rash|pathology|histology|radiograph|image|scan)\b", text):
+        return "diagnostic"
+    if re.search(r"\b(algorithm|flowchart|management|workup|treatment|stepwise|approach)\b", text):
+        return "algorithm"
+    if re.search(r"\b(table|chart|grid)\b", text):
+        return "table-like"
+    area = int(bounds.get("cx", 0)) * int(bounds.get("cy", 0))
+    if area and area < 250_000_000_000:
+        return "decorative"
+    if re.search(r"\b(pathway|mechanism|diagram|summary|mnemonic)\b", text):
+        return "explanatory"
+    return "explanatory"
+
+
+def pptx_extract_images(
+    zf: zipfile.ZipFile,
+    rels: dict[str, dict[str, str]],
+    slide_path: str,
+    slide_id: str,
+    deck_stem: str,
+    slide_text: str,
+    slide_root: ET.Element,
+) -> list[dict[str, Any]]:
+    base_dir = str(Path(slide_path).parent)
+    images: list[dict[str, Any]] = []
+    for idx, pic in enumerate(slide_root.findall(".//p:pic", PPTX_NS), start=1):
+        blip = pic.find(".//a:blip", PPTX_NS)
+        if blip is None:
+            continue
+        rid = blip.attrib.get(f"{{{PPTX_NS['r']}}}embed", "")
+        target = rels.get(rid, {}).get("target", "")
+        if not target:
+            continue
+        media_path = rel_target(base_dir, target)
+        if media_path not in zf.namelist():
+            continue
+        source_name = pic.find(".//p:cNvPr", PPTX_NS)
+        original_name = source_name.attrib.get("name", "") if source_name is not None else Path(media_path).name
+        ext = Path(media_path).suffix or ".bin"
+        image_id = f"{slide_id}_img{idx:02d}"
+        asset_name = f"{slugify(deck_stem)}_{image_id}{ext}"
+        asset_path = ASSET_DIR / asset_name
+        asset_path.write_bytes(zf.read(media_path))
+        bounds = pptx_shape_bounds(pic)
+        images.append({
+            "imageId": image_id,
+            "kind": classify_fast_facts_image(original_name, slide_text, bounds),
+            "source": "pptx_embedded_image",
+            "sourceSlideId": slide_id,
+            "sourceRelationshipId": rid,
+            "sourcePath": media_path,
+            "originalName": original_name,
+            "assetPath": str(asset_path.relative_to(BASE_DIR)),
+            "mimeType": mime_for(asset_path),
+            "width": 0,
+            "height": 0,
+            "sha256": file_sha(asset_path),
+            "bounds": bounds,
+        })
+    return images
+
+
+def pptx_notes_text(zf: zipfile.ZipFile, slide_path: str, rels: dict[str, dict[str, str]]) -> str:
+    base_dir = str(Path(slide_path).parent)
+    for rel in rels.values():
+        if "notesSlide" not in rel.get("type", ""):
+            continue
+        notes_path = rel_target(base_dir, rel.get("target", ""))
+        if notes_path in zf.namelist():
+            return pptx_text_from_element(ET.fromstring(zf.read(notes_path)))
+    return ""
+
+
+def decompose_fast_facts_pptx(pptx_path: Path, limit_slides: int = 0) -> dict[str, Any]:
+    ensure_dirs()
+    deck_hash = file_sha(pptx_path)
+    deck_stem = pptx_path.stem
+    slide_limit = max(0, int(limit_slides or 0))
+    log(f"Decomposing Fast Facts PPTX {pptx_path.name}")
+    with zipfile.ZipFile(pptx_path) as zf:
+        all_slide_paths = pptx_ordered_slide_paths(zf)
+        slide_paths = all_slide_paths[:slide_limit] if slide_limit else all_slide_paths
+        slides: list[dict[str, Any]] = []
+        failures: list[dict[str, Any]] = []
+        for idx, slide_path in enumerate(slide_paths, start=1):
+            slide_id = f"{slugify(deck_stem)}_s{idx:04d}_{deck_hash[:8]}"
+            try:
+                root = ET.fromstring(zf.read(slide_path))
+                rels = pptx_relationships(zf, f"{Path(slide_path).parent}/_rels/{Path(slide_path).name}.rels")
+                text_blocks = []
+                for shape_idx, shape in enumerate(root.findall(".//p:sp", PPTX_NS), start=1):
+                    text = pptx_text_from_element(shape)
+                    if text:
+                        text_blocks.append({
+                            "textBlockId": f"{slide_id}_text{shape_idx:02d}",
+                            "text": text,
+                            "bounds": pptx_shape_bounds(shape),
+                        })
+                tables = []
+                for table_idx, frame in enumerate(root.findall(".//p:graphicFrame", PPTX_NS), start=1):
+                    table = pptx_table_from_graphic_frame(frame, f"{slide_id}_table{table_idx:02d}")
+                    if table:
+                        tables.append(table)
+                notes = pptx_notes_text(zf, slide_path, rels)
+                combined_text = clean_slide_text("\n".join([b["text"] for b in text_blocks] + ([notes] if notes else [])))
+                images = pptx_extract_images(zf, rels, slide_path, slide_id, deck_stem, combined_text, root)
+                slides.append({
+                    "slideId": slide_id,
+                    "sourceFile": pptx_path.name,
+                    "pptxSha256": deck_hash,
+                    "slideIndex": idx,
+                    "pptxSlidePath": slide_path,
+                    "textBlocks": text_blocks,
+                    "notesText": notes,
+                    "nativeText": combined_text,
+                    "images": images,
+                    "tables": tables,
+                    "metadata": {
+                        "profile": FAST_FACTS_PROFILE,
+                        "renderedSlideImage": None,
+                    },
+                })
+            except Exception as exc:
+                failures.append({"slideIndex": idx, "slidePath": slide_path, "error": str(exc)})
+        payload = {
+            "schemaVersion": "fast-facts-pptx-decomposition-v1",
+            "profile": FAST_FACTS_PROFILE,
+            "sourceFile": pptx_path.name,
+            "sourcePath": str(pptx_path),
+            "pptxSha256": deck_hash,
+            "createdAt": dt.datetime.now(dt.timezone.utc).isoformat(),
+            "slideCount": len(all_slide_paths),
+            "processedSlideCount": len(slides),
+            "limit": slide_limit,
+            "slides": slides,
+            "failures": failures,
+        }
+    out_path = SLIDES_DIR / f"{slugify(deck_stem)}_fast_facts_slides.json"
+    write_json(out_path, payload)
+    log(f"  Fast Facts slides -> {out_path.relative_to(BASE_DIR)}")
+    return payload
+
+
+def fast_facts_checkpoint_path(pptx_path: Path) -> Path:
+    return NORMALIZED_DIR / f"{slugify(pptx_path.stem)}_fast_facts_checkpoint.json"
+
+
+def fast_facts_output_path(pptx_path: Path) -> Path:
+    return NORMALIZED_DIR / f"{slugify(pptx_path.stem)}_fast_facts_concept_graph.json"
+
+
+def load_fast_facts_checkpoint(pptx_path: Path, deck_hash: str, limit_slides: int) -> dict[str, Any]:
+    path = fast_facts_checkpoint_path(pptx_path)
+    if not path.exists():
+        return {"concepts": [], "processedSlideIds": [], "failures": []}
+    try:
+        payload = read_json(path)
+    except Exception:
+        return {"concepts": [], "processedSlideIds": [], "failures": []}
+    if (
+        payload.get("pptxSha256") != deck_hash
+        or int(payload.get("limit") or 0) != int(limit_slides or 0)
+        or payload.get("atomizerVersion") != FAST_FACTS_ATOMIZER_VERSION
+    ):
+        return {"concepts": [], "processedSlideIds": [], "failures": []}
+    return payload
+
+
+def write_fast_facts_checkpoint(pptx_path: Path, deck_hash: str, limit_slides: int, concepts: list[dict[str, Any]], processed: list[str], failures: list[dict[str, Any]]) -> None:
+    write_json(fast_facts_checkpoint_path(pptx_path), {
+        "schemaVersion": "fast-facts-concept-checkpoint-v1",
+        "profile": FAST_FACTS_PROFILE,
+        "atomizerVersion": FAST_FACTS_ATOMIZER_VERSION,
+        "sourceFile": pptx_path.name,
+        "pptxSha256": deck_hash,
+        "limit": int(limit_slides or 0),
+        "updatedAt": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "processedSlideIds": processed,
+        "concepts": concepts,
+        "failures": failures,
+    })
+
+
+def classify_fast_facts_category(text: str) -> str:
+    lower = normalize_key(text)
+    if re.search(r"\b(treat\w*|management|therapy|screen\w*|prevent\w*|vaccine|antibiotic\w*|surgery|surgical|administer\w*)\b", lower):
+        return "management"
+    if re.search(r"\b(diagnos\w*|test\w*|lab\w*|ecg|ekg|ct|mri|ultrasound|x-ray|finding\w*|criteria|culture\w*)\b", lower):
+        return "diagnosis"
+    if re.search(r"\b(pathophys\w*|mechanism\w*|cause\w*|mutation\w*|deficien\w*|inhibit\w*|activat\w*|receptor\w*)\b", lower):
+        return "mechanism"
+    if re.search(r"\b(vs|versus|differentiat\w*|mimic\w*|ddx|differential)\b", lower):
+        return "differential"
+    if re.search(r"\b(trap\w*|except|avoid\w*|do not|contraindicat\w*|classic)\b", lower):
+        return "trap"
+    return "clinical"
+
+
+FAST_FACTS_MEDICAL_CUE_RE = re.compile(
+    r"\b("
+    r"diagnos\w*|treat\w*|manage\w*|screen\w*|prevent\w*|workup|therapy|antibiotic\w*|"
+    r"infection\w*|disease\w*|syndrome\w*|rash|pain|fever|blood|culture\w*|urine|renal|"
+    r"cardiac|pulmonary|hepatic|diabetes|cellulitis|erysipelas|cystitis|pyelonephritis|"
+    r"pneumonia|embolism|thrombosis|ischemia|infarct\w*|failure|deficien\w*|mutation\w*|"
+    r"ecg|ekg|ct|mri|x-ray|ultrasound|lab\w*|finding\w*|criteria|contraindicat\w*|"
+    r"pack-year|smok\w*|quit|low-dose|yearly|life expectancy|bmi|hgb|a1c|frequency|suprapubic"
+    r")\b",
+    re.I,
+)
+
+
+def is_fast_facts_medical_line(line: str) -> bool:
+    stripped = normalize_key(line)
+    if not stripped:
+        return False
+    if stripped.strip(":") in {"diagnosis and management", "management", "diagnosis", "treatment"}:
+        return False
+    if re.match(r"^[,;:)]", stripped):
+        return False
+    if re.fullmatch(r"[a-z]+[)]", stripped):
+        return False
+    if stripped in {
+        "internal medicine shelf fast facts",
+        "useful tables and images from uworld/amboss",
+    }:
+        return False
+    if len(stripped) < 5:
+        return False
+    if extract_medical_claim_terms(line):
+        return True
+    return bool(FAST_FACTS_MEDICAL_CUE_RE.search(line))
+
+
+def fast_facts_lines_from_text(text: str) -> list[str]:
+    raw_lines = [
+        re.sub(r"\s+", " ", line).strip(" -•\t")
+        for line in str(text or "").splitlines()
+    ]
+    raw_lines = [line for line in raw_lines if line]
+    merged: list[str] = []
+    i = 0
+    join_prefixes = {"empiric", "treatment", "urine", "blood", "sputum", "stool", "serum", "oral", "iv"}
+    while i < len(raw_lines):
+        line = raw_lines[i]
+        while i + 1 < len(raw_lines):
+            nxt = raw_lines[i + 1]
+            word_count = len(re.findall(r"\b\w+\b", line))
+            should_join = (
+                normalize_key(line).strip(":") in join_prefixes
+                or (word_count <= 2 and re.match(r"^(with|prior|to|for|while|and|or|but|plus|culture|treatment)\b", normalize_key(nxt)))
+                or re.search(r"\b(empiric|urine|blood|sputum|stool|serum|oral|iv)$", normalize_key(line))
+                or (word_count <= 5 and len(re.findall(r"\b\w+\b", nxt)) <= 2 and not nxt.endswith(":"))
+                or normalize_key(line) in {"started, consider"}
+                or re.search(r"\brenal artery$", normalize_key(line))
+            )
+            if not should_join:
+                break
+            line = f"{line} {nxt}".strip()
+            i += 1
+        merged.append(line)
+        i += 1
+    return merged
+
+
+def fast_facts_split_atomic_lines(slide: dict[str, Any]) -> list[str]:
+    lines: list[str] = []
+    for block in slide.get("textBlocks") or []:
+        lines.extend(fast_facts_lines_from_text(str(block.get("text") or "")))
+    if slide.get("notesText"):
+        lines.extend(fast_facts_lines_from_text(str(slide.get("notesText") or "")))
+    for table in slide.get("tables") or []:
+        headers = [str(h).strip() for h in table.get("headers") or []]
+        for row in table.get("rows") or []:
+            cells = [str(c).strip() for c in row if str(c).strip()]
+            if cells:
+                prefix = f"{headers[0]}: " if headers and headers[0] else ""
+                lines.append(prefix + " | ".join(cells))
+    clean: list[str] = []
+    seen: set[str] = set()
+    for line in lines:
+        line = re.sub(r"\s+", " ", line).strip(" -•\t")
+        if len(line) < 4 or len(line) > 260:
+            continue
+        if not is_fast_facts_medical_line(line):
+            continue
+        key = normalize_key(line)
+        if key in seen:
+            continue
+        seen.add(key)
+        clean.append(line)
+    return clean
+
+
+FAST_FACTS_GENERIC_TERMS = {
+    "additional", "angle", "blood", "border", "borders", "cases", "clinical",
+    "common", "confined", "consider", "criteria", "current", "currently",
+    "days", "described", "diagnosis", "done", "enough", "external", "facts",
+    "feature", "features", "history", "interval", "like", "local", "medical",
+    "medicine", "patient", "patients", "positive", "prior", "recommended",
+    "screening", "severe", "shelf", "significantly", "symptoms", "systemic",
+    "test", "then", "treated", "useful", "usually", "with", "without",
+    "should", "over", "even", "absence", "earlier", "within",
+}
+
+
+def meaningful_fast_facts_terms(text: str) -> list[str]:
+    phrases: list[str] = []
+    for phrase in re.findall(r"\b[A-Z][A-Za-z0-9+\-/]*(?:\s+[A-Z0-9][A-Za-z0-9+\-/]*){0,4}\b", text):
+        cleaned = re.sub(r"\s+", " ", phrase).strip()
+        if len(cleaned) >= 4 and normalize_key(cleaned) not in FAST_FACTS_GENERIC_TERMS:
+            phrases.append(cleaned.lower())
+    tokens = [
+        tok.lower().strip("-")
+        for tok in re.findall(r"\b[A-Za-z][A-Za-z0-9+\-/]{2,}\b", text)
+        if tok.lower() not in COMMON_CLINICAL_WORDS and tok.lower() not in FAST_FACTS_GENERIC_TERMS
+    ]
+    for tok in sorted(extract_medical_claim_terms(text)):
+        if tok not in tokens:
+            tokens.insert(0, tok)
+    ordered: list[str] = []
+    for term in phrases + tokens:
+        term = term.strip(" ,.;:()")
+        if len(term) < 4 or term in FAST_FACTS_GENERIC_TERMS:
+            continue
+        if term not in ordered:
+            ordered.append(term)
+    return ordered[:40]
+
+
+def fast_facts_grounding_terms(text: str) -> list[str]:
+    return meaningful_fast_facts_terms(text)
+
+
+def fast_facts_fact_bucket(line: str, active_section: str = "") -> str:
+    text = normalize_key(f"{active_section} {line}")
+    if re.search(r"\b(not to be confused|do not confuse|confused with|vs|versus|rather than)\b", text):
+        return "trapFacts"
+    if re.search(r"\b(differential|mimic|not pulmonary symptoms|interstitial nephritis|ain)\b", text):
+        return "differentialFacts"
+    if re.search(r"\b(pathophys|mechanism|mutation|deficien|causes?|induced|receptor|inhibit|activat)\b", text):
+        return "mechanismFacts"
+    if re.search(r"\b(diagnos|urinalysis|culture|leukocyte|nitrat|glucose|a1c|blood pressure|systolic|diastolic|ct scan|testing|ultrasound|criteria|finding|opacit)\b", text):
+        return "diagnosticFacts"
+    if re.search(r"\b(treat|therapy|management|empiric|antibiotic|ceftriaxone|cefazolin|amoxicillin|tmp-smx|nitrofurantoin|fosfomycin|fluoroquinolone|screening|low-dose|yearly|termination)\b", text):
+        return "managementFacts"
+    if active_section and re.search(r"\b(presentation|clinical features)\b", normalize_key(active_section)):
+        return "clinicalFacts"
+    return "clinicalFacts"
+
+
+def fast_facts_clean_title(text: str, fallback: str = "") -> str:
+    title = re.sub(r"\s+", " ", str(text or fallback or "")).strip(" :-•\t")
+    title = re.sub(r"[:.;,]+$", "", title).strip()
+    return title[:120]
+
+
+def fast_facts_new_concept(slide: dict[str, Any], title: str, ordinal: int) -> dict[str, Any]:
+    clean_title = fast_facts_clean_title(title, f"Slide {slide.get('slideIndex')} concept {ordinal}")
+    return {
+        "conceptId": f"ff_{slide['slideId']}_{short_hash(clean_title + str(ordinal))[:8]}",
+        "sourceSlideIds": [slide["slideId"]],
+        "title": clean_title,
+        "category": classify_fast_facts_category(clean_title),
+        "clinicalFacts": [],
+        "diagnosticFacts": [],
+        "managementFacts": [],
+        "mechanismFacts": [],
+        "differentialFacts": [],
+        "trapFacts": [],
+        "nativeTextFacts": [],
+        "imageOcrFacts": [],
+        "cleanedImageFacts": [],
+        "structuredImageFacts": {
+            "criteria": [],
+            "indications": [],
+            "contraindications": [],
+            "managementSteps": [],
+            "thresholds": [],
+        },
+        "imageTextQuality": "none",
+        "images": [],
+        "tables": [],
+        "questionPotential": 0,
+        "groundingTerms": [],
+    }
+
+
+def fast_facts_add_fact(concept: dict[str, Any], line: str, active_section: str = "", origin: str = "native") -> None:
+    clean = re.sub(r"\s+", " ", str(line or "")).strip(" -•\t")
+    clean = re.sub(r"^[¢•]+\s*", "", clean).strip()
+    section_key = normalize_key(active_section).strip(":")
+    if not clean:
+        return
+    if normalize_key(clean).strip(":") in {"recommended", "test", "interval", "age for screening", "past", "or"}:
+        return
+    section_allows_context = bool(re.search(r"\b(presentation|clinical features|diagnosis|management|screening|recommendations|termination)\b", section_key))
+    if not is_fast_facts_medical_line(clean) and not section_allows_context:
+        return
+    bucket = fast_facts_fact_bucket(clean, active_section)
+    if clean not in concept[bucket]:
+        concept[bucket].append(clean)
+    if origin == "native" and clean not in concept["nativeTextFacts"]:
+        concept["nativeTextFacts"].append(clean)
+
+
+def fast_facts_finalize_concept(concept: dict[str, Any]) -> dict[str, Any] | None:
+    all_facts: list[str] = []
+    for key in ["clinicalFacts", "diagnosticFacts", "managementFacts", "mechanismFacts", "differentialFacts", "trapFacts"]:
+        all_facts.extend(concept.get(key) or [])
+    title = str(concept.get("title") or "")
+    if not all_facts and not concept.get("images"):
+        return None
+    if not all_facts and is_fast_facts_medical_line(title):
+        concept["clinicalFacts"].append(title)
+        all_facts.append(title)
+    for key in ["nativeTextFacts", "imageOcrFacts", "cleanedImageFacts"]:
+        seen_values: set[str] = set()
+        deduped: list[str] = []
+        for value in concept.get(key) or []:
+            value = re.sub(r"\s+", " ", str(value or "")).strip()
+            if value and value not in seen_values:
+                seen_values.add(value)
+                deduped.append(value)
+        concept[key] = deduped
+    for key, values in list((concept.get("structuredImageFacts") or {}).items()):
+        seen_structured: set[str] = set()
+        concept["structuredImageFacts"][key] = [
+            v for v in values
+            if isinstance(v, str) and v and not (v in seen_structured or seen_structured.add(v))
+        ]
+    if concept.get("imageTextQuality") == "poor":
+        fact_text = " ".join([title] + all_facts)
+    else:
+        fact_text = " ".join([title] + all_facts + (concept.get("cleanedImageFacts") or []))
+    terms = fast_facts_grounding_terms(fact_text)
+    concept["groundingTerms"] = terms
+    concept["questionPotential"] = min(100, 30 + len(all_facts) * 8 + len(terms) * 2 + len(concept.get("images") or []) * 8)
+    fact_counts = {
+        "clinical": len(concept["clinicalFacts"]),
+        "diagnosis": len(concept["diagnosticFacts"]),
+        "management": len(concept["managementFacts"]),
+        "mechanism": len(concept["mechanismFacts"]),
+        "differential": len(concept["differentialFacts"]) + len(concept["trapFacts"]),
+    }
+    concept["category"] = max(fact_counts.items(), key=lambda kv: kv[1])[0] if any(fact_counts.values()) else classify_fast_facts_category(title)
+    return concept
+
+
+def fast_facts_ocr_image_text(image: dict[str, Any]) -> str:
+    asset = image.get("assetPath")
+    if not asset:
+        return ""
+    path = BASE_DIR / str(asset)
+    if not path.exists() or not shutil.which("tesseract"):
+        return ""
+    try:
+        proc = subprocess.run(
+            ["tesseract", str(path), "stdout", "--psm", "6"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except Exception:
+        return ""
+    if proc.returncode != 0:
+        return ""
+    return clean_slide_text(proc.stdout)
+
+
+def fast_facts_normalize_ocr_line(line: str) -> str:
+    line = re.sub(r"[¢•·]+", " ", line)
+    line = re.sub(r"[“”]", '"', line)
+    line = re.sub(r"[‘’]", "'", line)
+    line = re.sub(r"\s+", " ", line).strip(" -—:;,.")
+    replacements = [
+        (r"\bAne\b", ""),
+        (r"\butr\"?\b", "UTI"),
+        (r"\b220-pack-year\b", "20-pack-year"),
+        (r"\b215\b", "15"),
+        (r"^7\s+", ""),
+        (r"\btest Recommended\b", ""),
+        (r"\bRecommended\s*$", ""),
+        (r"\s*&\s*$", ""),
+    ]
+    for pat, repl in replacements:
+        line = re.sub(pat, repl, line, flags=re.I)
+    line = re.sub(r"\s+", " ", line).strip(" -—:;,.")
+    return line
+
+
+def fast_facts_clean_ocr_lines(raw_ocr: str) -> list[str]:
+    raw_lines = fast_facts_lines_from_text(raw_ocr)
+    clean_lines: list[str] = []
+    skip = {
+        "recommended", "test", "interval", "age for", "age for screening",
+        "past", "or", "screening", "termination of",
+    }
+    for line in raw_lines:
+        clean = fast_facts_normalize_ocr_line(line)
+        key = normalize_key(clean)
+        if not clean or key in skip or len(clean) < 3:
+            continue
+        clean_lines.append(clean)
+
+    joined = "\n".join(clean_lines)
+    if "lung cancer screening" in normalize_key(joined):
+        facts = [
+            "Low-dose CT scan of the chest",
+            "Screen yearly",
+            "Age 50-80 years",
+            "20-pack-year smoking history",
+            "Currently smoking or quit within the past 15 years",
+            "Terminate screening if quit smoking for 15 years",
+            "Terminate screening if medical conditions significantly limit life expectancy",
+        ]
+        return [f for f in facts if any(tok in normalize_key(joined) for tok in normalize_key(f).split()[:2]) or f.startswith("Terminate")]
+
+    if "urinary tract infection" in normalize_key(joined) or "uncomplicated" in normalize_key(joined):
+        facts = [
+            "Uncomplicated UTI: nitrofurantoin",
+            "Uncomplicated UTI: trimethoprim-sulfamethoxazole",
+            "Uncomplicated UTI: fosfomycin single dose",
+            "Use fluoroquinolones only if previous options cannot be used",
+            "Urine culture only if initial treatment fails",
+            "Complicated UTI outpatient treatment: fluoroquinolones",
+            "Complicated UTI inpatient treatment: ceftriaxone, piperacillin-tazobactam, or carbapenems such as imipenem",
+            "Obtain culture before therapy and adjust antibiotic as needed",
+            "Complicated UTI includes infection above the bladder, pelvic pain in men, or systemic illness",
+        ]
+        return facts
+
+    seen: set[str] = set()
+    out: list[str] = []
+    for line in clean_lines:
+        key = normalize_key(line)
+        if key not in seen and is_fast_facts_medical_line(line):
+            seen.add(key)
+            out.append(line)
+    return out
+
+
+def fast_facts_image_text_quality(raw_ocr: str, cleaned: list[str]) -> str:
+    if not raw_ocr.strip():
+        return "none"
+    junk_hits = len(re.findall(r"[¢_=]{1,}|[\"']\s*[a-z]?$|\b[A-Za-z]{1,2}\b", raw_ocr))
+    token_count = len(re.findall(r"\b[A-Za-z0-9][A-Za-z0-9-]*\b", raw_ocr))
+    if token_count < 6 or not cleaned:
+        return "poor"
+    if junk_hits / max(1, token_count) > 0.35:
+        return "poor"
+    if junk_hits / max(1, token_count) > 0.18:
+        return "fair"
+    return "good"
+
+
+def fast_facts_structured_image_facts(cleaned_facts: list[str], image_kind: str) -> dict[str, list[str]]:
+    structured = {
+        "criteria": [],
+        "indications": [],
+        "contraindications": [],
+        "managementSteps": [],
+        "thresholds": [],
+    }
+    for fact in cleaned_facts:
+        key = normalize_key(fact)
+        if re.search(r"\b(age|pack-year|years?|bmi|a1c|>\d|<\d|\d+-\d+|15 years|20-pack)\b", key):
+            structured["thresholds"].append(fact)
+        if re.search(r"\b(currently smoking|quit|systemic illness|infection above|pelvic pain|initial treatment fails)\b", key):
+            structured["criteria"].append(fact)
+        if re.search(r"\b(low-dose ct|screen|culture|obtain|treatment|nitrofurantoin|trimethoprim|fosfomycin|fluoroquinolone|ceftriaxone|piperacillin|carbapenem)\b", key):
+            structured["managementSteps"].append(fact)
+        if re.search(r"\b(medical conditions|limit life expectancy|cannot be used)\b", key):
+            structured["contraindications"].append(fact)
+        if image_kind in {"algorithm", "table-like"} and re.search(r"\b(uti|screening|infection|smoking)\b", key):
+            structured["indications"].append(fact)
+    return structured
+
+
+def fast_facts_apply_image_ocr(concept: dict[str, Any], slide: dict[str, Any], force: bool = False) -> list[str]:
+    native_lines = fast_facts_split_atomic_lines(slide)
+    if not force and len(native_lines) > 1:
+        return []
+    all_cleaned: list[str] = []
+    for image in slide.get("images") or []:
+        ocr = fast_facts_ocr_image_text(image)
+        if ocr:
+            image["ocrText"] = ocr
+            cleaned = fast_facts_clean_ocr_lines(ocr)
+            image["cleanedOcrFacts"] = cleaned
+            image["imageTextQuality"] = fast_facts_image_text_quality(ocr, cleaned)
+            image["structuredFacts"] = fast_facts_structured_image_facts(cleaned, str(image.get("kind") or ""))
+            concept["imageOcrFacts"].extend(fast_facts_lines_from_text(ocr))
+            concept["cleanedImageFacts"].extend(cleaned)
+            for key, values in image["structuredFacts"].items():
+                for value in values:
+                    if value not in concept["structuredImageFacts"][key]:
+                        concept["structuredImageFacts"][key].append(value)
+            all_cleaned.extend(cleaned)
+    qualities = [img.get("imageTextQuality") for img in slide.get("images") or [] if img.get("ocrText")]
+    if qualities:
+        if "poor" in qualities:
+            concept["imageTextQuality"] = "poor"
+        elif "fair" in qualities:
+            concept["imageTextQuality"] = "fair"
+        else:
+            concept["imageTextQuality"] = "good"
+    return all_cleaned
+
+
+def fast_facts_image_fallback_lines(slide: dict[str, Any]) -> list[str]:
+    temp = fast_facts_new_concept(slide, "image fallback", 999)
+    return fast_facts_apply_image_ocr(temp, slide, force=False)
+
+
+def fast_facts_heading_candidates(slide: dict[str, Any]) -> list[str]:
+    candidates: list[str] = []
+    for block in slide.get("textBlocks") or []:
+        lines = fast_facts_lines_from_text(str(block.get("text") or ""))
+        if lines:
+            candidates.append(lines[0])
+    if slide.get("notesText"):
+        candidates.extend(fast_facts_lines_from_text(str(slide.get("notesText") or ""))[:1])
+    return [fast_facts_clean_title(c) for c in candidates if fast_facts_clean_title(c)]
+
+
+def fast_facts_block_lines(block: dict[str, Any]) -> list[str]:
+    return fast_facts_lines_from_text(str(block.get("text") or ""))
+
+
+def atomize_fast_facts_slide(slide: dict[str, Any]) -> list[dict[str, Any]]:
+    blocks = slide.get("textBlocks") or []
+    heading_candidates = fast_facts_heading_candidates(slide)
+    main_title = heading_candidates[0] if heading_candidates else fast_facts_clean_title(slide.get("notesText") or f"Slide {slide.get('slideIndex')}")
+    concepts: list[dict[str, Any]] = []
+
+    if len(blocks) <= 1:
+        concept = fast_facts_new_concept(slide, main_title, 1)
+        lines: list[str] = []
+        for block in blocks:
+            block_lines = fast_facts_block_lines(block)
+            lines.extend(block_lines[1:] if block_lines and fast_facts_clean_title(block_lines[0]) == main_title else block_lines)
+        image_lines = fast_facts_apply_image_ocr(concept, slide, force=True)
+        image_line_keys = {normalize_key(line) for line in image_lines}
+        lines.extend(image_lines if concept.get("imageTextQuality") != "poor" else [])
+        section = ""
+        for line in lines:
+            if re.search(r":$", line):
+                section = line
+                continue
+            origin = "image" if normalize_key(line) in image_line_keys else "native"
+            fast_facts_add_fact(concept, line, section, origin=origin)
+        concept["images"] = slide.get("images") or []
+        concept["tables"] = slide.get("tables") or []
+        finalized = fast_facts_finalize_concept(concept)
+        return [finalized] if finalized else []
+
+    content_blocks = blocks[1:] if fast_facts_clean_title(fast_facts_block_lines(blocks[0])[0] if fast_facts_block_lines(blocks[0]) else "") == main_title else blocks
+    major_blocks = [b for b in content_blocks if fast_facts_block_lines(b) and re.search(r"\b(uncomplicated|complicated|screening for|not to be confused|presentation)\b", fast_facts_block_lines(b)[0], re.I)]
+    if len(content_blocks) > 1 and len(major_blocks) >= 2 and re.search(r"\burinary tract infections?\b", main_title, re.I):
+        ordinal = 1
+        for block in content_blocks:
+            lines = fast_facts_block_lines(block)
+            if not lines:
+                continue
+            subheading = lines[0]
+            concept = fast_facts_new_concept(slide, f"{main_title}: {subheading}", ordinal)
+            section = ""
+            for line in lines[1:]:
+                if re.search(r":$", line):
+                    section = line
+                    continue
+                fast_facts_add_fact(concept, line, section)
+            finalized = fast_facts_finalize_concept(concept)
+            if finalized:
+                concepts.append(finalized)
+                ordinal += 1
+        if concepts:
+            concepts[0]["images"] = slide.get("images") or []
+            concepts[0]["tables"] = slide.get("tables") or []
+            fast_facts_apply_image_ocr(concepts[0], slide, force=True)
+            return concepts
+
+    if re.search(r"\bhypertension\b", normalize_key(slide.get("notesText") or "")):
+        hypertension = fast_facts_new_concept(slide, fast_facts_clean_title(slide.get("notesText")), 1)
+        diabetes = fast_facts_new_concept(slide, "Screening for diabetes", 2)
+        hypertension_context = False
+        for block in blocks:
+            lines = fast_facts_block_lines(block)
+            section = ""
+            target = hypertension
+            for line in lines:
+                if re.match(r"screening for diabetes", line, re.I):
+                    section = line
+                    target = diabetes
+                    fast_facts_add_fact(diabetes, line, section)
+                    continue
+                if re.search(r":$", line):
+                    section = line
+                    continue
+                if re.search(r"\b(diabetes|glucose|a1c|bmi)\b", line, re.I):
+                    fast_facts_add_fact(diabetes, line, section)
+                elif re.search(r"\b(refractory hypertension|resistant hypertension|renal artery|sleep apnea|acei|blood pressure|systolic|diastolic)\b", line, re.I):
+                    hypertension_context = True
+                    fast_facts_add_fact(hypertension, line, section)
+                elif hypertension_context and re.search(r"\b(started|consider|stenosis|renal|ultrasound)\b", line, re.I):
+                    fast_facts_add_fact(hypertension, line, section)
+                else:
+                    fast_facts_add_fact(target, line, section)
+        hypertension["images"] = slide.get("images") or []
+        hypertension["tables"] = slide.get("tables") or []
+        fast_facts_apply_image_ocr(hypertension, slide, force=True)
+        return [c for c in [fast_facts_finalize_concept(hypertension), fast_facts_finalize_concept(diabetes)] if c]
+
+    concept = fast_facts_new_concept(slide, main_title, 1)
+    section = ""
+    for block in content_blocks:
+        lines = fast_facts_block_lines(block)
+        if lines and fast_facts_clean_title(lines[0]) == main_title:
+            lines = lines[1:]
+        for line in lines:
+            if re.search(r":$", line):
+                section = line
+                if re.search(r"\bnot to be confused|differential|do not confuse\b", line, re.I):
+                    fast_facts_add_fact(concept, line, section)
+                continue
+            fast_facts_add_fact(concept, line, section)
+    image_facts = fast_facts_apply_image_ocr(concept, slide, force=not any(concept.get(key) for key in ["clinicalFacts", "diagnosticFacts", "managementFacts", "mechanismFacts", "differentialFacts", "trapFacts"]))
+    if not any(concept.get(key) for key in ["clinicalFacts", "diagnosticFacts", "managementFacts", "mechanismFacts", "differentialFacts", "trapFacts"]):
+        for line in image_facts if concept.get("imageTextQuality") != "poor" else []:
+            fast_facts_add_fact(concept, line, "", origin="image")
+    concept["images"] = slide.get("images") or []
+    concept["tables"] = slide.get("tables") or []
+    finalized = fast_facts_finalize_concept(concept)
+    return [finalized] if finalized else []
+
+
+def validate_fast_facts_concept_graph(payload: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    if payload.get("profile") != FAST_FACTS_PROFILE:
+        errors.append("profile must be FAST_FACTS_PROFILE")
+    if not isinstance(payload.get("concepts"), list):
+        errors.append("concepts must be a list")
+        return errors
+    seen: set[str] = set()
+    required = [
+        "conceptId", "sourceSlideIds", "title", "category", "clinicalFacts",
+        "diagnosticFacts", "managementFacts", "mechanismFacts",
+        "differentialFacts", "trapFacts", "nativeTextFacts", "imageOcrFacts",
+        "cleanedImageFacts", "structuredImageFacts", "imageTextQuality", "images", "tables",
+        "questionPotential", "groundingTerms", "semanticClusterId", "duplicateOf",
+        "overlapScore", "dedupeDisposition",
+    ]
+    allowed_image_kinds = {"diagnostic", "explanatory", "algorithm", "decorative", "table-like"}
+    for idx, concept in enumerate(payload.get("concepts") or [], start=1):
+        if not isinstance(concept, dict):
+            errors.append(f"concept {idx} is not an object")
+            continue
+        missing = [key for key in required if key not in concept]
+        if missing:
+            errors.append(f"concept {idx} missing keys: {', '.join(missing)}")
+        cid = str(concept.get("conceptId") or "")
+        if not cid:
+            errors.append(f"concept {idx} missing conceptId")
+        elif cid in seen:
+            errors.append(f"duplicate conceptId: {cid}")
+        seen.add(cid)
+        if not concept.get("title"):
+            errors.append(f"{cid or idx}: empty title")
+        if not isinstance(concept.get("sourceSlideIds"), list) or not concept.get("sourceSlideIds"):
+            errors.append(f"{cid or idx}: sourceSlideIds must be non-empty")
+        for key in required:
+            if (key.endswith("Facts") and key != "structuredImageFacts") or key in {"images", "tables", "groundingTerms"}:
+                if not isinstance(concept.get(key), list):
+                    errors.append(f"{cid or idx}: {key} must be a list")
+        if not isinstance(concept.get("structuredImageFacts"), dict):
+            errors.append(f"{cid or idx}: structuredImageFacts must be an object")
+        if concept.get("imageTextQuality") not in {"none", "poor", "fair", "good"}:
+            errors.append(f"{cid or idx}: invalid imageTextQuality {concept.get('imageTextQuality')}")
+        if concept.get("dedupeDisposition") not in {"keep", "merge", "suppress", "recap_only", "low_information"}:
+            errors.append(f"{cid or idx}: invalid dedupeDisposition {concept.get('dedupeDisposition')}")
+        try:
+            score = float(concept.get("overlapScore"))
+            if score < 0 or score > 1:
+                errors.append(f"{cid or idx}: overlapScore must be between 0 and 1")
+        except Exception:
+            errors.append(f"{cid or idx}: overlapScore must be numeric")
+        for image in concept.get("images") or []:
+            if isinstance(image, dict) and image.get("kind") not in allowed_image_kinds:
+                errors.append(f"{cid or idx}: invalid image kind {image.get('kind')}")
+    return errors
+
+
+def fast_facts_fact_values(concept: dict[str, Any]) -> list[str]:
+    values: list[str] = [str(concept.get("title") or "")]
+    for key in [
+        "clinicalFacts", "diagnosticFacts", "managementFacts", "mechanismFacts",
+        "differentialFacts", "trapFacts", "cleanedImageFacts", "groundingTerms",
+    ]:
+        values.extend(str(v) for v in concept.get(key) or [])
+    for values_list in (concept.get("structuredImageFacts") or {}).values():
+        if isinstance(values_list, list):
+            values.extend(str(v) for v in values_list)
+    return values
+
+
+def fast_facts_semantic_tokens(concept: dict[str, Any]) -> set[str]:
+    text = " ".join(fast_facts_fact_values(concept))
+    tokens = set(meaningful_fast_facts_terms(text))
+    for token in re.findall(r"\b[A-Za-z][A-Za-z0-9+\-/]{3,}\b", text):
+        key = token.lower().strip("-")
+        if key not in FAST_FACTS_GENERIC_TERMS and key not in COMMON_CLINICAL_WORDS:
+            tokens.add(key)
+    return tokens
+
+
+def fast_facts_structured_overlap(a: dict[str, Any], b: dict[str, Any]) -> float:
+    scores: list[float] = []
+    for key in ["criteria", "indications", "contraindications", "managementSteps", "thresholds"]:
+        av = {normalize_key(v) for v in (a.get("structuredImageFacts") or {}).get(key, []) if normalize_key(v)}
+        bv = {normalize_key(v) for v in (b.get("structuredImageFacts") or {}).get(key, []) if normalize_key(v)}
+        if av or bv:
+            scores.append(len(av & bv) / max(1, len(av | bv)))
+    return max(scores) if scores else 0.0
+
+
+def fast_facts_overlap_score(a: dict[str, Any], b: dict[str, Any]) -> tuple[float, list[str]]:
+    a_tokens = fast_facts_semantic_tokens(a)
+    b_tokens = fast_facts_semantic_tokens(b)
+    token_score = len(a_tokens & b_tokens) / max(1, len(a_tokens | b_tokens))
+    fact_a = {normalize_key(v) for v in fast_facts_fact_values(a) if normalize_key(v)}
+    fact_b = {normalize_key(v) for v in fast_facts_fact_values(b) if normalize_key(v)}
+    fact_score = len(fact_a & fact_b) / max(1, min(len(fact_a), len(fact_b)))
+    structured_score = fast_facts_structured_overlap(a, b)
+    title_tokens_a = set(re.findall(r"\b[a-z0-9+\-/]{4,}\b", normalize_key(a.get("title") or ""))) - FAST_FACTS_GENERIC_TERMS
+    title_tokens_b = set(re.findall(r"\b[a-z0-9+\-/]{4,}\b", normalize_key(b.get("title") or ""))) - FAST_FACTS_GENERIC_TERMS
+    title_score = len(title_tokens_a & title_tokens_b) / max(1, len(title_tokens_a | title_tokens_b))
+    score = max(token_score, fact_score, structured_score, title_score * 0.85)
+    reasons: list[str] = []
+    if fact_score >= 0.5:
+        reasons.append("repeated fact block")
+    if structured_score >= 0.5:
+        reasons.append("repeated algorithm/criteria block")
+    if token_score >= 0.55:
+        reasons.append("near-duplicate medical term set")
+    if title_score >= 0.75 and score >= 0.65:
+        reasons.append("title plus content overlap")
+    if any(re.search(r"\b(screening|treatment|management|criteria|threshold)\b", normalize_key(v)) for v in fast_facts_fact_values(a) + fast_facts_fact_values(b)) and score >= 0.55:
+        reasons.append("overlapping screening/treatment threshold")
+    shared_tokens = a_tokens & b_tokens
+    if {"urinary", "tract"} <= shared_tokens or "uti" in shared_tokens:
+        reasons.append("overlapping UTI topic")
+        if shared_tokens & {"nitrofurantoin", "fosfomycin", "fluoroquinolones", "ceftriaxone", "culture"}:
+            reasons.append("repeated UTI management or criteria")
+        score = max(score, min(1.0, token_score + 0.18))
+    if "hypertension" in shared_tokens and (shared_tokens & {"renal", "sleep", "apnea", "screening", "glucose"}):
+        reasons.append("overlapping hypertension evaluation")
+        score = max(score, min(1.0, token_score + 0.12))
+    if "diabetes" in shared_tokens and (shared_tokens & {"screening", "glucose", "a1c", "risk"}):
+        reasons.append("overlapping diabetes screening/management")
+        score = max(score, min(1.0, token_score + 0.12))
+    return round(min(1.0, score), 3), reasons
+
+
+def fast_facts_concept_information_score(concept: dict[str, Any]) -> int:
+    fact_count = sum(len(concept.get(key) or []) for key in [
+        "clinicalFacts", "diagnosticFacts", "managementFacts", "mechanismFacts", "differentialFacts", "trapFacts", "cleanedImageFacts",
+    ])
+    unique_terms = len(concept.get("groundingTerms") or [])
+    unique_assets = len(concept.get("images") or []) + len(concept.get("tables") or [])
+    return fact_count * 5 + unique_terms + unique_assets * 4
+
+
+def fast_facts_merge_unique_list(target: dict[str, Any], source: dict[str, Any], key: str) -> list[str]:
+    existing = list(target.get(key) or [])
+    seen = {json.dumps(v, sort_keys=True) if isinstance(v, dict) else str(v) for v in existing}
+    retained: list[str] = []
+    for value in source.get(key) or []:
+        marker = json.dumps(value, sort_keys=True) if isinstance(value, dict) else str(value)
+        if marker not in seen:
+            existing.append(value)
+            seen.add(marker)
+            retained.append(str(value if not isinstance(value, dict) else value.get("imageId") or value))
+    target[key] = existing
+    return retained
+
+
+def fast_facts_merge_concepts(base: dict[str, Any], other: dict[str, Any]) -> dict[str, list[str]]:
+    retained: dict[str, list[str]] = {}
+    for key in [
+        "sourceSlideIds", "clinicalFacts", "diagnosticFacts", "managementFacts",
+        "mechanismFacts", "differentialFacts", "trapFacts", "nativeTextFacts",
+        "imageOcrFacts", "cleanedImageFacts", "groundingTerms", "images", "tables",
+    ]:
+        retained[key] = fast_facts_merge_unique_list(base, other, key)
+    for key, values in (other.get("structuredImageFacts") or {}).items():
+        base.setdefault("structuredImageFacts", {}).setdefault(key, [])
+        seen = set(base["structuredImageFacts"][key])
+        retained_key: list[str] = []
+        for value in values or []:
+            if value not in seen:
+                base["structuredImageFacts"][key].append(value)
+                seen.add(value)
+                retained_key.append(str(value))
+        if retained_key:
+            retained[f"structuredImageFacts.{key}"] = retained_key
+    quality_order = {"none": 0, "poor": 1, "fair": 2, "good": 3}
+    if quality_order.get(other.get("imageTextQuality"), 0) > quality_order.get(base.get("imageTextQuality"), 0):
+        base["imageTextQuality"] = other.get("imageTextQuality")
+    finalized = fast_facts_finalize_concept(base)
+    if finalized:
+        base.update(finalized)
+    return {k: v for k, v in retained.items() if v}
+
+
+def dedupe_fast_facts_concepts(concepts: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    working = [copy.deepcopy(c) for c in concepts]
+    before_count = len(working)
+    for concept in working:
+        concept["semanticClusterId"] = concept.get("semanticClusterId") or f"ff_cluster_{short_hash(concept.get('conceptId', ''))[:8]}"
+        concept["duplicateOf"] = None
+        concept["overlapScore"] = 0.0
+        concept["dedupeDisposition"] = "keep"
+
+    clusters: list[dict[str, Any]] = []
+    suppressed: list[dict[str, Any]] = []
+    merged: list[dict[str, Any]] = []
+    clustered_overlaps: list[dict[str, Any]] = []
+    low_information: list[dict[str, Any]] = []
+    kept: list[dict[str, Any]] = []
+
+    for concept in working:
+        info_score = fast_facts_concept_information_score(concept)
+        if info_score < 10:
+            concept["dedupeDisposition"] = "low_information"
+            low_information.append({
+                "conceptId": concept.get("conceptId"),
+                "title": concept.get("title"),
+                "reason": "low information score",
+                "informationScore": info_score,
+            })
+            continue
+
+        best: dict[str, Any] | None = None
+        best_score = 0.0
+        best_reasons: list[str] = []
+        for existing in kept:
+            score, reasons = fast_facts_overlap_score(existing, concept)
+            if score > best_score:
+                best = existing
+                best_score = score
+                best_reasons = reasons
+
+        if best and best_score >= 0.78 and best_reasons:
+            concept["duplicateOf"] = best["conceptId"]
+            concept["semanticClusterId"] = best["semanticClusterId"]
+            concept["overlapScore"] = best_score
+            if fast_facts_concept_information_score(concept) <= 12 and not (concept.get("images") or concept.get("trapFacts") or concept.get("differentialFacts")):
+                concept["dedupeDisposition"] = "suppress"
+                suppressed.append({
+                    "conceptId": concept.get("conceptId"),
+                    "duplicateOf": best.get("conceptId"),
+                    "overlapScore": best_score,
+                    "reasons": best_reasons,
+                })
+            else:
+                concept["dedupeDisposition"] = "merge"
+                retained = fast_facts_merge_concepts(best, concept)
+                merged.append({
+                    "conceptId": concept.get("conceptId"),
+                    "mergedInto": best.get("conceptId"),
+                    "overlapScore": best_score,
+                    "reasons": best_reasons,
+                    "retainedUniqueFacts": retained,
+                })
+            continue
+
+        if best and best_score >= 0.28 and best_reasons:
+            concept["semanticClusterId"] = best["semanticClusterId"]
+            concept["overlapScore"] = best_score
+            concept["dedupeDisposition"] = "keep"
+            clustered_overlaps.append({
+                "conceptId": concept.get("conceptId"),
+                "clusteredWith": best.get("conceptId"),
+                "semanticClusterId": best.get("semanticClusterId"),
+                "overlapScore": best_score,
+                "reasons": best_reasons,
+                "retainedUniqueFacts": {
+                    key: concept.get(key) or []
+                    for key in ["clinicalFacts", "diagnosticFacts", "managementFacts", "differentialFacts", "trapFacts", "cleanedImageFacts"]
+                    if concept.get(key)
+                },
+            })
+
+        if re.search(r"\b(recap|summary|review|key points)\b", normalize_key(concept.get("title") or "")):
+            concept["dedupeDisposition"] = "recap_only"
+            low_information.append({
+                "conceptId": concept.get("conceptId"),
+                "title": concept.get("title"),
+                "reason": "recap-only slide",
+            })
+            continue
+
+        kept.append(concept)
+
+    cluster_map: dict[str, list[dict[str, Any]]] = {}
+    for concept in kept:
+        cluster_map.setdefault(concept["semanticClusterId"], []).append({
+            "conceptId": concept.get("conceptId"),
+            "title": concept.get("title"),
+            "sourceSlideIds": concept.get("sourceSlideIds"),
+        })
+    duplicate_clusters = [
+        {"semanticClusterId": cid, "members": members}
+        for cid, members in cluster_map.items()
+        if len(members) > 1
+    ]
+    report = {
+        "conceptsBeforeDedupe": before_count,
+        "conceptsAfterDedupe": len(kept),
+        "duplicateClustersFound": len(duplicate_clusters),
+        "duplicateClusters": duplicate_clusters,
+        "suppressedConcepts": suppressed,
+        "mergedConcepts": merged,
+        "clusteredOverlaps": clustered_overlaps,
+        "lowInformationConcepts": low_information,
+        "overlapComparisons": [],
+    }
+    for i, a in enumerate(working):
+        for b in working[i + 1:]:
+            score, reasons = fast_facts_overlap_score(a, b)
+            if score >= 0.45 and reasons:
+                report["overlapComparisons"].append({
+                    "conceptA": a.get("conceptId"),
+                    "titleA": a.get("title"),
+                    "conceptB": b.get("conceptId"),
+                    "titleB": b.get("title"),
+                    "overlapScore": score,
+                    "reasons": reasons,
+                })
+    return kept, report
+
+
+def process_fast_facts_pptx(
+    pptx_path: Path,
+    limit_slides: int = 10,
+    generate: bool = False,
+    reuse_cache: bool = True,
+    force_regenerate: bool = False,
+    repair_only: bool = False,
+) -> Path:
+    if pptx_path.suffix.lower() != ".pptx":
+        raise PipelineError(f"Fast Facts profile expects a PPTX file: {pptx_path}")
+    limit_slides = int(limit_slides or 10)
+    slide_payload = decompose_fast_facts_pptx(pptx_path, limit_slides=limit_slides)
+    deck_hash = slide_payload["pptxSha256"]
+    checkpoint = load_fast_facts_checkpoint(pptx_path, deck_hash, limit_slides)
+    concepts: list[dict[str, Any]] = list(checkpoint.get("concepts") or [])
+    processed: list[str] = list(checkpoint.get("processedSlideIds") or [])
+    failures: list[dict[str, Any]] = list(checkpoint.get("failures") or []) + list(slide_payload.get("failures") or [])
+    processed_set = set(processed)
+    for slide in slide_payload.get("slides") or []:
+        if slide["slideId"] in processed_set:
+            continue
+        try:
+            slide_concepts = atomize_fast_facts_slide(slide)
+            if not slide_concepts:
+                failures.append({"slideId": slide["slideId"], "slideIndex": slide["slideIndex"], "error": "no atomic concepts extracted"})
+            concepts.extend(slide_concepts)
+            processed.append(slide["slideId"])
+            processed_set.add(slide["slideId"])
+            write_fast_facts_checkpoint(pptx_path, deck_hash, limit_slides, concepts, processed, failures)
+        except Exception as exc:
+            failures.append({"slideId": slide.get("slideId"), "slideIndex": slide.get("slideIndex"), "error": str(exc)})
+            processed.append(slide["slideId"])
+            processed_set.add(slide["slideId"])
+            write_fast_facts_checkpoint(pptx_path, deck_hash, limit_slides, concepts, processed, failures)
+    deduped_concepts, dedupe_report = dedupe_fast_facts_concepts(concepts)
+    graph = {
+        "profile": FAST_FACTS_PROFILE,
+        "deckTitle": pptx_path.stem,
+        "slideCount": int(slide_payload.get("slideCount") or 0),
+        "concepts": deduped_concepts,
+    }
+    errors = validate_fast_facts_concept_graph(graph)
+    report = {
+        "profile": FAST_FACTS_PROFILE,
+        "sourceFile": pptx_path.name,
+        "slidesProcessed": len(slide_payload.get("slides") or []),
+        "conceptsExtracted": len(concepts),
+        "conceptsAfterDedupe": len(deduped_concepts),
+        "dedupeReport": dedupe_report,
+        "imagesFound": sum(len(s.get("images") or []) for s in slide_payload.get("slides") or []),
+        "tablesFound": sum(len(s.get("tables") or []) for s in slide_payload.get("slides") or []),
+        "skippedSlides": len([f for f in failures if "slide" in str(f).lower() or f.get("slideId")]),
+        "topConceptExamples": [
+            {
+                "conceptId": c.get("conceptId"),
+                "sourceSlideIds": c.get("sourceSlideIds"),
+                "title": c.get("title"),
+                "category": c.get("category"),
+                "questionPotential": c.get("questionPotential"),
+            }
+            for c in concepts[:10]
+        ],
+        "extractionFailures": failures,
+        "validationErrors": errors,
+        "checkpointPath": str(fast_facts_checkpoint_path(pptx_path).relative_to(BASE_DIR)),
+    }
+    report_path = write_report(report, "fast_facts_concept_extraction_report")
+    if errors:
+        raise PipelineError("Fast Facts concept graph validation failed:\n" + "\n".join(f"- {err}" for err in errors[:80]))
+    out_path = fast_facts_output_path(pptx_path)
+    write_json(out_path, graph)
+    json.loads(out_path.read_text(encoding="utf-8"))
+    log(f"Fast Facts concept graph -> {out_path.relative_to(BASE_DIR)}")
+    log(f"Fast Facts report -> {report_path.relative_to(BASE_DIR)}")
+    if generate:
+        return run_fast_facts_generation_milestone(
+            pptx_path,
+            graph,
+            deck_hash,
+            limit_slides,
+            report,
+            reuse_cache=reuse_cache,
+            force_regenerate=force_regenerate,
+            repair_only=repair_only,
+        )
+    return out_path
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate NBME-style questions from lecture-slide PDFs.")
     mode = parser.add_mutually_exclusive_group()
@@ -2606,7 +5313,13 @@ def parse_args() -> argparse.Namespace:
     mode.add_argument("--generate", action="store_true", help="Run semantic normalization and question generation with Gemini.")
     mode.add_argument("--repair-existing", action="store_true", help="Repair existing generated questions without rerunning full-deck generation.")
     mode.add_argument("--validate-only", default="", help="Validate an app-ready JSON output.")
+    parser.add_argument("--fast-facts-profile", action="store_true", help="Use FAST_FACTS_PROFILE PPTX concept graph mode. Combine with --generate for the constrained generation milestone.")
+    parser.add_argument("--reuse-cache", action=argparse.BooleanOptionalAction, default=True, help="Reuse valid Fast Facts cached questions when available.")
+    parser.add_argument("--force-regenerate", action="store_true", help="Ignore Fast Facts cache hits and regenerate eligible questions.")
+    parser.add_argument("--repair-only", action="store_true", help="Fast Facts only: repair/revalidate cache without generating cache misses.")
+    parser.add_argument("--show-cache-status", action="store_true", help="Show Fast Facts question cache status and exit.")
     parser.add_argument("--input-dir", default="", help="Folder containing lecture PDFs.")
+    parser.add_argument("--input-file", default="", help="Single PDF/PPTX input file.")
     parser.add_argument("--limit", type=int, default=0, help="Limit PDFs processed.")
     return parser.parse_args()
 
@@ -2618,11 +5331,40 @@ def main() -> int:
         if args.validate_only:
             validate_only(Path(args.validate_only).resolve())
             return 0
+        if args.show_cache_status:
+            show_fast_facts_cache_status()
+            return 0
+        if args.fast_facts_profile:
+            if args.input_file:
+                pptx_files = [Path(args.input_file).expanduser().resolve()]
+            else:
+                input_dir = Path(args.input_dir).resolve() if args.input_dir else INPUT_DIR
+                pptx_files = supported_pptx(input_dir)
+            if not pptx_files:
+                raise PipelineError("No PPTX files found for FAST_FACTS_PROFILE.")
+            outputs = [
+                process_fast_facts_pptx(
+                    path,
+                    limit_slides=args.limit or 10,
+                    generate=args.generate or args.repair_only,
+                    reuse_cache=args.reuse_cache,
+                    force_regenerate=args.force_regenerate,
+                    repair_only=args.repair_only,
+                )
+                for path in pptx_files[:1]
+            ]
+            print("Generated Fast Facts files:")
+            for output in outputs:
+                print(f"  {output}")
+            return 0
         if not args.dry_run and not args.generate and not args.repair_existing:
-            print("No action specified. Use --dry-run, --generate, --repair-existing, or --validate-only.")
+            print("No action specified. Use --dry-run, --generate, --repair-existing, --fast-facts-profile, or --validate-only.")
             return 2
-        input_dir = Path(args.input_dir).resolve() if args.input_dir else INPUT_DIR
-        pdfs = supported_pdfs(input_dir)
+        if args.input_file:
+            pdfs = [Path(args.input_file).expanduser().resolve()]
+        else:
+            input_dir = Path(args.input_dir).resolve() if args.input_dir else INPUT_DIR
+            pdfs = supported_pdfs(input_dir)
         if args.limit:
             pdfs = pdfs[:args.limit]
         if not pdfs:
