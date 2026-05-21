@@ -3,6 +3,8 @@
 **Last updated:** 2026-05-19
 **Purpose:** Diagrams and explains all external tool pipelines, their shared infrastructure, their intentionally separate infrastructure, and the planned OME pipeline. Read before building or modifying any pipeline.
 
+> Historical pipeline note. Current `shamsulalamx` ingestion guidance is in `ARCHITECTURE.md`, `BATCH_IMPORT_ARCHITECTURE.md`, `SHARED_INGESTION_ARCHITECTURE.md`, `VALIDATED_PIPELINES.md`, and `PROJECT_STATUS_2026-05-21.md`. The current primary workflow is Batch Import, manual app-ready import uses Import JSON, and OME/Anki/Divine validation claims must distinguish dry-run orchestration from live and semantic validation.
+
 ---
 
 ## 1. The Two-Layer Model

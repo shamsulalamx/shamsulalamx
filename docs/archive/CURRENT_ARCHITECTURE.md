@@ -3,6 +3,8 @@
 **Last updated:** 2026-05-18  
 **Supersedes:** `ARCHITECTURE.md` (which was last updated 2026-05-11 and remains accurate for Electron IPC/Gemini internals, but does not reflect the 2026-05-18 changes)
 
+> Superseded for current `shamsulalamx` state on 2026-05-21. Use `PROJECT_CONTEXT.md`, `ARCHITECTURE.md`, `BATCH_IMPORT_ARCHITECTURE.md`, `SHARED_INGESTION_ARCHITECTURE.md`, `VALIDATED_PIPELINES.md`, and `PROJECT_STATUS_2026-05-21.md` for current workflow and validation claims. This file remains a historical description of the older inline-app architecture and should not override the current Batch Import, shared-ingestion, status UI, or import UI milestone docs.
+
 ---
 
 ## 1. Platform Overview
