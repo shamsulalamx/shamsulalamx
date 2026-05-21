@@ -101,6 +101,16 @@ The active `divine_transcript` registry entry is dry-run only.
 - Registry notes are shown in the BIC UI, including the dry-run-only and no-audio note.
 - Packaged dry-run auto-import passed for `.txt` and `.md` transcript inputs.
 
+## Fast Facts Registry Boundary
+
+The active `fast_facts_pptx` registry entry has a narrow stabilization live path.
+
+- Live Fast Facts validation currently requests diagnostic reporting.
+- `--fast-facts-question-limit 3`, `--no-reuse-cache`, and `--limit 3` cap the current stabilization registry path.
+- A visible Electron dev BIC live run validated output discovery, auto-import, first-question rendering, scoring, and reload persistence for one small PPTX with one final app-ready question.
+- That run validated the observed Turner Syndrome screening ontology failure path only. It does not establish broad Fast Facts semantic stability, all-deck coverage, or packaged validation for this fix.
+- A global renderer Gemini alert can remain out of sync with BIC batch key availability in a fresh dev profile. BIC batch success should be judged from the batch job path until that separate UI consistency issue is addressed.
+
 ## Output Discovery
 
 The runner discovers outputs by scanning each source's registered `outputDirectories` for `*_app_ready.json` files created or touched during the run.

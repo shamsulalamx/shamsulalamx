@@ -178,11 +178,11 @@
           "stage": "generation",
           "stageLabel": "Fast Facts live generation",
           "heartbeatSeconds": 20,
-          "args": ["generate_lecture_slide_questions.py", "--fast-facts-profile", "--generate", "--input-file", "{inputFile}", "--limit", "10"]
+          "args": ["generate_lecture_slide_questions.py", "--fast-facts-profile", "--generate", "--fast-facts-diagnostic-report", "--fast-facts-question-limit", "3", "--no-reuse-cache", "--input-file", "{inputFile}", "--limit", "3"]
         }
       ],
       "outputDirectories": ["output_json/app_ready"],
-      "notes": "Uses the existing FAST_FACTS_PROFILE in the lecture-slide generator."
+      "notes": "Uses the existing FAST_FACTS_PROFILE in the lecture-slide generator. Fast Facts stabilization mode currently caps live diagnostic generation at 3 attempted questions."
     },
     "amboss_pdf": {
       "label": "AMBOSS PDF",

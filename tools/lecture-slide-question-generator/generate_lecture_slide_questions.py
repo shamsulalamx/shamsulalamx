@@ -3342,6 +3342,76 @@ def fast_facts_allocations(normalized_payload: dict[str, Any], memory: dict[str,
     return allocations
 
 
+def limit_fast_facts_question_attempts(allocations: list[dict[str, Any]], question_limit: int) -> list[dict[str, Any]]:
+    if int(question_limit or 0) <= 0:
+        return allocations
+    limited = copy.deepcopy(allocations)
+    remaining = int(question_limit)
+    for allocation in limited:
+        count = max(0, int(allocation.get("questionCount") or 0))
+        if count <= 0:
+            continue
+        if remaining <= 0:
+            allocation["questionCount"] = 0
+            allocation["reason"] = "skipped by Fast Facts question attempt limit"
+            continue
+        kept = min(count, remaining)
+        allocation["questionCount"] = kept
+        remaining -= kept
+        if kept < count:
+            allocation["reason"] = "partially capped by Fast Facts question attempt limit"
+    return limited
+
+
+def fast_facts_diagnostic_entry(allocation: dict[str, Any]) -> dict[str, Any]:
+    slide = allocation["slide"]
+    allowed = slide_allowed_grounding(slide)
+    return {
+        "conceptId": slide.get("slideId"),
+        "sourceSlideIds": (slide.get("metadata") or {}).get("sourceSlideIds") or [],
+        "conceptTitle": first_nonempty(slide.get("primaryConcepts")),
+        "allocation": {
+            "questionCount": allocation.get("questionCount"),
+            "reason": allocation.get("reason"),
+            "yieldScore": allocation.get("yieldScore"),
+            "contentRichness": allocation.get("contentRichness"),
+        },
+        "selectedArchetype": slide.get("questionArchetype"),
+        "allowedGroundingFacts": allowed.get("groundingFacts") or [],
+        "allowedMedicalTerms": allowed.get("allowedMedicalTerms") or [],
+        "cacheStatus": "pending",
+        "generatedQuestionBeforeRepair": None,
+        "preRepairValidationFindings": {},
+        "repairAttempted": False,
+        "repairResult": None,
+        "postRepairValidationFindings": {},
+        "finalDisposition": "pending",
+        "dropReason": "",
+        "finalQuestionId": None,
+        "finalQuestionIndex": None,
+    }
+
+
+def fast_facts_diagnostic_validation(
+    normalized_payload: dict[str, Any],
+    slide: dict[str, Any],
+    question: dict[str, Any],
+) -> dict[str, Any]:
+    single_norm = dict(normalized_payload)
+    single_norm["slides"] = [slide]
+    _, errors, grounding, diversity, strict = collect_fast_facts_generation_validation(single_norm, [question])
+    return {
+        "errors": errors,
+        "semanticGroundingFindings": grounding,
+        "questionQualityFindings": diversity.get("findings", []),
+        "fastFactsStrictFindings": strict,
+    }
+
+
+def write_fast_facts_diagnostic_report(report: dict[str, Any]) -> Path:
+    return write_report(report, "fast_facts_diagnostic_report")
+
+
 def validation_failed_question_indices(errors: list[str], grounding_findings: list[dict[str, Any]], diversity_report: dict[str, Any]) -> set[int]:
     indices: set[int] = set()
     for finding in grounding_findings:
@@ -3548,7 +3618,7 @@ def fast_facts_answer_ontology(text: str) -> str:
         return "unknown"
     if re.search(r"\b(abscess|ain|acute kidney injury|interstitial nephritis|pulmonary injury|erysipelas|cellulitis|folliculitis|furuncle|uti|urinary tract infection|cystitis|pyelonephritis|infection)\b", value):
         return "diagnosis"
-    if re.search(r"\b(obtain|order|perform|culture|test|testing|screen|examination|ct|ultrasound|x-ray|urinalysis|blood cultures?)\b", value):
+    if re.search(r"\b(obtain|order|perform|culture|test|testing|screen|examination|ct|ultrasound|x-ray|urinalysis|blood cultures?|antibod(?:y|ies)|tissue transglutaminase|ttg|tsh|free t4|hormone levels?|levels?|dexa|dxa|scan)\b", value):
         return "procedure"
     if re.search(r"\b(initiate|administer|treat|therapy|antibiotic|management|oral|intravenous|iv)\b", value):
         return "treatment"
@@ -3941,6 +4011,7 @@ def generate_fast_facts_questions_with_cache(
     reuse_cache: bool,
     force_regenerate: bool,
     repair_only: bool,
+    diagnostic_report: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[int, dict[str, Any]], dict[int, dict[str, Any]]]:
     started = time.time()
     cache = load_fast_facts_cache()
@@ -3953,9 +4024,14 @@ def generate_fast_facts_questions_with_cache(
     cache_hits = 0
     cache_misses = 0
     reused = 0
+    diagnostic_entries = {
+        allocation["slideId"]: fast_facts_diagnostic_entry(allocation)
+        for allocation in ordered_allocations
+    } if diagnostic_report else {}
 
     for allocation in ordered_allocations:
         slide = allocation["slide"]
+        diagnostic = diagnostic_entries.get(slide["slideId"])
         key = fast_facts_cache_key(normalized_payload, slide)
         entry = (cache.get("entries") or {}).get(key)
         if isinstance(entry, dict) and entry.get("validationStatus") == "valid" and isinstance(entry.get("question"), dict):
@@ -3970,13 +4046,21 @@ def generate_fast_facts_questions_with_cache(
                 update_memory_from_question(memory, question)
                 cache_hits += 1
                 reused += 1
+                if diagnostic:
+                    diagnostic["cacheStatus"] = "reused"
                 update_fast_facts_cache_entry(cache, key, fast_facts_cache_entry(normalized_payload, slide, question, qa_item, "valid"))
                 continue
             invalidation_reasons.append({"slideId": slide["slideId"], "reason": "; ".join(errors[:4])})
+            if diagnostic:
+                diagnostic["cacheStatus"] = "invalidated"
         cache_misses += 1
         if repair_only:
             invalidation_reasons.append({"slideId": slide["slideId"], "reason": "repair_only_no_valid_cache_hit"})
+            if diagnostic and diagnostic["cacheStatus"] == "pending":
+                diagnostic["cacheStatus"] = "repair-only-miss"
             continue
+        if diagnostic and diagnostic["cacheStatus"] == "pending":
+            diagnostic["cacheStatus"] = "bypassed" if (force_regenerate or not reuse_cache) else "generated"
         misses.append(allocation)
 
     regenerated = 0
@@ -3988,6 +4072,9 @@ def generate_fast_facts_questions_with_cache(
             if slide_id:
                 questions_by_slide[slide_id] = question
                 regenerated += 1
+                diagnostic = diagnostic_entries.get(slide_id)
+                if diagnostic:
+                    diagnostic["generatedQuestionBeforeRepair"] = copy.deepcopy(question)
         generated_ids = set(questions_by_slide) - {a["slideId"] for a in ordered_allocations if a["slideId"] not in [m["slideId"] for m in misses]}
         for allocation in misses:
             if allocation["slideId"] not in questions_by_slide:
@@ -4003,8 +4090,22 @@ def generate_fast_facts_questions_with_cache(
             ordered_questions.append(prior_valid_by_slide[slide_id])
             reused += 1
             invalidation_reasons.append({"slideId": slide_id, "reason": "used_prior_valid_cache_after_generation_failure"})
+            diagnostic = diagnostic_entries.get(slide_id)
+            if diagnostic:
+                diagnostic["cacheStatus"] = "reused"
         else:
             dropped_before_repair.append({"slideId": slide_id, "reason": "no valid cached or generated question"})
+
+    if diagnostic_entries:
+        slide_by_id = {a["slideId"]: a["slide"] for a in ordered_allocations}
+        for question in ordered_questions:
+            slide_id = str(question.get("slideId") or "")
+            diagnostic = diagnostic_entries.get(slide_id)
+            slide = slide_by_id.get(slide_id)
+            if diagnostic and slide:
+                if diagnostic["generatedQuestionBeforeRepair"] is None:
+                    diagnostic["generatedQuestionBeforeRepair"] = copy.deepcopy(question)
+                diagnostic["preRepairValidationFindings"] = fast_facts_diagnostic_validation(normalized_payload, slide, question)
 
     app_payload_before, before_errors, before_grounding, before_diversity, before_strict = collect_fast_facts_generation_validation(normalized_payload, ordered_questions)
     repaired_questions, repair_report = repair_fast_facts_questions(normalized_payload, ordered_questions, before_errors, before_grounding, before_diversity)
@@ -4016,6 +4117,14 @@ def generate_fast_facts_questions_with_cache(
     }
     dropped_questions = list(repair_report.get("droppedQuestions") or [])
     final_by_slide = {str(q.get("slideId") or ""): q for q in repaired_questions if isinstance(q, dict)}
+    if diagnostic_entries:
+        for item in repair_report.get("repairLog") or []:
+            if not isinstance(item, dict):
+                continue
+            diagnostic = diagnostic_entries.get(str(item.get("slideId") or ""))
+            if diagnostic:
+                diagnostic["repairAttempted"] = True
+                diagnostic["repairResult"] = copy.deepcopy(item)
     final_questions: list[dict[str, Any]] = []
     rescued_from_prior = 0
     for allocation in ordered_allocations:
@@ -4024,9 +4133,16 @@ def generate_fast_facts_questions_with_cache(
         key = fast_facts_cache_key(normalized_payload, slide)
         if slide_id in final_by_slide:
             question = final_by_slide[slide_id]
+            diagnostic = diagnostic_entries.get(slide_id)
+            if diagnostic:
+                diagnostic["postRepairValidationFindings"] = fast_facts_diagnostic_validation(normalized_payload, slide, question)
             ok, errors, qa_item = fast_facts_single_question_validation(normalized_payload, slide, question)
             if ok:
                 final_questions.append(question)
+                if diagnostic:
+                    diagnostic["finalDisposition"] = "repaired" if slide_id in repaired_slide_ids else (
+                        "reused-cache" if diagnostic["cacheStatus"] == "reused" else "kept"
+                    )
                 update_fast_facts_cache_entry(cache, key, fast_facts_cache_entry(normalized_payload, slide, question, qa_item, "valid"))
                 continue
             invalidation_reasons.append({"slideId": slide_id, "reason": "post-repair validation failed: " + "; ".join(errors[:4])})
@@ -4036,6 +4152,10 @@ def generate_fast_facts_questions_with_cache(
             if ok:
                 final_questions.append(prior)
                 rescued_from_prior += 1
+                diagnostic = diagnostic_entries.get(slide_id)
+                if diagnostic:
+                    diagnostic["postRepairValidationFindings"] = fast_facts_diagnostic_validation(normalized_payload, slide, prior)
+                    diagnostic["finalDisposition"] = "reused-cache"
                 update_fast_facts_cache_entry(cache, key, fast_facts_cache_entry(normalized_payload, slide, prior, qa_item, "valid"))
                 continue
         if slide_id not in final_by_slide:
@@ -4043,6 +4163,10 @@ def generate_fast_facts_questions_with_cache(
             matching_drop = next((d for d in dropped_questions if d.get("slideId") == slide_id), None)
             if matching_drop:
                 reason = matching_drop.get("reason") or reason
+            diagnostic = diagnostic_entries.get(slide_id)
+            if diagnostic:
+                diagnostic["finalDisposition"] = "dropped"
+                diagnostic["dropReason"] = reason or "no valid question after generation/repair"
             entry = {
                 **fast_facts_cache_key_parts(normalized_payload, slide),
                 "cacheKey": key,
@@ -4086,6 +4210,24 @@ def generate_fast_facts_questions_with_cache(
         "beforeErrors": before_errors,
         "beforeStrictFindings": before_strict,
     }
+    if diagnostic_entries:
+        final_index_by_slide = {
+            str(question.get("slideId") or ""): index
+            for index, question in enumerate(final_questions, start=1)
+        }
+        for slide_id, diagnostic in diagnostic_entries.items():
+            final_index = final_index_by_slide.get(slide_id)
+            if final_index:
+                final_question = final_questions[final_index - 1]
+                diagnostic["finalQuestionIndex"] = final_index
+                diagnostic["finalQuestionId"] = stable_fast_facts_question_id(
+                    next(a["slide"] for a in ordered_allocations if a["slideId"] == slide_id),
+                    final_question,
+                )
+            elif diagnostic["finalDisposition"] == "pending":
+                diagnostic["finalDisposition"] = "dropped"
+                diagnostic["dropReason"] = "no valid question after generation/repair"
+        cache_report["diagnosticEntries"] = list(diagnostic_entries.values())
     return final_questions, cache_report, before_diversity, app_payload_before
 
 
@@ -4232,6 +4374,8 @@ def run_fast_facts_generation_milestone(
     reuse_cache: bool = True,
     force_regenerate: bool = False,
     repair_only: bool = False,
+    diagnostic_report: bool = False,
+    question_limit: int = 0,
 ) -> Path:
     normalized_payload, skipped_concepts = fast_facts_normalized_payload(pptx_path, graph, deck_hash, limit_slides)
     normalized_path = NORMALIZED_DIR / f"{slugify(pptx_path.stem)}_fast_facts_generation_normalized.json"
@@ -4246,7 +4390,10 @@ def run_fast_facts_generation_milestone(
         except Exception:
             before_generation_snapshot = []
     memory = empty_memory()
-    allocations = fast_facts_allocations(normalized_payload, memory)
+    allocations = limit_fast_facts_question_attempts(
+        fast_facts_allocations(normalized_payload, memory),
+        question_limit,
+    )
     repaired_questions, cache_report, before_diversity, app_payload_before = generate_fast_facts_questions_with_cache(
         normalized_payload=normalized_payload,
         allocations=allocations,
@@ -4254,7 +4401,22 @@ def run_fast_facts_generation_milestone(
         reuse_cache=reuse_cache,
         force_regenerate=force_regenerate,
         repair_only=repair_only,
+        diagnostic_report=diagnostic_report,
     )
+    diagnostic_report_path = None
+    if diagnostic_report:
+        diagnostic_report_path = write_fast_facts_diagnostic_report({
+            "runAt": timestamp_iso(),
+            "profile": FAST_FACTS_PROFILE,
+            "sourceFile": pptx_path.name,
+            "sourcePath": str(pptx_path),
+            "limitSlides": int(limit_slides or 0),
+            "questionAttemptLimit": int(question_limit or 0),
+            "reuseCache": bool(reuse_cache),
+            "forceRegenerate": bool(force_regenerate),
+            "repairOnly": bool(repair_only),
+            "entries": cache_report.get("diagnosticEntries") or [],
+        })
     if not repaired_questions:
         raise PipelineError("Fast Facts constrained generation produced no questions.")
     write_json(generated_path, {"questions": repaired_questions})
@@ -4322,6 +4484,8 @@ def run_fast_facts_generation_milestone(
         "extractionReport": extraction_report,
         "imageRoutingSummary": image_routing_summary(app_payload_before if after_errors else app_payload),
     }
+    if diagnostic_report_path:
+        metrics["diagnosticReportPath"] = str(diagnostic_report_path.relative_to(BASE_DIR))
     if after_errors:
         report_path = write_report(metrics, "fast_facts_generation_validation_report")
         raise PipelineError(
@@ -6319,6 +6483,8 @@ def process_fast_facts_pptx(
     reuse_cache: bool = True,
     force_regenerate: bool = False,
     repair_only: bool = False,
+    diagnostic_report: bool = False,
+    question_limit: int = 0,
 ) -> Path:
     if pptx_path.suffix.lower() != ".pptx":
         raise PipelineError(f"Fast Facts profile expects a PPTX file: {pptx_path}")
@@ -6396,7 +6562,28 @@ def process_fast_facts_pptx(
             reuse_cache=reuse_cache,
             force_regenerate=force_regenerate,
             repair_only=repair_only,
+            diagnostic_report=diagnostic_report,
+            question_limit=question_limit,
         )
+    if diagnostic_report:
+        skeleton_allocations = limit_fast_facts_question_attempts(
+            fast_facts_allocations(fast_facts_normalized_payload(pptx_path, graph, deck_hash, limit_slides)[0], empty_memory()),
+            question_limit,
+        )
+        write_fast_facts_diagnostic_report({
+            "runAt": timestamp_iso(),
+            "profile": FAST_FACTS_PROFILE,
+            "sourceFile": pptx_path.name,
+            "sourcePath": str(pptx_path),
+            "limitSlides": int(limit_slides or 0),
+            "questionAttemptLimit": int(question_limit or 0),
+            "generationRun": False,
+            "entries": [
+                fast_facts_diagnostic_entry(allocation)
+                for allocation in skeleton_allocations
+                if int(allocation.get("questionCount") or 0) > 0
+            ],
+        })
     return out_path
 
 
@@ -6413,6 +6600,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--force-regenerate", action="store_true", help="Ignore Fast Facts cache hits and regenerate eligible questions.")
     parser.add_argument("--repair-only", action="store_true", help="Fast Facts only: repair/revalidate cache without generating cache misses.")
     parser.add_argument("--show-cache-status", action="store_true", help="Show Fast Facts question cache status and exit.")
+    parser.add_argument("--fast-facts-diagnostic-report", action="store_true", help="Fast Facts only: write a diagnostic report for the generation and validation chain.")
+    parser.add_argument("--fast-facts-question-limit", type=int, default=0, help="Fast Facts only: cap attempted generation allocations without changing the normal default.")
     parser.add_argument("--input-dir", default="", help="Folder containing lecture PDFs.")
     parser.add_argument("--input-file", default="", help="Single PDF/PPTX input file.")
     parser.add_argument("--normalized-chunks", default="", help="Shared normalized chunk bundle JSON to consume instead of reopening the source PDF.")
@@ -6446,6 +6635,8 @@ def main() -> int:
                     reuse_cache=args.reuse_cache,
                     force_regenerate=args.force_regenerate,
                     repair_only=args.repair_only,
+                    diagnostic_report=args.fast_facts_diagnostic_report,
+                    question_limit=args.fast_facts_question_limit,
                 )
                 for path in pptx_files[:1]
             ]

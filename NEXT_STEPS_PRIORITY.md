@@ -14,15 +14,15 @@ Architectural impact: Extends the existing Divine generator boundary carefully w
 
 Validation requirements: Start with a controlled audio sample, keep the existing generator boundary, prove output location and import behavior, and separate transcription from live question quality claims.
 
-## 2. Fast Facts Stabilization
+## 2. Broader Fast Facts Validation
 
-Rationale: Fast Facts still has cache/profile foundation only and remains the major semantically unstable named source.
+Rationale: Fast Facts now has a narrow screening stabilization pass with diagnostic reporting, a capped live BIC validation path, and one observed Turner Syndrome screening ontology failure fixed. The next Fast Facts step is to widen evidence without turning that pass into a broad stability claim.
 
-Risk: High. Semantic instability should be handled with narrow evidence rather than broader architecture expansion.
+Risk: High. One small PPTX and one final app-ready question do not establish broad semantic stability.
 
-Architectural impact: Stabilizes an existing path before adding more profile breadth.
+Architectural impact: Extends validation of the existing path while preserving the current capped stabilization registry mode.
 
-Validation requirements: Use a small failing sample set, preserve cache behavior, review generated content, and validate importer, score, and reload before stability claims.
+Validation requirements: Add controlled Fast Facts deck coverage, run packaged validation for the screening fix before packaged claims, review diagnostic reports, and keep importer, render, score, and reload evidence tied to each claim. Track the global Gemini alert mismatch separately as a UI consistency issue.
 
 ## 3. OME Live Policy Or Writable Output Migration
 

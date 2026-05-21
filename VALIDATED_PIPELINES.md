@@ -16,7 +16,7 @@ This file records what is validated, what is not validated, and the risk level f
 | Anki | Shared profile dry-run handoff validated | Not validated; BIC live steps intentionally reuse dry-run handoff | Normalized text chunks validated | Dry-run BIC auto-import validated in dev and packaged app | Packaged dry-run auto-import, quiz rendering, reload persistence, and score history persistence validated | Placeholder questions only; live Gemini generation not enabled or validated | Medium-high |
 | OME | Shared PDF dry-run handoff validated | Not validated; BIC live steps intentionally reuse dry-run handoff | Normalized text chunks validated | Dry-run BIC auto-import validated in dev and packaged app | Clean packaged profile, quiz rendering, reload persistence, and score history persistence validated | Placeholder questions only; real PDF coverage, live Gemini generation, and writable packaged output are unvalidated | Medium-high |
 | Divine Transcript | Dry-run BIC handoff validated | Not validated; BIC live steps intentionally reuse dry-run handoff | Normalized transcript chunks validated | Dry-run BIC auto-import validated in dev and packaged app | Packaged `.txt` and `.md` dry-run auto-import and score history persistence validated | `sourceType` `divine_transcript`; visible source `Divine Transcript`; `sourceFormat` remains `divine-audio`; live generation and audio are unvalidated | Medium-high |
-| Fast Facts | Cache foundation exists | Semantic quality unstable | Adapter foundation exists | BIC registered | Do not claim packaged semantic stability | Generation quality instability | High |
+| Fast Facts | Cache foundation plus narrow screening stabilization | Dev Electron live BIC generation validated only through the capped 3-attempt stabilization path | Adapter foundation exists | Dev BIC app-ready discovery and auto-import validated on one small PPTX | Not run for this Fast Facts fix | Broad deck coverage, broad semantic stability, renderer Gemini-alert mismatch | High |
 
 ## AMBOSS
 
@@ -117,13 +117,21 @@ Not validated:
 Validated:
 
 - Cache foundation was added at v4.4.
+- Diagnostic reporting was added for Fast Facts generation and validation.
+- `--fast-facts-question-limit` was added and the visible BIC live stabilization path was capped at 3 attempted questions.
+- The screening-test ontology classifier was fixed for the observed Turner Syndrome screening failure.
+- One visible Electron dev BIC live generation passed from a small Fast Facts PPTX through the capped stabilization registry path.
+- The run emitted app-ready output with 1 final question, discovered that output in BIC, auto-imported it, rendered the first question, scored the imported test, and preserved score history after reload.
+- The newest diagnostic and validation reports for that run did not show `mixed_answer_choice_ontology` or unsupported-term failures.
 
 Explicitly not validated:
 
-- semantic generation quality.
-- stable packaged semantic output.
+- broad semantic generation quality.
+- all Fast Facts decks.
+- packaged validation for this Fast Facts fix.
+- uncapped live BIC validation outside the current stabilization registry path.
 
-Treat Fast Facts as high-risk until semantic generation is separately hardened and validated.
+Treat Fast Facts as high-risk outside the narrow observed screening failure that was stabilized and validated.
 
 ## Divine Transcript
 

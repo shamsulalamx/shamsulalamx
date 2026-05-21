@@ -38,7 +38,7 @@ Earlier v4.0-v4.3 established Images/Tables generator stability and Emma Holiday
 | Anki | Shared-ingestion dry-run profile and BIC dry-run orchestration validated | Dev Electron visible UI auto-import, packaged visible UI auto-import, and score history persistence validated; live Gemini generation and semantic question quality are not validated |
 | OME | Shared-ingestion dry-run profile and BIC dry-run orchestration validated | Normalized chunks, selected-input dry-run handoff, dev and packaged visible BIC auto-import, clean-profile import, quiz rendering, and score history persistence validated; live Gemini generation is not validated |
 | Divine Transcript | Shared-ingestion transcript profile and BIC dry-run orchestration validated | Transcript normalized chunks, `.txt` and `.md` inputs, selected-input dry-run handoff, dev and packaged visible BIC auto-import, and score history persistence validated; live Gemini, audio, and transcription are not validated |
-| Fast Facts | Cache foundation only | Explicitly not semantically stable |
+| Fast Facts | Narrow screening validation stabilized | Diagnostic reporting, capped dev BIC live generation, auto-import, render, score, and reload persistence validated on one small PPTX; broad semantic stability is not claimed |
 
 ## Validated Runtime Paths
 
@@ -91,6 +91,18 @@ Validated after the OME dry-run BIC milestone for Divine Transcript:
 
 This Divine Transcript milestone validates transcript-first dry-run output only. It does not validate live Gemini Divine generation, audio input, transcription, or real Divine podcast audio.
 
+Validated after the Fast Facts screening stabilization pass:
+
+- Fast Facts diagnostic reporting for the generation and validation chain.
+- `--fast-facts-question-limit` support, used by the BIC stabilization registry path to cap live validation at 3 attempted questions.
+- The screening-test ontology classifier fix for the observed Turner Syndrome screening failure.
+- Visible Electron dev BIC live generation from a small Fast Facts PPTX through the capped stabilization registry path.
+- App-ready output discovery and auto-import into Fast Facts.
+- First-question render, score history, and reload persistence for the imported one-question output.
+- The newest diagnostic and validation reports did not show `mixed_answer_choice_ontology` or unsupported-term failures for this run.
+
+This Fast Facts pass is narrow. It validates one small PPTX and one final app-ready question in Electron dev only. It does not establish broad Fast Facts semantic stability, all-deck coverage, or packaged validation for this fix.
+
 ## Packaged App Status
 
 Packaged app validation has been required for image and BIC claims. The v4.15 Images & Tables profile passed packaged validation:
@@ -105,7 +117,10 @@ Packaged app validation has been required for image and BIC claims. The v4.15 Im
 
 ## Remaining Risks
 
-- Fast Facts semantic generation remains unstable. Do not call it stable.
+- Fast Facts broad semantic generation remains unvalidated outside the narrow screened stabilization pass. Do not call all Fast Facts decks stable.
+- Fast Facts stabilization registry mode is currently capped at 3 attempted questions.
+- The Fast Facts screening stabilization pass covered one small PPTX with one final app-ready question; packaged validation was not run for this fix.
+- A fresh dev profile can still show the global renderer alert `Gemini key missing` even when the BIC batch path receives the injected Gemini key and generates successfully. Treat that as a later UI consistency issue, not a Fast Facts blocker.
 - Emma live generation can fail semantic validation even after normalized chunks are consumed.
 - Semantic validators may reject legitimate source terms.
 - Images & Tables classification is heuristic.
@@ -123,7 +138,7 @@ Packaged app validation has been required for image and BIC claims. The v4.15 Im
 Priority roadmap:
 
 1. Controlled Divine audio and `.mp3` operationalization through the existing generator only if pursued next.
-2. Fast Facts stabilization.
+2. Broader Fast Facts deck coverage and packaged validation after the narrow screening stabilization pass.
 3. OME live-generation policy and semantic quality only if desired.
 4. OME writable app-data output migration.
 5. Anki live generation and semantic hardening only if desired.

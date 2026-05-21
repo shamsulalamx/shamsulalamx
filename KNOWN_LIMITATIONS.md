@@ -2,9 +2,11 @@
 
 Last updated: 2026-05-21
 
-## Fast Facts Instability
+## Fast Facts Validation Limit
 
-Fast Facts is not semantically stable. v4.4 added profile extraction and an incremental cache foundation, but that does not prove generated question quality. Do not tune or claim Fast Facts quality without a separate validation pass.
+Fast Facts has a narrow screening stabilization pass beyond the v4.4 cache foundation. Diagnostic reporting, a `--fast-facts-question-limit` cap, the observed Turner Syndrome screening-test ontology fix, and a visible Electron dev BIC live run were validated on one small PPTX. That run produced one final app-ready question and passed auto-import, render, score, and reload persistence.
+
+This does not prove broad Fast Facts semantic stability, all-deck coverage, or packaged validation for the fix. The BIC registry path is currently capped at 3 attempted questions for stabilization mode. A fresh dev profile can still show the global renderer alert `Gemini key missing` while the BIC batch path has the injected Gemini key and generates successfully; that is a later UI consistency issue, not a Fast Facts blocker.
 
 ## Semantic Validator Fragility
 
@@ -27,7 +29,7 @@ Each source still has source-specific assumptions:
 - Emma uses lecture-slide downstream semantics.
 - Mehlman assumes text-heavy PDF structure.
 - Images & Tables assumes small image sets.
-- Fast Facts relies on its cache/profile foundation but remains semantically unstable.
+- Fast Facts has a narrow screening stabilization pass only; broad semantic quality remains unvalidated.
 
 ## Unvalidated Scaling Behavior
 
