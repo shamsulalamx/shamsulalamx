@@ -68,6 +68,7 @@ REPORT_DIR = _BASE / "reports"
 PROMPTS_DIR = _BASE / "prompts"
 
 SUPPORTED_AUDIO = {".mp3", ".m4a", ".wav"}
+SUPPORTED_TRANSCRIPTS = {".txt", ".md"}
 
 # Gemini File API base (separate from the generateContent endpoint)
 _GEMINI_FILES_BASE = "https://generativelanguage.googleapis.com"
@@ -107,6 +108,42 @@ def _stem_from_raw(path: Path) -> str:
 def _stem_from_cleaned(path: Path) -> str:
     """Strip '_cleaned' suffix from cleaned transcript filename stem."""
     return path.stem.removesuffix("_cleaned")
+
+
+def _resolve_selected_transcript(raw_path: str) -> Path:
+    selected = Path(raw_path).expanduser()
+    if not selected.is_absolute():
+        selected = (Path.cwd() / selected).resolve()
+    else:
+        selected = selected.resolve()
+    if not selected.exists():
+        raise ValueError(f"--input-file does not exist: {selected}")
+    if not selected.is_file():
+        raise ValueError(f"--input-file must be a file: {selected}")
+    if selected.suffix.lower() not in SUPPORTED_TRANSCRIPTS:
+        supported = ", ".join(sorted(SUPPORTED_TRANSCRIPTS))
+        raise ValueError(f"--input-file has unsupported extension '{selected.suffix}'. Supported: {supported}")
+    return selected
+
+
+def _apply_output_dir(raw_path: str) -> Path:
+    global CHUNK_DIR, GEN_DIR, DEBUG_DIR, APP_DIR, REPORT_DIR
+
+    output_root = Path(raw_path).expanduser()
+    if not output_root.is_absolute():
+        output_root = (Path.cwd() / output_root).resolve()
+    else:
+        output_root = output_root.resolve()
+    if output_root.exists() and not output_root.is_dir():
+        raise ValueError(f"--output-dir must be a directory path: {output_root}")
+    CHUNK_DIR = output_root / "chunks"
+    GEN_DIR = output_root / "generated"
+    DEBUG_DIR = output_root / "generated" / "debug"
+    APP_DIR = output_root / "app_ready"
+    REPORT_DIR = output_root / "reports"
+    _uw.DEBUG_DIR = DEBUG_DIR
+    _uw.REPORT_DIR = REPORT_DIR
+    return output_root
 
 
 # ── Gemini File API: upload ────────────────────────────────────────────────────
@@ -655,7 +692,25 @@ def main() -> None:
         "--questions-per-file", type=int, default=15, metavar="N",
         help="Target questions per audio file or cleaned transcript (default: 15).",
     )
+    parser.add_argument(
+        "--input-file",
+        default="",
+        help="Process one selected transcript file instead of scanning transcript folders. Supported: .txt, .md.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default="",
+        help="Optional output root. Writes chunks/, generated/, app_ready/, and reports/ under this directory.",
+    )
     args = parser.parse_args()
+
+    try:
+        selected_input = _resolve_selected_transcript(args.input_file) if args.input_file else None
+        output_root = _apply_output_dir(args.output_dir) if args.output_dir else None
+    except ValueError as exc:
+        parser.error(str(exc))
+    if selected_input and (args.transcribe_only or args.clean_only):
+        parser.error("--input-file selects a transcript and is supported only with --dry-run, --chunk-only, or --generate.")
 
     # ── Startup log ────────────────────────────────────────────────────────────
     mode_label = (
@@ -670,6 +725,11 @@ def main() -> None:
     _uw.log(f"  Model:              {_uw.GEMINI_MODEL}")
     _uw.log(f"  Mode:               {mode_label}")
     _uw.log(f"  Questions per file: {args.questions_per_file}")
+    _uw.log(f"  Input mode:         {'selected transcript' if selected_input else 'workspace scan'}")
+    if selected_input:
+        _uw.log(f"  Selected input:     {selected_input}")
+    if output_root:
+        _uw.log(f"  Output root:        {output_root}")
     _uw.log("=" * 60)
 
     # ── Create all directories ─────────────────────────────────────────────────
@@ -700,7 +760,7 @@ def main() -> None:
     # Mode: --dry-run
     # ══════════════════════════════════════════════════════════════════════════
     if args.dry_run:
-        cleaned_files = discover_cleaned_transcripts()
+        cleaned_files = [selected_input] if selected_input else discover_cleaned_transcripts()
         if not cleaned_files:
             _uw.log("No cleaned transcripts found in transcripts/cleaned/")
             _uw.log(
@@ -720,7 +780,7 @@ def main() -> None:
         _uw.log(f"Found {len(cleaned_files)} cleaned transcript(s): "
                 f"{[f.name for f in cleaned_files]}")
         for cf in cleaned_files:
-            stem = _stem_from_cleaned(cf)
+            stem = cf.stem if selected_input else _stem_from_cleaned(cf)
             try:
                 cleaned_text = cf.read_text(encoding="utf-8")
                 _process_cleaned_transcript(
@@ -830,7 +890,7 @@ def main() -> None:
     # Mode: --chunk-only
     # ══════════════════════════════════════════════════════════════════════════
     elif args.chunk_only:
-        cleaned_files = discover_cleaned_transcripts()
+        cleaned_files = [selected_input] if selected_input else discover_cleaned_transcripts()
         if not cleaned_files:
             _uw.log("No cleaned transcripts found in transcripts/cleaned/")
             _uw.log("Run --clean-only first, or place _cleaned.txt files manually.")
@@ -843,7 +903,7 @@ def main() -> None:
         _uw.log(f"Found {len(cleaned_files)} cleaned transcript(s): "
                 f"{[f.name for f in cleaned_files]}")
         for cf in cleaned_files:
-            stem = _stem_from_cleaned(cf)
+            stem = cf.stem if selected_input else _stem_from_cleaned(cf)
             try:
                 cleaned_text = cf.read_text(encoding="utf-8")
                 chunks = _uw.split_into_chunks(cleaned_text, max_chars=3000)
@@ -869,8 +929,24 @@ def main() -> None:
     # Mode: --generate (full pipeline)
     # ══════════════════════════════════════════════════════════════════════════
     elif args.generate:
-        audio_files = discover_audio_files()
-        processed_stems: set = set()
+        if selected_input:
+            try:
+                transcript_text = selected_input.read_text(encoding="utf-8")
+                _process_cleaned_transcript(
+                    selected_input.stem,
+                    transcript_text,
+                    args.questions_per_file,
+                    False,
+                    report_data,
+                )
+            except Exception as exc:
+                _uw.warn(f"Error processing {selected_input.name}: {exc}")
+                report_data["files"][selected_input.stem] = {"status": "error", "error": str(exc)}
+            audio_files = []
+            processed_stems = {selected_input.stem}
+        else:
+            audio_files = discover_audio_files()
+            processed_stems: set = set()
 
         if audio_files:
             _uw.log(
@@ -922,7 +998,7 @@ def main() -> None:
                 report_data["files"][stem] = {"status": "error", "error": str(exc)}
 
         # Also process standalone cleaned transcripts (no corresponding audio file)
-        standalone_cleaned = [
+        standalone_cleaned = [] if selected_input else [
             f for f in discover_cleaned_transcripts()
             if _stem_from_cleaned(f) not in processed_stems
         ]
@@ -942,7 +1018,7 @@ def main() -> None:
                     _uw.warn(f"Error processing {cf.name}: {exc}")
                     report_data["files"][stem] = {"status": "error", "error": str(exc)}
 
-        if not audio_files and not discover_cleaned_transcripts():
+        if not selected_input and not audio_files and not discover_cleaned_transcripts():
             _uw.log("No audio files found in input_audio/")
             _uw.log("No cleaned transcripts found in transcripts/cleaned/")
             _uw.log(

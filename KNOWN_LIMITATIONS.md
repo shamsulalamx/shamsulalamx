@@ -58,14 +58,18 @@ The validated OME BIC path is dry-run only. Its current app-ready questions are 
 - Packaged OME output currently writes under packaged resources. Moving generated output to a writable app-data location is future work.
 - Signed or notarized distribution behavior and non-writable packaged resource tree behavior are not validated.
 
-## Divine Transcript First-Milestone Limitations
+## Divine Transcript Dry-Run Limitations
 
-The current Divine shared-ingestion milestone is transcript normalization only.
+The validated Divine Transcript BIC path is transcript-first and dry-run only.
 
-- Only synthetic `.txt` and `.md` transcript fixtures are validated.
-- Audio ingestion, transcription, Whisper, local speech models, and Gemini audio transcription are not supported.
+- Audio files are not supported yet through the Divine Transcript BIC source, including `.mp3`, `.wav`, and `.m4a`.
+- Live Gemini Divine generation is not enabled through BIC.
+- The current Divine dry-run app-ready output keeps `sourceFormat: divine-audio` even when the selected input is a transcript.
+- Packaged Divine dry-run outputs currently write under packaged resources.
+- Only synthetic `.txt` and `.md` transcript fixtures are validated; real-world transcript variation is unvalidated.
+- Audio ingestion, transcription, Whisper, local speech models, and Gemini audio transcription are not part of this validated path.
 - Transcript chunks preserve structure and provenance but do not prove semantic medical quality.
-- BIC registration, app-ready generation, importer behavior, Electron UI, packaged orchestration, retrieval, clustering, images, and assets remain out of scope.
+- Retrieval, clustering, images, and assets remain out of scope.
 
 ## Remaining Multimodal Gaps
 
@@ -84,4 +88,4 @@ Packaged app jobs run from app resources. A workspace path and a packaged resour
 
 ## Shared Architecture Incomplete
 
-The shared profile architecture is active but incomplete. Anki and OME have validated dry-run shared profiles and BIC handoffs, while Divine and UWorld are not fully migrated into shared ingestion. Do not delete existing source-specific flows.
+The shared profile architecture is active but incomplete. Anki, OME, and Divine Transcript have validated dry-run shared profiles and BIC handoffs, while UWorld is not fully migrated into shared ingestion. Do not delete existing source-specific flows.

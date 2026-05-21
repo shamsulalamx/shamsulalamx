@@ -2,7 +2,7 @@
 
 Last updated: 2026-05-21
 
-This document describes the current v4.16 architecture plus the validated OME dry-run BIC milestone after that tag. It distinguishes validated behavior from intended convergence.
+This document describes the current v4.16 architecture plus the validated OME and Divine Transcript dry-run BIC milestones after that tag. It distinguishes validated behavior from intended convergence.
 
 ## System Overview
 
@@ -55,6 +55,7 @@ Current shared profile descriptors include:
 - `images_tables_source`
 - `anki_notes`
 - `ome_pdf`
+- `divine_transcript`
 
 The descriptor is metadata plus routing intent. It is not a runtime schema fork.
 
@@ -100,6 +101,7 @@ Shared ingestion currently feeds existing downstream generators:
 - Images & Tables normalized chunks feed a deterministic attachment-first runner.
 - Anki normalized text chunks hand off to the existing Anki wrapper only in selected-input dry-run mode.
 - OME normalized text chunks hand off to the existing OME generator only in selected-input dry-run mode.
+- Divine Transcript normalized transcript chunks hand off to the existing Divine generator only in selected-input dry-run mode.
 
 NBME, AMBOSS, and Fast Facts still use existing source-specific downstream code. Do not rewrite those generators as part of profile onboarding unless the user explicitly requests it and validation supports the change.
 
@@ -128,6 +130,19 @@ The validated BIC route is intentionally dry-run only:
 4. BIC discovers that JSON and the renderer imports it through the existing NBME Gemini-style importer path.
 
 That path proves selected-input orchestration, import compatibility, quiz rendering, and persistence for placeholder dry-run output. It does not validate live Gemini OME generation or real OME question quality.
+
+## Divine Transcript Dry-Run Profile
+
+Divine Transcript is transcript-first. Its active shared profile accepts `.txt` and `.md` transcript inputs, emits normalized chunks with `chunkType: transcript`, and keeps the existing Divine generator as the app-ready output boundary.
+
+The validated BIC route is dry-run only:
+
+1. Shared ingestion emits normalized Divine transcript chunks.
+2. `divine_transcript_profile_runner.py` calls the existing Divine generator with one selected transcript, `--dry-run`, and a controlled output directory.
+3. The existing Divine generator emits app-ready JSON from that dry-run handoff.
+4. BIC discovers that JSON and the renderer imports it through the existing importer path.
+
+That path proves transcript-first dry-run orchestration, importer compatibility, packaged auto-import, and score history persistence for `.txt` and `.md` inputs. It does not add audio support or validate live Gemini Divine generation or transcription.
 
 ## Batch Import Center
 

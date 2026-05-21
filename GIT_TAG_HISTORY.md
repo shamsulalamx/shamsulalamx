@@ -176,4 +176,8 @@ Architecture significance: Proved a dry-run-only BIC profile can reuse an existi
 
 ## Pending Milestone Candidate
 
-The OME dry-run BIC milestone has validation evidence after v4.16, but no stable tag exists yet. Do not add a tag-history entry until the commit and tag decision is made.
+The OME dry-run BIC milestone and Divine Transcript dry-run BIC milestone have validation evidence after v4.16, but no stable tag exists yet.
+
+Pending candidate only: `v4.19-divine-transcript-dry-run-bic-stable`.
+
+Do not add a stable tag-history entry until the commit and tag decision is made.

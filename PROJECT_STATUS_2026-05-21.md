@@ -37,6 +37,7 @@ Earlier v4.0-v4.3 established Images/Tables generator stability and Emma Holiday
 | Images & Tables | Shared-ingestion profile stable | Packaged app import, FigureStore persistence, image/table rendering, score, reload validated |
 | Anki | Shared-ingestion dry-run profile and BIC dry-run orchestration validated | Dev Electron visible UI auto-import, packaged visible UI auto-import, and score history persistence validated; live Gemini generation and semantic question quality are not validated |
 | OME | Shared-ingestion dry-run profile and BIC dry-run orchestration validated | Normalized chunks, selected-input dry-run handoff, dev and packaged visible BIC auto-import, clean-profile import, quiz rendering, and score history persistence validated; live Gemini generation is not validated |
+| Divine Transcript | Shared-ingestion transcript profile and BIC dry-run orchestration validated | Transcript normalized chunks, `.txt` and `.md` inputs, selected-input dry-run handoff, dev and packaged visible BIC auto-import, and score history persistence validated; live Gemini, audio, and transcription are not validated |
 | Fast Facts | Cache foundation only | Explicitly not semantically stable |
 
 ## Validated Runtime Paths
@@ -78,6 +79,18 @@ Validated after v4.16 for the OME dry-run BIC milestone:
 
 This OME milestone validates placeholder dry-run output only. It does not validate live Gemini OME generation, a live OME BIC path, or real semantic OME question quality.
 
+Validated after the OME dry-run BIC milestone for Divine Transcript:
+
+- Shared-ingestion normalized Divine transcript chunks.
+- Synthetic `.txt` and `.md` transcript inputs.
+- Selected-input dry-run handoff through the existing Divine generator.
+- Active BIC dry-run registry orchestration and output discovery.
+- Dev Electron visible BIC auto-import.
+- Packaged app visible BIC auto-import for `.txt` and `.md` inputs.
+- Score history persistence after packaged validation.
+
+This Divine Transcript milestone validates transcript-first dry-run output only. It does not validate live Gemini Divine generation, audio input, transcription, or real Divine podcast audio.
+
 ## Packaged App Status
 
 Packaged app validation has been required for image and BIC claims. The v4.15 Images & Tables profile passed packaged validation:
@@ -103,21 +116,23 @@ Packaged app validation has been required for image and BIC claims. The v4.15 Im
 - Semantic Anki question quality is not validated.
 - Live Gemini OME generation and live OME BIC execution are not validated.
 - OME packaged output currently depends on a writable packaged resource tree; app-data output migration is future work.
+- Live Gemini Divine generation, Divine audio input, and Divine transcription are not validated.
 
 ## Roadmap
 
 Priority roadmap:
 
-1. Divine transcript/audio profile or UWorld notes profile, depending on roadmap.
-2. OME live-generation policy and semantic quality only if desired.
-3. OME writable app-data output migration.
-4. Anki live generation and semantic hardening only if desired.
-5. Shared downstream reuse.
-6. Semantic validator hardening.
-7. Multimodal grounding improvements.
-8. Scalable asset caching.
-9. Deeper table parsing.
-10. Full profile architecture convergence.
+1. Controlled Divine audio and `.mp3` operationalization through the existing generator only if pursued next.
+2. Fast Facts stabilization.
+3. OME live-generation policy and semantic quality only if desired.
+4. OME writable app-data output migration.
+5. Anki live generation and semantic hardening only if desired.
+6. Shared downstream reuse.
+7. Semantic validator hardening.
+8. Multimodal grounding improvements.
+9. Scalable asset caching.
+10. Deeper table parsing.
+11. Full profile architecture convergence.
 
 ## Exact Current Git Tags
 

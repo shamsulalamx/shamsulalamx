@@ -96,9 +96,11 @@ The adapter reuses existing OME native text extraction and UWorld text chunking.
 
 ## Divine Transcript Descriptor And Adapter
 
-Divine has a transcript-first `divine_transcript` descriptor, a thin text adapter, and `divine_transcript_profile_runner.py`.
+Divine has a transcript-first `divine_transcript` descriptor, a thin transcript adapter, and `divine_transcript_profile_runner.py`.
 
-This first profile milestone accepts `.txt` and `.md` transcript text only. It emits `chunkType: transcript`, preserves source line ranges, preserves explicit timestamps when they exist, and keeps blank-line transcript blocks in source order. It does not add audio ingestion, transcription, semantic generation, BIC registration, retrieval, images, or assets.
+This milestone accepts `.txt` and `.md` transcript text only. It emits `chunkType: transcript`, preserves line provenance through source line ranges, preserves explicit timestamps when they exist, and keeps blank-line transcript blocks in source order. Synthetic `.txt` and `.md` fixtures validate the transcript adapter before the dry-run downstream handoff.
+
+The validated handoff calls the existing Divine generator only after transcript chunks validate. No audio ingestion or transcription is part of this milestone.
 
 ## Asset Routing
 
@@ -118,7 +120,7 @@ Current downstream approaches:
 
 - Existing generator reuse: Emma, Mehlman.
 - Attachment-first runner: Images & Tables.
-- Existing generator dry-run handoff: Anki, OME.
+- Existing generator dry-run handoff: Anki, OME, Divine Transcript.
 - Existing source-specific pipeline: AMBOSS, NBME, Fast Facts.
 
 True shared downstream generation is a future milestone.

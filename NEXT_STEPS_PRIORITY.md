@@ -4,17 +4,27 @@ Last updated: 2026-05-21
 
 This roadmap prioritizes convergence while protecting validated behavior.
 
-## 1. Divine Transcript/Audio Profile Or UWorld Notes
+## 1. Controlled Divine Audio Operationalization
 
-Rationale: OME now has a validated dry-run BIC profile. The next broad architecture step should move to Divine transcript/audio or UWorld notes after the roadmap choice is made.
+Rationale: Divine Transcript now has a validated transcript-first dry-run BIC milestone. If Divine work is pursued next, the next step is controlled audio and `.mp3` operationalization through the existing Divine generator, not a new architecture branch.
 
-Risk: Medium-high. Both candidates have source-sensitive semantics and save/import boundaries that should be validated narrowly.
+Risk: Medium-high. Audio input and live generation add source-sensitive operational and semantic risk that the dry-run transcript proof does not cover.
 
-Architectural impact: Extends profile architecture beyond the newly validated OME PDF dry-run path.
+Architectural impact: Extends the existing Divine generator boundary carefully while preserving the validated transcript dry-run path.
 
-Validation requirements: Choose one candidate and validate a small source sample through normalized artifacts, downstream output, import, quiz, score, and reload.
+Validation requirements: Start with a controlled audio sample, keep the existing generator boundary, prove output location and import behavior, and separate transcription from live question quality claims.
 
-## 2. OME Live Policy Or Writable Output Migration
+## 2. Fast Facts Stabilization
+
+Rationale: Fast Facts still has cache/profile foundation only and remains the major semantically unstable named source.
+
+Risk: High. Semantic instability should be handled with narrow evidence rather than broader architecture expansion.
+
+Architectural impact: Stabilizes an existing path before adding more profile breadth.
+
+Validation requirements: Use a small failing sample set, preserve cache behavior, review generated content, and validate importer, score, and reload before stability claims.
+
+## 3. OME Live Policy Or Writable Output Migration
 
 Rationale: OME dry-run orchestration is validated. Further OME work should either define a live-generation policy and semantic review bar or move generated packaged output to a writable app-data location.
 
@@ -23,16 +33,6 @@ Risk: Medium-high. Dry-run proof does not validate live generation quality, and 
 Architectural impact: Keeps the validated OME dry-run boundary intact while addressing the next real OME risk.
 
 Validation requirements: For live work, review real generated OME content and packaged import behavior. For output migration, prove packaged BIC discovery and reload persistence from a writable destination.
-
-## 3. Divine Transcript/Audio Profile
-
-Rationale: Divine already has transcript/audio workflows and can test transcript chunk types in shared ingestion.
-
-Risk: Medium-high. Transcript cleaning and semantic refinement are source-sensitive.
-
-Architectural impact: Brings transcript/audio modality toward profile architecture.
-
-Validation requirements: transcript chunk emission, draft generation/refinement path, save gates, import, score, reload. Avoid broad prompt rewrites.
 
 ## 4. Anki Live Generation And Semantic Hardening
 

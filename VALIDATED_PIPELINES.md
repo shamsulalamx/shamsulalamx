@@ -15,7 +15,7 @@ This file records what is validated, what is not validated, and the risk level f
 | Images & Tables | Shared image/table profile stable | Attachment-first only, no semantic generator | Validated in v4.15 | BIC generate + auto-import validated | Packaged app validated end to end | Heuristic classification, no deep table parsing | Medium |
 | Anki | Shared profile dry-run handoff validated | Not validated; BIC live steps intentionally reuse dry-run handoff | Normalized text chunks validated | Dry-run BIC auto-import validated in dev and packaged app | Packaged dry-run auto-import, quiz rendering, reload persistence, and score history persistence validated | Placeholder questions only; live Gemini generation not enabled or validated | Medium-high |
 | OME | Shared PDF dry-run handoff validated | Not validated; BIC live steps intentionally reuse dry-run handoff | Normalized text chunks validated | Dry-run BIC auto-import validated in dev and packaged app | Clean packaged profile, quiz rendering, reload persistence, and score history persistence validated | Placeholder questions only; real PDF coverage, live Gemini generation, and writable packaged output are unvalidated | Medium-high |
-| Divine transcript | Transcript-first shared-ingestion normalization validated on synthetic fixtures | Not in scope | Normalized transcript chunks validated | Not registered in BIC | Not validated | Transcript-only milestone; audio, transcription, retrieval, and semantic question generation intentionally absent | Medium-high |
+| Divine Transcript | Dry-run BIC handoff validated | Not validated; BIC live steps intentionally reuse dry-run handoff | Normalized transcript chunks validated | Dry-run BIC auto-import validated in dev and packaged app | Packaged `.txt` and `.md` dry-run auto-import and score history persistence validated | `sourceType` `divine_transcript`; visible source `Divine Transcript`; `sourceFormat` remains `divine-audio`; live generation and audio are unvalidated | Medium-high |
 | Fast Facts | Cache foundation exists | Semantic quality unstable | Adapter foundation exists | BIC registered | Do not claim packaged semantic stability | Generation quality instability | High |
 
 ## AMBOSS
@@ -127,19 +127,25 @@ Treat Fast Facts as high-risk until semantic generation is separately hardened a
 
 ## Divine Transcript
 
-Validated for the first shared-ingestion milestone:
+Validated for the dry-run BIC milestone:
 
 - `divine_transcript` descriptor for transcript text input.
-- `.txt` and `.md` synthetic transcript fixtures only.
+- Visible BIC source label `Divine Transcript`.
+- `.txt` and `.md` synthetic transcript fixtures.
 - Transcript normalized chunks with source line-range grounding.
 - Explicit timestamp preservation when transcript lines contain timestamps.
-- Transcript-only profile runner output through `shared-normalized-chunk-bundle-v1`.
+- Selected-input dry-run handoff through the existing Divine generator.
+- Active BIC dry-run registry execution, output discovery, and visible auto-import in dev Electron.
+- Packaged `.txt` and `.md` dry-run validation with visible auto-import and score history persistence.
+- App-ready dry-run output currently keeps `sourceFormat: divine-audio`.
 
 Intentionally not validated:
 
-- Audio input or transcription.
-- Gemini invocation or semantic question generation.
-- BIC registration, app-ready JSON, importer behavior, Electron UI, or packaged orchestration.
+- Live Gemini invocation or semantic question generation.
+- Audio input, `.mp3`, `.wav`, `.m4a`, or transcription.
+- Real Divine podcast audio.
+- Installed or signed app write constraints.
+- Real-world transcript variation.
 - Retrieval, clustering, multimodal grounding, images, or assets.
 
 ## OME

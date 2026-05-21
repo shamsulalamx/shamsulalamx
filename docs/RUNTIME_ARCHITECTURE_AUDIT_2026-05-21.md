@@ -648,3 +648,19 @@ Validated evidence now includes:
 - quiz rendering, reload persistence, and score history persistence after reload.
 
 This addendum records a dry-run milestone only. Live Gemini OME generation, any live OME BIC path, real semantic OME question quality, broad real OME PDF coverage, signed or notarized distribution behavior, and non-writable packaged resource tree behavior remain unvalidated. Packaged OME output currently writes under packaged resources; moving generated output to a writable app-data directory remains a future task.
+
+## Addendum: Divine Transcript Dry-Run BIC Milestone
+
+After the original audit and later dry-run addenda, the Divine Transcript dry-run BIC milestone was validated.
+
+Validated evidence now includes:
+
+- shared-ingestion normalized Divine transcript chunks,
+- synthetic `.txt` and `.md` transcript fixtures,
+- selected-input dry-run handoff through the existing Divine generator,
+- active BIC registry execution and output discovery,
+- visible dev Electron BIC auto-import,
+- visible packaged app BIC auto-import for `.txt` and `.md` validation,
+- score history persistence after packaged validation.
+
+This addendum records a transcript-first dry-run milestone only. Live Gemini Divine generation, audio input, `.mp3`, `.wav`, `.m4a`, transcription, real Divine podcast audio, installed or signed app write constraints, and real-world transcript variation remain unvalidated.

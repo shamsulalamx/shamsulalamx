@@ -33,6 +33,7 @@ Current registered sources:
 - `images_tables_source`
 - `anki_notes`
 - `ome_pdf`
+- `divine_transcript`
 - `fast_facts_pptx`
 - `amboss_pdf`
 - `nbme_pdf`
@@ -87,6 +88,18 @@ The active `ome_pdf` registry entry is dry-run only.
 - `liveSteps` intentionally map to the same dry-run handoff. This does not enable or validate live OME Gemini generation.
 - Registry notes are displayed in the BIC UI, including the dry-run-only OME note.
 - OME note visibility and dry-run auto-import were validated in dev Electron and packaged app.
+
+## Divine Transcript Registry Boundary
+
+The active `divine_transcript` registry entry is dry-run only.
+
+- Its visible source label is Divine Transcript.
+- Supported inputs are `.txt` and `.md`.
+- `requiresGemini` is `false` because the validated BIC path runs the selected-input dry-run handoff.
+- `dryRunSteps` emit transcript normalized chunks and app-ready dry-run output through the Divine Transcript profile runner.
+- `liveSteps` intentionally map to the same dry-run handoff. This does not enable or validate live Divine Gemini generation.
+- Registry notes are shown in the BIC UI, including the dry-run-only and no-audio note.
+- Packaged dry-run auto-import passed for `.txt` and `.md` transcript inputs.
 
 ## Output Discovery
 

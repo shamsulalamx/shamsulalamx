@@ -132,6 +132,32 @@
       "outputDirectories": ["tools/shared-ingestion/output/ome_app_ready_dry_run"],
       "notes": "Dry-run orchestration only. Live Gemini OME generation is intentionally not enabled through Batch Import Center yet."
     },
+    "divine_transcript": {
+      "label": "Divine Transcript",
+      "status": "active",
+      "requiresGemini": false,
+      "inputExtensions": [".txt", ".md"],
+      "workingDirectory": ".",
+      "pythonExecutable": "python3",
+      "dryRunSteps": [
+        {
+          "stage": "normalization",
+          "stageLabel": "Divine Transcript shared-ingestion dry-run",
+          "heartbeatSeconds": 10,
+          "args": ["tools/shared-ingestion/divine_transcript_profile_runner.py", "--input-file", "{inputFile}", "--emit-app-ready-dry-run"]
+        }
+      ],
+      "liveSteps": [
+        {
+          "stage": "normalization",
+          "stageLabel": "Divine Transcript shared-ingestion dry-run handoff",
+          "heartbeatSeconds": 10,
+          "args": ["tools/shared-ingestion/divine_transcript_profile_runner.py", "--input-file", "{inputFile}", "--emit-app-ready-dry-run"]
+        }
+      ],
+      "outputDirectories": ["tools/shared-ingestion/output/divine_app_ready_dry_run"],
+      "notes": "BIC Divine Transcript currently runs dry-run handoff only. Live Gemini generation is not enabled through BIC. Audio files are not supported through this source."
+    },
     "fast_facts_pptx": {
       "label": "Fast Facts PPTX",
       "status": "active",
@@ -245,10 +271,6 @@
     "uworld_notes": {
       "status": "placeholder",
       "notes": "Existing external notes pipeline exists, but it is not part of the initial Batch Import Center registry."
-    },
-    "divine_transcript": {
-      "status": "placeholder",
-      "notes": "Current Divine workflow remains in-app and is not registered as a local Python pipeline here."
     }
   }
 }
