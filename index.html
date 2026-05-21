@@ -2301,6 +2301,7 @@ body.quiz-fullscreen-mode .modal-overlay {
         <option value="dry-run">dry-run</option>
         <option value="generate">generate</option>
         <option value="generate-auto-import">generate + auto-import</option>
+        <option value="existing-output-auto-import">existing output + auto-import</option>
       </select>
     </div>
     <div id="bic-run-status" class="notes-import-summary">No job run yet.</div>
@@ -22250,11 +22251,13 @@ const App = (() => {
     const api = window.nbmeDesktop && window.nbmeDesktop.batchImport;
     const runStatus = document.getElementById('bic-run-status');
     const sourceType = (document.getElementById('bic-source-type')?.value || '').trim();
+    const runMode = (document.getElementById('bic-run-mode')?.value || 'dry-run').trim();
+    const existingOutputValidation = runMode === 'existing-output-auto-import';
     if (!api) {
       if (runStatus) runStatus.textContent = 'Native file selection is available only in the Electron app.';
       return;
     }
-    const result = await api.selectFiles({ sourceType });
+    const result = await api.selectFiles({ sourceType, existingOutputValidation });
     if (!result || !result.ok) {
       if (runStatus) runStatus.textContent = result?.message || 'File selection failed.';
       return;
@@ -22296,6 +22299,7 @@ const App = (() => {
     const runMode = (document.getElementById('bic-run-mode')?.value || 'dry-run').trim();
     const folderId = (document.getElementById('bic-target-folder')?.value || '').trim();
     const inputPaths = Array.isArray(_batchImportState?.files) ? _batchImportState.files.slice() : [];
+    const existingOutputValidation = runMode === 'existing-output-auto-import';
     if (!api) {
       if (runStatus) runStatus.textContent = 'Batch Import Center is available only in the Electron app.';
       return;
@@ -22304,7 +22308,7 @@ const App = (() => {
       if (runStatus) runStatus.textContent = 'Choose at least one file.';
       return;
     }
-    if (runMode === 'generate-auto-import' && !folderId) {
+    if ((runMode === 'generate-auto-import' || existingOutputValidation) && !folderId) {
       if (runStatus) runStatus.textContent = 'Choose a target folder before auto-import.';
       return;
     }
@@ -22326,15 +22330,16 @@ const App = (() => {
       appendBatchImportProgress(event);
     });
 
-    const isDryRun = runMode === 'dry-run';
-    if (runStatus) runStatus.textContent = isDryRun ? 'Dry-run in progress...' : 'Generation in progress...';
+    const isDryRun = runMode === 'dry-run' || existingOutputValidation;
+    if (runStatus) runStatus.textContent = existingOutputValidation ? 'Existing output validation in progress...' : (isDryRun ? 'Dry-run in progress...' : 'Generation in progress...');
     if (report) report.textContent = 'Waiting for completion.';
 
     const result = await api.launchJob({
       sourceType,
       inputPaths,
       dryRun: isDryRun,
-      executePipeline: true,
+      executePipeline: !existingOutputValidation,
+      existingOutputValidation,
       destination: {
         folderId,
         testName: ''
@@ -22398,7 +22403,7 @@ const App = (() => {
     }
 
 	    let importResult = null;
-	    if (runMode === 'generate-auto-import') {
+	    if (runMode === 'generate-auto-import' || existingOutputValidation) {
 	      const firstValid = validations.find(function(item) { return item.ok; });
 	      if (firstValid) {
 	        appendBatchImportProgress({
@@ -22427,8 +22432,8 @@ const App = (() => {
     const primary = validations[0] || { ok: true, outputPath: '', warnings: [], errors: [], questionCount: 0, imageCount: 0 };
     const errors = primary.errors ? primary.errors.slice() : [];
     const warnings = primary.warnings ? primary.warnings.slice() : [];
-    if (runMode === 'generate-auto-import' && importResult && !importResult.ok) errors.push(importResult.error || 'Auto-import failed.');
-    if (runMode === 'generate-auto-import' && importResult?.ok) warnings.push('Auto-import completed.');
+    if ((runMode === 'generate-auto-import' || existingOutputValidation) && importResult && !importResult.ok) errors.push(importResult.error || 'Auto-import failed.');
+    if ((runMode === 'generate-auto-import' || existingOutputValidation) && importResult?.ok) warnings.push(existingOutputValidation ? 'Existing-output auto-import completed.' : 'Auto-import completed.');
 
     const finalReport = buildBatchImportCompletionReport({
       jobId,
@@ -22444,9 +22449,11 @@ const App = (() => {
     renderBatchImportCompletionReport(finalReport);
     if (api.updateJobReport && jobId) await api.updateJobReport({ jobId, report: finalReport });
     await refreshBatchImportHistory();
-    if (runStatus) runStatus.textContent = isDryRun
-      ? 'Dry-run completed.'
-      : (runMode === 'generate-auto-import' && importResult?.ok ? 'Generation and auto-import completed.' : 'Generation completed.');
+    if (runStatus) runStatus.textContent = existingOutputValidation
+      ? (importResult?.ok ? 'Existing output validation and auto-import completed.' : 'Existing output validation completed.')
+      : (isDryRun
+        ? 'Dry-run completed.'
+        : (runMode === 'generate-auto-import' && importResult?.ok ? 'Generation and auto-import completed.' : 'Generation completed.'));
   }
 
   async function cancelBatchImportJob() {

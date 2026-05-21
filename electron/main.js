@@ -193,6 +193,7 @@ function sanitizeBatchJobPayload(payload, source) {
   const inputPaths = Array.isArray(payload?.inputPaths) ? payload.inputPaths : [];
   const folderId = String(payload?.destination?.folderId || '').trim();
   const testName = String(payload?.destination?.testName || '').trim();
+  const existingOutputValidation = payload?.existingOutputValidation === true;
   const dryRun = payload?.dryRun !== false;
   const executePipeline = payload?.executePipeline === true;
 
@@ -204,9 +205,10 @@ function sanitizeBatchJobPayload(payload, source) {
     jobId: `batch-${Date.now().toString(36)}`,
     sourceType,
     inputs: inputPaths.map(inputPath => ({ path: String(inputPath || '').trim() })).filter(item => item.path),
-    requiresGemini: !!source?.requiresGemini,
+    requiresGemini: existingOutputValidation ? false : !!source?.requiresGemini,
     dryRun,
     executePipeline,
+    existingOutputValidation,
     destination: { folderId, testName },
     createdAt: new Date().toISOString()
   };
@@ -303,14 +305,17 @@ ipcMain.handle('nbme:batch-import:select-files', async (_event, payload) => {
     if (!source || source.status !== 'active') {
       return safeError('BATCH_SOURCE_UNKNOWN', `Source type is not registered: ${sourceType}`);
     }
-    const extensions = Array.isArray(source.inputExtensions)
+    const existingOutputValidation = payload?.existingOutputValidation === true;
+    const extensions = existingOutputValidation
+      ? ['json']
+      : Array.isArray(source.inputExtensions)
       ? source.inputExtensions.map(ext => String(ext).replace(/^\./, '').trim()).filter(Boolean)
       : [];
     const result = await dialog.showOpenDialog({
-      title: `Select ${source.label || sourceType} file`,
+      title: existingOutputValidation ? 'Select existing app-ready JSON output' : `Select ${source.label || sourceType} file`,
       properties: ['openFile', 'multiSelections'],
       filters: extensions.length
-        ? [{ name: source.label || sourceType, extensions }, { name: 'All Files', extensions: ['*'] }]
+        ? [{ name: existingOutputValidation ? 'App-ready JSON' : (source.label || sourceType), extensions }, { name: 'All Files', extensions: ['*'] }]
         : [{ name: 'All Files', extensions: ['*'] }]
     });
     if (result.canceled) return { ok: true, canceled: true, filePaths: [] };

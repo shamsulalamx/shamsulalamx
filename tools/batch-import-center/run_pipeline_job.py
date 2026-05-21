@@ -89,6 +89,8 @@ def validate_manifest(manifest: dict[str, Any]) -> None:
         raise ValueError("Manifest inputs must be a non-empty array")
     if "requiresGemini" in manifest and not isinstance(manifest["requiresGemini"], bool):
         raise ValueError("Manifest requiresGemini must be true or false")
+    if "existingOutputValidation" in manifest and not isinstance(manifest["existingOutputValidation"], bool):
+        raise ValueError("Manifest existingOutputValidation must be true or false")
 
 
 def get_source(registry: dict[str, Any], source_type: str) -> dict[str, Any]:
@@ -101,7 +103,8 @@ def get_source(registry: dict[str, Any], source_type: str) -> dict[str, Any]:
 
 
 def validate_inputs(manifest: dict[str, Any], source: dict[str, Any]) -> list[Path]:
-    allowed = {ext.lower() for ext in source.get("inputExtensions", [])}
+    existing_output_validation = bool(manifest.get("existingOutputValidation"))
+    allowed = {".json"} if existing_output_validation else {ext.lower() for ext in source.get("inputExtensions", [])}
     paths: list[Path] = []
     for item in manifest["inputs"]:
         raw_path = item.get("path") if isinstance(item, dict) else None
@@ -112,6 +115,8 @@ def validate_inputs(manifest: dict[str, Any], source: dict[str, Any]) -> list[Pa
             raise ValueError(f"Input file does not exist: {path}")
         if allowed and path.suffix.lower() not in allowed:
             raise ValueError(f"Unsupported input extension for {path.name}: {path.suffix}")
+        if existing_output_validation and not path.name.endswith("_app_ready.json"):
+            raise ValueError(f"Existing-output validation requires *_app_ready.json: {path.name}")
         paths.append(path)
     return paths
 
@@ -435,7 +440,14 @@ def main() -> int:
         run_started_at = time.time()
         before = discover_outputs(source)
         execute_pipeline = bool(manifest.get("executePipeline"))
-        if manifest.get("dryRun") and not execute_pipeline:
+        existing_output_validation = bool(manifest.get("existingOutputValidation"))
+        if existing_output_validation:
+            emit(
+                "validation_mode",
+                message="Existing app-ready output validation mode enabled; generation skipped.",
+                outputs=[str(path) for path in inputs],
+            )
+        elif manifest.get("dryRun") and not execute_pipeline:
             emit("dry_run", message="Validated manifest and registry. Pipeline execution skipped by dry-run.")
         else:
             for input_file in inputs:
@@ -482,12 +494,24 @@ def main() -> int:
 
         source_summary = emit_source_summary(manifest["sourceType"], source, run_started_at)
         after = discover_outputs(source)
-        new_outputs = {path for path in after if path not in before}
-        touched_outputs = {
-            path for path, modified_at in after.items()
-            if modified_at >= run_started_at - 1
-        }
-        outputs = sorted(new_outputs | touched_outputs)
+        if existing_output_validation:
+            discovered = set(after)
+            selected = [str(path.resolve()) for path in inputs]
+            outputs = selected[:]
+            external = [path for path in selected if path not in discovered]
+            if external:
+                emit(
+                    "warning",
+                    message="Selected app-ready output was not in the packaged registered output directories; using explicit existing-output selection after discovery.",
+                    externalOutputs=external,
+                )
+        else:
+            new_outputs = {path for path in after if path not in before}
+            touched_outputs = {
+                path for path, modified_at in after.items()
+                if modified_at >= run_started_at - 1
+            }
+            outputs = sorted(new_outputs | touched_outputs)
         emit("outputs_discovered", outputs=outputs, count=len(outputs))
         report = completion_report(manifest, source, run_started_at, outputs, source_summary)
         emit(
