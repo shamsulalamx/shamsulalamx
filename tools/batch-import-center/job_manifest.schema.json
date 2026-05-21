@@ -10,6 +10,7 @@
         "path": "/absolute/path/to/source.pptx"
       }
     ],
+    "requiresGemini": true,
     "dryRun": true,
     "executePipeline": false,
     "destination": {

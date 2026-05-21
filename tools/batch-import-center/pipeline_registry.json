@@ -4,31 +4,43 @@
     "emma_holiday_pdf": {
       "label": "Emma Holiday PDF",
       "status": "active",
+      "requiresGemini": true,
       "inputExtensions": [".pdf"],
-      "workingDirectory": "tools/nbme-pdf-json-generator",
+      "workingDirectory": "tools/lecture-slide-question-generator",
       "pythonExecutable": "python3",
       "dryRunSteps": [
-        { "args": ["extract_pdfs.py", "--normalize-dry-run"] },
-        { "args": ["normalized_to_app_json.py", "--dry-run"] }
+        {
+          "stageLabel": "Emma Holiday dry-run",
+          "args": ["generate_lecture_slide_questions.py", "--dry-run", "--input-file", "{inputFile}", "--limit", "1"]
+        }
       ],
       "liveSteps": [
-        { "args": ["extract_pdfs.py", "--normalize-gemini"] },
-        { "args": ["normalized_to_app_json.py"] }
+        {
+          "stageLabel": "Emma Holiday live generation",
+          "args": ["generate_lecture_slide_questions.py", "--generate", "--input-file", "{inputFile}", "--limit", "1"]
+        }
       ],
       "outputDirectories": ["output_json/app_ready"],
-      "notes": "Registered against the existing NBME PDF toolchain. The registry does not modify the extraction, normalization, or app-ready schema."
+      "notes": "Uses the existing lecture-slide generator against Emma Holiday PDFs. The registry does not modify extraction, normalization, or app-ready schema."
     },
     "fast_facts_pptx": {
       "label": "Fast Facts PPTX",
       "status": "active",
+      "requiresGemini": true,
       "inputExtensions": [".pptx"],
       "workingDirectory": "tools/lecture-slide-question-generator",
       "pythonExecutable": "python3",
       "dryRunSteps": [
-        { "args": ["generate_lecture_slide_questions.py", "--fast-facts-profile", "--input-file", "{inputFile}", "--limit", "10"] }
+        {
+          "stageLabel": "Fast Facts dry-run",
+          "args": ["generate_lecture_slide_questions.py", "--fast-facts-profile", "--input-file", "{inputFile}", "--limit", "10"]
+        }
       ],
       "liveSteps": [
-        { "args": ["generate_lecture_slide_questions.py", "--fast-facts-profile", "--generate", "--input-file", "{inputFile}", "--limit", "10"] }
+        {
+          "stageLabel": "Fast Facts live generation",
+          "args": ["generate_lecture_slide_questions.py", "--fast-facts-profile", "--generate", "--input-file", "{inputFile}", "--limit", "10"]
+        }
       ],
       "outputDirectories": ["output_json/app_ready"],
       "notes": "Uses the existing FAST_FACTS_PROFILE in the lecture-slide generator."
@@ -36,14 +48,21 @@
     "amboss_pdf": {
       "label": "AMBOSS PDF",
       "status": "active",
+      "requiresGemini": true,
       "inputExtensions": [".pdf"],
       "workingDirectory": "tools/lecture-slide-question-generator",
       "pythonExecutable": "python3",
       "dryRunSteps": [
-        { "args": ["generate_lecture_slide_questions.py", "--amboss-profile", "--input-file", "{inputFile}", "--limit", "5"] }
+        {
+          "stageLabel": "AMBOSS dry-run",
+          "args": ["generate_lecture_slide_questions.py", "--amboss-profile", "--input-file", "{inputFile}", "--limit", "5"]
+        }
       ],
       "liveSteps": [
-        { "args": ["generate_lecture_slide_questions.py", "--amboss-profile", "--input-file", "{inputFile}", "--limit", "5"] }
+        {
+          "stageLabel": "AMBOSS live extraction",
+          "args": ["generate_lecture_slide_questions.py", "--amboss-profile", "--input-file", "{inputFile}", "--limit", "5"]
+        }
       ],
       "outputDirectories": ["output_json/app_ready"],
       "notes": "Uses the existing AMBOSS_PROFILE deterministic extraction path."

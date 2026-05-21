@@ -27,7 +27,61 @@ function readBatchRegistry() {
   return JSON.parse(raw);
 }
 
-function sanitizeBatchJobPayload(payload) {
+function readEnvLocal() {
+  const envPath = path.join(app.getAppPath(), '.env.local');
+  if (!fs.existsSync(envPath) || !fs.statSync(envPath).isFile()) return {};
+  const parsed = {};
+  const lines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const match = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+    if (!match) continue;
+    let value = match[2].trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    parsed[match[1]] = value;
+  }
+  return parsed;
+}
+
+function batchEnvFromLocalSources() {
+  const env = { ...process.env };
+  if (!env.GEMINI_API_KEY) {
+    const localEnv = readEnvLocal();
+    if (localEnv.GEMINI_API_KEY) env.GEMINI_API_KEY = localEnv.GEMINI_API_KEY;
+  }
+  return env;
+}
+
+async function shellHasGeminiApiKey() {
+  return await new Promise(resolve => {
+    const proc = spawn('/bin/zsh', ['-lc', 'source ~/.zshrc >/dev/null 2>&1 || true; test -n "$GEMINI_API_KEY"'], {
+      cwd: app.getAppPath(),
+      env: process.env,
+      stdio: ['ignore', 'ignore', 'ignore']
+    });
+    proc.on('error', () => resolve(false));
+    proc.on('close', code => resolve(code === 0));
+  });
+}
+
+async function resolveBatchEnvironment(requiresGemini) {
+  const env = batchEnvFromLocalSources();
+  if (!requiresGemini || env.GEMINI_API_KEY) {
+    return { ok: true, env, useLoginShell: false };
+  }
+  if (await shellHasGeminiApiKey()) {
+    return { ok: true, env: process.env, useLoginShell: true };
+  }
+  return safeError(
+    'BATCH_GEMINI_KEY_UNAVAILABLE',
+    'GEMINI_API_KEY is not available to the Electron batch process.'
+  );
+}
+
+function sanitizeBatchJobPayload(payload, source) {
   const sourceType = String(payload?.sourceType || '').trim();
   const inputPaths = Array.isArray(payload?.inputPaths) ? payload.inputPaths : [];
   const folderId = String(payload?.destination?.folderId || '').trim();
@@ -43,6 +97,7 @@ function sanitizeBatchJobPayload(payload) {
     jobId: `batch-${Date.now().toString(36)}`,
     sourceType,
     inputs: inputPaths.map(inputPath => ({ path: String(inputPath || '').trim() })).filter(item => item.path),
+    requiresGemini: !!source?.requiresGemini,
     dryRun,
     executePipeline,
     destination: { folderId, testName },
@@ -95,8 +150,21 @@ ipcMain.handle('nbme:batch-import:select-files', async (_event, payload) => {
 ipcMain.handle('nbme:batch-import:launch-job', async (event, payload) => {
   let manifest;
   let manifestPath;
+  let batchEnvironment;
   try {
-    manifest = sanitizeBatchJobPayload(payload);
+    const sourceType = String(payload?.sourceType || '').trim();
+    const registry = readBatchRegistry();
+    const source = registry.sources?.[sourceType];
+    if (!source || source.status !== 'active') {
+      return safeError('BATCH_SOURCE_UNKNOWN', `Source type is not registered: ${sourceType}`);
+    }
+    manifest = sanitizeBatchJobPayload(payload, source);
+    if (!manifest.dryRun && manifest.requiresGemini) {
+      batchEnvironment = await resolveBatchEnvironment(true);
+      if (!batchEnvironment.ok) return batchEnvironment;
+    } else {
+      batchEnvironment = await resolveBatchEnvironment(false);
+    }
     manifestPath = writeBatchManifest(manifest);
   } catch (err) {
     return safeError('BATCH_JOB_INVALID', err.message || String(err));
@@ -109,9 +177,15 @@ ipcMain.handle('nbme:batch-import:launch-job', async (event, payload) => {
       event.sender.send('nbme:batch-import:progress', eventPayload);
     };
 
-    const proc = spawn('python3', [BATCH_IMPORT_RUNNER, manifestPath], {
+    const childEnv = batchEnvironment?.env || process.env;
+    const useLoginShell = !!batchEnvironment?.useLoginShell;
+    const command = useLoginShell ? '/bin/zsh' : 'python3';
+    const args = useLoginShell
+      ? ['-lc', 'source ~/.zshrc >/dev/null 2>&1 || true; exec "$@"', 'nbme-batch-python', 'python3', BATCH_IMPORT_RUNNER, manifestPath]
+      : [BATCH_IMPORT_RUNNER, manifestPath];
+    const proc = spawn(command, args, {
       cwd: app.getAppPath(),
-      env: process.env,
+      env: childEnv,
       stdio: ['ignore', 'pipe', 'pipe']
     });
 
@@ -149,19 +223,23 @@ ipcMain.handle('nbme:batch-import:launch-job', async (event, payload) => {
       resolve(safeError('BATCH_JOB_LAUNCH_FAILED', err.message || String(err)));
     });
 
-    proc.on('close', code => {
+    proc.on('close', (code, signal) => {
       consumeLine(stdoutBuffer, 'stdout');
       consumeLine(stderrBuffer, 'stderr');
       const ok = code === 0 && (!finalEvent || finalEvent.ok !== false);
+      const fallbackMessage = signal
+        ? `Batch job exited with signal ${signal}.`
+        : `Batch job exited with code ${code}.`;
       resolve({
         ok,
         exitCode: code,
+        signal,
         manifestPath,
         manifest,
         outputs: Array.isArray(finalEvent?.outputs) ? finalEvent.outputs : [],
         progress,
         errorCode: ok ? null : 'BATCH_JOB_FAILED',
-        message: ok ? null : (finalEvent?.error || `Batch job exited with code ${code}.`)
+        message: ok ? null : (finalEvent?.error || fallbackMessage)
       });
     });
   });

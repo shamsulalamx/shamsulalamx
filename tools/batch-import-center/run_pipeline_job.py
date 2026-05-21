@@ -31,6 +31,13 @@ def emit(event_type: str, **payload: Any) -> None:
     print(json.dumps(event, ensure_ascii=False), flush=True)
 
 
+def rel(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(PROJECT_ROOT))
+    except ValueError:
+        return str(path.resolve())
+
+
 def load_json(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as handle:
         data = json.load(handle)
@@ -48,6 +55,8 @@ def validate_manifest(manifest: dict[str, Any]) -> None:
         raise ValueError("Unsupported manifestVersion")
     if not isinstance(manifest["inputs"], list) or not manifest["inputs"]:
         raise ValueError("Manifest inputs must be a non-empty array")
+    if "requiresGemini" in manifest and not isinstance(manifest["requiresGemini"], bool):
+        raise ValueError("Manifest requiresGemini must be true or false")
 
 
 def get_source(registry: dict[str, Any], source_type: str) -> dict[str, Any]:
@@ -111,7 +120,16 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
     dry_run = bool(manifest.get("dryRun"))
     cwd = (PROJECT_ROOT / source["workingDirectory"]).resolve()
     cmd = [source.get("pythonExecutable") or "python3", *expand_args(step["args"], input_file)]
-    emit("command_start", cwd=str(cwd), command=cmd, stepIndex=step_index)
+    stage_label = str(step.get("stageLabel") or f"Pipeline step {step_index}")
+    stage_started_at = time.time()
+    emit(
+        "stage_start",
+        message=f"{stage_label} started for {input_file.name}",
+        stageLabel=stage_label,
+        inputFile=str(input_file),
+        stepIndex=step_index,
+    )
+    emit("command_start", cwd=str(cwd), command=cmd, stepIndex=step_index, stageLabel=stage_label)
     proc = subprocess.Popen(
         cmd,
         cwd=str(cwd),
@@ -121,9 +139,81 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
         env=os.environ.copy(),
     )
     assert proc.stdout is not None
+    last_lines: list[str] = []
     for line in proc.stdout:
-        emit("log", message=line.rstrip("\n"))
-    return proc.wait()
+        message = line.rstrip("\n")
+        if message:
+            last_lines.append(message)
+            last_lines = last_lines[-12:]
+        emit("log", message=message, stageLabel=stage_label)
+    code = proc.wait()
+    duration = round(time.time() - stage_started_at, 2)
+    if code == 0:
+        emit(
+            "stage_complete",
+            message=f"{stage_label} completed in {duration}s",
+            stageLabel=stage_label,
+            durationSeconds=duration,
+            stepIndex=step_index,
+        )
+    else:
+        reason = (
+            next((line for line in reversed(last_lines) if line.strip().upper().startswith("ERROR:")), "")
+            or next((line for line in reversed(last_lines) if line.strip()), f"Process exited with code {code}")
+        )
+        emit(
+            "stage_failed",
+            message=f"{stage_label} failed: {reason}",
+            stageLabel=stage_label,
+            durationSeconds=duration,
+            exitCode=code,
+            failureReason=reason,
+            stepIndex=step_index,
+        )
+    return code
+
+
+def newest_json_report(source: dict[str, Any], pattern: str, started_at: float) -> Path | None:
+    cwd = (PROJECT_ROOT / source["workingDirectory"]).resolve()
+    reports_dir = cwd / "reports"
+    if not reports_dir.exists():
+        return None
+    candidates = [
+        path for path in reports_dir.glob(pattern)
+        if path.is_file() and path.stat().st_mtime >= started_at - 1
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda path: path.stat().st_mtime)
+
+
+def emit_source_summary(source_type: str, source: dict[str, Any], started_at: float) -> None:
+    if source_type != "fast_facts_pptx":
+        return
+    report_path = newest_json_report(source, "fast_facts_generation_validation_report_*.json", started_at)
+    if not report_path:
+        emit("cache_summary", message="Fast Facts cache summary unavailable; validation report not produced.")
+        return
+    try:
+        report = load_json(report_path)
+    except Exception as exc:
+        emit("cache_summary", message=f"Fast Facts cache summary unavailable: {exc}")
+        return
+    cache_report = report.get("cacheReport") if isinstance(report.get("cacheReport"), dict) else {}
+    hits = int(cache_report.get("cacheHits") or 0)
+    misses = int(cache_report.get("cacheMisses") or 0)
+    regenerated = int(cache_report.get("regeneratedQuestions") or 0)
+    dropped = int(cache_report.get("droppedQuestions") or 0)
+    emit(
+        "cache_summary",
+        message=f"Fast Facts cache hits: {hits}; misses: {misses}; regenerated: {regenerated}; dropped: {dropped}.",
+        reportPath=rel(report_path),
+        cacheHits=hits,
+        cacheMisses=misses,
+        regeneratedQuestions=regenerated,
+        droppedQuestions=dropped,
+        runtimeDurationSeconds=cache_report.get("runtimeDurationSeconds"),
+    )
 
 
 def main() -> int:
@@ -157,9 +247,23 @@ def main() -> int:
                 for step_index, step in enumerate(command_steps(source, bool(manifest.get("dryRun"))), start=1):
                     code = run_command(source, manifest, input_file, step, step_index)
                     if code != 0:
-                        emit("command_failed", exitCode=code, stepIndex=step_index)
+                        emit(
+                            "command_failed",
+                            message=f"Pipeline step {step_index} exited with code {code}. See stage_failed for the explicit failure reason.",
+                            exitCode=code,
+                            stepIndex=step_index,
+                        )
+                        emit(
+                            "job_complete",
+                            jobId=manifest["jobId"],
+                            ok=False,
+                            dryRun=bool(manifest.get("dryRun")),
+                            outputs=[],
+                            error=f"Pipeline step {step_index} exited with code {code}.",
+                        )
                         return code
 
+        emit_source_summary(manifest["sourceType"], source, run_started_at)
         after = discover_outputs(source)
         new_outputs = {path for path in after if path not in before}
         touched_outputs = {
