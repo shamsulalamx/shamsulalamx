@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import queue
+import signal
 import subprocess
 import sys
 import threading
@@ -22,6 +23,20 @@ from typing import Any
 RUNNER_DIR = Path(__file__).parent.resolve()
 PROJECT_ROOT = RUNNER_DIR.parents[1]
 REGISTRY_PATH = RUNNER_DIR / "pipeline_registry.json"
+STANDARD_STAGES = {
+    "preflight",
+    "extraction",
+    "OCR",
+    "chunking",
+    "normalization",
+    "generation",
+    "validation",
+    "app-ready conversion",
+    "import",
+    "completed",
+}
+CURRENT_PROC: subprocess.Popen[str] | None = None
+CANCEL_REQUESTED = False
 
 
 def emit(event_type: str, **payload: Any) -> None:
@@ -31,6 +46,21 @@ def emit(event_type: str, **payload: Any) -> None:
         **payload,
     }
     print(json.dumps(event, ensure_ascii=False), flush=True)
+
+
+def handle_cancel_signal(signum: int, _frame: Any) -> None:
+    global CANCEL_REQUESTED
+    CANCEL_REQUESTED = True
+    emit("job_cancelled", message=f"Cancellation signal received: {signum}")
+    if CURRENT_PROC and CURRENT_PROC.poll() is None:
+        try:
+            CURRENT_PROC.terminate()
+        except Exception:
+            pass
+
+
+signal.signal(signal.SIGTERM, handle_cancel_signal)
+signal.signal(signal.SIGINT, handle_cancel_signal)
 
 
 def rel(path: Path) -> str:
@@ -118,15 +148,33 @@ def command_steps(source: dict[str, Any], dry_run: bool) -> list[dict[str, Any]]
     raise ValueError(f"Registry source has no {steps_key}")
 
 
+def normalize_stage(step: dict[str, Any]) -> str:
+    stage = str(step.get("stage") or step.get("stageLabel") or "generation").strip()
+    aliases = {
+        "ocr": "OCR",
+        "app-ready": "app-ready conversion",
+        "app_ready": "app-ready conversion",
+        "app-ready conversion": "app-ready conversion",
+        "complete": "completed",
+    }
+    stage = aliases.get(stage.lower(), stage)
+    if stage not in STANDARD_STAGES:
+        stage = "generation"
+    return stage
+
+
 def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Path, step: dict[str, Any], step_index: int) -> int:
+    global CURRENT_PROC
     dry_run = bool(manifest.get("dryRun"))
     cwd = (PROJECT_ROOT / source["workingDirectory"]).resolve()
     cmd = [source.get("pythonExecutable") or "python3", *expand_args(step["args"], input_file)]
     stage_label = str(step.get("stageLabel") or f"Pipeline step {step_index}")
+    stage = normalize_stage(step)
     stage_started_at = time.time()
     emit(
         "stage_start",
         message=f"{stage_label} started for {input_file.name}",
+        stage=stage,
         stageLabel=stage_label,
         inputFile=str(input_file),
         stepIndex=step_index,
@@ -140,6 +188,7 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
         text=True,
         env=os.environ.copy(),
     )
+    CURRENT_PROC = proc
     assert proc.stdout is not None
     last_lines: list[str] = []
     lines: queue.Queue[str | None] = queue.Queue()
@@ -154,9 +203,15 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
     reader = threading.Thread(target=read_stdout, daemon=True)
     reader.start()
     stream_done = False
-    heartbeat_seconds = float(step.get("heartbeatSeconds") or 0)
+    heartbeat_seconds = float(step.get("heartbeatSeconds") or (20 if stage in {"OCR", "generation"} else 0))
     next_heartbeat = time.time() + heartbeat_seconds if heartbeat_seconds > 0 else 0
     while not stream_done:
+        if CANCEL_REQUESTED:
+            try:
+                if proc.poll() is None:
+                    proc.terminate()
+            except Exception:
+                pass
         try:
             line = lines.get(timeout=1)
         except queue.Empty:
@@ -165,6 +220,7 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
                 emit(
                     "stage_heartbeat",
                     message=f"{stage_label} still running after {duration}s",
+                    stage=stage,
                     stageLabel=stage_label,
                     durationSeconds=duration,
                     stepIndex=step_index,
@@ -180,14 +236,26 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
             last_lines = last_lines[-12:]
         emit("log", message=message, stageLabel=stage_label)
     code = proc.wait()
+    CURRENT_PROC = None
     reader.join(timeout=1)
     duration = round(time.time() - stage_started_at, 2)
     if code == 0:
         emit(
             "stage_complete",
             message=f"{stage_label} completed in {duration}s",
+            stage=stage,
             stageLabel=stage_label,
             durationSeconds=duration,
+            stepIndex=step_index,
+        )
+    elif CANCEL_REQUESTED:
+        emit(
+            "stage_cancelled",
+            message=f"{stage_label} cancelled after {duration}s",
+            stage=stage,
+            stageLabel=stage_label,
+            durationSeconds=duration,
+            exitCode=code,
             stepIndex=step_index,
         )
     else:
@@ -198,6 +266,7 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
         emit(
             "stage_failed",
             message=f"{stage_label} failed: {reason}",
+            stage=stage,
             stageLabel=stage_label,
             durationSeconds=duration,
             exitCode=code,
@@ -205,6 +274,88 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
             stepIndex=step_index,
         )
     return code
+
+
+def output_metrics(output_path: Path) -> dict[str, Any]:
+    metrics = {
+        "questionCount": 0,
+        "imageTableCount": 0,
+        "figureRefs": [],
+        "warnings": [],
+        "errors": [],
+    }
+    try:
+        data = load_json(output_path)
+    except Exception as exc:
+        metrics["errors"].append(f"{rel(output_path)} could not be read: {exc}")
+        return metrics
+    questions = data.get("questions") if isinstance(data.get("questions"), list) else []
+    metrics["questionCount"] = len(questions)
+    figure_refs: list[str] = []
+    image_table_count = 0
+    warnings: list[str] = []
+    for question in questions:
+        if not isinstance(question, dict):
+            continue
+        for key in ("figureRefs", "images", "explanationImages", "tables", "explanationTables"):
+            value = question.get(key)
+            if isinstance(value, list):
+                image_table_count += len(value)
+                if key == "figureRefs":
+                    for item in value:
+                        if isinstance(item, dict):
+                            ref_id = item.get("id") or item.get("figureId") or item.get("placeholder")
+                            if ref_id:
+                                figure_refs.append(str(ref_id))
+                        elif item:
+                            figure_refs.append(str(item))
+        extraction_warnings = question.get("extractionWarnings")
+        if isinstance(extraction_warnings, list):
+            warnings.extend(str(item) for item in extraction_warnings if item)
+    metrics["imageTableCount"] = image_table_count
+    metrics["figureRefs"] = sorted(set(figure_refs))
+    metrics["warnings"] = warnings[:50]
+    return metrics
+
+
+def completion_report(
+    manifest: dict[str, Any],
+    source: dict[str, Any],
+    run_started_at: float,
+    outputs: list[str],
+    source_summary: dict[str, Any] | None,
+) -> dict[str, Any]:
+    question_count = 0
+    image_table_count = 0
+    figure_refs: list[str] = []
+    warnings: list[str] = []
+    errors: list[str] = []
+    for output in outputs:
+        metrics = output_metrics(Path(output))
+        question_count += int(metrics["questionCount"])
+        image_table_count += int(metrics["imageTableCount"])
+        figure_refs.extend(metrics["figureRefs"])
+        warnings.extend(metrics["warnings"])
+        errors.extend(metrics["errors"])
+    return {
+        "schemaVersion": "batch-import-completion-report-v1",
+        "jobId": manifest.get("jobId"),
+        "sourceType": manifest.get("sourceType"),
+        "targetFolder": (manifest.get("destination") or {}).get("folderId") or "",
+        "runtimeSeconds": round(time.time() - run_started_at, 2),
+        "questionCount": question_count,
+        "imageTableCount": image_table_count,
+        "figureRefs": sorted(set(figure_refs)),
+        "cacheHits": (source_summary or {}).get("cacheHits"),
+        "cacheMisses": (source_summary or {}).get("cacheMisses"),
+        "warnings": warnings[:50],
+        "errors": errors[:50],
+        "outputJsonPath": outputs[0] if outputs else "",
+        "outputPaths": outputs,
+        "importedTestId": None,
+        "importedTestName": None,
+        "stage": "completed",
+    }
 
 
 def newest_json_report(source: dict[str, Any], pattern: str, started_at: float) -> Path | None:
@@ -221,18 +372,18 @@ def newest_json_report(source: dict[str, Any], pattern: str, started_at: float) 
     return max(candidates, key=lambda path: path.stat().st_mtime)
 
 
-def emit_source_summary(source_type: str, source: dict[str, Any], started_at: float) -> None:
+def emit_source_summary(source_type: str, source: dict[str, Any], started_at: float) -> dict[str, Any]:
     if source_type != "fast_facts_pptx":
-        return
+        return {}
     report_path = newest_json_report(source, "fast_facts_generation_validation_report_*.json", started_at)
     if not report_path:
         emit("cache_summary", message="Fast Facts cache summary unavailable; validation report not produced.")
-        return
+        return {}
     try:
         report = load_json(report_path)
     except Exception as exc:
         emit("cache_summary", message=f"Fast Facts cache summary unavailable: {exc}")
-        return
+        return {}
     cache_report = report.get("cacheReport") if isinstance(report.get("cacheReport"), dict) else {}
     hits = int(cache_report.get("cacheHits") or 0)
     misses = int(cache_report.get("cacheMisses") or 0)
@@ -248,6 +399,7 @@ def emit_source_summary(source_type: str, source: dict[str, Any], started_at: fl
         droppedQuestions=dropped,
         runtimeDurationSeconds=cache_report.get("runtimeDurationSeconds"),
     )
+    return {"cacheHits": hits, "cacheMisses": misses}
 
 
 def main() -> int:
@@ -263,12 +415,21 @@ def main() -> int:
         source = get_source(registry, manifest["sourceType"])
         inputs = validate_inputs(manifest, source)
 
+        preflight_started_at = time.time()
+        emit("stage_start", stage="preflight", stageLabel="preflight", message="preflight started")
         emit(
             "job_start",
             jobId=manifest["jobId"],
             sourceType=manifest["sourceType"],
             dryRun=bool(manifest.get("dryRun")),
             inputCount=len(inputs),
+        )
+        emit(
+            "stage_complete",
+            stage="preflight",
+            stageLabel="preflight",
+            message="preflight completed",
+            durationSeconds=round(time.time() - preflight_started_at, 2),
         )
 
         run_started_at = time.time()
@@ -279,7 +440,29 @@ def main() -> int:
         else:
             for input_file in inputs:
                 for step_index, step in enumerate(command_steps(source, bool(manifest.get("dryRun"))), start=1):
+                    if CANCEL_REQUESTED:
+                        emit(
+                            "job_complete",
+                            jobId=manifest["jobId"],
+                            ok=False,
+                            cancelled=True,
+                            dryRun=bool(manifest.get("dryRun")),
+                            outputs=[],
+                            error="Job cancelled.",
+                        )
+                        return 130
                     code = run_command(source, manifest, input_file, step, step_index)
+                    if CANCEL_REQUESTED:
+                        emit(
+                            "job_complete",
+                            jobId=manifest["jobId"],
+                            ok=False,
+                            cancelled=True,
+                            dryRun=bool(manifest.get("dryRun")),
+                            outputs=[],
+                            error="Job cancelled.",
+                        )
+                        return 130
                     if code != 0:
                         emit(
                             "command_failed",
@@ -297,7 +480,7 @@ def main() -> int:
                         )
                         return code
 
-        emit_source_summary(manifest["sourceType"], source, run_started_at)
+        source_summary = emit_source_summary(manifest["sourceType"], source, run_started_at)
         after = discover_outputs(source)
         new_outputs = {path for path in after if path not in before}
         touched_outputs = {
@@ -306,12 +489,21 @@ def main() -> int:
         }
         outputs = sorted(new_outputs | touched_outputs)
         emit("outputs_discovered", outputs=outputs, count=len(outputs))
+        report = completion_report(manifest, source, run_started_at, outputs, source_summary)
+        emit(
+            "stage_complete",
+            stage="completed",
+            stageLabel="completed",
+            message="job completed",
+            durationSeconds=report["runtimeSeconds"],
+        )
         emit(
             "job_complete",
             jobId=manifest["jobId"],
             ok=True,
             dryRun=bool(manifest.get("dryRun")),
             outputs=outputs,
+            report=report,
         )
         return 0
     except Exception as exc:

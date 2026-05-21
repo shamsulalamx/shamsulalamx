@@ -10,13 +10,17 @@
       "pythonExecutable": "python3",
       "dryRunSteps": [
         {
+          "stage": "generation",
           "stageLabel": "Emma Holiday dry-run",
+          "heartbeatSeconds": 20,
           "args": ["generate_lecture_slide_questions.py", "--dry-run", "--input-file", "{inputFile}", "--limit", "1"]
         }
       ],
       "liveSteps": [
         {
+          "stage": "generation",
           "stageLabel": "Emma Holiday live generation",
+          "heartbeatSeconds": 20,
           "args": ["generate_lecture_slide_questions.py", "--generate", "--input-file", "{inputFile}", "--limit", "1"]
         }
       ],
@@ -32,13 +36,17 @@
       "pythonExecutable": "python3",
       "dryRunSteps": [
         {
+          "stage": "generation",
           "stageLabel": "Fast Facts dry-run",
+          "heartbeatSeconds": 20,
           "args": ["generate_lecture_slide_questions.py", "--fast-facts-profile", "--input-file", "{inputFile}", "--limit", "10"]
         }
       ],
       "liveSteps": [
         {
+          "stage": "generation",
           "stageLabel": "Fast Facts live generation",
+          "heartbeatSeconds": 20,
           "args": ["generate_lecture_slide_questions.py", "--fast-facts-profile", "--generate", "--input-file", "{inputFile}", "--limit", "10"]
         }
       ],
@@ -54,13 +62,17 @@
       "pythonExecutable": "python3",
       "dryRunSteps": [
         {
+          "stage": "extraction",
           "stageLabel": "AMBOSS dry-run",
+          "heartbeatSeconds": 20,
           "args": ["generate_lecture_slide_questions.py", "--amboss-profile", "--input-file", "{inputFile}", "--limit", "5"]
         }
       ],
       "liveSteps": [
         {
+          "stage": "extraction",
           "stageLabel": "AMBOSS live extraction",
+          "heartbeatSeconds": 20,
           "args": ["generate_lecture_slide_questions.py", "--amboss-profile", "--input-file", "{inputFile}", "--limit", "5"]
         }
       ],
@@ -76,27 +88,45 @@
       "pythonExecutable": "python3",
       "dryRunSteps": [
         {
-          "stageLabel": "NBME dry-run",
+          "stage": "OCR",
+          "stageLabel": "NBME dry-run OCR",
+          "heartbeatSeconds": 15,
+          "args": ["nbme_batch_wrapper.py", "--stage", "ocr", "--input-file", "{inputFile}", "--max-pages", "5"]
+        },
+        {
+          "stage": "chunking",
+          "stageLabel": "NBME dry-run chunking",
+          "heartbeatSeconds": 15,
+          "args": ["nbme_batch_wrapper.py", "--stage", "chunking", "--input-file", "{inputFile}", "--max-pages", "5"]
+        },
+        {
+          "stage": "normalization",
+          "stageLabel": "NBME dry-run normalization",
+          "heartbeatSeconds": 20,
           "args": ["nbme_batch_wrapper.py", "--stage", "normalization", "--dry-run", "--input-file", "{inputFile}", "--max-pages", "5"]
         }
       ],
       "liveSteps": [
         {
+          "stage": "OCR",
           "stageLabel": "OCR",
           "heartbeatSeconds": 15,
           "args": ["nbme_batch_wrapper.py", "--stage", "ocr", "--input-file", "{inputFile}", "--max-pages", "5"]
         },
         {
+          "stage": "chunking",
           "stageLabel": "chunking",
           "heartbeatSeconds": 15,
           "args": ["nbme_batch_wrapper.py", "--stage", "chunking", "--input-file", "{inputFile}", "--max-pages", "5"]
         },
         {
+          "stage": "normalization",
           "stageLabel": "normalization",
           "heartbeatSeconds": 20,
           "args": ["nbme_batch_wrapper.py", "--stage", "normalization", "--input-file", "{inputFile}", "--max-pages", "5"]
         },
         {
+          "stage": "app-ready conversion",
           "stageLabel": "app-ready conversion",
           "heartbeatSeconds": 15,
           "args": ["nbme_batch_wrapper.py", "--stage", "app-ready", "--input-file", "{inputFile}", "--max-pages", "5"]

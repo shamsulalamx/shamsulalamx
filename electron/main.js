@@ -13,6 +13,8 @@ let resolvedDevUrl = null; // set at startup; see startEmbeddedServer / NBME_ELE
 const BATCH_IMPORT_RUNNER = path.join(app.getAppPath(), 'tools', 'batch-import-center', 'run_pipeline_job.py');
 const BATCH_IMPORT_REGISTRY = path.join(app.getAppPath(), 'tools', 'batch-import-center', 'pipeline_registry.json');
 const BATCH_JOB_MANIFEST_VERSION = 'batch-import-job-v1';
+const BATCH_JOB_HISTORY_VERSION = 'batch-import-job-history-v1';
+const activeBatchJobs = new Map();
 
 ipcMain.handle('nbme:ai:get-status', async () => ({
   available: true,
@@ -25,6 +27,111 @@ ipcMain.handle('nbme:ai:get-status', async () => ({
 function readBatchRegistry() {
   const raw = fs.readFileSync(BATCH_IMPORT_REGISTRY, 'utf8');
   return JSON.parse(raw);
+}
+
+function batchHistoryPath() {
+  const dir = path.join(app.getPath('userData'), 'batch-import-center');
+  fs.mkdirSync(dir, { recursive: true });
+  return path.join(dir, 'job-history.json');
+}
+
+function readBatchJobHistory() {
+  const historyPath = batchHistoryPath();
+  if (!fs.existsSync(historyPath)) return { schemaVersion: BATCH_JOB_HISTORY_VERSION, jobs: [] };
+  try {
+    const parsed = JSON.parse(fs.readFileSync(historyPath, 'utf8'));
+    if (!parsed || !Array.isArray(parsed.jobs)) throw new Error('Invalid history shape');
+    return {
+      schemaVersion: parsed.schemaVersion || BATCH_JOB_HISTORY_VERSION,
+      jobs: parsed.jobs.filter(job => job && typeof job === 'object')
+    };
+  } catch (_) {
+    return { schemaVersion: BATCH_JOB_HISTORY_VERSION, jobs: [] };
+  }
+}
+
+function writeBatchJobHistory(history) {
+  const historyPath = batchHistoryPath();
+  const tmpPath = `${historyPath}.tmp`;
+  fs.writeFileSync(tmpPath, JSON.stringify(history, null, 2), 'utf8');
+  fs.renameSync(tmpPath, historyPath);
+}
+
+function persistBatchJobRecord(record) {
+  const history = readBatchJobHistory();
+  const jobs = history.jobs.filter(job => job.jobId !== record.jobId);
+  jobs.unshift(record);
+  writeBatchJobHistory({
+    schemaVersion: BATCH_JOB_HISTORY_VERSION,
+    jobs: jobs
+      .sort((a, b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')))
+      .slice(0, 100)
+  });
+  return record;
+}
+
+function updateBatchJobRecord(jobId, patch) {
+  const history = readBatchJobHistory();
+  const existing = history.jobs.find(job => job.jobId === jobId);
+  if (!existing) return null;
+  const cleanPatch = Object.fromEntries(
+    Object.entries(patch || {}).filter(([, value]) => value !== undefined)
+  );
+  const updated = {
+    ...existing,
+    ...cleanPatch,
+    warnings: Array.isArray(cleanPatch.warnings) ? cleanPatch.warnings : (existing.warnings || []),
+    errors: Array.isArray(cleanPatch.errors) ? cleanPatch.errors : (existing.errors || []),
+    outputPaths: Array.isArray(cleanPatch.outputPaths) ? cleanPatch.outputPaths : (existing.outputPaths || []),
+    updatedAt: new Date().toISOString()
+  };
+  return persistBatchJobRecord(updated);
+}
+
+function reconcileStaleBatchJobs() {
+  const history = readBatchJobHistory();
+  let changed = false;
+  const jobs = history.jobs.map(job => {
+    if (job.status === 'running' || job.status === 'queued') {
+      changed = true;
+      return {
+        ...job,
+        status: 'failed',
+        completedAt: job.completedAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        errors: [...(job.errors || []), 'The app closed before this job reported completion.']
+      };
+    }
+    return job;
+  });
+  if (changed) writeBatchJobHistory({ schemaVersion: BATCH_JOB_HISTORY_VERSION, jobs });
+}
+
+function initialBatchJobRecord(manifest, source, manifestPath) {
+  const now = new Date().toISOString();
+  return {
+    jobId: manifest.jobId,
+    status: 'queued',
+    createdAt: manifest.createdAt || now,
+    startedAt: null,
+    completedAt: null,
+    updatedAt: now,
+    sourceType: manifest.sourceType,
+    sourceLabel: source?.label || manifest.sourceType,
+    dryRun: !!manifest.dryRun,
+    targetFolderId: manifest.destination?.folderId || '',
+    targetTestName: manifest.destination?.testName || '',
+    inputPaths: (manifest.inputs || []).map(item => item.path).filter(Boolean),
+    manifestPath,
+    runtimeSeconds: null,
+    currentStage: 'preflight',
+    outputPaths: [],
+    warnings: [],
+    errors: [],
+    report: null,
+    importedTestId: null,
+    importedTestName: null
+  };
 }
 
 function readEnvLocal() {
@@ -121,6 +228,72 @@ ipcMain.handle('nbme:batch-import:get-registry', async () => {
   }
 });
 
+ipcMain.handle('nbme:batch-import:get-history', async () => {
+  try {
+    reconcileStaleBatchJobs();
+    return { ok: true, history: readBatchJobHistory() };
+  } catch (err) {
+    return safeError('BATCH_HISTORY_UNAVAILABLE', err.message || String(err));
+  }
+});
+
+ipcMain.handle('nbme:batch-import:update-job-report', async (_event, payload) => {
+  try {
+    const jobId = String(payload?.jobId || '').trim();
+    if (!jobId) return safeError('BATCH_JOB_ID_REQUIRED', 'jobId is required.');
+    const report = payload?.report && typeof payload.report === 'object' ? payload.report : {};
+    const updated = updateBatchJobRecord(jobId, {
+      status: report.status || payload?.status || undefined,
+      completedAt: report.completedAt || undefined,
+      runtimeSeconds: Number.isFinite(report.runtimeSeconds) ? report.runtimeSeconds : undefined,
+      outputPaths: Array.isArray(report.outputPaths) ? report.outputPaths : undefined,
+      warnings: Array.isArray(report.warnings) ? report.warnings : undefined,
+      errors: Array.isArray(report.errors) ? report.errors : undefined,
+      importedTestId: report.importedTestId || null,
+      importedTestName: report.importedTestName || null,
+      report
+    });
+    if (!updated) return safeError('BATCH_JOB_NOT_FOUND', 'Job history record was not found.');
+    return { ok: true, job: updated };
+  } catch (err) {
+    return safeError('BATCH_HISTORY_UPDATE_FAILED', err.message || String(err));
+  }
+});
+
+ipcMain.handle('nbme:batch-import:cancel-job', async (_event, payload) => {
+  try {
+    const jobId = String(payload?.jobId || '').trim();
+    if (!jobId) return safeError('BATCH_JOB_ID_REQUIRED', 'jobId is required.');
+    const active = activeBatchJobs.get(jobId);
+    if (!active) {
+      return safeError('BATCH_JOB_NOT_RUNNING', 'No running batch job was found for that id.');
+    }
+    active.cancelled = true;
+    active.cancelledAt = new Date().toISOString();
+    updateBatchJobRecord(jobId, {
+      status: 'cancelled',
+      completedAt: active.cancelledAt,
+      errors: [],
+      warnings: [...(active.warnings || []), 'Job cancelled by user.']
+    });
+    if (active.proc?.pid) {
+      try {
+        process.kill(-active.proc.pid, 'SIGTERM');
+      } catch (_) {
+        try { active.proc.kill('SIGTERM'); } catch (__) {}
+      }
+      active.killTimer = setTimeout(() => {
+        if (active.proc && active.proc.exitCode === null) {
+          try { process.kill(-active.proc.pid, 'SIGKILL'); } catch (_) {}
+        }
+      }, 5000);
+    }
+    return { ok: true, jobId, status: 'cancelled' };
+  } catch (err) {
+    return safeError('BATCH_CANCEL_FAILED', err.message || String(err));
+  }
+});
+
 ipcMain.handle('nbme:batch-import:select-files', async (_event, payload) => {
   try {
     const sourceType = String(payload?.sourceType || '').trim();
@@ -159,22 +332,42 @@ ipcMain.handle('nbme:batch-import:launch-job', async (event, payload) => {
       return safeError('BATCH_SOURCE_UNKNOWN', `Source type is not registered: ${sourceType}`);
     }
     manifest = sanitizeBatchJobPayload(payload, source);
-    if (!manifest.dryRun && manifest.requiresGemini) {
+    const dryRunRequiresGemini = !!source.dryRunRequiresGemini;
+    if (manifest.requiresGemini && (!manifest.dryRun || dryRunRequiresGemini)) {
       batchEnvironment = await resolveBatchEnvironment(true);
       if (!batchEnvironment.ok) return batchEnvironment;
     } else {
       batchEnvironment = await resolveBatchEnvironment(false);
     }
     manifestPath = writeBatchManifest(manifest);
+    persistBatchJobRecord(initialBatchJobRecord(manifest, source, manifestPath));
   } catch (err) {
     return safeError('BATCH_JOB_INVALID', err.message || String(err));
   }
 
   return await new Promise(resolve => {
     const progress = [];
+    const warnings = [];
+    const errors = [];
+    const launchedAt = Date.now();
     const sendProgress = eventPayload => {
-      progress.push(eventPayload);
-      event.sender.send('nbme:batch-import:progress', eventPayload);
+      const enriched = { jobId: manifest.jobId, ...eventPayload };
+      if (enriched.type === 'job_start') {
+        updateBatchJobRecord(manifest.jobId, { status: 'running', startedAt: enriched.timestamp || new Date().toISOString() });
+      }
+      if (enriched.type === 'stage_start' && enriched.stage) {
+        updateBatchJobRecord(manifest.jobId, { currentStage: enriched.stage });
+      }
+      if (enriched.type === 'warning' || enriched.type === 'cache_summary') {
+        const message = enriched.message || enriched.warning;
+        if (message) warnings.push(String(message));
+      }
+      if (enriched.type === 'error' || enriched.type === 'stage_failed') {
+        const message = enriched.message || enriched.error || enriched.failureReason;
+        if (message) errors.push(String(message));
+      }
+      progress.push(enriched);
+      event.sender.send('nbme:batch-import:progress', enriched);
     };
 
     const childEnv = batchEnvironment?.env || process.env;
@@ -186,7 +379,18 @@ ipcMain.handle('nbme:batch-import:launch-job', async (event, payload) => {
     const proc = spawn(command, args, {
       cwd: app.getAppPath(),
       env: childEnv,
-      stdio: ['ignore', 'pipe', 'pipe']
+      stdio: ['ignore', 'pipe', 'pipe'],
+      detached: true
+    });
+    activeBatchJobs.set(manifest.jobId, {
+      proc,
+      manifest,
+      manifestPath,
+      progress,
+      warnings,
+      errors,
+      cancelled: false,
+      killTimer: null
     });
 
     let stdoutBuffer = '';
@@ -220,26 +424,63 @@ ipcMain.handle('nbme:batch-import:launch-job', async (event, payload) => {
     });
 
     proc.on('error', err => {
+      activeBatchJobs.delete(manifest.jobId);
+      updateBatchJobRecord(manifest.jobId, {
+        status: 'failed',
+        completedAt: new Date().toISOString(),
+        runtimeSeconds: Math.round((Date.now() - launchedAt) / 100) / 10,
+        errors: [err.message || String(err)]
+      });
       resolve(safeError('BATCH_JOB_LAUNCH_FAILED', err.message || String(err)));
     });
 
     proc.on('close', (code, signal) => {
       consumeLine(stdoutBuffer, 'stdout');
       consumeLine(stderrBuffer, 'stderr');
-      const ok = code === 0 && (!finalEvent || finalEvent.ok !== false);
+      const active = activeBatchJobs.get(manifest.jobId);
+      if (active?.killTimer) clearTimeout(active.killTimer);
+      activeBatchJobs.delete(manifest.jobId);
+      const wasCancelled = !!active?.cancelled;
+      const runtimeSeconds = Math.round((Date.now() - launchedAt) / 100) / 10;
+      const ok = !wasCancelled && code === 0 && (!finalEvent || finalEvent.ok !== false);
       const fallbackMessage = signal
         ? `Batch job exited with signal ${signal}.`
         : `Batch job exited with code ${code}.`;
+      const outputPaths = Array.isArray(finalEvent?.outputs) ? finalEvent.outputs : [];
+      const status = wasCancelled ? 'cancelled' : (ok ? 'completed' : 'failed');
+      const finalErrors = wasCancelled
+        ? []
+        : (errors.length ? errors : (ok ? [] : [finalEvent?.error || fallbackMessage]));
+      const report = finalEvent?.report && typeof finalEvent.report === 'object' ? finalEvent.report : {};
+      updateBatchJobRecord(manifest.jobId, {
+        status,
+        completedAt: new Date().toISOString(),
+        runtimeSeconds,
+        currentStage: status === 'completed' ? 'completed' : report.stage || null,
+        outputPaths,
+        warnings: wasCancelled ? [...warnings, 'Job cancelled by user.'] : warnings,
+        errors: finalErrors,
+        report: {
+          ...report,
+          status,
+          runtimeSeconds,
+          outputPaths,
+          warnings: wasCancelled ? [...warnings, 'Job cancelled by user.'] : warnings,
+          errors: finalErrors
+        }
+      });
       resolve({
         ok,
+        cancelled: wasCancelled,
         exitCode: code,
         signal,
         manifestPath,
         manifest,
-        outputs: Array.isArray(finalEvent?.outputs) ? finalEvent.outputs : [],
+        outputs: outputPaths,
         progress,
-        errorCode: ok ? null : 'BATCH_JOB_FAILED',
-        message: ok ? null : (finalEvent?.error || fallbackMessage)
+        report,
+        errorCode: ok ? null : (wasCancelled ? 'BATCH_JOB_CANCELLED' : 'BATCH_JOB_FAILED'),
+        message: ok ? null : (wasCancelled ? 'Batch job cancelled.' : (finalEvent?.error || fallbackMessage))
       });
     });
   });

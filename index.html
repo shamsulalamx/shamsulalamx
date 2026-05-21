@@ -2308,9 +2308,14 @@ body.quiz-fullscreen-mode .modal-overlay {
     </div>
     <div class="notes-import-section-title">Completion Report</div>
     <div id="bic-completion-report" class="notes-import-summary">Completion report placeholder.</div>
+    <div class="notes-import-section-title">Job History</div>
+    <div id="bic-job-history" class="notes-import-preview">
+      <div class="notes-import-empty">No prior jobs loaded.</div>
+    </div>
 
     <div class="modal-actions">
       <button class="btn-modal primary" onclick="App.launchBatchImportJob()">Run</button>
+      <button class="btn-modal" id="bic-cancel-job-btn" onclick="App.cancelBatchImportJob()" disabled>Cancel Job</button>
       <button class="btn-modal" onclick="App.closeBatchImportCenter()">Close</button>
     </div>
   </div>
@@ -22084,7 +22089,7 @@ const App = (() => {
     const runStatus = document.getElementById('bic-run-status');
     const log = document.getElementById('bic-progress-log');
     const report = document.getElementById('bic-completion-report');
-    _batchImportState = { lastResult: null, progress: [], files: [], registry: null };
+    _batchImportState = { lastResult: null, progress: [], files: [], registry: null, history: [], activeJobId: null };
     if (registryStatus) registryStatus.textContent = 'Loading registry...';
     if (runStatus) runStatus.textContent = 'No job run yet.';
     if (log) log.innerHTML = '<div class="notes-import-empty">Progress events will appear here.</div>';
@@ -22113,6 +22118,7 @@ const App = (() => {
     }).catch(function(err) {
       if (registryStatus) registryStatus.textContent = err?.message || 'Registry could not be loaded.';
     });
+    refreshBatchImportHistory();
   }
 
   function populateBatchImportTargetFolders() {
@@ -22157,6 +22163,80 @@ const App = (() => {
       const name = String(filePath || '').split(/[\\/]/).pop() || filePath;
       return `<div>${escapeHTML(name)}</div>`;
     }).join('');
+  }
+
+  async function refreshBatchImportHistory() {
+    const api = window.nbmeDesktop && window.nbmeDesktop.batchImport;
+    const target = document.getElementById('bic-job-history');
+    if (!target) return;
+    if (!api || !api.getHistory) {
+      target.innerHTML = '<div class="notes-import-empty">Job history is available only in the Electron app.</div>';
+      return;
+    }
+    const result = await api.getHistory();
+    if (!result || !result.ok) {
+      target.innerHTML = '<div class="notes-import-empty">' + escapeHTML(result?.message || 'Job history could not be loaded.') + '</div>';
+      return;
+    }
+    const jobs = Array.isArray(result.history?.jobs) ? result.history.jobs : [];
+    if (_batchImportState) _batchImportState.history = jobs;
+    renderBatchImportHistory(jobs);
+  }
+
+  function renderBatchImportHistory(jobs) {
+    const target = document.getElementById('bic-job-history');
+    if (!target) return;
+    if (!Array.isArray(jobs) || !jobs.length) {
+      target.innerHTML = '<div class="notes-import-empty">No prior jobs.</div>';
+      return;
+    }
+    target.innerHTML = jobs.slice(0, 12).map(function(job) {
+      const sourceLabel = job.sourceLabel || BATCH_IMPORT_SOURCE_LABELS[job.sourceType] || job.sourceType || 'Unknown source';
+      const when = job.completedAt || job.startedAt || job.createdAt || '';
+      const count = Number(job.report?.questionCount || 0);
+      const outputs = Array.isArray(job.outputPaths) ? job.outputPaths.length : 0;
+      const status = job.status || 'unknown';
+      return `
+        <div class="notes-import-block" onclick="App.inspectBatchImportHistoryJob('${escapeHTML(job.jobId || '')}')">
+          <div class="notes-import-block-head">
+            <span class="notes-import-type">${escapeHTML(status)}</span>
+            <span class="notes-import-path">${escapeHTML(when)}</span>
+          </div>
+          <div class="notes-import-text">${escapeHTML(sourceLabel)} · ${count} question(s) · ${outputs} output(s)</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function inspectBatchImportHistoryJob(jobId) {
+    const jobs = Array.isArray(_batchImportState?.history) ? _batchImportState.history : [];
+    const job = jobs.find(function(item) { return item.jobId === jobId; });
+    if (!job) return;
+    renderBatchImportCompletionReport(normalizeBatchHistoryJobReport(job));
+    const runStatus = document.getElementById('bic-run-status');
+    if (runStatus) runStatus.textContent = 'Showing saved report for ' + (job.jobId || 'prior job') + '.';
+  }
+
+  function normalizeBatchHistoryJobReport(job) {
+    const report = job.report || {};
+    return {
+      jobId: job.jobId,
+      status: job.status,
+      sourceType: job.sourceType,
+      folderId: job.targetFolderId || report.targetFolder || '',
+      outputPath: report.outputJsonPath || (Array.isArray(job.outputPaths) ? job.outputPaths[0] : ''),
+      outputPaths: Array.isArray(job.outputPaths) ? job.outputPaths : (Array.isArray(report.outputPaths) ? report.outputPaths : []),
+      questionCount: Number(report.questionCount || 0),
+      imageCount: Number(report.imageTableCount || report.imageCount || 0),
+      figureRefs: Array.isArray(report.figureRefs) ? report.figureRefs : [],
+      cacheHits: report.cacheHits,
+      cacheMisses: report.cacheMisses,
+      runtimeSeconds: report.runtimeSeconds || job.runtimeSeconds || null,
+      importedTestId: job.importedTestId || report.importedTestId || '',
+      importedTestName: job.importedTestName || report.importedTestName || '',
+      warnings: Array.isArray(job.warnings) ? job.warnings : (Array.isArray(report.warnings) ? report.warnings : []),
+      errors: Array.isArray(job.errors) ? job.errors : (Array.isArray(report.errors) ? report.errors : [])
+    };
   }
 
   function onBatchImportSourceChange() {
@@ -22229,10 +22309,18 @@ const App = (() => {
 
     if (_batchImportProgressUnsubscribe) _batchImportProgressUnsubscribe();
     if (_batchImportState) _batchImportState.progress = [];
+    if (_batchImportState) _batchImportState.activeJobId = null;
+    const cancelBtn = document.getElementById('bic-cancel-job-btn');
+    if (cancelBtn) cancelBtn.disabled = true;
     const log = document.getElementById('bic-progress-log');
     if (log) log.innerHTML = '<div class="notes-import-empty">Progress events will appear here.</div>';
     _batchImportProgressUnsubscribe = api.onProgress(function(event) {
       if (_batchImportState) _batchImportState.progress.push(event);
+      if (event?.jobId && _batchImportState) {
+        _batchImportState.activeJobId = event.jobId;
+        if (cancelBtn) cancelBtn.disabled = false;
+      }
+      if (event?.type === 'job_complete' && cancelBtn) cancelBtn.disabled = true;
       appendBatchImportProgress(event);
     });
 
@@ -22244,24 +22332,49 @@ const App = (() => {
       sourceType,
       inputPaths,
       dryRun: isDryRun,
-      executePipeline: !isDryRun,
+      executePipeline: true,
       destination: {
         folderId,
         testName: ''
       }
     });
     _batchImportState = Object.assign(_batchImportState || {}, { lastResult: result });
-    if (!result?.ok) {
-      if (runStatus) runStatus.textContent = result?.message || 'Batch job failed.';
-      renderBatchImportCompletionReport({
+    if (cancelBtn) cancelBtn.disabled = true;
+    const jobId = result?.manifest?.jobId || _batchImportState?.activeJobId || '';
+    if (result?.cancelled) {
+      if (runStatus) runStatus.textContent = 'Batch job cancelled.';
+      const cancelledReport = buildBatchImportCompletionReport({
+        jobId,
+        status: 'cancelled',
         sourceType,
         folderId,
-        outputPath: '',
-        questionCount: 0,
-        imageCount: 0,
-        warnings: [],
-        errors: [result?.message || 'Batch job failed.']
+        pipelineReport: result.report || {},
+        validations: [],
+        importResult: null,
+        errors: [],
+        warnings: ['Job cancelled by user.']
       });
+      renderBatchImportCompletionReport(cancelledReport);
+      if (api.updateJobReport && jobId) await api.updateJobReport({ jobId, report: cancelledReport });
+      await refreshBatchImportHistory();
+      return;
+    }
+    if (!result?.ok) {
+      if (runStatus) runStatus.textContent = result?.message || 'Batch job failed.';
+      const failedReport = buildBatchImportCompletionReport({
+        jobId,
+        status: 'failed',
+        sourceType,
+        folderId,
+        pipelineReport: result?.report || {},
+        validations: [],
+        importResult: null,
+        errors: [result?.message || 'Batch job failed.'],
+        warnings: []
+      });
+      renderBatchImportCompletionReport(failedReport);
+      if (api.updateJobReport && jobId) await api.updateJobReport({ jobId, report: failedReport });
+      await refreshBatchImportHistory();
       return;
     }
 
@@ -22276,7 +22389,7 @@ const App = (() => {
 	    for (const outputPath of outputs) {
 	      const read = await api.readOutputJson(outputPath);
 	      if (!read || !read.ok) {
-        validations.push({ ok: false, outputPath, errors: [read?.message || 'Output JSON could not be read.'], warnings: [], questionCount: 0, imageCount: 0 });
+        validations.push({ ok: false, outputPath, errors: [read?.message || 'Output JSON could not be read.'], warnings: [], questionCount: 0, imageCount: 0, figureRefs: [] });
         continue;
       }
       validations.push(validateBatchOutputJsonText(read.text, outputPath));
@@ -22315,18 +22428,76 @@ const App = (() => {
     if (runMode === 'generate-auto-import' && importResult && !importResult.ok) errors.push(importResult.error || 'Auto-import failed.');
     if (runMode === 'generate-auto-import' && importResult?.ok) warnings.push('Auto-import completed.');
 
-    renderBatchImportCompletionReport({
+    const finalReport = buildBatchImportCompletionReport({
+      jobId,
+      status: errors.length ? 'failed' : 'completed',
       sourceType,
       folderId,
-      outputPath: primary.outputPath || '',
-      questionCount: primary.questionCount || 0,
-      imageCount: primary.imageCount || 0,
+      pipelineReport: result.report || {},
+      validations,
+      importResult,
       warnings,
       errors
     });
+    renderBatchImportCompletionReport(finalReport);
+    if (api.updateJobReport && jobId) await api.updateJobReport({ jobId, report: finalReport });
+    await refreshBatchImportHistory();
     if (runStatus) runStatus.textContent = isDryRun
       ? 'Dry-run completed.'
       : (runMode === 'generate-auto-import' && importResult?.ok ? 'Generation and auto-import completed.' : 'Generation completed.');
+  }
+
+  async function cancelBatchImportJob() {
+    const api = window.nbmeDesktop && window.nbmeDesktop.batchImport;
+    const runStatus = document.getElementById('bic-run-status');
+    const jobId = _batchImportState?.activeJobId;
+    if (!api || !api.cancelJob || !jobId) {
+      if (runStatus) runStatus.textContent = 'No running job is available to cancel.';
+      return;
+    }
+    const cancelBtn = document.getElementById('bic-cancel-job-btn');
+    if (cancelBtn) cancelBtn.disabled = true;
+    if (runStatus) runStatus.textContent = 'Cancelling batch job...';
+    const result = await api.cancelJob({ jobId });
+    if (!result || !result.ok) {
+      if (runStatus) runStatus.textContent = result?.message || 'Cancel request failed.';
+      if (cancelBtn) cancelBtn.disabled = false;
+      return;
+    }
+    appendBatchImportProgress({ type: 'job_cancelled', timestamp: new Date().toISOString(), jobId, message: 'Cancel request sent.' });
+  }
+
+  function buildBatchImportCompletionReport(options) {
+    const pipelineReport = options.pipelineReport || {};
+    const validations = Array.isArray(options.validations) ? options.validations : [];
+    const primary = validations[0] || {};
+    const validationQuestionCount = validations.reduce(function(sum, item) { return sum + Number(item.questionCount || 0); }, 0);
+    const validationImageCount = validations.reduce(function(sum, item) { return sum + Number(item.imageCount || 0); }, 0);
+    const figureRefs = [];
+    validations.forEach(function(item) {
+      (item.figureRefs || []).forEach(function(ref) { if (ref) figureRefs.push(ref); });
+    });
+    return {
+      schemaVersion: 'batch-import-completion-report-v1',
+      jobId: options.jobId || '',
+      status: options.status || 'completed',
+      completedAt: new Date().toISOString(),
+      sourceType: options.sourceType || pipelineReport.sourceType || '',
+      folderId: options.folderId || pipelineReport.targetFolder || '',
+      outputPath: primary.outputPath || pipelineReport.outputJsonPath || '',
+      outputPaths: Array.isArray(pipelineReport.outputPaths) ? pipelineReport.outputPaths : [],
+      questionCount: validationQuestionCount || Number(pipelineReport.questionCount || 0),
+      imageTableCount: validationImageCount || Number(pipelineReport.imageTableCount || 0),
+      imageCount: validationImageCount || Number(pipelineReport.imageTableCount || 0),
+      figureRefs: Array.from(new Set(figureRefs.concat(Array.isArray(pipelineReport.figureRefs) ? pipelineReport.figureRefs : []))),
+      cacheHits: pipelineReport.cacheHits,
+      cacheMisses: pipelineReport.cacheMisses,
+      warnings: Array.isArray(options.warnings) ? options.warnings : [],
+      errors: Array.isArray(options.errors) ? options.errors : [],
+      runtimeSeconds: pipelineReport.runtimeSeconds || null,
+      importedTestId: options.importResult?.testId || null,
+      importedTestName: options.importResult?.testName || null
+    };
   }
 
   async function autoImportBatchOutputJson(outputPath, destination) {
@@ -22342,13 +22513,14 @@ const App = (() => {
     try {
       parsed = JSON.parse(rawText || '');
     } catch(err) {
-      return { ok: false, outputPath, rawText, testName: '', questionCount: 0, imageCount: 0, warnings: [], errors: ['Invalid JSON: ' + (err.message || String(err))] };
+      return { ok: false, outputPath, rawText, testName: '', questionCount: 0, imageCount: 0, figureRefs: [], warnings: [], errors: ['Invalid JSON: ' + (err.message || String(err))] };
     }
 
     let warnings = [];
     let errors = [];
     let questionCount = 0;
     let imageCount = 0;
+    let figureRefs = [];
     let testName = String(parsed?.testTitle || parsed?.name || 'Batch Import').trim();
 
     if (parsed && parsed.testTitle !== undefined && Array.isArray(parsed.questions)) {
@@ -22357,6 +22529,7 @@ const App = (() => {
       errors = validation.isValid ? [] : (validation.blockingErrors || ['NBME Gemini JSON validation failed.']).slice();
       questionCount = parsed.questions.length;
 	      imageCount = parsed.questions.reduce(function(sum, q) {
+	        if (Array.isArray(q.figureRefs)) figureRefs = figureRefs.concat(q.figureRefs.map(String));
 	        return sum
 	          + (Array.isArray(q.figureRefs) ? q.figureRefs.length : 0)
 	          + (Array.isArray(q.images) ? q.images.length : 0)
@@ -22364,7 +22537,7 @@ const App = (() => {
 	          + (Array.isArray(q.tables) ? q.tables.length : 0)
 	          + (Array.isArray(q.explanationTables) ? q.explanationTables.length : 0);
 	      }, 0);
-      return { ok: validation.isValid, outputPath, rawText, testName, questionCount, imageCount, warnings, errors };
+      return { ok: validation.isValid, outputPath, rawText, testName, questionCount, imageCount, figureRefs: Array.from(new Set(figureRefs)), warnings, errors };
     }
 
     if (parsed && Array.isArray(parsed.questions) && parsed.questions.length && parsed.questions.every(_isInternalAppReadyQuestion)) {
@@ -22372,25 +22545,26 @@ const App = (() => {
       const ok = _validateInternalAppReadyQuestions(questions);
       questionCount = questions.length;
 	      imageCount = questions.reduce(function(sum, q) {
+	        if (Array.isArray(q.figureRefs)) figureRefs = figureRefs.concat(q.figureRefs.map(String));
 	        return sum
 	          + (Array.isArray(q.images) ? q.images.length : 0)
 	          + (Array.isArray(q.explanationImages) ? q.explanationImages.length : 0)
 	          + (Array.isArray(q.tables) ? q.tables.length : 0)
 	          + (Array.isArray(q.explanationTables) ? q.explanationTables.length : 0);
 	      }, 0);
-      return { ok, outputPath, rawText, testName, questionCount, imageCount, warnings, errors: ok ? [] : ['JSON questions are missing required internal fields (t, o).'] };
+      return { ok, outputPath, rawText, testName, questionCount, imageCount, figureRefs: Array.from(new Set(figureRefs)), warnings, errors: ok ? [] : ['JSON questions are missing required internal fields (t, o).'] };
     }
 
     if (parsed && Array.isArray(parsed.questions) && parsed.questions.length) {
       const ok = parsed.questions.every(function(q) { return q.stem && Array.isArray(q.options); });
       questionCount = parsed.questions.length;
-      return { ok, outputPath, rawText, testName, questionCount, imageCount, warnings, errors: ok ? [] : ['JSON questions are missing required fields (stem, options).'] };
+      return { ok, outputPath, rawText, testName, questionCount, imageCount, figureRefs, warnings, errors: ok ? [] : ['JSON questions are missing required fields (stem, options).'] };
     }
 
     if (Array.isArray(parsed) && parsed.length && parsed[0] && parsed[0].stem) {
       const ok = parsed.every(function(q) { return q.stem && Array.isArray(q.options); });
       questionCount = parsed.length;
-      return { ok, outputPath, rawText, testName, questionCount, imageCount, warnings, errors: ok ? [] : ['JSON questions are missing required fields (stem, options).'] };
+      return { ok, outputPath, rawText, testName, questionCount, imageCount, figureRefs, warnings, errors: ok ? [] : ['JSON questions are missing required fields (stem, options).'] };
     }
 
     return { ok: false, outputPath, rawText, testName, questionCount: 0, imageCount: 0, warnings, errors: ['Unrecognized JSON schema.'] };
@@ -22403,12 +22577,22 @@ const App = (() => {
     const sourceLabel = BATCH_IMPORT_SOURCE_LABELS[report.sourceType] || report.sourceType || 'Unknown source';
     const warnings = Array.isArray(report.warnings) ? report.warnings : [];
     const errors = Array.isArray(report.errors) ? report.errors : [];
+    const outputPaths = Array.isArray(report.outputPaths) ? report.outputPaths : (report.outputPath ? [report.outputPath] : []);
+    const figureRefs = Array.isArray(report.figureRefs) ? report.figureRefs : [];
+    const cacheText = report.cacheHits !== undefined || report.cacheMisses !== undefined
+      ? String(Number(report.cacheHits || 0)) + ' / ' + String(Number(report.cacheMisses || 0))
+      : 'N/A';
     target.innerHTML = `
+      <div><strong>Status:</strong> ${escapeHTML(report.status || 'unknown')}</div>
       <div><strong>Source type:</strong> ${escapeHTML(sourceLabel)}</div>
       <div><strong>Target folder:</strong> ${escapeHTML(report.folderId ? `${lbl.srcName} / ${lbl.fldName}` : 'Not selected')}</div>
-      <div><strong>Output path:</strong> ${escapeHTML(report.outputPath || 'None discovered')}</div>
+      <div><strong>Runtime:</strong> ${report.runtimeSeconds !== null && report.runtimeSeconds !== undefined ? escapeHTML(String(report.runtimeSeconds) + 's') : 'N/A'}</div>
+      <div><strong>Output path:</strong> ${escapeHTML(report.outputPath || outputPaths[0] || 'None discovered')}</div>
       <div><strong>Question count:</strong> ${Number(report.questionCount || 0)}</div>
-	      <div><strong>Image/table count:</strong> ${Number(report.imageCount || 0)}</div>
+	      <div><strong>Image/table count:</strong> ${Number(report.imageTableCount || report.imageCount || 0)}</div>
+      <div><strong>figureRefs:</strong> ${figureRefs.length ? escapeHTML(figureRefs.join(', ')) : 'None'}</div>
+      <div><strong>Cache hits/misses:</strong> ${escapeHTML(cacheText)}</div>
+      <div><strong>Imported test:</strong> ${escapeHTML(report.importedTestId ? `${report.importedTestName || 'Imported test'} (${report.importedTestId})` : 'None')}</div>
       <div><strong>Warnings:</strong> ${warnings.length ? escapeHTML(warnings.join('; ')) : 'None'}</div>
       <div><strong>Errors:</strong> ${errors.length ? escapeHTML(errors.join('; ')) : 'None'}</div>
     `;
@@ -22471,7 +22655,7 @@ const App = (() => {
     _currentFolder = folderId;
     renderSidebar();
     renderHomeGrid();
-    return { ok: true, testId: test.id, questionCount: questions.length };
+    return { ok: true, testId: test.id, testName, questionCount: questions.length };
   }
 
   // ─── END LANDING JSON IMPORT ────────────────────────────────────────────────
@@ -26951,6 +27135,9 @@ const App = (() => {
     onBatchImportSourceChange,
     selectBatchImportFiles,
     launchBatchImportJob,
+    cancelBatchImportJob,
+    inspectBatchImportHistoryJob,
+    refreshBatchImportHistory,
     autoImportBatchOutputJson,
     importValidatedBatchOutputJsonText,
     openLandingJsonImportModal,

@@ -9,8 +9,11 @@ const desktopInfo = Object.freeze({
   }),
   batchImport: Object.freeze({
     getRegistry: () => ipcRenderer.invoke('nbme:batch-import:get-registry'),
+    getHistory: () => ipcRenderer.invoke('nbme:batch-import:get-history'),
     selectFiles: payload => ipcRenderer.invoke('nbme:batch-import:select-files', payload),
     launchJob: payload => ipcRenderer.invoke('nbme:batch-import:launch-job', payload),
+    cancelJob: payload => ipcRenderer.invoke('nbme:batch-import:cancel-job', payload),
+    updateJobReport: payload => ipcRenderer.invoke('nbme:batch-import:update-job-report', payload),
     readOutputJson: outputPath => ipcRenderer.invoke('nbme:batch-import:read-output-json', outputPath),
     onProgress: callback => {
       if (typeof callback !== 'function') return () => {};
