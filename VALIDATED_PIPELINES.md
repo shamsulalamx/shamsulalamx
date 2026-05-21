@@ -15,6 +15,7 @@ This file records what is validated, what is not validated, and the risk level f
 | Images & Tables | Shared image/table profile stable | Attachment-first only, no semantic generator | Validated in v4.15 | BIC generate + auto-import validated | Packaged app validated end to end | Heuristic classification, no deep table parsing | Medium |
 | Anki | Shared profile dry-run handoff validated | Not validated; BIC live steps intentionally reuse dry-run handoff | Normalized text chunks validated | Dry-run BIC auto-import validated in dev and packaged app | Packaged dry-run auto-import, quiz rendering, reload persistence, and score history persistence validated | Placeholder questions only; live Gemini generation not enabled or validated | Medium-high |
 | OME | Shared PDF dry-run handoff validated | Not validated; BIC live steps intentionally reuse dry-run handoff | Normalized text chunks validated | Dry-run BIC auto-import validated in dev and packaged app | Clean packaged profile, quiz rendering, reload persistence, and score history persistence validated | Placeholder questions only; real PDF coverage, live Gemini generation, and writable packaged output are unvalidated | Medium-high |
+| Divine transcript | Transcript-first shared-ingestion normalization validated on synthetic fixtures | Not in scope | Normalized transcript chunks validated | Not registered in BIC | Not validated | Transcript-only milestone; audio, transcription, retrieval, and semantic question generation intentionally absent | Medium-high |
 | Fast Facts | Cache foundation exists | Semantic quality unstable | Adapter foundation exists | BIC registered | Do not claim packaged semantic stability | Generation quality instability | High |
 
 ## AMBOSS
@@ -123,6 +124,23 @@ Explicitly not validated:
 - stable packaged semantic output.
 
 Treat Fast Facts as high-risk until semantic generation is separately hardened and validated.
+
+## Divine Transcript
+
+Validated for the first shared-ingestion milestone:
+
+- `divine_transcript` descriptor for transcript text input.
+- `.txt` and `.md` synthetic transcript fixtures only.
+- Transcript normalized chunks with source line-range grounding.
+- Explicit timestamp preservation when transcript lines contain timestamps.
+- Transcript-only profile runner output through `shared-normalized-chunk-bundle-v1`.
+
+Intentionally not validated:
+
+- Audio input or transcription.
+- Gemini invocation or semantic question generation.
+- BIC registration, app-ready JSON, importer behavior, Electron UI, or packaged orchestration.
+- Retrieval, clustering, multimodal grounding, images, or assets.
 
 ## OME
 

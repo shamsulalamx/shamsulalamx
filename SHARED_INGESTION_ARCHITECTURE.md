@@ -69,7 +69,8 @@ Current shared adapters include:
 - Mehlman adapter,
 - Images & Tables adapter,
 - Anki plain-text adapter,
-- OME PDF adapter.
+- OME PDF adapter,
+- Divine transcript adapter.
 
 Only the profiles listed in `VALIDATED_PIPELINES.md` should be treated as validated.
 
@@ -92,6 +93,12 @@ The adapter treats those inputs as card-style source text. It does not assume MC
 OME has an `ome_pdf` descriptor, a thin PDF adapter, and `ome_profile_runner.py`.
 
 The adapter reuses existing OME native text extraction and UWorld text chunking. It emits `chunkType: text`, preserves page grounding from `## Page N` markers, and does not add OCR or asset extraction claims. The validated handoff uses the existing OME generator only after normalized chunks validate.
+
+## Divine Transcript Descriptor And Adapter
+
+Divine has a transcript-first `divine_transcript` descriptor, a thin text adapter, and `divine_transcript_profile_runner.py`.
+
+This first profile milestone accepts `.txt` and `.md` transcript text only. It emits `chunkType: transcript`, preserves source line ranges, preserves explicit timestamps when they exist, and keeps blank-line transcript blocks in source order. It does not add audio ingestion, transcription, semantic generation, BIC registration, retrieval, images, or assets.
 
 ## Asset Routing
 

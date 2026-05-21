@@ -34,6 +34,8 @@ IMAGES_TABLES_DIR = PROJECT_ROOT / "tools" / "images-tables-question-generator"
 IMAGES_TABLES_ASSET_DIR = IMAGES_TABLES_DIR / "output_assets"
 SUPPORTED_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
 SUPPORTED_ANKI_EXTS = {".txt", ".md"}
+SUPPORTED_DIVINE_TRANSCRIPT_EXTS = {".txt", ".md"}
+DIVINE_TIMESTAMP_RE = re.compile(r"(?<!\d)(\d{1,2}:\d{2}(?::\d{2})?)(?!\d)")
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -394,6 +396,113 @@ def anki_notes_to_normalized_chunks(input_path: Path, limit: int = 25) -> dict[s
     )
 
 
+def _divine_timestamp(text: str) -> str:
+    match = DIVINE_TIMESTAMP_RE.search(text)
+    return match.group(1) if match else ""
+
+
+def _divine_section_label(line: str) -> str:
+    stripped = line.strip()
+    if stripped.startswith("#"):
+        label = stripped.lstrip("#").strip()
+        return label or ""
+    if stripped.endswith(":") and len(stripped.split()) <= 8:
+        return stripped[:-1].strip()
+    return ""
+
+
+def _divine_transcript_blocks(raw_text: str) -> list[list[dict[str, Any]]]:
+    blocks: list[list[dict[str, Any]]] = []
+    block: list[dict[str, Any]] = []
+    for line_number, raw_line in enumerate(raw_text.splitlines(), start=1):
+        if not raw_line.strip():
+            if block:
+                blocks.append(block)
+                block = []
+            continue
+        block.append({
+            "lineNumber": line_number,
+            "text": raw_line,
+            "timestamp": _divine_timestamp(raw_line),
+            "sectionLabel": _divine_section_label(raw_line),
+        })
+    if block:
+        blocks.append(block)
+    return blocks
+
+
+def divine_transcript_to_normalized_chunks(input_path: Path, limit: int = 0) -> dict[str, Any]:
+    input_path = input_path.resolve()
+    if input_path.suffix.lower() not in SUPPORTED_DIVINE_TRANSCRIPT_EXTS:
+        supported = ", ".join(sorted(SUPPORTED_DIVINE_TRANSCRIPT_EXTS))
+        raise ValueError(f"Unsupported Divine transcript extension: {input_path.suffix}. Supported: {supported}")
+
+    raw_text = input_path.read_text(encoding="utf-8", errors="replace")
+    source_file = input_path.name
+    source_path = rel(input_path)
+    source_blocks = _divine_transcript_blocks(raw_text)
+    selected_blocks = source_blocks[:limit] if limit else source_blocks
+    normalized_chunks: list[dict[str, Any]] = []
+
+    for index, block in enumerate(selected_blocks, start=1):
+        line_start = int(block[0]["lineNumber"])
+        line_end = int(block[-1]["lineNumber"])
+        timestamps = [str(line["timestamp"]) for line in block if line.get("timestamp")]
+        section_labels = [str(line["sectionLabel"]) for line in block if line.get("sectionLabel")]
+        grounding = {
+            "chunkIndex": index,
+            "lineStart": line_start,
+            "lineEnd": line_end,
+            "sourcePath": source_path,
+        }
+        if timestamps:
+            grounding["timestampStart"] = timestamps[0]
+            grounding["timestampEnd"] = timestamps[-1]
+        section_label = section_labels[0] if section_labels else ""
+        if section_label:
+            grounding["sectionLabel"] = section_label
+        content = "\n".join(str(line["text"]) for line in block)
+        normalized_chunks.append(NormalizedChunk(
+            chunkId=f"{slugify(input_path.stem)}_divine_transcript_chunk_{index:04d}",
+            chunkType="transcript",
+            sourceType="divine_transcript",
+            sourceFile=source_file,
+            sourceGrounding=grounding,
+            text=content,
+            textBlocks=[
+                {
+                    "kind": "transcript-line",
+                    "lineNumber": line["lineNumber"],
+                    "timestamp": line["timestamp"],
+                    "text": line["text"],
+                }
+                for line in block
+            ],
+            imageRefs=[],
+            tableRefs=[],
+            confidence=0.9 if content else 0.35,
+            metadata={
+                "sourceFormat": "divine-transcript-text",
+                "chunkIndex": index,
+                "lineStart": line_start,
+                "lineEnd": line_end,
+                "timestampCount": len(timestamps),
+                "sectionLabel": section_label,
+                "normalizationScope": "structural transcript chunking only",
+            },
+            warnings=[],
+        ).to_dict())
+
+    warnings = [] if source_blocks else ["No non-empty transcript lines found in source file."]
+    return build_chunk_bundle(
+        source_descriptor=get_source_descriptor("divine_transcript").to_dict(),
+        source_file=source_file,
+        source_path=source_path,
+        chunks=normalized_chunks,
+        warnings=warnings,
+    )
+
+
 def fast_facts_to_normalized_chunks(input_path: Path, limit: int = 10) -> dict[str, Any]:
     input_path = input_path.resolve()
     if input_path.suffix.lower() == ".json":
@@ -684,6 +793,8 @@ def emit_normalized_chunks(source_type: str, input_path: Path, output_path: Path
         bundle = mehlman_to_normalized_chunks(input_path, limit=limit)
     elif source_type == "ome_pdf":
         bundle = ome_to_normalized_chunks(input_path, limit=limit)
+    elif source_type == "divine_transcript":
+        bundle = divine_transcript_to_normalized_chunks(input_path, limit=limit)
     elif source_type == "images_tables_source":
         bundle = images_tables_to_normalized_chunks(input_path, limit=limit)
     else:

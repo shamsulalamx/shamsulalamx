@@ -58,6 +58,15 @@ The validated OME BIC path is dry-run only. Its current app-ready questions are 
 - Packaged OME output currently writes under packaged resources. Moving generated output to a writable app-data location is future work.
 - Signed or notarized distribution behavior and non-writable packaged resource tree behavior are not validated.
 
+## Divine Transcript First-Milestone Limitations
+
+The current Divine shared-ingestion milestone is transcript normalization only.
+
+- Only synthetic `.txt` and `.md` transcript fixtures are validated.
+- Audio ingestion, transcription, Whisper, local speech models, and Gemini audio transcription are not supported.
+- Transcript chunks preserve structure and provenance but do not prove semantic medical quality.
+- BIC registration, app-ready generation, importer behavior, Electron UI, packaged orchestration, retrieval, clustering, images, and assets remain out of scope.
+
 ## Remaining Multimodal Gaps
 
 Open multimodal gaps:
