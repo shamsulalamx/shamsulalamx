@@ -2282,6 +2282,7 @@ body.quiz-fullscreen-mode .modal-overlay {
         <option value="emma_holiday_pdf">Emma Holiday PDF</option>
         <option value="mehlman_pdf">Mehlman PDF</option>
         <option value="images_tables_source">Images & Tables</option>
+        <option value="anki_notes">Anki Notes</option>
         <option value="fast_facts_pptx">Fast Facts PPTX</option>
         <option value="amboss_pdf">Amboss PDF</option>
         <option value="nbme_pdf">NBME PDF</option>
@@ -2295,6 +2296,10 @@ body.quiz-fullscreen-mode .modal-overlay {
     <div class="form-group">
       <label class="form-label">Target Folder</label>
       <select class="form-input" id="bic-target-folder"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Test name (optional)</label>
+      <input type="text" class="form-input" id="bic-test-name" autocomplete="off" placeholder="Use app-ready title when blank">
     </div>
     <div class="form-group">
       <label class="form-label">Run Mode</label>
@@ -8451,6 +8456,8 @@ const App = (() => {
 	  const BATCH_IMPORT_SOURCE_LABELS = {
 	    emma_holiday_pdf: 'Emma Holiday PDF',
 	    mehlman_pdf: 'Mehlman PDF',
+	    images_tables_source: 'Images & Tables',
+	    anki_notes: 'Anki Notes',
 	    fast_facts_pptx: 'Fast Facts PPTX',
 	    amboss_pdf: 'Amboss PDF',
 	    nbme_pdf: 'NBME PDF'
@@ -22299,6 +22306,7 @@ const App = (() => {
     const sourceType = (document.getElementById('bic-source-type')?.value || '').trim();
     const runMode = (document.getElementById('bic-run-mode')?.value || 'dry-run').trim();
     const folderId = (document.getElementById('bic-target-folder')?.value || '').trim();
+    const testName = (document.getElementById('bic-test-name')?.value || '').trim();
     const inputPaths = Array.isArray(_batchImportState?.files) ? _batchImportState.files.slice() : [];
     const existingOutputValidation = runMode === 'existing-output-auto-import';
     if (!api) {
@@ -22343,7 +22351,7 @@ const App = (() => {
       existingOutputValidation,
       destination: {
         folderId,
-        testName: ''
+        testName
       }
     });
     _batchImportState = Object.assign(_batchImportState || {}, { lastResult: result });
@@ -22415,7 +22423,7 @@ const App = (() => {
 	        });
 	        importResult = await importValidatedBatchOutputJsonText(firstValid.rawText, {
 	          folderId,
-	          testName: firstValid.testName || ''
+	          testName: testName || firstValid.testName || ''
 	        });
 	      } else {
 	        importResult = { ok: false, error: 'No valid output was available to auto-import.' };
@@ -23831,7 +23839,7 @@ const App = (() => {
 
   // ── NBME Gemini JSON Import ────────────────────────────────
 
-  const VALID_SOURCE_FORMATS = ['pdf','docx','ocr_text','screenshot','mixed','unknown','rtf',''];
+  const VALID_SOURCE_FORMATS = ['pdf','docx','ocr_text','screenshot','mixed','unknown','rtf','anki-notes',''];
 
   function _ngjEsc(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -25180,7 +25188,7 @@ const App = (() => {
     if (payload.sourceFormat !== undefined && payload.sourceFormat !== null) {
       const sf = String(payload.sourceFormat || '').toLowerCase();
       if (!VALID_SOURCE_FORMATS.includes(sf)) {
-        warnings.push(`sourceFormat "${payload.sourceFormat}" is not a recognized value. Allowed: pdf, docx, ocr_text, screenshot, mixed, unknown.`);
+        warnings.push(`sourceFormat "${payload.sourceFormat}" is not a recognized value. Allowed: pdf, docx, ocr_text, screenshot, mixed, unknown, anki-notes.`);
       }
     }
     if (!Array.isArray(payload.questions)) {

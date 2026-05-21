@@ -10,9 +10,12 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import csv
+import re
 import shutil
 import subprocess
 import sys
+from io import StringIO
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +32,7 @@ MEHLMAN_DIR = PROJECT_ROOT / "tools" / "mehlman-pdf-question-generator"
 IMAGES_TABLES_DIR = PROJECT_ROOT / "tools" / "images-tables-question-generator"
 IMAGES_TABLES_ASSET_DIR = IMAGES_TABLES_DIR / "output_assets"
 SUPPORTED_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
+SUPPORTED_ANKI_EXTS = {".txt", ".md"}
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -285,6 +289,104 @@ def nbme_to_normalized_chunks(input_path: Path, limit: int = 5, refresh: bool = 
     )
 
 
+def anki_notes_to_normalized_chunks(input_path: Path, limit: int = 25) -> dict[str, Any]:
+    input_path = input_path.resolve()
+    if input_path.suffix.lower() not in SUPPORTED_ANKI_EXTS:
+        raise ValueError(f"Unsupported Anki notes extension: {input_path.suffix}. Supported: {', '.join(sorted(SUPPORTED_ANKI_EXTS))}")
+    raw_text = input_path.read_text(encoding="utf-8", errors="replace")
+    source_file = input_path.name
+    source_path = rel(input_path)
+    cards: list[dict[str, Any]] = []
+    directives: dict[str, str] = {}
+    tag_column = 0
+
+    for line_number, line in enumerate(raw_text.splitlines(), start=1):
+        if not line.strip():
+            continue
+        if line.startswith("#"):
+            if ":" in line:
+                key, value = line[1:].split(":", 1)
+                directives[key.strip()] = value.strip()
+                if key.strip().lower() == "tags column":
+                    try:
+                        tag_column = int(value.strip())
+                    except ValueError:
+                        tag_column = 0
+            else:
+                directives[line[1:].strip()] = ""
+            continue
+        row = next(csv.reader(StringIO(line), delimiter="\t"))
+        fields = [field.strip() for field in row]
+        nonempty = [field for field in fields if field]
+        front = nonempty[0] if nonempty else ""
+        back = nonempty[1] if len(nonempty) > 1 else ""
+        tags_text = fields[tag_column - 1] if tag_column and len(fields) >= tag_column else ""
+        tags = [tag for tag in re.split(r"\s+", tags_text.strip()) if tag]
+        cloze_terms = re.findall(r"\{\{c\d+::(.*?)(?:::[^}]*)?\}\}", "\n".join(nonempty))
+        cards.append({
+            "lineNumber": line_number,
+            "fieldCount": len(fields),
+            "fields": fields,
+            "front": front,
+            "back": back,
+            "tags": tags,
+            "clozeTerms": cloze_terms,
+            "rawText": line,
+        })
+
+    selected_cards = cards[:limit] if limit else cards
+    chunks: list[dict[str, Any]] = []
+    for index, card in enumerate(selected_cards, start=1):
+        chunk_id = f"{slugify(input_path.stem)}_anki_card_{index:04d}"
+        grounding = {
+            "cardIndex": index,
+            "lineNumber": card["lineNumber"],
+            "sourcePath": source_path,
+        }
+        text_parts = [card["front"], card["back"]]
+        for field in card["fields"]:
+            if field and field not in text_parts:
+                text_parts.append(field)
+        chunks.append(NormalizedChunk(
+            chunkId=chunk_id,
+            chunkType="text",
+            sourceType="anki_notes",
+            sourceFile=source_file,
+            sourceGrounding=grounding,
+            text="\n\n".join(part for part in text_parts if part),
+            textBlocks=[
+                {"role": "front", "text": card["front"]},
+                {"role": "back", "text": card["back"]},
+                {"role": "raw", "text": card["rawText"]},
+            ],
+            imageRefs=[],
+            tableRefs=[],
+            confidence=0.8 if card["front"] or card["back"] else 0.45,
+            metadata={
+                "sourceFormat": "anki-plain-text-export",
+                "cardIndex": index,
+                "lineNumber": card["lineNumber"],
+                "fieldCount": card["fieldCount"],
+                "front": card["front"],
+                "back": card["back"],
+                "fields": card["fields"],
+                "clozeTerms": card["clozeTerms"],
+                "tags": card["tags"],
+                "directives": directives,
+                "downstreamHandoff": "validated selected-input dry-run handoff to existing Anki wrapper; BIC dry-run auto-import validated in dev and packaged app; live Gemini generation and semantic question quality remain unvalidated",
+            },
+            warnings=[],
+        ).to_dict())
+
+    return build_chunk_bundle(
+        source_descriptor=get_source_descriptor("anki_notes").to_dict(),
+        source_file=source_file,
+        source_path=source_path,
+        chunks=chunks,
+        warnings=[] if cards else ["No Anki card rows found in source file."],
+    )
+
+
 def fast_facts_to_normalized_chunks(input_path: Path, limit: int = 10) -> dict[str, Any]:
     input_path = input_path.resolve()
     if input_path.suffix.lower() == ".json":
@@ -497,6 +599,8 @@ def emit_normalized_chunks(source_type: str, input_path: Path, output_path: Path
         bundle = emma_to_normalized_chunks(input_path, limit=limit)
     elif source_type == "nbme_pdf":
         bundle = nbme_to_normalized_chunks(input_path, limit=limit, refresh=refresh)
+    elif source_type == "anki_notes":
+        bundle = anki_notes_to_normalized_chunks(input_path, limit=limit)
     elif source_type == "fast_facts_pptx":
         bundle = fast_facts_to_normalized_chunks(input_path, limit=limit)
     elif source_type == "mehlman_pdf":

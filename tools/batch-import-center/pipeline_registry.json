@@ -80,6 +80,32 @@
       "outputDirectories": ["tools/images-tables-question-generator/output_json/app_ready"],
       "notes": "Profile-style image/table source: emits shared normalized image/table chunks and creates lightweight attachment-first app-ready cards without semantic question generation."
     },
+    "anki_notes": {
+      "label": "Anki Notes",
+      "status": "active",
+      "requiresGemini": false,
+      "inputExtensions": [".txt"],
+      "workingDirectory": ".",
+      "pythonExecutable": "python3",
+      "dryRunSteps": [
+        {
+          "stage": "normalization",
+          "stageLabel": "Anki shared-ingestion dry-run",
+          "heartbeatSeconds": 10,
+          "args": ["tools/shared-ingestion/anki_profile_runner.py", "--mode", "dry-run", "--input-file", "{inputFile}", "--limit", "3", "--emit-app-ready-dry-run"]
+        }
+      ],
+      "liveSteps": [
+        {
+          "stage": "normalization",
+          "stageLabel": "Anki shared-ingestion dry-run handoff",
+          "heartbeatSeconds": 10,
+          "args": ["tools/shared-ingestion/anki_profile_runner.py", "--mode", "dry-run", "--input-file", "{inputFile}", "--limit", "3", "--emit-app-ready-dry-run"]
+        }
+      ],
+      "outputDirectories": ["tools/shared-ingestion/output/anki_app_ready_dry_run"],
+      "notes": "Dry-run orchestration only. Live Gemini Anki generation is intentionally not enabled through Batch Import Center yet."
+    },
     "fast_facts_pptx": {
       "label": "Fast Facts PPTX",
       "status": "active",
@@ -193,10 +219,6 @@
     "uworld_notes": {
       "status": "placeholder",
       "notes": "Existing external notes pipeline exists, but it is not part of the initial Batch Import Center registry."
-    },
-    "anki_notes": {
-      "status": "placeholder",
-      "notes": "Existing wrapper pipeline exists, but it is not part of the initial Batch Import Center registry."
     },
     "ome_pdf": {
       "status": "placeholder",

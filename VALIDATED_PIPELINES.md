@@ -1,0 +1,124 @@
+# Validated Pipelines
+
+Last updated: 2026-05-21
+
+This file records what is validated, what is not validated, and the risk level for each source. Do not upgrade a source's status without evidence.
+
+## Summary Table
+
+| Source | Ingestion status | Live generation status | Normalized chunk support | Auto-import status | Packaged validation | Known blockers | Risk |
+|---|---|---|---|---|---|---|---|
+| AMBOSS | Registered in BIC | Validated through v4.6 live path | Adapter foundation exists | Validated for BIC live import path | Stable tag exists; exact packaged details should be rechecked before new claims | Source-specific extraction assumptions | Medium |
+| Emma | Shared profile stable | Live generation can fail semantic validation | Validated through v4.14 downstream | Existing-output BIC import validated | BIC existing-output import path validated | Semantic validator rejected unsupported term `dystocia` in live run | Medium-high |
+| Mehlman | Shared profile stable | Tagged live profile stable | Validated in v4.12 | Registered in BIC | Stable tag exists; revalidate packaged path before broad claims | Scaling and source variety not fully characterized | Medium |
+| NBME | BIC orchestration stable | Existing NBME pipeline stable for known workflows | Adapter foundation exists | BIC orchestration tagged stable | Earlier figure/image workflows packaged-validated; recheck for new changes | OCR variability, figure linking, source-specific PDFs | Medium |
+| Images & Tables | Shared image/table profile stable | Attachment-first only, no semantic generator | Validated in v4.15 | BIC generate + auto-import validated | Packaged app validated end to end | Heuristic classification, no deep table parsing | Medium |
+| Anki | Shared profile dry-run handoff validated | Not validated; BIC live steps intentionally reuse dry-run handoff | Normalized text chunks validated | Dry-run BIC auto-import validated in dev and packaged app | Packaged dry-run auto-import, quiz rendering, reload persistence, and score history persistence validated | Placeholder questions only; live Gemini generation not enabled or validated | Medium-high |
+| Fast Facts | Cache foundation exists | Semantic quality unstable | Adapter foundation exists | BIC registered | Do not claim packaged semantic stability | Generation quality instability | High |
+
+## AMBOSS
+
+Validated:
+
+- Variable-choice support tagged at v4.5.
+- BIC live import path tagged at v4.6.
+- Gemini environment propagation applies through v4.7.
+
+Not claimed:
+
+- Universal AMBOSS source robustness.
+- Shared normalized-chunk downstream convergence.
+
+## Emma Holiday
+
+Validated:
+
+- Shared-ingestion profile at v4.11.
+- BIC existing-output import mode at v4.13.
+- Normalized-chunk downstream consumption at v4.14.
+- Existing valid Emma app-ready JSON can auto-import through BIC with expected count and folder.
+
+Known blocker:
+
+- Live generation reached downstream but failed Emma semantic validation on Q1 for unsupported term `dystocia`. This is generation/validator quality, not BIC wiring.
+
+## Mehlman
+
+Validated:
+
+- Shared-ingestion live profile at v4.12.
+- Text-heavy normalized chunks with preserved figures/tables where available.
+
+Not claimed:
+
+- Every Mehlman PDF variant.
+- Full semantic stability across all Mehlman topics.
+
+## NBME
+
+Validated:
+
+- NBME batch orchestration at v4.8.
+- BIC orchestration hardening at v4.9.
+- Earlier NBME figure extraction and crop/manual-upload workflows have packaged validation history.
+
+Not claimed:
+
+- All NBME forms.
+- Perfect OCR.
+- Fully automatic figure attachment.
+
+## Images & Tables
+
+Validated at v4.15:
+
+- `images_tables_source` descriptor.
+- image/table normalized chunk emission.
+- OCR extraction with local `tesseract`.
+- asset classification into ordinary image, algorithm, and table image on a small sample.
+- lightweight app-ready cards.
+- BIC generate + auto-import.
+- packaged `.app` import.
+- `FigureStore` persistence for all generated cards.
+- ordinary image rendering.
+- table image rendering after reload.
+- score history persistence after reload.
+
+Not claimed:
+
+- Advanced semantic medical question generation.
+- Recursive large-folder ingestion.
+- deep table parsing.
+
+## Anki
+
+Validated for the dry-run BIC milestone:
+
+- `anki_notes` shared descriptor and normalized `text` chunk emission.
+- Shared-ingestion dry-run profile runner handoff to the existing Anki wrapper with one selected input.
+- BIC dry-run registry execution and output discovery.
+- Renderer auto-import through the existing importer path.
+- DB persistence, quiz rendering, reload persistence, and score history persistence.
+- Visible BIC UI auto-import in dev Electron and packaged app.
+
+Only dry-run handoff is validated. The current app-ready output is placeholder dry-run output, not proof of live semantic generation.
+
+Not validated:
+
+- Live Gemini Anki generation.
+- Real semantic Anki question quality.
+- Broad real-world Anki export variation.
+- Non-Anki regression coverage after the Anki UI additions.
+
+## Fast Facts
+
+Validated:
+
+- Cache foundation was added at v4.4.
+
+Explicitly not validated:
+
+- semantic generation quality.
+- stable packaged semantic output.
+
+Treat Fast Facts as high-risk until semantic generation is separately hardened and validated.

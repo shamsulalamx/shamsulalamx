@@ -54,6 +54,22 @@ SOURCE_DESCRIPTORS: dict[str, SourceDescriptor] = {
         cache_policy="source_hash",
         notes="Uses existing NBME OCR/chunk artifacts; app-ready conversion remains in the existing generator.",
     ),
+    "anki_notes": SourceDescriptor(
+        source_type="anki_notes",
+        modality="text",
+        extraction_style="native_text",
+        generation_style="existing_downstream",
+        asset_policy="none",
+        cache_policy="source_hash",
+        notes="Profile-style Anki plain-text export source. Emits normalized text chunks while preserving card fields, cloze text, tags, and provenance; selected-input dry-run handoff to the existing wrapper and BIC dry-run auto-import are validated in dev and packaged app.",
+        metadata={
+            "profileStatus": "foundation",
+            "supportedInputs": [".txt", ".md"],
+            "downstreamGenerator": "tools/anki-question-generator/generate_anki_questions.py",
+            "downstreamStatus": "selected-input dry-run handoff validated; live Gemini generation intentionally disabled and semantic question quality unvalidated",
+            "promptPolicy": "unchanged",
+        },
+    ),
     "fast_facts_pptx": SourceDescriptor(
         source_type="fast_facts_pptx",
         modality="pptx",
