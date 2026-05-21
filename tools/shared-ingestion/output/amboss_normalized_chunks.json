@@ -1,0 +1,256 @@
+{
+  "schemaVersion": "shared-normalized-chunk-bundle-v1",
+  "sourceDescriptor": {
+    "source_type": "amboss_pdf",
+    "modality": "pdf",
+    "extraction_style": "question_extraction",
+    "generation_style": "existing_downstream",
+    "asset_policy": "route_to_explanation",
+    "cache_policy": "read_write",
+    "schema_version": "shared-source-descriptor-v1",
+    "notes": "Uses existing AMBOSS page decomposition/extraction artifacts; downstream question conversion is unchanged.",
+    "metadata": {}
+  },
+  "sourceFile": "[Medicalstudyzone.com] Immune System - Block 2.pdf",
+  "sourcePath": "/Users/shamsulalam/Desktop/shamsulalamx/tools/lecture-slide-question-generator/input_pdfs/[Medicalstudyzone.com] Immune System - Block 2.pdf",
+  "createdAt": "2026-05-21T12:59:28.580580+00:00",
+  "chunkCount": 5,
+  "chunks": [
+    {
+      "chunkId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0001_931e06be",
+      "chunkType": "question",
+      "sourceType": "amboss_pdf",
+      "sourceFile": "[Medicalstudyzone.com] Immune System - Block 2.pdf",
+      "sourceGrounding": {
+        "slideId": null,
+        "pageId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0001_931e06be",
+        "slideIndex": null,
+        "pageIndex": 0,
+        "sourcePath": "/Users/shamsulalam/Desktop/shamsulalamx/tools/lecture-slide-question-generator/input_pdfs/[Medicalstudyzone.com] Immune System - Block 2.pdf"
+      },
+      "text": "",
+      "textBlocks": [],
+      "imageRefs": [
+        {
+          "refId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0001_931e06be_slide_image",
+          "kind": "image",
+          "role": "explanation",
+          "path": "output_assets/Medicalstudyzone.com_Immune_System_-_Block_2_Medicalstudyzone.com_Immune_System_-_Block_2_p0001_931e06be.png",
+          "text": "",
+          "grounding": {
+            "slideId": null,
+            "pageId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0001_931e06be",
+            "slideIndex": null,
+            "pageIndex": 0,
+            "sourcePath": "/Users/shamsulalam/Desktop/shamsulalamx/tools/lecture-slide-question-generator/input_pdfs/[Medicalstudyzone.com] Immune System - Block 2.pdf"
+          },
+          "confidence": 0.7,
+          "metadata": {
+            "imageId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0001_931e06be_slide_image",
+            "kind": "page_screenshot",
+            "mimeType": "image/png",
+            "width": 1684,
+            "height": 946,
+            "sha256": "099243169756e4afd47a112eef60dc05b9574ee389519241935d793e98f09ea7",
+            "imageFingerprint": "099243169756e4afd47a112eef60dc05b9574ee389519241935d793e98f09ea7",
+            "sourcePageId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0001_931e06be"
+          }
+        }
+      ],
+      "tableRefs": [],
+      "confidence": 0.45,
+      "metadata": {},
+      "warnings": [],
+      "schemaVersion": "shared-normalized-chunk-v1"
+    },
+    {
+      "chunkId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0002_931e06be",
+      "chunkType": "question",
+      "sourceType": "amboss_pdf",
+      "sourceFile": "[Medicalstudyzone.com] Immune System - Block 2.pdf",
+      "sourceGrounding": {
+        "slideId": null,
+        "pageId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0002_931e06be",
+        "slideIndex": null,
+        "pageIndex": 1,
+        "sourcePath": "/Users/shamsulalam/Desktop/shamsulalamx/tools/lecture-slide-question-generator/input_pdfs/[Medicalstudyzone.com] Immune System - Block 2.pdf"
+      },
+      "text": "",
+      "textBlocks": [],
+      "imageRefs": [
+        {
+          "refId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0002_931e06be_slide_image",
+          "kind": "image",
+          "role": "explanation",
+          "path": "output_assets/Medicalstudyzone.com_Immune_System_-_Block_2_Medicalstudyzone.com_Immune_System_-_Block_2_p0002_931e06be.png",
+          "text": "",
+          "grounding": {
+            "slideId": null,
+            "pageId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0002_931e06be",
+            "slideIndex": null,
+            "pageIndex": 1,
+            "sourcePath": "/Users/shamsulalam/Desktop/shamsulalamx/tools/lecture-slide-question-generator/input_pdfs/[Medicalstudyzone.com] Immune System - Block 2.pdf"
+          },
+          "confidence": 0.7,
+          "metadata": {
+            "imageId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0002_931e06be_slide_image",
+            "kind": "page_screenshot",
+            "mimeType": "image/png",
+            "width": 1684,
+            "height": 946,
+            "sha256": "bf8aae14340209ffa6521cd761d595e0d85a5a2288abf58230b46af6b2125d46",
+            "imageFingerprint": "bf8aae14340209ffa6521cd761d595e0d85a5a2288abf58230b46af6b2125d46",
+            "sourcePageId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0002_931e06be"
+          }
+        }
+      ],
+      "tableRefs": [],
+      "confidence": 0.45,
+      "metadata": {},
+      "warnings": [],
+      "schemaVersion": "shared-normalized-chunk-v1"
+    },
+    {
+      "chunkId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0003_931e06be",
+      "chunkType": "question",
+      "sourceType": "amboss_pdf",
+      "sourceFile": "[Medicalstudyzone.com] Immune System - Block 2.pdf",
+      "sourceGrounding": {
+        "slideId": null,
+        "pageId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0003_931e06be",
+        "slideIndex": null,
+        "pageIndex": 2,
+        "sourcePath": "/Users/shamsulalam/Desktop/shamsulalamx/tools/lecture-slide-question-generator/input_pdfs/[Medicalstudyzone.com] Immune System - Block 2.pdf"
+      },
+      "text": "",
+      "textBlocks": [],
+      "imageRefs": [
+        {
+          "refId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0003_931e06be_slide_image",
+          "kind": "image",
+          "role": "explanation",
+          "path": "output_assets/Medicalstudyzone.com_Immune_System_-_Block_2_Medicalstudyzone.com_Immune_System_-_Block_2_p0003_931e06be.png",
+          "text": "",
+          "grounding": {
+            "slideId": null,
+            "pageId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0003_931e06be",
+            "slideIndex": null,
+            "pageIndex": 2,
+            "sourcePath": "/Users/shamsulalam/Desktop/shamsulalamx/tools/lecture-slide-question-generator/input_pdfs/[Medicalstudyzone.com] Immune System - Block 2.pdf"
+          },
+          "confidence": 0.7,
+          "metadata": {
+            "imageId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0003_931e06be_slide_image",
+            "kind": "page_screenshot",
+            "mimeType": "image/png",
+            "width": 1684,
+            "height": 946,
+            "sha256": "804b6fe6cf43abec2b09533545cdafd100d33c0afcdfe18685f7023179cbf181",
+            "imageFingerprint": "804b6fe6cf43abec2b09533545cdafd100d33c0afcdfe18685f7023179cbf181",
+            "sourcePageId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0003_931e06be"
+          }
+        }
+      ],
+      "tableRefs": [],
+      "confidence": 0.45,
+      "metadata": {},
+      "warnings": [],
+      "schemaVersion": "shared-normalized-chunk-v1"
+    },
+    {
+      "chunkId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0004_931e06be",
+      "chunkType": "question",
+      "sourceType": "amboss_pdf",
+      "sourceFile": "[Medicalstudyzone.com] Immune System - Block 2.pdf",
+      "sourceGrounding": {
+        "slideId": null,
+        "pageId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0004_931e06be",
+        "slideIndex": null,
+        "pageIndex": 3,
+        "sourcePath": "/Users/shamsulalam/Desktop/shamsulalamx/tools/lecture-slide-question-generator/input_pdfs/[Medicalstudyzone.com] Immune System - Block 2.pdf"
+      },
+      "text": "",
+      "textBlocks": [],
+      "imageRefs": [
+        {
+          "refId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0004_931e06be_slide_image",
+          "kind": "image",
+          "role": "explanation",
+          "path": "output_assets/Medicalstudyzone.com_Immune_System_-_Block_2_Medicalstudyzone.com_Immune_System_-_Block_2_p0004_931e06be.png",
+          "text": "",
+          "grounding": {
+            "slideId": null,
+            "pageId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0004_931e06be",
+            "slideIndex": null,
+            "pageIndex": 3,
+            "sourcePath": "/Users/shamsulalam/Desktop/shamsulalamx/tools/lecture-slide-question-generator/input_pdfs/[Medicalstudyzone.com] Immune System - Block 2.pdf"
+          },
+          "confidence": 0.7,
+          "metadata": {
+            "imageId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0004_931e06be_slide_image",
+            "kind": "page_screenshot",
+            "mimeType": "image/png",
+            "width": 1684,
+            "height": 946,
+            "sha256": "c75ac281e5e25083b556da9d6816e8cc750b9f96fd7fad95d6d8d7dcc27bd8bc",
+            "imageFingerprint": "c75ac281e5e25083b556da9d6816e8cc750b9f96fd7fad95d6d8d7dcc27bd8bc",
+            "sourcePageId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0004_931e06be"
+          }
+        }
+      ],
+      "tableRefs": [],
+      "confidence": 0.45,
+      "metadata": {},
+      "warnings": [],
+      "schemaVersion": "shared-normalized-chunk-v1"
+    },
+    {
+      "chunkId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0005_931e06be",
+      "chunkType": "question",
+      "sourceType": "amboss_pdf",
+      "sourceFile": "[Medicalstudyzone.com] Immune System - Block 2.pdf",
+      "sourceGrounding": {
+        "slideId": null,
+        "pageId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0005_931e06be",
+        "slideIndex": null,
+        "pageIndex": 4,
+        "sourcePath": "/Users/shamsulalam/Desktop/shamsulalamx/tools/lecture-slide-question-generator/input_pdfs/[Medicalstudyzone.com] Immune System - Block 2.pdf"
+      },
+      "text": "",
+      "textBlocks": [],
+      "imageRefs": [
+        {
+          "refId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0005_931e06be_slide_image",
+          "kind": "image",
+          "role": "explanation",
+          "path": "output_assets/Medicalstudyzone.com_Immune_System_-_Block_2_Medicalstudyzone.com_Immune_System_-_Block_2_p0005_931e06be.png",
+          "text": "",
+          "grounding": {
+            "slideId": null,
+            "pageId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0005_931e06be",
+            "slideIndex": null,
+            "pageIndex": 4,
+            "sourcePath": "/Users/shamsulalam/Desktop/shamsulalamx/tools/lecture-slide-question-generator/input_pdfs/[Medicalstudyzone.com] Immune System - Block 2.pdf"
+          },
+          "confidence": 0.7,
+          "metadata": {
+            "imageId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0005_931e06be_slide_image",
+            "kind": "page_screenshot",
+            "mimeType": "image/png",
+            "width": 1684,
+            "height": 946,
+            "sha256": "6224130c15493da9ad849be2d3e9d346a915cfbd9c7ac7dd14e789d1edecd9b7",
+            "imageFingerprint": "6224130c15493da9ad849be2d3e9d346a915cfbd9c7ac7dd14e789d1edecd9b7",
+            "sourcePageId": "Medicalstudyzone.com_Immune_System_-_Block_2_p0005_931e06be"
+          }
+        }
+      ],
+      "tableRefs": [],
+      "confidence": 0.45,
+      "metadata": {},
+      "warnings": [],
+      "schemaVersion": "shared-normalized-chunk-v1"
+    }
+  ],
+  "warnings": []
+}

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "shared-normalized-chunk-report-v1",
+  "sourceType": "amboss_pdf",
+  "inputPath": "/Users/shamsulalam/Desktop/shamsulalamx/tools/lecture-slide-question-generator/input_pdfs/[Medicalstudyzone.com] Immune System - Block 2.pdf",
+  "outputPath": "/Users/shamsulalam/Desktop/shamsulalamx/tools/shared-ingestion/output/amboss_normalized_chunks.json",
+  "stages": [
+    "extraction",
+    "OCR",
+    "chunking",
+    "normalization",
+    "asset routing",
+    "validation"
+  ],
+  "chunkCount": 5,
+  "chunkTypes": [
+    "question"
+  ],
+  "imageRefCount": 5,
+  "tableRefCount": 0,
+  "validationErrors": [],
+  "ok": true
+}

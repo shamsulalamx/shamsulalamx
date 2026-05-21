@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "shared-normalized-chunk-report-v1",
+  "sourceType": "fast_facts_pptx",
+  "inputPath": "/Users/shamsulalam/Desktop/shamsulalamx/tools/lecture-slide-question-generator/output_json/slides/Internal_Medicine_Shelf_Fast_Facts_fast_facts_slides.json",
+  "outputPath": "/Users/shamsulalam/Desktop/shamsulalamx/tools/shared-ingestion/output/fast_facts_normalized_chunks.json",
+  "stages": [
+    "extraction",
+    "OCR",
+    "chunking",
+    "normalization",
+    "asset routing",
+    "validation"
+  ],
+  "chunkCount": 5,
+  "chunkTypes": [
+    "slide"
+  ],
+  "imageRefCount": 2,
+  "tableRefCount": 0,
+  "validationErrors": [],
+  "ok": true
+}

@@ -1,0 +1,315 @@
+{
+  "schemaVersion": "shared-normalized-chunk-bundle-v1",
+  "sourceDescriptor": {
+    "source_type": "fast_facts_pptx",
+    "modality": "pptx",
+    "extraction_style": "slide_decomposition",
+    "generation_style": "existing_downstream",
+    "asset_policy": "preserve",
+    "cache_policy": "read_write",
+    "schema_version": "shared-source-descriptor-v1",
+    "notes": "Uses existing Fast Facts slide decomposition only; generation quality logic is untouched.",
+    "metadata": {}
+  },
+  "sourceFile": "Internal Medicine Shelf Fast Facts.pptx",
+  "sourcePath": "/Users/shamsulalam/Downloads/Internal Medicine Shelf Fast Facts.pptx",
+  "createdAt": "2026-05-21T12:59:28.016678+00:00",
+  "chunkCount": 5,
+  "chunks": [
+    {
+      "chunkId": "Internal_Medicine_Shelf_Fast_Facts_s0001_b9d7bc22",
+      "chunkType": "slide",
+      "sourceType": "fast_facts_pptx",
+      "sourceFile": "Internal Medicine Shelf Fast Facts.pptx",
+      "sourceGrounding": {
+        "slideId": "Internal_Medicine_Shelf_Fast_Facts_s0001_b9d7bc22",
+        "pageId": null,
+        "slideIndex": 1,
+        "pageIndex": null,
+        "sourcePath": "/Users/shamsulalam/Downloads/Internal Medicine Shelf Fast Facts.pptx"
+      },
+      "text": "Internal Medicine Shelf Fast Facts\nUseful tables and images from UWorld/AMBOSS",
+      "textBlocks": [
+        {
+          "textBlockId": "Internal_Medicine_Shelf_Fast_Facts_s0001_b9d7bc22_text01",
+          "text": "Internal Medicine Shelf Fast Facts",
+          "bounds": {
+            "x": 311708,
+            "y": 744575,
+            "cx": 8520600,
+            "cy": 2052600
+          }
+        },
+        {
+          "textBlockId": "Internal_Medicine_Shelf_Fast_Facts_s0001_b9d7bc22_text02",
+          "text": "Useful tables and images from UWorld/AMBOSS",
+          "bounds": {
+            "x": 311700,
+            "y": 2834125,
+            "cx": 8520600,
+            "cy": 792600
+          }
+        }
+      ],
+      "imageRefs": [],
+      "tableRefs": [],
+      "confidence": 0.75,
+      "metadata": {
+        "profile": "FAST_FACTS_PROFILE",
+        "renderedSlideImage": null
+      },
+      "warnings": [],
+      "schemaVersion": "shared-normalized-chunk-v1"
+    },
+    {
+      "chunkId": "Internal_Medicine_Shelf_Fast_Facts_s0002_b9d7bc22",
+      "chunkType": "slide",
+      "sourceType": "fast_facts_pptx",
+      "sourceFile": "Internal Medicine Shelf Fast Facts.pptx",
+      "sourceGrounding": {
+        "slideId": "Internal_Medicine_Shelf_Fast_Facts_s0002_b9d7bc22",
+        "pageId": null,
+        "slideIndex": 2,
+        "pageIndex": null,
+        "sourcePath": "/Users/shamsulalam/Downloads/Internal Medicine Shelf Fast Facts.pptx"
+      },
+      "text": "Common skin infections - erysipelas, cellulitis (nonpurulent), cellulitis (purulent)",
+      "textBlocks": [],
+      "imageRefs": [
+        {
+          "refId": "Internal_Medicine_Shelf_Fast_Facts_s0002_b9d7bc22_img01",
+          "kind": "image",
+          "role": "context",
+          "path": "output_assets/Internal_Medicine_Shelf_Fast_Facts_Internal_Medicine_Shelf_Fast_Facts_s0002_b9d7bc22_img01.png",
+          "text": "",
+          "grounding": {
+            "slideId": "Internal_Medicine_Shelf_Fast_Facts_s0002_b9d7bc22",
+            "pageId": null,
+            "slideIndex": 2,
+            "pageIndex": null,
+            "sourcePath": "/Users/shamsulalam/Downloads/Internal Medicine Shelf Fast Facts.pptx"
+          },
+          "confidence": 0.7,
+          "metadata": {
+            "imageId": "Internal_Medicine_Shelf_Fast_Facts_s0002_b9d7bc22_img01",
+            "kind": "explanatory",
+            "source": "pptx_embedded_image",
+            "sourceSlideId": "Internal_Medicine_Shelf_Fast_Facts_s0002_b9d7bc22",
+            "sourceRelationshipId": "rId3",
+            "sourcePath": "ppt/media/image12.png",
+            "originalName": "Google Shape;60;p14",
+            "mimeType": "image/png",
+            "width": 0,
+            "height": 0,
+            "sha256": "2cccc6dd1cd8b069ec968d8f949a1be5b9f0c6676d4c9153b53bc69a32bf7a63",
+            "bounds": {
+              "x": 392900,
+              "y": 152400,
+              "cx": 7610742,
+              "cy": 4838699
+            }
+          }
+        }
+      ],
+      "tableRefs": [],
+      "confidence": 0.75,
+      "metadata": {
+        "profile": "FAST_FACTS_PROFILE",
+        "renderedSlideImage": null
+      },
+      "warnings": [],
+      "schemaVersion": "shared-normalized-chunk-v1"
+    },
+    {
+      "chunkId": "Internal_Medicine_Shelf_Fast_Facts_s0003_b9d7bc22",
+      "chunkType": "slide",
+      "sourceType": "fast_facts_pptx",
+      "sourceFile": "Internal Medicine Shelf Fast Facts.pptx",
+      "sourceGrounding": {
+        "slideId": "Internal_Medicine_Shelf_Fast_Facts_s0003_b9d7bc22",
+        "pageId": null,
+        "slideIndex": 3,
+        "pageIndex": null,
+        "sourcePath": "/Users/shamsulalam/Downloads/Internal Medicine Shelf Fast Facts.pptx"
+      },
+      "text": "Erysipelas\nDiagnosis usually clinical but blood cultures may be useful in severe cases or for patients with underlying comorbidities like diabetes\nUsually treated with IV antibiotics (ceftriaxone, cefazolin) but if no systemic symptoms then oral amoxicillin\nDescribed as “warm, tender, erythematous rash with raised, well-demarcated borders” and a good tell is if the external ear is involved (no dermis level to the external ear so makes it much less likely to be deeper infection like \ncellulitis)\nErysipelas",
+      "textBlocks": [
+        {
+          "textBlockId": "Internal_Medicine_Shelf_Fast_Facts_s0003_b9d7bc22_text01",
+          "text": "Erysipelas",
+          "bounds": {
+            "x": 311700,
+            "y": 445025,
+            "cx": 8520600,
+            "cy": 572700
+          }
+        },
+        {
+          "textBlockId": "Internal_Medicine_Shelf_Fast_Facts_s0003_b9d7bc22_text02",
+          "text": "Diagnosis usually clinical but blood cultures may be useful in severe cases or for patients with underlying comorbidities like diabetes\nUsually treated with IV antibiotics (ceftriaxone, cefazolin) but if no systemic symptoms then oral amoxicillin\nDescribed as “warm, tender, erythematous rash with raised, well-demarcated borders” and a good tell is if the external ear is involved (no dermis level to the external ear so makes it much less likely to be deeper infection like \ncellulitis)",
+          "bounds": {
+            "x": 311700,
+            "y": 1152475,
+            "cx": 4260300,
+            "cy": 3416400
+          }
+        }
+      ],
+      "imageRefs": [
+        {
+          "refId": "Internal_Medicine_Shelf_Fast_Facts_s0003_b9d7bc22_img01",
+          "kind": "image",
+          "role": "context",
+          "path": "output_assets/Internal_Medicine_Shelf_Fast_Facts_Internal_Medicine_Shelf_Fast_Facts_s0003_b9d7bc22_img01.png",
+          "text": "",
+          "grounding": {
+            "slideId": "Internal_Medicine_Shelf_Fast_Facts_s0003_b9d7bc22",
+            "pageId": null,
+            "slideIndex": 3,
+            "pageIndex": null,
+            "sourcePath": "/Users/shamsulalam/Downloads/Internal Medicine Shelf Fast Facts.pptx"
+          },
+          "confidence": 0.7,
+          "metadata": {
+            "imageId": "Internal_Medicine_Shelf_Fast_Facts_s0003_b9d7bc22_img01",
+            "kind": "diagnostic",
+            "source": "pptx_embedded_image",
+            "sourceSlideId": "Internal_Medicine_Shelf_Fast_Facts_s0003_b9d7bc22",
+            "sourceRelationshipId": "rId3",
+            "sourcePath": "ppt/media/image20.png",
+            "originalName": "Google Shape;67;p15",
+            "mimeType": "image/png",
+            "width": 0,
+            "height": 0,
+            "sha256": "78cbd81cbacd061ccfc2f9119f869666d825560923e90effca815173bcbf4a55",
+            "bounds": {
+              "x": 4973550,
+              "y": 207438,
+              "cx": 3373349,
+              "cy": 4728625
+            }
+          }
+        }
+      ],
+      "tableRefs": [],
+      "confidence": 0.75,
+      "metadata": {
+        "profile": "FAST_FACTS_PROFILE",
+        "renderedSlideImage": null
+      },
+      "warnings": [],
+      "schemaVersion": "shared-normalized-chunk-v1"
+    },
+    {
+      "chunkId": "Internal_Medicine_Shelf_Fast_Facts_s0004_b9d7bc22",
+      "chunkType": "slide",
+      "sourceType": "fast_facts_pptx",
+      "sourceFile": "Internal Medicine Shelf Fast Facts.pptx",
+      "sourceGrounding": {
+        "slideId": "Internal_Medicine_Shelf_Fast_Facts_s0004_b9d7bc22",
+        "pageId": null,
+        "slideIndex": 4,
+        "pageIndex": null,
+        "sourcePath": "/Users/shamsulalam/Downloads/Internal Medicine Shelf Fast Facts.pptx"
+      },
+      "text": "Urinary Tract Infections\nUncomplicated - confined within the bladder\nClinical features:\nDysuria \nUrinary frequency\nSuprapubic tenderness\nDiagnosis and management:\nUrinalysis - positive leukocyte esterase and nitrates\nEmpiric \ntreatment\n with TMP-SMX (3 days), nitrofurantoin (5 days) or fosfomycin (single dose)\nFluoroquinolones if high local resistance rates or sulfa allergy\nComplicated - extends beyond the bladder\nClinical features:\nFever\nChills or rigors\nFlank pain or costovertebral angle tenderness\nDiagnosis and management:\nUrine \nculture\n prior to empiric therapy to tailor antibiotics \nUsually oral fluoroquinolones are enough, but IV ceftriaxone while awaiting culture may be necessary in severe cases",
+      "textBlocks": [
+        {
+          "textBlockId": "Internal_Medicine_Shelf_Fast_Facts_s0004_b9d7bc22_text01",
+          "text": "Urinary Tract Infections",
+          "bounds": {
+            "x": 311700,
+            "y": 445025,
+            "cx": 8520600,
+            "cy": 572700
+          }
+        },
+        {
+          "textBlockId": "Internal_Medicine_Shelf_Fast_Facts_s0004_b9d7bc22_text02",
+          "text": "Uncomplicated - confined within the bladder\nClinical features:\nDysuria \nUrinary frequency\nSuprapubic tenderness\nDiagnosis and management:\nUrinalysis - positive leukocyte esterase and nitrates\nEmpiric \ntreatment\n with TMP-SMX (3 days), nitrofurantoin (5 days) or fosfomycin (single dose)\nFluoroquinolones if high local resistance rates or sulfa allergy",
+          "bounds": {
+            "x": 311700,
+            "y": 1152475,
+            "cx": 3999900,
+            "cy": 3416400
+          }
+        },
+        {
+          "textBlockId": "Internal_Medicine_Shelf_Fast_Facts_s0004_b9d7bc22_text03",
+          "text": "Complicated - extends beyond the bladder\nClinical features:\nFever\nChills or rigors\nFlank pain or costovertebral angle tenderness\nDiagnosis and management:\nUrine \nculture\n prior to empiric therapy to tailor antibiotics \nUsually oral fluoroquinolones are enough, but IV ceftriaxone while awaiting culture may be necessary in severe cases",
+          "bounds": {
+            "x": 4832400,
+            "y": 1152475,
+            "cx": 3999900,
+            "cy": 3416400
+          }
+        }
+      ],
+      "imageRefs": [],
+      "tableRefs": [],
+      "confidence": 0.75,
+      "metadata": {
+        "profile": "FAST_FACTS_PROFILE",
+        "renderedSlideImage": null
+      },
+      "warnings": [],
+      "schemaVersion": "shared-normalized-chunk-v1"
+    },
+    {
+      "chunkId": "Internal_Medicine_Shelf_Fast_Facts_s0005_b9d7bc22",
+      "chunkType": "slide",
+      "sourceType": "fast_facts_pptx",
+      "sourceFile": "Internal Medicine Shelf Fast Facts.pptx",
+      "sourceGrounding": {
+        "slideId": "Internal_Medicine_Shelf_Fast_Facts_s0005_b9d7bc22",
+        "pageId": null,
+        "slideIndex": 5,
+        "pageIndex": null,
+        "sourcePath": "/Users/shamsulalam/Downloads/Internal Medicine Shelf Fast Facts.pptx"
+      },
+      "text": "Acute Nitrofurantoin-Induced Pulmonary Injury\nPresentation:\nNew-onset shortness of breath, fevers, dry cough, bilateral mid and lower lung opacities\nBasilar crackles, erythematous maculopapular rash, unilateral pleural effusion\nLeukocytosis and eosinophilia\nUsually symptoms start 3-9 days after medication initiation\nNot to be confused with:\nDrug-induced acute interstitial nephritis (AIN) → also causes fevers and eosinophilia, but will have nausea and vomiting as well as abnormal \ncreatinine\n, not pulmonary symptoms",
+      "textBlocks": [
+        {
+          "textBlockId": "Internal_Medicine_Shelf_Fast_Facts_s0005_b9d7bc22_text01",
+          "text": "Acute Nitrofurantoin-Induced Pulmonary Injury",
+          "bounds": {
+            "x": 311700,
+            "y": 445025,
+            "cx": 8520600,
+            "cy": 572700
+          }
+        },
+        {
+          "textBlockId": "Internal_Medicine_Shelf_Fast_Facts_s0005_b9d7bc22_text02",
+          "text": "Presentation:\nNew-onset shortness of breath, fevers, dry cough, bilateral mid and lower lung opacities\nBasilar crackles, erythematous maculopapular rash, unilateral pleural effusion\nLeukocytosis and eosinophilia\nUsually symptoms start 3-9 days after medication initiation",
+          "bounds": {
+            "x": 311700,
+            "y": 1152475,
+            "cx": 3999900,
+            "cy": 3416400
+          }
+        },
+        {
+          "textBlockId": "Internal_Medicine_Shelf_Fast_Facts_s0005_b9d7bc22_text03",
+          "text": "Not to be confused with:\nDrug-induced acute interstitial nephritis (AIN) → also causes fevers and eosinophilia, but will have nausea and vomiting as well as abnormal \ncreatinine\n, not pulmonary symptoms",
+          "bounds": {
+            "x": 4832400,
+            "y": 1152475,
+            "cx": 3999900,
+            "cy": 3416400
+          }
+        }
+      ],
+      "imageRefs": [],
+      "tableRefs": [],
+      "confidence": 0.75,
+      "metadata": {
+        "profile": "FAST_FACTS_PROFILE",
+        "renderedSlideImage": null
+      },
+      "warnings": [],
+      "schemaVersion": "shared-normalized-chunk-v1"
+    }
+  ],
+  "warnings": []
+}

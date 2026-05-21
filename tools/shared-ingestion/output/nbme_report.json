@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "shared-normalized-chunk-report-v1",
+  "sourceType": "nbme_pdf",
+  "inputPath": "/Users/shamsulalam/Desktop/shamsulalamx/tools/nbme-pdf-json-generator/input_pdfs/8A-pages_batch_p001_p005.pdf",
+  "outputPath": "/Users/shamsulalam/Desktop/shamsulalamx/tools/shared-ingestion/output/nbme_normalized_chunks.json",
+  "stages": [
+    "extraction",
+    "OCR",
+    "chunking",
+    "normalization",
+    "asset routing",
+    "validation"
+  ],
+  "chunkCount": 1,
+  "chunkTypes": [
+    "question"
+  ],
+  "imageRefCount": 0,
+  "tableRefCount": 0,
+  "validationErrors": [],
+  "ok": true
+}
