@@ -632,3 +632,19 @@ Validated evidence now includes:
 - packaged auto-import and score history persistence.
 
 This addendum records a dry-run milestone only. Live Gemini Anki generation, real semantic Anki question quality, broad real-world Anki export variation, and non-Anki regression testing after the Anki UI additions remain unvalidated.
+
+## Addendum: OME Dry-Run BIC Milestone
+
+After the original audit and the Anki addendum, the OME dry-run BIC milestone was validated.
+
+Validated evidence now includes:
+
+- shared-ingestion normalized OME text chunks from the tracked synthetic fixture,
+- selected-input dry-run handoff through the existing OME generator,
+- `ome_profile_runner.py --emit-app-ready-dry-run`,
+- active BIC registry orchestration and output discovery,
+- visible dev Electron BIC auto-import and dry-run-only registry note display,
+- visible packaged app BIC auto-import from a clean temporary profile,
+- quiz rendering, reload persistence, and score history persistence after reload.
+
+This addendum records a dry-run milestone only. Live Gemini OME generation, any live OME BIC path, real semantic OME question quality, broad real OME PDF coverage, signed or notarized distribution behavior, and non-writable packaged resource tree behavior remain unvalidated. Packaged OME output currently writes under packaged resources; moving generated output to a writable app-data directory remains a future task.

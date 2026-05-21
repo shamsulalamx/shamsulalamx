@@ -106,6 +106,32 @@
       "outputDirectories": ["tools/shared-ingestion/output/anki_app_ready_dry_run"],
       "notes": "Dry-run orchestration only. Live Gemini Anki generation is intentionally not enabled through Batch Import Center yet."
     },
+    "ome_pdf": {
+      "label": "OME PDF",
+      "status": "active",
+      "requiresGemini": false,
+      "inputExtensions": [".pdf"],
+      "workingDirectory": ".",
+      "pythonExecutable": "python3",
+      "dryRunSteps": [
+        {
+          "stage": "normalization",
+          "stageLabel": "OME shared-ingestion dry-run",
+          "heartbeatSeconds": 10,
+          "args": ["tools/shared-ingestion/ome_profile_runner.py", "--input-file", "{inputFile}", "--limit", "2", "--emit-app-ready-dry-run"]
+        }
+      ],
+      "liveSteps": [
+        {
+          "stage": "normalization",
+          "stageLabel": "OME shared-ingestion dry-run handoff",
+          "heartbeatSeconds": 10,
+          "args": ["tools/shared-ingestion/ome_profile_runner.py", "--input-file", "{inputFile}", "--limit", "2", "--emit-app-ready-dry-run"]
+        }
+      ],
+      "outputDirectories": ["tools/shared-ingestion/output/ome_app_ready_dry_run"],
+      "notes": "Dry-run orchestration only. Live Gemini OME generation is intentionally not enabled through Batch Import Center yet."
+    },
     "fast_facts_pptx": {
       "label": "Fast Facts PPTX",
       "status": "active",
@@ -219,10 +245,6 @@
     "uworld_notes": {
       "status": "placeholder",
       "notes": "Existing external notes pipeline exists, but it is not part of the initial Batch Import Center registry."
-    },
-    "ome_pdf": {
-      "status": "placeholder",
-      "notes": "External OME generator exists separately. It is intentionally not registered in the initial source set."
     },
     "divine_transcript": {
       "status": "placeholder",

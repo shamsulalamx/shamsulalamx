@@ -24,6 +24,8 @@ OME-specific:
 
 Usage:
   python3 generate_ome_questions.py --dry-run
+  python3 generate_ome_questions.py --input-file input_pdfs/my_lesson.pdf --dry-run
+  python3 generate_ome_questions.py --input-file input_pdfs/my_lesson.pdf --dry-run --output-dir /tmp/ome-output
   python3 generate_ome_questions.py --dry-run --extract-assets
   python3 generate_ome_questions.py --generate
   python3 generate_ome_questions.py --generate --extract-assets
@@ -329,6 +331,39 @@ def _ome_build_app_ready_json(source_stem, questions, warnings):
 _uw.build_app_ready_json = _ome_build_app_ready_json
 
 
+def _resolve_selected_input(raw_path: str) -> Path:
+    selected = Path(raw_path).expanduser()
+    if not selected.is_absolute():
+        selected = (Path.cwd() / selected).resolve()
+    else:
+        selected = selected.resolve()
+    if not selected.exists():
+        raise ValueError(f"--input-file does not exist: {selected}")
+    if not selected.is_file():
+        raise ValueError(f"--input-file must be a file: {selected}")
+    if selected.suffix.lower() not in _uw.SUPPORTED_EXTENSIONS:
+        supported = ", ".join(sorted(_uw.SUPPORTED_EXTENSIONS))
+        raise ValueError(f"--input-file has unsupported extension '{selected.suffix}'. Supported: {supported}")
+    return selected
+
+
+def _apply_output_dir(raw_path: str) -> Path:
+    output_root = Path(raw_path).expanduser()
+    if not output_root.is_absolute():
+        output_root = (Path.cwd() / output_root).resolve()
+    else:
+        output_root = output_root.resolve()
+    if output_root.exists() and not output_root.is_dir():
+        raise ValueError(f"--output-dir must be a directory path: {output_root}")
+    _uw.RAW_DIR = output_root / "raw_text"
+    _uw.CHUNK_DIR = output_root / "chunks"
+    _uw.GEN_DIR = output_root / "generated"
+    _uw.DEBUG_DIR = output_root / "generated" / "debug"
+    _uw.APP_DIR = output_root / "app_ready"
+    _uw.REPORT_DIR = output_root / "reports"
+    return output_root
+
+
 # ── CLI entry point ────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -340,6 +375,8 @@ def main() -> None:
         epilog=textwrap.dedent("""
             v1 — text only (default):
               python3 generate_ome_questions.py --dry-run
+              python3 generate_ome_questions.py --input-file input_pdfs/my_lesson.pdf --dry-run
+              python3 generate_ome_questions.py --input-file input_pdfs/my_lesson.pdf --dry-run --output-dir /tmp/ome-output
               python3 generate_ome_questions.py --generate
 
             v2 — hybrid text + asset extraction:
@@ -363,6 +400,16 @@ def main() -> None:
         help="Target questions per input PDF (default: 15).",
     )
     parser.add_argument(
+        "--input-file",
+        default="",
+        help="Process one selected OME PDF instead of scanning input_pdfs/.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default="",
+        help="Optional output root. Writes raw_text/, chunks/, generated/, app_ready/, and reports/ under this directory.",
+    )
+    parser.add_argument(
         "--extract-assets",
         action="store_true",
         help=(
@@ -378,6 +425,12 @@ def main() -> None:
     if args.dry_run and args.generate:
         parser.error("--dry-run and --generate are mutually exclusive.")
 
+    try:
+        selected_input = _resolve_selected_input(args.input_file) if args.input_file else None
+        output_root = _apply_output_dir(args.output_dir) if args.output_dir else None
+    except ValueError as exc:
+        parser.error(str(exc))
+
     _extract_assets = args.extract_assets
     mode_label = "v2 (text + asset extraction)" if _extract_assets else "v1 (text only)"
 
@@ -388,6 +441,11 @@ def main() -> None:
     _uw.log(f"  Generate:           {args.generate}")
     _uw.log(f"  Extract assets:     {_extract_assets}")
     _uw.log(f"  Questions per file: {args.questions_per_file}")
+    _uw.log(f"  Input mode:         {'selected file' if selected_input else 'input_pdfs scan'}")
+    if selected_input:
+        _uw.log(f"  Selected input:     {selected_input}")
+    if output_root:
+        _uw.log(f"  Output root:        {output_root}")
     _uw.log("=" * 60)
 
     # Always create asset dirs so their presence is discoverable
@@ -398,7 +456,7 @@ def main() -> None:
     ):
         d.mkdir(parents=True, exist_ok=True)
 
-    files = _uw.discover_input_files()
+    files = [selected_input] if selected_input else _uw.discover_input_files()
     if not files:
         _uw.log("No PDF files found in input_pdfs/")
         _uw.log("Drop OME lesson PDF files into input_pdfs/ and re-run.")

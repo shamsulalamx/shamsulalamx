@@ -14,6 +14,7 @@ This file records what is validated, what is not validated, and the risk level f
 | NBME | BIC orchestration stable | Existing NBME pipeline stable for known workflows | Adapter foundation exists | BIC orchestration tagged stable | Earlier figure/image workflows packaged-validated; recheck for new changes | OCR variability, figure linking, source-specific PDFs | Medium |
 | Images & Tables | Shared image/table profile stable | Attachment-first only, no semantic generator | Validated in v4.15 | BIC generate + auto-import validated | Packaged app validated end to end | Heuristic classification, no deep table parsing | Medium |
 | Anki | Shared profile dry-run handoff validated | Not validated; BIC live steps intentionally reuse dry-run handoff | Normalized text chunks validated | Dry-run BIC auto-import validated in dev and packaged app | Packaged dry-run auto-import, quiz rendering, reload persistence, and score history persistence validated | Placeholder questions only; live Gemini generation not enabled or validated | Medium-high |
+| OME | Shared PDF dry-run handoff validated | Not validated; BIC live steps intentionally reuse dry-run handoff | Normalized text chunks validated | Dry-run BIC auto-import validated in dev and packaged app | Clean packaged profile, quiz rendering, reload persistence, and score history persistence validated | Placeholder questions only; real PDF coverage, live Gemini generation, and writable packaged output are unvalidated | Medium-high |
 | Fast Facts | Cache foundation exists | Semantic quality unstable | Adapter foundation exists | BIC registered | Do not claim packaged semantic stability | Generation quality instability | High |
 
 ## AMBOSS
@@ -122,3 +123,24 @@ Explicitly not validated:
 - stable packaged semantic output.
 
 Treat Fast Facts as high-risk until semantic generation is separately hardened and validated.
+
+## OME
+
+Validated for the dry-run BIC milestone:
+
+- `ome_pdf` descriptor and normalized `text` chunks from the tracked synthetic fixture.
+- Selected-input OME generator dry-run with controlled output.
+- `ome_profile_runner.py --emit-app-ready-dry-run` handoff and app-ready JSON validation.
+- Active BIC dry-run orchestration, output discovery, registry note display, and visible auto-import in dev Electron and packaged app.
+- Clean packaged temporary profile import, quiz rendering, reload persistence, and score history persistence after reload.
+
+Only dry-run placeholder output is validated. The dry-run app-ready JSON proves orchestration and importer compatibility, not semantic medical question quality.
+
+Not validated:
+
+- Live Gemini OME generation.
+- Any live OME BIC path.
+- Real semantic OME question quality.
+- Broad OME PDF coverage beyond the synthetic fixture.
+- Controlled asset extraction for OME.
+- Non-writable packaged resource tree behavior.

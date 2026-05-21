@@ -2283,11 +2283,13 @@ body.quiz-fullscreen-mode .modal-overlay {
         <option value="mehlman_pdf">Mehlman PDF</option>
         <option value="images_tables_source">Images & Tables</option>
         <option value="anki_notes">Anki Notes</option>
+        <option value="ome_pdf">OME PDF</option>
         <option value="fast_facts_pptx">Fast Facts PPTX</option>
         <option value="amboss_pdf">Amboss PDF</option>
         <option value="nbme_pdf">NBME PDF</option>
       </select>
     </div>
+    <div id="bic-source-note" class="notes-import-summary" style="display:none;"></div>
     <div class="form-group">
       <label class="form-label">Files</label>
       <button type="button" class="btn-modal" onclick="App.selectBatchImportFiles()">Choose Files</button>
@@ -8458,6 +8460,7 @@ const App = (() => {
 	    mehlman_pdf: 'Mehlman PDF',
 	    images_tables_source: 'Images & Tables',
 	    anki_notes: 'Anki Notes',
+	    ome_pdf: 'OME PDF',
 	    fast_facts_pptx: 'Fast Facts PPTX',
 	    amboss_pdf: 'Amboss PDF',
 	    nbme_pdf: 'NBME PDF'
@@ -22126,6 +22129,7 @@ const App = (() => {
       if (registryStatus) registryStatus.textContent = active.length
         ? 'Active: ' + active.join(', ')
         : 'No active sources registered.';
+      renderBatchImportSourceNote();
     }).catch(function(err) {
       if (registryStatus) registryStatus.textContent = err?.message || 'Registry could not be loaded.';
     });
@@ -22253,6 +22257,16 @@ const App = (() => {
   function onBatchImportSourceChange() {
     if (_batchImportState) _batchImportState.files = [];
     renderBatchImportSelectedFiles();
+    renderBatchImportSourceNote();
+  }
+
+  function renderBatchImportSourceNote() {
+    const target = document.getElementById('bic-source-note');
+    if (!target) return;
+    const sourceType = (document.getElementById('bic-source-type')?.value || '').trim();
+    const note = String(_batchImportState?.registry?.sources?.[sourceType]?.notes || '').trim();
+    target.textContent = note;
+    target.style.display = note ? 'block' : 'none';
   }
 
   async function selectBatchImportFiles() {
@@ -23839,7 +23853,7 @@ const App = (() => {
 
   // ── NBME Gemini JSON Import ────────────────────────────────
 
-  const VALID_SOURCE_FORMATS = ['pdf','docx','ocr_text','screenshot','mixed','unknown','rtf','anki-notes',''];
+  const VALID_SOURCE_FORMATS = ['pdf','docx','ocr_text','screenshot','mixed','unknown','rtf','anki-notes','ome-pdf',''];
 
   function _ngjEsc(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -25188,7 +25202,7 @@ const App = (() => {
     if (payload.sourceFormat !== undefined && payload.sourceFormat !== null) {
       const sf = String(payload.sourceFormat || '').toLowerCase();
       if (!VALID_SOURCE_FORMATS.includes(sf)) {
-        warnings.push(`sourceFormat "${payload.sourceFormat}" is not a recognized value. Allowed: pdf, docx, ocr_text, screenshot, mixed, unknown, anki-notes.`);
+        warnings.push(`sourceFormat "${payload.sourceFormat}" is not a recognized value. Allowed: pdf, docx, ocr_text, screenshot, mixed, unknown, anki-notes, ome-pdf.`);
       }
     }
     if (!Array.isArray(payload.questions)) {

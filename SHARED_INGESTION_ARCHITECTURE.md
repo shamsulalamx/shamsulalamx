@@ -68,7 +68,8 @@ Current shared adapters include:
 - Fast Facts adapter foundation,
 - Mehlman adapter,
 - Images & Tables adapter,
-- Anki plain-text adapter.
+- Anki plain-text adapter,
+- OME PDF adapter.
 
 Only the profiles listed in `VALIDATED_PIPELINES.md` should be treated as validated.
 
@@ -85,6 +86,12 @@ The Anki chunks preserve:
 - source path and line/card grounding.
 
 The adapter treats those inputs as card-style source text. It does not assume MCQ structure before the downstream Anki wrapper runs.
+
+## OME Descriptor And Adapter
+
+OME has an `ome_pdf` descriptor, a thin PDF adapter, and `ome_profile_runner.py`.
+
+The adapter reuses existing OME native text extraction and UWorld text chunking. It emits `chunkType: text`, preserves page grounding from `## Page N` markers, and does not add OCR or asset extraction claims. The validated handoff uses the existing OME generator only after normalized chunks validate.
 
 ## Asset Routing
 
@@ -104,7 +111,7 @@ Current downstream approaches:
 
 - Existing generator reuse: Emma, Mehlman.
 - Attachment-first runner: Images & Tables.
-- Existing generator dry-run handoff: Anki.
+- Existing generator dry-run handoff: Anki, OME.
 - Existing source-specific pipeline: AMBOSS, NBME, Fast Facts.
 
 True shared downstream generation is a future milestone.

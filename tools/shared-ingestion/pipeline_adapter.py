@@ -29,6 +29,7 @@ PROJECT_ROOT = ADAPTER_DIR.parents[1]
 LECTURE_DIR = PROJECT_ROOT / "tools" / "lecture-slide-question-generator"
 NBME_DIR = PROJECT_ROOT / "tools" / "nbme-pdf-json-generator"
 MEHLMAN_DIR = PROJECT_ROOT / "tools" / "mehlman-pdf-question-generator"
+OME_DIR = PROJECT_ROOT / "tools" / "ome-pdf-question-generator"
 IMAGES_TABLES_DIR = PROJECT_ROOT / "tools" / "images-tables-question-generator"
 IMAGES_TABLES_ASSET_DIR = IMAGES_TABLES_DIR / "output_assets"
 SUPPORTED_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
@@ -174,6 +175,12 @@ def _import_nbme_modules() -> tuple[Any, Any]:
 def _import_mehlman_generator() -> Any:
     sys.path.insert(0, str(MEHLMAN_DIR))
     import generate_mehlman_questions as generator  # type: ignore
+    return generator
+
+
+def _import_ome_generator() -> Any:
+    sys.path.insert(0, str(OME_DIR))
+    import generate_ome_questions as generator  # type: ignore
     return generator
 
 
@@ -505,6 +512,76 @@ def mehlman_to_normalized_chunks(input_path: Path, limit: int = 10) -> dict[str,
     )
 
 
+def _ome_pages_in_chunk(text: str) -> list[int]:
+    return [int(value) for value in re.findall(r"(?m)^## Page (\d+)\b", text)]
+
+
+def ome_to_normalized_chunks(input_path: Path, limit: int = 5) -> dict[str, Any]:
+    generator = _import_ome_generator()
+    input_path = input_path.resolve()
+    if input_path.suffix.lower() != ".pdf":
+        raise ValueError(f"Unsupported OME source extension: {input_path.suffix}. Supported: .pdf")
+
+    generator._extract_assets = False
+    raw_text = generator.extract_pdf_text(input_path)
+    extracted_stats = dict(generator._pdf_extraction_stats.get(str(input_path)) or {})
+    source_chunks = generator._uw.split_into_chunks(raw_text)
+    if limit:
+        source_chunks = source_chunks[:limit]
+
+    source_file = input_path.name
+    source_path = rel(input_path)
+    normalized_chunks: list[dict[str, Any]] = []
+    for item in source_chunks:
+        if not isinstance(item, dict):
+            continue
+        chunk_index = int(item.get("chunkIndex") or len(normalized_chunks) + 1)
+        chunk_text = str(item.get("chunkText") or "")
+        page_numbers = _ome_pages_in_chunk(chunk_text)
+        grounding = {
+            "chunkIndex": chunk_index,
+            "pageNumbers": page_numbers,
+            "pageStart": min(page_numbers) if page_numbers else None,
+            "pageEnd": max(page_numbers) if page_numbers else None,
+            "sourcePath": source_path,
+        }
+        text_blocks = [{
+            "kind": "ome-native-text",
+            "chunkIndex": chunk_index,
+            "pageNumbers": page_numbers,
+            "text": chunk_text,
+        }]
+        normalized_chunks.append(NormalizedChunk(
+            chunkId=f"{slugify(input_path.stem)}_ome_chunk_{chunk_index:04d}",
+            chunkType="text",
+            sourceType="ome_pdf",
+            sourceFile=source_file,
+            sourceGrounding=grounding,
+            text=chunk_text,
+            textBlocks=text_blocks,
+            imageRefs=[],
+            tableRefs=[],
+            confidence=0.85 if chunk_text else 0.35,
+            metadata={
+                "sourceChunkIndex": chunk_index,
+                "charCount": item.get("charCount"),
+                "pagesProcessed": extracted_stats.get("pagesProcessed"),
+                "totalPages": extracted_stats.get("totalPages"),
+                "charsExtracted": extracted_stats.get("charsExtracted"),
+                "ocrPolicy": "none",
+            },
+            warnings=[],
+        ).to_dict())
+
+    return build_chunk_bundle(
+        source_descriptor=get_source_descriptor("ome_pdf").to_dict(),
+        source_file=source_file,
+        source_path=source_path,
+        chunks=normalized_chunks,
+        warnings=list(extracted_stats.get("extractionWarnings") or []),
+    )
+
+
 def images_tables_to_normalized_chunks(input_path: Path, limit: int = 5) -> dict[str, Any]:
     input_path = input_path.resolve()
     files = supported_images_from_input(input_path, limit=limit)
@@ -605,6 +682,8 @@ def emit_normalized_chunks(source_type: str, input_path: Path, output_path: Path
         bundle = fast_facts_to_normalized_chunks(input_path, limit=limit)
     elif source_type == "mehlman_pdf":
         bundle = mehlman_to_normalized_chunks(input_path, limit=limit)
+    elif source_type == "ome_pdf":
+        bundle = ome_to_normalized_chunks(input_path, limit=limit)
     elif source_type == "images_tables_source":
         bundle = images_tables_to_normalized_chunks(input_path, limit=limit)
     else:

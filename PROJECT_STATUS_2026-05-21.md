@@ -1,6 +1,6 @@
 # Project Status 2026-05-21
 
-Current stable tag: `v4.15-images-tables-profile-stable`
+Current stable tag: `v4.16-anki-dry-run-bic-stable`
 
 Current branch observed during this update: `main`
 
@@ -22,6 +22,7 @@ Completed and tagged milestones:
 - v4.13: BIC existing-output validation mode.
 - v4.14: Emma normalized-chunk downstream consumption.
 - v4.15: Images & Tables shared-ingestion profile.
+- v4.16: Anki dry-run BIC profile.
 
 Earlier v4.0-v4.3 established Images/Tables generator stability and Emma Holiday lecture-slide generator stability.
 
@@ -35,11 +36,12 @@ Earlier v4.0-v4.3 established Images/Tables generator stability and Emma Holiday
 | NBME | BIC orchestration stable | Tagged v4.8; legacy NBME import and image workflows have earlier validation |
 | Images & Tables | Shared-ingestion profile stable | Packaged app import, FigureStore persistence, image/table rendering, score, reload validated |
 | Anki | Shared-ingestion dry-run profile and BIC dry-run orchestration validated | Dev Electron visible UI auto-import, packaged visible UI auto-import, and score history persistence validated; live Gemini generation and semantic question quality are not validated |
+| OME | Shared-ingestion dry-run profile and BIC dry-run orchestration validated | Normalized chunks, selected-input dry-run handoff, dev and packaged visible BIC auto-import, clean-profile import, quiz rendering, and score history persistence validated; live Gemini generation is not validated |
 | Fast Facts | Cache foundation only | Explicitly not semantically stable |
 
 ## Validated Runtime Paths
 
-Validated runtime paths as of v4.15:
+Validated runtime paths as of v4.16:
 
 - Electron packaged build through `npm run electron:build:mac`.
 - Packaged app launch with remote debugging.
@@ -64,6 +66,18 @@ Validated after v4.15 for the Anki dry-run BIC milestone:
 
 This Anki milestone does not validate live Gemini Anki generation or real semantic Anki question quality.
 
+Validated after v4.16 for the OME dry-run BIC milestone:
+
+- Shared-ingestion normalized OME text chunks from the tracked synthetic OME PDF fixture.
+- Selected-input dry-run handoff through the existing OME generator.
+- Shared runner handoff through `--emit-app-ready-dry-run`.
+- Active BIC dry-run registry orchestration and output discovery.
+- Dev Electron visible UI auto-import and dry-run-only registry note display.
+- Packaged app visible UI auto-import from a clean temporary profile.
+- Quiz rendering, reload persistence, and score history persistence after reload.
+
+This OME milestone validates placeholder dry-run output only. It does not validate live Gemini OME generation, a live OME BIC path, or real semantic OME question quality.
+
 ## Packaged App Status
 
 Packaged app validation has been required for image and BIC claims. The v4.15 Images & Tables profile passed packaged validation:
@@ -87,15 +101,17 @@ Packaged app validation has been required for image and BIC claims. The v4.15 Im
 - Shared downstream generation is not complete.
 - Live Gemini Anki generation is not validated.
 - Semantic Anki question quality is not validated.
+- Live Gemini OME generation and live OME BIC execution are not validated.
+- OME packaged output currently depends on a writable packaged resource tree; app-data output migration is future work.
 
 ## Roadmap
 
 Priority roadmap:
 
-1. OME profile.
-2. Divine transcript/audio profile.
-3. Anki live generation and semantic hardening only if desired.
-4. UWorld notes profile.
+1. Divine transcript/audio profile or UWorld notes profile, depending on roadmap.
+2. OME live-generation policy and semantic quality only if desired.
+3. OME writable app-data output migration.
+4. Anki live generation and semantic hardening only if desired.
 5. Shared downstream reuse.
 6. Semantic validator hardening.
 7. Multimodal grounding improvements.
@@ -123,6 +139,7 @@ Priority roadmap:
 | `v4.13-bic-existing-output-import-stable` | Existing-output BIC validation mode |
 | `v4.14-emma-normalized-chunk-downstream-stable` | Emma downstream consumes normalized chunks |
 | `v4.15-images-tables-profile-stable` | Images & Tables shared-ingestion profile |
+| `v4.16-anki-dry-run-bic-stable` | Anki dry-run BIC profile |
 
 ## Working Tree Notes At Handoff
 

@@ -26,12 +26,13 @@ The registry defines active sources:
 - output directories,
 - notes.
 
-Current v4.15 registered sources:
+Current registered sources:
 
 - `emma_holiday_pdf`
 - `mehlman_pdf`
 - `images_tables_source`
 - `anki_notes`
+- `ome_pdf`
 - `fast_facts_pptx`
 - `amboss_pdf`
 - `nbme_pdf`
@@ -76,6 +77,16 @@ The active `anki_notes` registry entry is dry-run only.
 - `liveSteps` are intentionally mapped to the same dry-run handoff for now. Selecting a live BIC run must not be read as live Anki Gemini validation.
 - The visible BIC source option includes Anki Notes.
 - The BIC modal has an optional test-name input that can override the imported app-ready title on this path.
+
+## OME Registry Boundary
+
+The active `ome_pdf` registry entry is dry-run only.
+
+- `requiresGemini` is `false` because the current BIC path runs the selected-input OME dry-run handoff.
+- `dryRunSteps` call the OME profile runner and request app-ready dry-run output.
+- `liveSteps` intentionally map to the same dry-run handoff. This does not enable or validate live OME Gemini generation.
+- Registry notes are displayed in the BIC UI, including the dry-run-only OME note.
+- OME note visibility and dry-run auto-import were validated in dev Electron and packaged app.
 
 ## Output Discovery
 

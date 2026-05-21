@@ -4,17 +4,27 @@ Last updated: 2026-05-21
 
 This roadmap prioritizes convergence while protecting validated behavior.
 
-## 1. OME Profile
+## 1. Divine Transcript/Audio Profile Or UWorld Notes
 
-Rationale: OME has existing PDF tooling and is a natural source for the next text-first profile onboarding step.
+Rationale: OME now has a validated dry-run BIC profile. The next broad architecture step should move to Divine transcript/audio or UWorld notes after the roadmap choice is made.
 
-Risk: Medium. PDF text extraction variability and asset assumptions remain.
+Risk: Medium-high. Both candidates have source-sensitive semantics and save/import boundaries that should be validated narrowly.
 
-Architectural impact: Extends shared ingestion to another PDF source without rewriting NBME or Mehlman.
+Architectural impact: Extends profile architecture beyond the newly validated OME PDF dry-run path.
 
-Validation requirements: small PDF sample, normalized chunks, app-ready output, import, quiz, reload. Validate figures/tables only if included.
+Validation requirements: Choose one candidate and validate a small source sample through normalized artifacts, downstream output, import, quiz, score, and reload.
 
-## 2. Divine Transcript/Audio Profile
+## 2. OME Live Policy Or Writable Output Migration
+
+Rationale: OME dry-run orchestration is validated. Further OME work should either define a live-generation policy and semantic review bar or move generated packaged output to a writable app-data location.
+
+Risk: Medium-high. Dry-run proof does not validate live generation quality, and packaged resource writes may fail in a non-writable distribution.
+
+Architectural impact: Keeps the validated OME dry-run boundary intact while addressing the next real OME risk.
+
+Validation requirements: For live work, review real generated OME content and packaged import behavior. For output migration, prove packaged BIC discovery and reload persistence from a writable destination.
+
+## 3. Divine Transcript/Audio Profile
 
 Rationale: Divine already has transcript/audio workflows and can test transcript chunk types in shared ingestion.
 
@@ -24,7 +34,7 @@ Architectural impact: Brings transcript/audio modality toward profile architectu
 
 Validation requirements: transcript chunk emission, draft generation/refinement path, save gates, import, score, reload. Avoid broad prompt rewrites.
 
-## 3. Anki Live Generation And Semantic Hardening
+## 4. Anki Live Generation And Semantic Hardening
 
 Rationale: The Anki dry-run BIC profile is validated. The next Anki work is live generation and semantic hardening only if that direction is desired.
 
@@ -34,7 +44,7 @@ Architectural impact: Extends the validated text/card-style dry-run profile into
 
 Validation requirements: live Gemini generation, semantic review on real Anki samples, export variation coverage, app-ready import, score, reload, packaged validation, and non-Anki regression checks after UI changes.
 
-## 4. UWorld Notes
+## 5. UWorld Notes
 
 Rationale: UWorld notes are important and already have deterministic save discipline.
 
@@ -44,7 +54,7 @@ Architectural impact: Tests shared profile architecture on note-derived concepts
 
 Validation requirements: raw concepts, deduped representatives, clusters, approved drafts, app-ready output, deterministic save, score/reload.
 
-## 5. Shared Downstream Reuse
+## 6. Shared Downstream Reuse
 
 Rationale: Current profiles still reuse source-specific downstream generators.
 
@@ -54,7 +64,7 @@ Architectural impact: Moves the project closer to true profile convergence.
 
 Validation requirements: one source at a time. Prove output equivalence or improvement before switching a source.
 
-## 6. Semantic Validator Hardening
+## 7. Semantic Validator Hardening
 
 Rationale: Validators are blocking legitimate content, as seen with Emma `dystocia`.
 
@@ -64,7 +74,7 @@ Architectural impact: Improves live generation reliability if done source-aware.
 
 Validation requirements: source-specific failing examples, negative controls, no global loosening without tests.
 
-## 7. Multimodal Grounding Improvements
+## 8. Multimodal Grounding Improvements
 
 Rationale: Images & Tables currently preserves assets but does not deeply understand them.
 
@@ -74,7 +84,7 @@ Architectural impact: Adds richer image/table reasoning above the attachment-fir
 
 Validation requirements: small curated set, visual inspection, OCR/asset provenance, generated question review, packaged rendering.
 
-## 8. Scalable Asset Caching
+## 9. Scalable Asset Caching
 
 Rationale: Multimodal and large-source workflows need cache discipline.
 
@@ -84,7 +94,7 @@ Architectural impact: Adds source-hash-backed asset cache indexes to shared inge
 
 Validation requirements: cache hit/miss reports, changed-file invalidation, packaged resource path checks.
 
-## 9. Deeper Table Parsing
+## 10. Deeper Table Parsing
 
 Rationale: Table images currently remain images with OCR text. Structured rows/columns would support better downstream questions.
 
@@ -94,7 +104,7 @@ Architectural impact: Adds structured table refs and possibly table-specific val
 
 Validation requirements: small table set with known expected rows, OCR confidence, visual review, import/render.
 
-## 10. Full Profile Architecture Convergence
+## 11. Full Profile Architecture Convergence
 
 Rationale: Long-term maintainability improves if each source becomes a descriptor plus adapter plus validated downstream path.
 

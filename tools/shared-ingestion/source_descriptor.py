@@ -109,6 +109,22 @@ SOURCE_DESCRIPTORS: dict[str, SourceDescriptor] = {
             "assetHandling": "preserve embedded figures and lattice-detected tables as normalized refs",
         },
     ),
+    "ome_pdf": SourceDescriptor(
+        source_type="ome_pdf",
+        modality="pdf",
+        extraction_style="native_text",
+        generation_style="existing_downstream",
+        asset_policy="none",
+        cache_policy="source_hash",
+        notes="OME text-layer PDF profile. Emits normalized text chunks through the existing deterministic OME PDF extraction and chunking path without question generation.",
+        metadata={
+            "profileStatus": "normalized-chunks-plus-optional-dry-run-handoff",
+            "supportedInputs": [".pdf"],
+            "downstreamGenerator": "tools/ome-pdf-question-generator/generate_ome_questions.py",
+            "downstreamStatus": "shared ingestion validates normalized chunks first; the OME profile runner can optionally hand off one selected PDF to the existing generator in dry-run mode",
+            "ocrPolicy": "none; reuse OME native text extraction only",
+        },
+    ),
     "images_tables_source": SourceDescriptor(
         source_type="images_tables_source",
         modality="image",

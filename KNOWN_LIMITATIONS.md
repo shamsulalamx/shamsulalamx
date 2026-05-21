@@ -47,6 +47,17 @@ The validated Anki BIC path is a dry-run handoff. Its current app-ready question
 - Media references and HTML variation are not validated.
 - The global `schemaVersion` and `questionCount` warning contract remains unresolved.
 
+## OME Dry-Run Limitations
+
+The validated OME BIC path is dry-run only. Its current app-ready questions are placeholders.
+
+- Live Gemini OME generation is not enabled through BIC.
+- Real semantic OME question quality is not validated.
+- Real OME PDFs beyond the tracked synthetic fixture are not validated.
+- OME asset extraction has not been validated with the controlled output path.
+- Packaged OME output currently writes under packaged resources. Moving generated output to a writable app-data location is future work.
+- Signed or notarized distribution behavior and non-writable packaged resource tree behavior are not validated.
+
 ## Remaining Multimodal Gaps
 
 Open multimodal gaps:
@@ -64,4 +75,4 @@ Packaged app jobs run from app resources. A workspace path and a packaged resour
 
 ## Shared Architecture Incomplete
 
-The shared profile architecture is active but incomplete. Anki has a validated dry-run shared profile and BIC handoff, while OME, Divine, and UWorld are not fully migrated into shared ingestion. Do not delete existing source-specific flows.
+The shared profile architecture is active but incomplete. Anki and OME have validated dry-run shared profiles and BIC handoffs, while Divine and UWorld are not fully migrated into shared ingestion. Do not delete existing source-specific flows.

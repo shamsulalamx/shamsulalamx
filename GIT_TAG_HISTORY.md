@@ -2,7 +2,7 @@
 
 Last updated: 2026-05-21
 
-This file documents stable v4 tags from v4.4 through v4.15, plus immediate v4.0-v4.3 context because v4.4 builds on those milestones.
+This file documents stable v4 tags from v4.4 through v4.16, plus immediate v4.0-v4.3 context because v4.4 builds on those milestones.
 
 ## v4.0-images-tables-generator-stable
 
@@ -164,6 +164,16 @@ Validated: Image/table normalized chunks, OCR extraction, asset classification, 
 
 Architecture significance: First validated multimodal profile-style source.
 
+## v4.16-anki-dry-run-bic-stable
+
+Commit: `7e67a08`
+
+Meaning: Added the validated Anki dry-run BIC profile milestone.
+
+Validated: Shared-ingestion normalized Anki text chunks, selected-input dry-run handoff, active BIC dry-run orchestration, visible dev and packaged auto-import, quiz rendering, reload persistence, and score history persistence.
+
+Architecture significance: Proved a dry-run-only BIC profile can reuse an existing wrapper without claiming live Gemini semantic quality.
+
 ## Pending Milestone Candidate
 
-The Anki dry-run BIC milestone has validation evidence after v4.15, but no stable tag exists yet. Do not add a tag-history entry until the commit and tag decision is made.
+The OME dry-run BIC milestone has validation evidence after v4.16, but no stable tag exists yet. Do not add a tag-history entry until the commit and tag decision is made.

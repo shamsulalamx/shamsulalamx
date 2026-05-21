@@ -58,6 +58,8 @@ OME PDF (input_pdfs/)
 ```bash
 cd tools/ome-pdf-question-generator
 python3 generate_ome_questions.py --dry-run
+python3 generate_ome_questions.py --input-file input_pdfs/test_ome_mood_disorders.pdf --dry-run
+python3 generate_ome_questions.py --input-file input_pdfs/test_ome_mood_disorders.pdf --dry-run --output-dir /tmp/ome-output
 python3 generate_ome_questions.py --dry-run --extract-assets
 ```
 
@@ -85,6 +87,10 @@ Default: 15 questions per PDF file.
 ## Input
 
 Drop OME lesson PDF files into `input_pdfs/`. Only `.pdf` files are processed.
+By default the generator scans that folder. Pass `--input-file <path>` to process
+one selected PDF only. Pass `--output-dir <path>` to write `raw_text/`,
+`chunks/`, `generated/`, `app_ready/`, and `reports/` under a controlled output
+root without changing the default output locations.
 
 OME PDFs are vector-based (text-layer); pdfplumber extracts them cleanly without OCR.
 
