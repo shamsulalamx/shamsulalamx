@@ -229,6 +229,11 @@ def file_sha(path: Path) -> str:
     return h.hexdigest()
 
 
+def stable_json_hash(payload: Any) -> str:
+    blob = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(blob.encode("utf-8", errors="replace")).hexdigest()
+
+
 def short_hash(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8", errors="replace")).hexdigest()[:12]
 
@@ -488,6 +493,109 @@ def load_or_decompose_pdf(pdf_path: Path) -> dict[str, Any]:
         except Exception as exc:
             warn(f"Existing slide decomposition could not be read ({exc}); recomposing PDF.")
     return decompose_pdf(pdf_path)
+
+
+def image_ref_to_slide_image(ref: dict[str, Any]) -> dict[str, Any]:
+    metadata = ref.get("metadata") if isinstance(ref.get("metadata"), dict) else {}
+    image_id = str(metadata.get("imageId") or ref.get("refId") or "").strip()
+    asset_path = str(ref.get("path") or metadata.get("assetPath") or "").strip()
+    return {
+        "imageId": image_id,
+        "kind": str(metadata.get("kind") or ref.get("kind") or "image"),
+        "assetPath": asset_path,
+        "mimeType": str(metadata.get("mimeType") or mime_for(BASE_DIR / asset_path) if asset_path else "application/octet-stream"),
+        "width": int(metadata.get("width") or 0),
+        "height": int(metadata.get("height") or 0),
+        "sha256": str(metadata.get("sha256") or ""),
+        "normalizedRefId": ref.get("refId"),
+        "normalizedRole": ref.get("role"),
+        "normalizedGrounding": ref.get("grounding") if isinstance(ref.get("grounding"), dict) else {},
+    }
+
+
+def table_ref_to_slide_table(ref: dict[str, Any]) -> dict[str, Any]:
+    metadata = ref.get("metadata") if isinstance(ref.get("metadata"), dict) else {}
+    table_id = str(metadata.get("tableId") or ref.get("refId") or "").strip()
+    return {
+        "tableId": table_id,
+        "title": str(ref.get("text") or metadata.get("title") or "Normalized chunk table"),
+        "headers": metadata.get("headers") if isinstance(metadata.get("headers"), list) else [],
+        "rows": metadata.get("rows") if isinstance(metadata.get("rows"), list) else [],
+        "normalizedRefId": ref.get("refId"),
+        "normalizedGrounding": ref.get("grounding") if isinstance(ref.get("grounding"), dict) else {},
+    }
+
+
+def slide_payload_from_normalized_chunks(bundle_path: Path) -> dict[str, Any]:
+    bundle = read_json(bundle_path)
+    if bundle.get("schemaVersion") != "shared-normalized-chunk-bundle-v1":
+        raise PipelineError("Normalized chunk input must use shared-normalized-chunk-bundle-v1.")
+    chunks = bundle.get("chunks")
+    if not isinstance(chunks, list) or not chunks:
+        raise PipelineError("Normalized chunk bundle has no chunks.")
+    bundle_hash = stable_json_hash(bundle)
+    slides: list[dict[str, Any]] = []
+    warnings = list(bundle.get("warnings") or [])
+    for index, chunk in enumerate(chunks, start=1):
+        if not isinstance(chunk, dict):
+            warnings.append(f"Skipped non-object chunk at index {index}.")
+            continue
+        chunk_id = str(chunk.get("chunkId") or f"normalized_chunk_{index:04d}").strip()
+        grounding = chunk.get("sourceGrounding") if isinstance(chunk.get("sourceGrounding"), dict) else {}
+        slide_index = int(grounding.get("slideIndex") or grounding.get("pageIndex") or index)
+        page_index = int(grounding.get("pageIndex") or max(0, slide_index - 1))
+        images = [
+            image_ref_to_slide_image(ref)
+            for ref in chunk.get("imageRefs") or []
+            if isinstance(ref, dict)
+        ]
+        tables = [
+            table_ref_to_slide_table(ref)
+            for ref in chunk.get("tableRefs") or []
+            if isinstance(ref, dict)
+        ]
+        text_blocks = chunk.get("textBlocks") if isinstance(chunk.get("textBlocks"), list) else []
+        text = str(chunk.get("text") or "").strip()
+        if not text and text_blocks:
+            text = "\n\n".join(str(block.get("text") or "") for block in text_blocks if isinstance(block, dict)).strip()
+        slides.append({
+            "slideId": chunk_id,
+            "sourceFile": str(chunk.get("sourceFile") or bundle.get("sourceFile") or bundle_path.name),
+            "pdfSha256": bundle_hash,
+            "slideIndex": slide_index,
+            "pageIndex": page_index,
+            "ocrText": clean_slide_text(text),
+            "images": images,
+            "tables": tables,
+            "metadata": {
+                **({} if not isinstance(chunk.get("metadata"), dict) else chunk.get("metadata")),
+                "normalizedChunkId": chunk_id,
+                "normalizedChunkType": chunk.get("chunkType"),
+                "normalizedChunkConfidence": chunk.get("confidence"),
+                "sourceGrounding": grounding,
+            },
+            "warnings": list(chunk.get("warnings") or []),
+        })
+    if not slides:
+        raise PipelineError("Normalized chunk bundle did not contain usable chunks.")
+    return {
+        "schemaVersion": "lecture-slide-decomposition-v1",
+        "sourceFile": str(bundle.get("sourceFile") or bundle_path.stem),
+        "sourcePath": str(bundle.get("sourcePath") or bundle_path),
+        "pdfSha256": bundle_hash,
+        "createdAt": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "pageCount": len(slides),
+        "pdfMetadata": {},
+        "slides": slides,
+        "provenance": {
+            "sourceMode": "normalized_chunks",
+            "chunkBundlePath": str(bundle_path),
+            "chunkBundleHash": bundle_hash,
+            "chunkBundleId": str(bundle.get("bundleId") or bundle.get("id") or bundle_hash[:16]),
+            "chunkCountConsumed": len(slides),
+        },
+        "normalizationWarnings": warnings,
+    }
 
 
 def chunk_list(items: list[Any], size: int) -> list[list[Any]]:
@@ -891,6 +999,8 @@ def normalize_slides(slide_payload: dict[str, Any], generate: bool) -> dict[str,
         },
         "slides": normalized,
     }
+    if isinstance(slide_payload.get("provenance"), dict):
+        payload["provenance"] = slide_payload["provenance"]
     out_path = normalized_output_path_for_source(slide_payload["sourceFile"])
     write_json(out_path, payload)
     log(f"  Normalized -> {out_path.relative_to(BASE_DIR)}")
@@ -2323,6 +2433,8 @@ def normalize_amboss_extracted_question(q: dict[str, Any]) -> dict[str, Any]:
 def build_app_ready_payload(normalized_payload: dict[str, Any], generated_questions: list[dict[str, Any]]) -> dict[str, Any]:
     slide_by_id = {s["slideId"]: s for s in normalized_payload.get("slides") or []}
     is_amboss = normalized_payload.get("profile") == AMBOSS_PROFILE
+    provenance = normalized_payload.get("provenance") if isinstance(normalized_payload.get("provenance"), dict) else {}
+    source_mode = str(provenance.get("sourceMode") or "raw_source")
     questions: list[dict[str, Any]] = []
     for index, gen_q in enumerate(generated_questions, start=1):
         slide_id = str(gen_q.get("slideId") or "")
@@ -2355,6 +2467,10 @@ def build_app_ready_payload(normalized_payload: dict[str, Any], generated_questi
             "metadata": {
                 "sourceType": "amboss-profile" if is_amboss else "lecture-slide-generator",
                 "sourceFormat": "amboss-extraction" if is_amboss else "lecture-slides",
+                "sourceMode": source_mode,
+                "chunkBundleHash": provenance.get("chunkBundleHash"),
+                "chunkBundleId": provenance.get("chunkBundleId"),
+                "chunkCountConsumed": provenance.get("chunkCountConsumed"),
                 "profile": AMBOSS_PROFILE if is_amboss else normalized_payload.get("profile"),
                 "slideId": slide_id,
                 "slideTypes": slide.get("slideType") or [],
@@ -2374,6 +2490,12 @@ def build_app_ready_payload(normalized_payload: dict[str, Any], generated_questi
         "schemaVersion": OUTPUT_SCHEMA_VERSION,
         "testTitle": f"{Path(normalized_payload['sourceFile']).stem} Lecture Questions",
         "sourceFormat": SOURCE_FORMAT,
+        "metadata": {
+            "sourceMode": source_mode,
+            "chunkBundleHash": provenance.get("chunkBundleHash"),
+            "chunkBundleId": provenance.get("chunkBundleId"),
+            "chunkCountConsumed": provenance.get("chunkCountConsumed"),
+        },
         "expectedQuestionCount": sum(1 for _ in questions),
         "actualExtractedQuestionCount": len(questions),
         "extractionWarnings": normalized_payload.get("normalizationWarnings") or [],
@@ -2708,14 +2830,13 @@ def write_report(report: dict[str, Any], prefix: str) -> Path:
     return path
 
 
-def process_pdf(pdf_path: Path, generate: bool) -> Path:
-    slide_payload = load_or_decompose_pdf(pdf_path)
+def process_slide_payload(slide_payload: dict[str, Any], generate: bool, output_stem: str, source_label: str) -> Path:
     normalized_payload = normalize_slides(slide_payload, generate=generate)
     memory = empty_memory()
     allocations = allocate_questions(normalized_payload, memory)
     questions = generate_questions(normalized_payload, allocations, memory, generate=generate)
     if not questions:
-        raise PipelineError(f"No questions allocated/generated for {pdf_path.name}.")
+        raise PipelineError(f"No questions allocated/generated for {source_label}.")
     grounding_findings = semantic_grounding_findings(questions, normalized_payload)
     diversity_report = question_quality_and_diversity(questions)
     app_payload = build_app_ready_payload(normalized_payload, questions)
@@ -2732,7 +2853,11 @@ def process_pdf(pdf_path: Path, generate: bool) -> Path:
             if f.get("severity") == "error"
         )
     report = {
-        "sourceFile": pdf_path.name,
+        "sourceFile": slide_payload.get("sourceFile") or source_label,
+        "sourceMode": (normalized_payload.get("provenance") or {}).get("sourceMode", "raw_source") if isinstance(normalized_payload.get("provenance"), dict) else "raw_source",
+        "chunkBundleHash": (normalized_payload.get("provenance") or {}).get("chunkBundleHash") if isinstance(normalized_payload.get("provenance"), dict) else None,
+        "chunkBundleId": (normalized_payload.get("provenance") or {}).get("chunkBundleId") if isinstance(normalized_payload.get("provenance"), dict) else None,
+        "chunkCountConsumed": (normalized_payload.get("provenance") or {}).get("chunkCountConsumed") if isinstance(normalized_payload.get("provenance"), dict) else None,
         "mode": "generate" if generate else "dry-run",
         "slideCount": len(slide_payload.get("slides") or []),
         "normalizationStats": normalized_payload.get("normalizationStats") or {},
@@ -2768,11 +2893,28 @@ def process_pdf(pdf_path: Path, generate: bool) -> Path:
     write_report(report, "lecture_slide_generation_report")
     if errors:
         raise PipelineError("Final validation failed:\n" + "\n".join(f"- {err}" for err in errors[:80]))
-    out_path = APP_READY_DIR / f"{slugify(pdf_path.stem)}_lecture_app_ready.json"
+    out_path = APP_READY_DIR / f"{slugify(output_stem)}_lecture_app_ready.json"
     write_json(out_path, app_payload)
     json.loads(out_path.read_text(encoding="utf-8"))
     log(f"App-ready -> {out_path.relative_to(BASE_DIR)}")
     return out_path
+
+
+def process_pdf(pdf_path: Path, generate: bool) -> Path:
+    slide_payload = load_or_decompose_pdf(pdf_path)
+    slide_payload["provenance"] = {
+        "sourceMode": "raw_source",
+        "chunkBundleHash": None,
+        "chunkBundleId": None,
+        "chunkCountConsumed": None,
+    }
+    return process_slide_payload(slide_payload, generate=generate, output_stem=pdf_path.stem, source_label=pdf_path.name)
+
+
+def process_normalized_chunks(bundle_path: Path, generate: bool) -> Path:
+    slide_payload = slide_payload_from_normalized_chunks(bundle_path)
+    output_stem = f"{Path(str(slide_payload.get('sourceFile') or bundle_path.stem)).stem}_normalized_chunks"
+    return process_slide_payload(slide_payload, generate=generate, output_stem=output_stem, source_label=bundle_path.name)
 
 
 def question_per_slide_distribution(allocations: list[dict[str, Any]]) -> dict[str, int]:
@@ -6273,6 +6415,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--show-cache-status", action="store_true", help="Show Fast Facts question cache status and exit.")
     parser.add_argument("--input-dir", default="", help="Folder containing lecture PDFs.")
     parser.add_argument("--input-file", default="", help="Single PDF/PPTX input file.")
+    parser.add_argument("--normalized-chunks", default="", help="Shared normalized chunk bundle JSON to consume instead of reopening the source PDF.")
     parser.add_argument("--limit", type=int, default=0, help="Limit PDFs processed.")
     return parser.parse_args()
 
@@ -6326,6 +6469,13 @@ def main() -> int:
         if not args.dry_run and not args.generate and not args.repair_existing:
             print("No action specified. Use --dry-run, --generate, --repair-existing, --fast-facts-profile, or --validate-only.")
             return 2
+        if args.normalized_chunks:
+            if args.repair_existing:
+                raise PipelineError("--repair-existing is not supported with --normalized-chunks.")
+            output = process_normalized_chunks(Path(args.normalized_chunks).expanduser().resolve(), generate=args.generate)
+            print("Generated app-ready files:")
+            print(f"  {output}")
+            return 0
         if args.input_file:
             pdfs = [Path(args.input_file).expanduser().resolve()]
         else:

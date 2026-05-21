@@ -43,17 +43,17 @@ def newest_app_ready_since(started_at: float) -> list[str]:
     return [str(path.resolve()) for path in sorted(paths, key=lambda p: p.stat().st_mtime)]
 
 
-def run_existing_emma_generator(input_file: Path, mode: str, limit: int) -> tuple[int, float, list[str]]:
+def run_existing_emma_generator(input_file: Path, mode: str, limit: int, normalized_chunks: Path | None = None) -> tuple[int, float, list[str]]:
     started_at = time.time()
     command = [
         sys.executable,
         "generate_lecture_slide_questions.py",
         "--generate" if mode == "generate" else "--dry-run",
-        "--input-file",
-        str(input_file),
-        "--limit",
-        str(limit),
     ]
+    if normalized_chunks:
+        command.extend(["--normalized-chunks", str(normalized_chunks)])
+    else:
+        command.extend(["--input-file", str(input_file), "--limit", str(limit)])
     emit("emma_downstream_start", command=command, cwd=str(LECTURE_DIR))
     proc = subprocess.Popen(
         command,
@@ -78,6 +78,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--mode", choices=["dry-run", "generate"], default="dry-run")
     parser.add_argument("--limit", type=int, default=0, help="Limit normalized chunks only. 0 means all chunks.")
     parser.add_argument("--chunk-output", default="")
+    parser.add_argument(
+        "--downstream-input",
+        choices=["raw-source", "normalized-chunks"],
+        default="normalized-chunks",
+        help="Choose whether the downstream Emma generator consumes the original PDF or the normalized chunk bundle.",
+    )
     return parser.parse_args()
 
 
@@ -111,12 +117,14 @@ def main() -> int:
         emit("emma_profile_complete", ok=False, error="Shared normalized chunk validation failed.", report=report)
         return 1
 
-    code, downstream_runtime, outputs = run_existing_emma_generator(input_file, args.mode, limit)
+    normalized_input = chunk_output if args.downstream_input == "normalized-chunks" else None
+    code, downstream_runtime, outputs = run_existing_emma_generator(input_file, args.mode, limit, normalized_chunks=normalized_input)
     total_runtime = round(time.time() - started_at, 3)
     final_report = {
         "schemaVersion": "emma-profile-runner-report-v1",
         "sourceType": "emma_holiday_pdf",
         "mode": args.mode,
+        "downstreamInput": args.downstream_input,
         "normalizedChunkPath": str(chunk_output),
         "normalizedChunkCount": report.get("chunkCount", 0),
         "assetCount": report.get("assetCount", 0),
