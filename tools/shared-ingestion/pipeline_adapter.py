@@ -103,6 +103,28 @@ def amboss_to_normalized_chunks(input_path: Path, limit: int = 5) -> dict[str, A
     )
 
 
+def emma_to_normalized_chunks(input_path: Path, limit: int = 5) -> dict[str, Any]:
+    generator = _import_lecture_generator()
+    payload = generator.load_or_decompose_pdf(input_path.resolve())
+    source_file = str(payload.get("sourceFile") or input_path.name)
+    source_path = str(payload.get("sourcePath") or input_path)
+    slides = payload.get("slides") or []
+    if limit:
+        slides = slides[:limit]
+    chunks = [
+        _lecture_slide_chunk("emma_holiday_pdf", source_file, source_path, slide, chunk_type="slide")
+        for slide in slides
+        if isinstance(slide, dict)
+    ]
+    return build_chunk_bundle(
+        source_descriptor=get_source_descriptor("emma_holiday_pdf").to_dict(),
+        source_file=source_file,
+        source_path=source_path,
+        chunks=chunks,
+        warnings=[],
+    )
+
+
 def nbme_to_normalized_chunks(input_path: Path, limit: int = 5, refresh: bool = False) -> dict[str, Any]:
     extract_pdfs, wrapper = _import_nbme_modules()
     input_path = input_path.resolve()
@@ -176,6 +198,8 @@ def fast_facts_to_normalized_chunks(input_path: Path, limit: int = 10) -> dict[s
 def emit_normalized_chunks(source_type: str, input_path: Path, output_path: Path, limit: int = 5, refresh: bool = False) -> dict[str, Any]:
     if source_type == "amboss_pdf":
         bundle = amboss_to_normalized_chunks(input_path, limit=limit)
+    elif source_type == "emma_holiday_pdf":
+        bundle = emma_to_normalized_chunks(input_path, limit=limit)
     elif source_type == "nbme_pdf":
         bundle = nbme_to_normalized_chunks(input_path, limit=limit, refresh=refresh)
     elif source_type == "fast_facts_pptx":

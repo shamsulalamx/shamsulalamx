@@ -6,26 +6,26 @@
       "status": "active",
       "requiresGemini": true,
       "inputExtensions": [".pdf"],
-      "workingDirectory": "tools/lecture-slide-question-generator",
+      "workingDirectory": ".",
       "pythonExecutable": "python3",
       "dryRunSteps": [
         {
-          "stage": "generation",
-          "stageLabel": "Emma Holiday dry-run",
+          "stage": "normalization",
+          "stageLabel": "Emma Holiday shared-ingestion dry-run",
           "heartbeatSeconds": 20,
-          "args": ["generate_lecture_slide_questions.py", "--dry-run", "--input-file", "{inputFile}", "--limit", "1"]
+          "args": ["tools/shared-ingestion/emma_profile_runner.py", "--mode", "dry-run", "--input-file", "{inputFile}", "--limit", "0"]
         }
       ],
       "liveSteps": [
         {
-          "stage": "generation",
-          "stageLabel": "Emma Holiday live generation",
+          "stage": "normalization",
+          "stageLabel": "Emma Holiday shared-ingestion live generation",
           "heartbeatSeconds": 20,
-          "args": ["generate_lecture_slide_questions.py", "--generate", "--input-file", "{inputFile}", "--limit", "1"]
+          "args": ["tools/shared-ingestion/emma_profile_runner.py", "--mode", "generate", "--input-file", "{inputFile}", "--limit", "0"]
         }
       ],
-      "outputDirectories": ["output_json/app_ready"],
-      "notes": "Uses the existing lecture-slide generator against Emma Holiday PDFs. The registry does not modify extraction, normalization, or app-ready schema."
+      "outputDirectories": ["tools/lecture-slide-question-generator/output_json/app_ready"],
+      "notes": "Profile-style source: emits shared normalized chunks first, then invokes the existing Emma generator unchanged."
     },
     "fast_facts_pptx": {
       "label": "Fast Facts PPTX",

@@ -70,7 +70,12 @@ SOURCE_DESCRIPTORS: dict[str, SourceDescriptor] = {
         generation_style="existing_downstream",
         asset_policy="preserve",
         cache_policy="source_hash",
-        notes="Future profile candidate using the lecture slide decomposition shape.",
+        notes="Profile-style source using shared normalized slide chunks before invoking the existing Emma downstream generator.",
+        metadata={
+            "profileStatus": "active",
+            "downstreamGenerator": "tools/lecture-slide-question-generator/generate_lecture_slide_questions.py",
+            "promptPolicy": "unchanged",
+        },
     ),
 }
 

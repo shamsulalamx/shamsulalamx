@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,8 @@ def run_shared_chunk_pipeline(
     limit: int,
     refresh: bool = False,
 ) -> dict[str, Any]:
+    started_at = time.time()
+    emit_started_at = time.time()
     bundle = emit_normalized_chunks(
         source_type=source_type,
         input_path=input_path,
@@ -36,7 +39,11 @@ def run_shared_chunk_pipeline(
         limit=limit,
         refresh=refresh,
     )
+    emit_seconds = round(time.time() - emit_started_at, 3)
+    validation_started_at = time.time()
     errors = validate_chunk_bundle(bundle)
+    validation_seconds = round(time.time() - validation_started_at, 3)
+    total_seconds = round(time.time() - started_at, 3)
     report = {
         "schemaVersion": "shared-normalized-chunk-report-v1",
         "sourceType": source_type,
@@ -47,7 +54,15 @@ def run_shared_chunk_pipeline(
         "chunkTypes": sorted({chunk.get("chunkType") for chunk in bundle.get("chunks", []) if isinstance(chunk, dict)}),
         "imageRefCount": sum(len(chunk.get("imageRefs") or []) for chunk in bundle.get("chunks", []) if isinstance(chunk, dict)),
         "tableRefCount": sum(len(chunk.get("tableRefs") or []) for chunk in bundle.get("chunks", []) if isinstance(chunk, dict)),
+        "assetCount": sum(len(chunk.get("imageRefs") or []) + len(chunk.get("tableRefs") or []) for chunk in bundle.get("chunks", []) if isinstance(chunk, dict)),
+        "stageTimings": {
+            "extraction_to_asset_routing_seconds": emit_seconds,
+            "validation_seconds": validation_seconds,
+            "total_seconds": total_seconds,
+        },
+        "warnings": bundle.get("warnings", []),
         "validationErrors": errors,
+        "errors": errors,
         "ok": not errors,
     }
     return {"bundle": bundle, "report": report}
@@ -55,7 +70,7 @@ def run_shared_chunk_pipeline(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Emit shared normalized chunks from an existing source pipeline.")
-    parser.add_argument("--source-type", required=True, choices=["amboss_pdf", "nbme_pdf", "fast_facts_pptx"])
+    parser.add_argument("--source-type", required=True, choices=["amboss_pdf", "nbme_pdf", "fast_facts_pptx", "emma_holiday_pdf"])
     parser.add_argument("--input-file", required=True)
     parser.add_argument("--output-file", required=True)
     parser.add_argument("--limit", type=int, default=5)
