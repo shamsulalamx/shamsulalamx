@@ -1930,6 +1930,26 @@ body.quiz-fullscreen-mode .modal-overlay {
 .ngj-figure-status { font-size: 11px; color: var(--muted); }
 .ngj-figure-status.ok { color: #27ae60; font-weight: 600; }
 .ngj-figure-status.auto { color: #2563eb; font-weight: 600; }
+.test-create-status {
+  display: none; border: 1px solid var(--border); border-radius: 6px; background: #f7f9fb;
+  padding: 9px 10px; margin: 8px 0 10px; color: #31445a;
+}
+.test-create-status.active, .test-create-status.success, .test-create-status.error { display: block; }
+.test-create-status-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 12px; }
+.test-create-status-phase { min-width: 0; font-weight: 700; color: var(--navy); }
+.test-create-status-value { flex-shrink: 0; font-size: 11px; color: var(--muted); }
+.test-create-status-track {
+  height: 8px; margin: 6px 0; overflow: hidden; border-radius: 4px; background: #dbe5ef;
+}
+.test-create-status-fill {
+  height: 100%; width: 0; border-radius: inherit; background: var(--blue); transition: width .24s ease;
+}
+.test-create-status-text { font-size: 11px; line-height: 1.4; color: #40546a; }
+.test-create-status.success { border-color: #b8dec5; background: #f1fbf5; }
+.test-create-status.success .test-create-status-fill { background: #238454; }
+.test-create-status.error { border-color: #efc1c1; background: #fff5f5; }
+.test-create-status.error .test-create-status-phase, .test-create-status.error .test-create-status-text { color: #9b2c2c; }
+.test-create-status.error .test-create-status-fill { background: #c0392b; }
 
 /* ── Misc Docs panel ─────────────────────────────────── */
 .misc-docs-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
@@ -2125,9 +2145,10 @@ body.quiz-fullscreen-mode .modal-overlay {
 
     <!-- Action buttons -->
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
-      <button type="button" class="btn-modal primary" onclick="App.parseNbmeGeminiJson()">Validate JSON</button>
+      <button type="button" class="btn-modal primary" id="ngj-validate-btn" onclick="App.parseNbmeGeminiJson()">Validate JSON</button>
       <button type="button" class="btn-modal" onclick="App.clearNbmeGeminiJsonImportState()">Clear</button>
     </div>
+    <div id="ngj-create-status" class="test-create-status" aria-live="polite"></div>
 
     <!-- Validation feedback -->
     <div id="ngj-validation-area" style="display:none;">
@@ -2293,7 +2314,7 @@ body.quiz-fullscreen-mode .modal-overlay {
     <div id="bic-source-note" class="notes-import-summary" style="display:none;"></div>
     <div class="form-group">
       <label class="form-label">Files</label>
-      <button type="button" class="btn-modal" onclick="App.selectBatchImportFiles()">Choose Files</button>
+      <button type="button" class="btn-modal" id="bic-select-files-btn" onclick="App.selectBatchImportFiles()">Choose Files</button>
       <div id="bic-selected-files" class="notes-import-summary">No files selected.</div>
     </div>
     <div class="form-group">
@@ -2314,6 +2335,7 @@ body.quiz-fullscreen-mode .modal-overlay {
       </select>
     </div>
     <div id="bic-run-status" class="notes-import-summary">No job run yet.</div>
+    <div id="bic-create-status" class="test-create-status" aria-live="polite"></div>
     <div id="bic-progress-log" class="notes-import-preview">
       <div class="notes-import-empty">Progress events will appear here.</div>
     </div>
@@ -2325,7 +2347,7 @@ body.quiz-fullscreen-mode .modal-overlay {
     </div>
 
     <div class="modal-actions">
-      <button class="btn-modal primary" onclick="App.launchBatchImportJob()">Run</button>
+      <button class="btn-modal primary" id="bic-run-btn" onclick="App.launchBatchImportJob()">Run</button>
       <button class="btn-modal" id="bic-cancel-job-btn" onclick="App.cancelBatchImportJob()" disabled>Cancel Job</button>
       <button class="btn-modal" onclick="App.closeBatchImportCenter()">Close</button>
     </div>
@@ -2368,6 +2390,7 @@ body.quiz-fullscreen-mode .modal-overlay {
     </div>
 
     <div id="lji-error" style="display:none;font-size:12px;color:#c0392b;margin-bottom:8px;padding:8px;background:#fff5f5;border-radius:4px;border:1px solid #f5c6cb;"></div>
+    <div id="lji-create-status" class="test-create-status" aria-live="polite"></div>
 
     <div class="modal-actions">
       <button class="btn-modal primary" id="lji-import-btn" onclick="App.confirmLandingJsonImport()">Import</button>
@@ -8467,6 +8490,63 @@ const App = (() => {
 	    amboss_pdf: 'Amboss PDF',
 	    nbme_pdf: 'NBME PDF'
 	  };
+  const TEST_CREATE_STATUS_IDLE = Object.freeze({
+    phase: 'Ready',
+    text: 'Waiting to start.',
+    percent: 0,
+    state: 'idle'
+  });
+
+  function resetTestCreateStatus(id) {
+    updateTestCreateStatus(id, TEST_CREATE_STATUS_IDLE);
+  }
+
+  function updateTestCreateStatus(id, options) {
+    const root = document.getElementById(id);
+    if (!root) return;
+    const status = Object.assign({}, TEST_CREATE_STATUS_IDLE, options || {});
+    const state = ['active', 'success', 'error'].includes(status.state) ? status.state : 'idle';
+    const pct = Math.max(0, Math.min(100, Number.isFinite(Number(status.percent)) ? Number(status.percent) : 0));
+    const stepText = status.step && status.totalSteps
+      ? `Step ${status.step} of ${status.totalSteps}`
+      : '';
+    const value = status.percentKnown === false
+      ? (stepText || 'Stage progress')
+      : `${Math.round(pct)}%${stepText ? ` · ${stepText}` : ''}`;
+    root.className = 'test-create-status' + (state === 'idle' ? '' : ` ${state}`);
+    root.innerHTML = `
+      <div class="test-create-status-head">
+        <div class="test-create-status-phase">${escapeHTML(status.phase || 'Working')}</div>
+        <div class="test-create-status-value">${escapeHTML(value)}</div>
+      </div>
+      <div class="test-create-status-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}">
+        <div class="test-create-status-fill" style="width:${pct}%"></div>
+      </div>
+      <div class="test-create-status-text">${escapeHTML(status.text || '')}</div>
+    `;
+  }
+
+  function setLandingJsonImportBusy(busy) {
+    ['lji-file-input', 'lji-test-name', 'lji-folder-select', 'lji-import-btn'].forEach(function(id) {
+      const el = document.getElementById(id);
+      if (el) el.disabled = !!busy;
+    });
+  }
+
+  function setNbmeJsonImportBusy(busy) {
+    ['ngj-file-input', 'ngj-raw-text', 'ngj-validate-btn', 'ngj-save-btn', 'ngj-save-valid-btn'].forEach(function(id) {
+      const el = document.getElementById(id);
+      if (el) el.disabled = !!busy;
+    });
+    if (!busy) updateNbmeGeminiJsonSaveReadiness();
+  }
+
+  function setBatchImportBusy(busy) {
+    ['bic-source-type', 'bic-select-files-btn', 'bic-target-folder', 'bic-test-name', 'bic-run-mode', 'bic-run-btn'].forEach(function(id) {
+      const el = document.getElementById(id);
+      if (el) el.disabled = !!busy;
+    });
+  }
   // ── Init ───────────────────────────────────────────────────
   function init() {
     window.toast = toast;
@@ -21831,6 +21911,8 @@ const App = (() => {
 
   function openLandingJsonImportModal() {
     _landingJsonImport = { rawText: '', fileName: '' };
+    setLandingJsonImportBusy(false);
+    resetTestCreateStatus('lji-create-status');
     const fi = document.getElementById('lji-file-input');
     if (fi) fi.value = '';
     document.getElementById('lji-file-name').textContent = '';
@@ -21886,12 +21968,16 @@ const App = (() => {
 
   function closeLandingJsonImportModal() {
     document.getElementById('modal-landing-json-import').style.display = 'none';
+    setLandingJsonImportBusy(false);
+    resetTestCreateStatus('lji-create-status');
     _landingJsonImport = null;
   }
 
   function handleLandingJsonFileUpload(inp) {
     const file = inp.files[0];
     if (!file) return;
+    resetTestCreateStatus('lji-create-status');
+    updateTestCreateStatus('lji-create-status', { phase: 'Reading JSON...', text: file.name, percent: 10, state: 'active' });
     document.getElementById('lji-file-name').textContent = '📄 ' + file.name;
     if (_landingJsonImport) _landingJsonImport.fileName = file.name;
     const reader = new FileReader();
@@ -21908,6 +21994,10 @@ const App = (() => {
         } catch(e2) {}
         tnInput.value = suggested;
       }
+      updateTestCreateStatus('lji-create-status', { phase: 'JSON ready', text: 'Selected file is ready to import.', percent: 10, state: 'success' });
+    };
+    reader.onerror = function() {
+      updateTestCreateStatus('lji-create-status', { phase: 'Reading JSON failed', text: 'Could not read the selected file.', percent: 10, state: 'error' });
     };
     reader.readAsText(file);
   }
@@ -21995,7 +22085,15 @@ const App = (() => {
 
   async function confirmLandingJsonImport() {
     const errEl = document.getElementById('lji-error');
-    function showError(msg) { errEl.textContent = msg; errEl.style.display = 'block'; }
+    function showError(msg, phase) {
+      errEl.textContent = msg;
+      errEl.style.display = 'block';
+      updateTestCreateStatus('lji-create-status', { phase: phase || 'Import failed', text: msg, percent: 0, state: 'error' });
+    }
+
+    setLandingJsonImportBusy(true);
+    errEl.style.display = 'none';
+    try {
 
     const testName = (document.getElementById('lji-test-name').value || '').trim();
     if (!testName) { showError('Please enter a test name.'); return; }
@@ -22005,9 +22103,10 @@ const App = (() => {
 
     let parsed;
     try {
+      updateTestCreateStatus('lji-create-status', { phase: 'Parsing JSON...', text: 'Checking the selected JSON structure.', percent: 25, state: 'active' });
       parsed = JSON.parse(rawText);
     } catch(err) {
-      showError('Invalid JSON: ' + (err.message || String(err)));
+      showError('Invalid JSON: ' + (err.message || String(err)), 'Parsing JSON failed');
       return;
     }
 
@@ -22037,12 +22136,14 @@ const App = (() => {
 
     if (parsed && parsed.testTitle !== undefined && Array.isArray(parsed.questions)) {
       // NBME Gemini JSON — route through existing validate/normalize pipeline
+      updateTestCreateStatus('lji-create-status', { phase: 'Validating app-ready JSON...', text: 'Validating NBME JSON before normalization.', percent: 45, state: 'active' });
       const validation = validateNbmeGeminiJsonImport(parsed);
       if (!validation.isValid) {
         const errs = (validation.blockingErrors || []).slice(0, 3).join('; ');
-        showError('NBME Gemini JSON validation failed: ' + errs);
+        showError('NBME Gemini JSON validation failed: ' + errs, 'Validation failed');
         return;
       }
+      updateTestCreateStatus('lji-create-status', { phase: 'Normalizing questions...', text: 'Preparing NBME JSON questions for test import.', percent: 65, state: 'active' });
       const normalizedItems = normalizeNbmeGeminiJsonImport(parsed);
       const importedAt = new Date().toISOString();
       questions = normalizedItems.map(function(q) {
@@ -22060,6 +22161,7 @@ const App = (() => {
     } else if (parsed && Array.isArray(parsed.questions) && parsed.questions.length && parsed.questions.every(_isInternalAppReadyQuestion)) {
       // Internal app-ready test object. Used by screenshot/table generators that
       // need q.images[] persisted through FigureStore instead of manual upload.
+      updateTestCreateStatus('lji-create-status', { phase: 'Normalizing questions...', text: 'Preparing app-ready questions for test import.', percent: 65, state: 'active' });
       questions = parsed.questions.map(_landingJsonQuestionFromInternalAppReady);
       if (!_validateInternalAppReadyQuestions(questions)) {
         showError('JSON questions are missing required internal fields (t, o).');
@@ -22067,12 +22169,14 @@ const App = (() => {
       }
     } else if (parsed && Array.isArray(parsed.questions) && parsed.questions.length) {
       // App-ready test object with questions array
+      updateTestCreateStatus('lji-create-status', { phase: 'Validating app-ready JSON...', text: 'Checking app-ready question fields.', percent: 45, state: 'active' });
       const qs = parsed.questions;
       const valid = qs.every(function(q) { return q.stem && Array.isArray(q.options); });
       if (!valid) { showError('JSON questions are missing required fields (stem, options).'); return; }
       questions = qs.map(_landingJsonQuestionFromLegacyAppReady);
     } else if (Array.isArray(parsed) && parsed.length && parsed[0] && parsed[0].stem) {
       // Bare array of question objects
+      updateTestCreateStatus('lji-create-status', { phase: 'Validating app-ready JSON...', text: 'Checking question fields.', percent: 45, state: 'active' });
       const valid = parsed.every(function(q) { return q.stem && Array.isArray(q.options); });
       if (!valid) { showError('JSON questions are missing required fields (stem, options).'); return; }
       questions = parsed.map(_landingJsonQuestionFromLegacyAppReady);
@@ -22083,20 +22187,24 @@ const App = (() => {
 
     if (!questions || !questions.length) { showError('No questions found in JSON.'); return; }
 
+    updateTestCreateStatus('lji-create-status', { phase: 'Saving test...', text: 'Saving imported questions.', percent: 85, state: 'active' });
     const test = DB.createTest(folderId, testName, questions);
     if (!test) { showError('Could not create test — storage may be full.'); return; }
     try {
       await _persistLandingJsonInlineImages(test);
     } catch(err) {
-      showError('Imported questions were created, but image persistence failed: ' + (err.message || String(err)));
+      showError('Imported questions were created, but image persistence failed: ' + (err.message || String(err)), 'Saving test failed');
       return;
     }
 
-    closeLandingJsonImportModal();
     _currentFolder = folderId;
     renderSidebar();
     renderHomeGrid();
+    updateTestCreateStatus('lji-create-status', { phase: 'Import complete', text: 'Imported test is saved and visible in the library.', percent: 100, state: 'success' });
     toast('✓ “' + testName + '” imported with ' + questions.length + ' question(s).');
+    } finally {
+      setLandingJsonImportBusy(false);
+    }
   }
 
   function openBatchImportCenter() {
@@ -22106,6 +22214,8 @@ const App = (() => {
     const log = document.getElementById('bic-progress-log');
     const report = document.getElementById('bic-completion-report');
     _batchImportState = { lastResult: null, progress: [], files: [], registry: null, history: [], activeJobId: null };
+    setBatchImportBusy(false);
+    resetTestCreateStatus('bic-create-status');
     if (registryStatus) registryStatus.textContent = 'Loading registry...';
     if (runStatus) runStatus.textContent = 'No job run yet.';
     if (log) log.innerHTML = '<div class="notes-import-empty">Progress events will appear here.</div>';
@@ -22300,6 +22410,8 @@ const App = (() => {
     }
     const modal = document.getElementById('modal-batch-import-center');
     if (modal) modal.style.display = 'none';
+    setBatchImportBusy(false);
+    resetTestCreateStatus('bic-create-status');
   }
 
   function appendBatchImportProgress(event) {
@@ -22313,6 +22425,25 @@ const App = (() => {
     row.innerHTML = `<div class="notes-import-block-head"><span class="notes-import-type">${escapeHTML(type)}</span><span class="notes-import-path">${escapeHTML(event?.timestamp || '')}</span></div><div class="notes-import-text">${escapeHTML(msg || JSON.stringify(event))}</div>`;
     log.appendChild(row);
     log.scrollTop = log.scrollHeight;
+  }
+
+  function updateBatchImportStatusFromEvent(event) {
+    const type = String(event?.type || '');
+    const stage = String(event?.stage || event?.stageLabel || '').toLowerCase();
+    const message = event?.message || '';
+    if (type === 'job_start') {
+      updateTestCreateStatus('bic-create-status', { phase: 'Job started', text: message || 'Batch job started.', percent: 10, step: 1, totalSteps: 5, percentKnown: false, state: 'active' });
+    } else if (type === 'stage_start' && stage.includes('preflight')) {
+      updateTestCreateStatus('bic-create-status', { phase: 'Preflight', text: message || 'Checking inputs.', percent: 25, step: 2, totalSteps: 5, percentKnown: false, state: 'active' });
+    } else if (type === 'stage_start' || type === 'command_start' || type === 'stage_heartbeat') {
+      updateTestCreateStatus('bic-create-status', { phase: stage.includes('generation') ? 'Generating questions...' : 'Running pipeline...', text: message || event?.stageLabel || 'Pipeline step is running.', percent: 45, step: 3, totalSteps: 5, percentKnown: false, state: 'active' });
+    } else if (type === 'stage_complete' && !stage.includes('import')) {
+      updateTestCreateStatus('bic-create-status', { phase: 'Pipeline stage complete', text: message || 'Waiting for next stage.', percent: 45, step: 3, totalSteps: 5, percentKnown: false, state: 'active' });
+    } else if (type === 'outputs_discovered') {
+      updateTestCreateStatus('bic-create-status', { phase: 'Discovering outputs...', text: message || `${Number(event?.count || event?.outputs?.length || 0)} output(s) discovered.`, percent: 65, step: 4, totalSteps: 5, percentKnown: false, state: 'active' });
+    } else if (type === 'job_error' || type === 'stage_failed' || type === 'error') {
+      updateTestCreateStatus('bic-create-status', { phase: 'Batch import failed', text: message || event?.error || 'The batch job failed.', percent: 45, percentKnown: false, state: 'error' });
+    }
   }
 
   async function launchBatchImportJob() {
@@ -22338,6 +22469,7 @@ const App = (() => {
       return;
     }
 
+    setBatchImportBusy(true);
     if (_batchImportProgressUnsubscribe) _batchImportProgressUnsubscribe();
     if (_batchImportState) _batchImportState.progress = [];
     if (_batchImportState) _batchImportState.activeJobId = null;
@@ -22345,6 +22477,7 @@ const App = (() => {
     if (cancelBtn) cancelBtn.disabled = true;
     const log = document.getElementById('bic-progress-log');
     if (log) log.innerHTML = '<div class="notes-import-empty">Progress events will appear here.</div>';
+    updateTestCreateStatus('bic-create-status', { phase: 'Job starting', text: 'Stage progress begins when the runner reports its first event.', percent: 10, step: 1, totalSteps: 5, percentKnown: false, state: 'active' });
     _batchImportProgressUnsubscribe = api.onProgress(function(event) {
       if (_batchImportState) _batchImportState.progress.push(event);
       if (event?.jobId && _batchImportState) {
@@ -22352,6 +22485,7 @@ const App = (() => {
         if (cancelBtn) cancelBtn.disabled = false;
       }
       if (event?.type === 'job_complete' && cancelBtn) cancelBtn.disabled = true;
+      updateBatchImportStatusFromEvent(event);
       appendBatchImportProgress(event);
     });
 
@@ -22359,6 +22493,7 @@ const App = (() => {
     if (runStatus) runStatus.textContent = existingOutputValidation ? 'Existing output validation in progress...' : (isDryRun ? 'Dry-run in progress...' : 'Generation in progress...');
     if (report) report.textContent = 'Waiting for completion.';
 
+    try {
     const result = await api.launchJob({
       sourceType,
       inputPaths,
@@ -22389,6 +22524,7 @@ const App = (() => {
       renderBatchImportCompletionReport(cancelledReport);
       if (api.updateJobReport && jobId) await api.updateJobReport({ jobId, report: cancelledReport });
       await refreshBatchImportHistory();
+      updateTestCreateStatus('bic-create-status', { phase: 'Batch job cancelled', text: 'No test was imported after cancellation.', percent: 45, percentKnown: false, state: 'error' });
       return;
     }
     if (!result?.ok) {
@@ -22407,6 +22543,7 @@ const App = (() => {
       renderBatchImportCompletionReport(failedReport);
       if (api.updateJobReport && jobId) await api.updateJobReport({ jobId, report: failedReport });
       await refreshBatchImportHistory();
+      updateTestCreateStatus('bic-create-status', { phase: 'Batch import failed', text: result?.message || 'Batch job failed.', percent: 45, percentKnown: false, state: 'error' });
       return;
     }
 
@@ -22418,6 +22555,7 @@ const App = (() => {
 	      stageLabel: 'import',
 	      message: 'import validation started'
 	    });
+	    updateTestCreateStatus('bic-create-status', { phase: 'Validating output...', text: 'Checking discovered app-ready JSON.', percent: 80, step: 4, totalSteps: 5, percentKnown: false, state: 'active' });
 	    for (const outputPath of outputs) {
 	      const read = await api.readOutputJson(outputPath);
 	      if (!read || !read.ok) {
@@ -22437,9 +22575,11 @@ const App = (() => {
 	          stageLabel: 'import',
 	          message: 'auto-import started'
 	        });
+	        updateTestCreateStatus('bic-create-status', { phase: 'Auto-importing...', text: 'Saving the first valid output as a test.', percent: 90, step: 5, totalSteps: 5, percentKnown: false, state: 'active' });
 	        importResult = await importValidatedBatchOutputJsonText(firstValid.rawText, {
 	          folderId,
-	          testName: testName || firstValid.testName || ''
+	          testName: testName || firstValid.testName || '',
+            statusTarget: 'bic-create-status'
 	        });
 	      } else {
 	        importResult = { ok: false, error: 'No valid output was available to auto-import.' };
@@ -22479,6 +22619,15 @@ const App = (() => {
       : (isDryRun
         ? 'Dry-run completed.'
         : (runMode === 'generate-auto-import' && importResult?.ok ? 'Generation and auto-import completed.' : 'Generation completed.'));
+    updateTestCreateStatus('bic-create-status', errors.length
+      ? { phase: 'Batch import failed', text: errors[0] || 'Batch import failed.', percent: 90, step: 5, totalSteps: 5, percentKnown: false, state: 'error' }
+      : { phase: 'Complete', text: importResult?.ok ? 'Batch output was imported and saved.' : 'Batch job completed.', percent: 100, step: 5, totalSteps: 5, percentKnown: false, state: 'success' });
+    } catch (err) {
+      if (runStatus) runStatus.textContent = err?.message || 'Batch job failed.';
+      updateTestCreateStatus('bic-create-status', { phase: 'Batch import failed', text: err?.message || 'Batch job failed.', percent: 45, percentKnown: false, state: 'error' });
+    } finally {
+      setBatchImportBusy(false);
+    }
   }
 
   async function cancelBatchImportJob() {
@@ -22633,10 +22782,26 @@ const App = (() => {
   }
 
   async function importValidatedBatchOutputJsonText(rawText, destination) {
+    const statusTarget = destination?.statusTarget || '';
+    const statusIsBatch = statusTarget === 'bic-create-status';
+    function reportImportStatus(phase, text, percent, state) {
+      if (!statusTarget) return;
+      updateTestCreateStatus(statusTarget, {
+        phase,
+        text,
+        percent,
+        step: statusIsBatch ? 5 : null,
+        totalSteps: statusIsBatch ? 5 : null,
+        percentKnown: !statusIsBatch,
+        state: state || 'active'
+      });
+    }
     let parsed;
     try {
+      reportImportStatus('Parsing JSON...', 'Reading output JSON.', statusIsBatch ? 80 : 25);
       parsed = JSON.parse(rawText || '');
     } catch(err) {
+      reportImportStatus('Parsing JSON failed', err.message || String(err), statusIsBatch ? 80 : 25, 'error');
       return { ok: false, error: 'Invalid JSON: ' + (err.message || String(err)) };
     }
 
@@ -22647,10 +22812,13 @@ const App = (() => {
 
     let questions;
     if (parsed && parsed.testTitle !== undefined && Array.isArray(parsed.questions)) {
+      reportImportStatus('Validating output...', 'Checking NBME JSON fields.', statusIsBatch ? 80 : 45);
       const validation = validateNbmeGeminiJsonImport(parsed);
       if (!validation.isValid) {
+        reportImportStatus('Validation failed', 'NBME JSON has blocking errors.', statusIsBatch ? 80 : 45, 'error');
         return { ok: false, error: 'NBME Gemini JSON validation failed: ' + ((validation.blockingErrors || []).slice(0, 3).join('; ') || 'unknown error') };
       }
+      reportImportStatus('Normalizing questions...', 'Preparing NBME JSON questions for import.', statusIsBatch ? 90 : 65);
       const normalizedItems = normalizeNbmeGeminiJsonImport(parsed);
       const importedAt = new Date().toISOString();
       questions = normalizedItems.map(function(q) {
@@ -22666,14 +22834,17 @@ const App = (() => {
         return out;
       });
     } else if (parsed && Array.isArray(parsed.questions) && parsed.questions.length && parsed.questions.every(_isInternalAppReadyQuestion)) {
+      reportImportStatus('Normalizing questions...', 'Preparing app-ready questions for import.', statusIsBatch ? 90 : 65);
       questions = parsed.questions.map(_landingJsonQuestionFromInternalAppReady);
       if (!_validateInternalAppReadyQuestions(questions)) return { ok: false, error: 'JSON questions are missing required internal fields (t, o).' };
     } else if (parsed && Array.isArray(parsed.questions) && parsed.questions.length) {
+      reportImportStatus('Validating output...', 'Checking app-ready question fields.', statusIsBatch ? 80 : 45);
       if (!parsed.questions.every(function(q) { return q.stem && Array.isArray(q.options); })) {
         return { ok: false, error: 'JSON questions are missing required fields (stem, options).' };
       }
       questions = parsed.questions.map(_landingJsonQuestionFromLegacyAppReady);
     } else if (Array.isArray(parsed) && parsed.length && parsed[0] && parsed[0].stem) {
+      reportImportStatus('Validating output...', 'Checking question fields.', statusIsBatch ? 80 : 45);
       if (!parsed.every(function(q) { return q.stem && Array.isArray(q.options); })) {
         return { ok: false, error: 'JSON questions are missing required fields (stem, options).' };
       }
@@ -22683,12 +22854,19 @@ const App = (() => {
     }
 
     if (!questions || !questions.length) return { ok: false, error: 'No questions found in JSON.' };
+    reportImportStatus('Saving test...', 'Saving imported questions.', statusIsBatch ? 90 : 85);
     const test = DB.createTest(folderId, testName, questions);
     if (!test) return { ok: false, error: 'Could not create test.' };
-    await _persistLandingJsonInlineImages(test);
+    try {
+      await _persistLandingJsonInlineImages(test);
+    } catch (err) {
+      reportImportStatus('Saving test failed', err.message || 'Image persistence failed.', statusIsBatch ? 90 : 85, 'error');
+      throw err;
+    }
     _currentFolder = folderId;
     renderSidebar();
     renderHomeGrid();
+    reportImportStatus('Import complete', 'Imported test is saved and visible in the library.', 100, 'success');
     return { ok: true, testId: test.id, testName, questionCount: questions.length };
   }
 
@@ -25025,6 +25203,8 @@ const App = (() => {
 	      figureSuggestionsByKey: {},
 	      lastSaveResult: null, lastSaveError: null
 	    };
+    setNbmeJsonImportBusy(false);
+    resetTestCreateStatus('ngj-create-status');
     const ta = document.getElementById('ngj-raw-text');
     if (ta) ta.value = '';
     const fi = document.getElementById('ngj-file-input');
@@ -25071,6 +25251,8 @@ const App = (() => {
 
   function closeNbmeGeminiJsonImportModal() {
     document.getElementById('modal-nbme-gemini-json').style.display = 'none';
+    setNbmeJsonImportBusy(false);
+    resetTestCreateStatus('ngj-create-status');
   }
 
   function _onNgjFolderChange() {
@@ -25113,6 +25295,8 @@ const App = (() => {
 	      figureSuggestionsByKey: {},
 	      lastSaveResult: null, lastSaveError: null
 	    };
+    setNbmeJsonImportBusy(false);
+    resetTestCreateStatus('ngj-create-status');
     const ta = document.getElementById('ngj-raw-text');
     if (ta) ta.value = '';
     const fi = document.getElementById('ngj-file-input');
@@ -25131,6 +25315,8 @@ const App = (() => {
   function handleNbmeGeminiJsonFileUpload(inp) {
     const file = inp.files[0];
     if (!file) return;
+    resetTestCreateStatus('ngj-create-status');
+    updateTestCreateStatus('ngj-create-status', { phase: 'Reading JSON...', text: file.name, percent: 10, state: 'active' });
     const fn = document.getElementById('ngj-file-name');
     if (fn) fn.textContent = '📄 ' + file.name;
     if (_nbmeGeminiJsonImport) _nbmeGeminiJsonImport.fileName = file.name;
@@ -25146,7 +25332,9 @@ const App = (() => {
         tnInput.value = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim();
         if (_nbmeGeminiJsonImport) _nbmeGeminiJsonImport.testName = tnInput.value;
       }
+      updateTestCreateStatus('ngj-create-status', { phase: 'JSON ready', text: 'Selected JSON is ready to validate.', percent: 10, state: 'success' });
     };
+    reader.onerror = () => updateTestCreateStatus('ngj-create-status', { phase: 'Reading JSON failed', text: 'Could not read the selected file.', percent: 10, state: 'error' });
     reader.readAsText(file);
   }
 
@@ -25658,6 +25846,8 @@ const App = (() => {
 
   function parseNbmeGeminiJson() {
     if (!_nbmeGeminiJsonImport) return;
+    setNbmeJsonImportBusy(true);
+    updateTestCreateStatus('ngj-create-status', { phase: 'Parsing JSON...', text: 'Checking JSON syntax.', percent: 25, state: 'active' });
     const ta = document.getElementById('ngj-raw-text');
     const rawText = (ta ? ta.value : '').trim();
     _nbmeGeminiJsonImport.rawText = rawText;
@@ -25682,7 +25872,9 @@ const App = (() => {
 
     if (!rawText) {
       bodyEl.innerHTML = '<div class="ngj-error-list">No JSON text provided. Paste or upload a JSON file first.</div>';
+      updateTestCreateStatus('ngj-create-status', { phase: 'Parsing JSON failed', text: 'Paste or upload JSON before validation.', percent: 25, state: 'error' });
       updateNbmeGeminiJsonSaveReadiness();
+      setNbmeJsonImportBusy(false);
       return;
     }
 
@@ -25690,12 +25882,16 @@ const App = (() => {
     const fileType = _ngjDetectRtfOrBinary(rawText);
     if (fileType === 'rtf') {
       bodyEl.innerHTML = '<div class="ngj-error-list"><strong>Parse Error: RTF file detected.</strong><br>This file is in RTF format (not JSON). Please export plain JSON from Gemini, not a Word/TextEdit RTF document. The file extension should be .json and the content should start with <code>{</code>.</div>';
+      updateTestCreateStatus('ngj-create-status', { phase: 'Parsing JSON failed', text: 'The selected file is RTF, not JSON.', percent: 25, state: 'error' });
       updateNbmeGeminiJsonSaveReadiness();
+      setNbmeJsonImportBusy(false);
       return;
     }
     if (fileType === 'pdf') {
       bodyEl.innerHTML = '<div class="ngj-error-list"><strong>Parse Error: PDF file detected.</strong><br>This is a PDF file. Please upload a .json file containing the Gemini-extracted JSON.</div>';
+      updateTestCreateStatus('ngj-create-status', { phase: 'Parsing JSON failed', text: 'The selected file is a PDF, not JSON.', percent: 25, state: 'error' });
       updateNbmeGeminiJsonSaveReadiness();
+      setNbmeJsonImportBusy(false);
       return;
     }
 
@@ -25712,11 +25908,14 @@ const App = (() => {
         extra = `<br><br>Check for: trailing commas, missing quotes around keys, unescaped special characters, or truncated output from Gemini.`;
       }
       bodyEl.innerHTML = `<div class="ngj-error-list"><strong>JSON Parse Error:</strong> ${_ngjEsc(msg)}${extra}</div>`;
+      updateTestCreateStatus('ngj-create-status', { phase: 'Parsing JSON failed', text: msg, percent: 25, state: 'error' });
       updateNbmeGeminiJsonSaveReadiness();
+      setNbmeJsonImportBusy(false);
       return;
     }
 
     _nbmeGeminiJsonImport.parsed = parsed;
+    updateTestCreateStatus('ngj-create-status', { phase: 'Validating app-ready JSON...', text: 'Checking NBME JSON fields.', percent: 45, state: 'active' });
 
     // Suggest test name from payload
     const tnInput = document.getElementById('ngj-test-name');
@@ -25731,6 +25930,7 @@ const App = (() => {
     _nbmeGeminiJsonImport.validation = validation;
 
     if (validation.isValid) {
+      updateTestCreateStatus('ngj-create-status', { phase: 'Normalizing questions...', text: 'Preparing validated NBME JSON questions.', percent: 65, state: 'active' });
       _nbmeGeminiJsonImport.normalizedItems = normalizeNbmeGeminiJsonImport(parsed);
     }
 
@@ -25738,6 +25938,10 @@ const App = (() => {
     renderNbmeGeminiJsonPreview(parsed, validation);
     renderNbmeGeminiJsonFigureAttachSection();
     updateNbmeGeminiJsonSaveReadiness();
+    updateTestCreateStatus('ngj-create-status', validation.isValid
+      ? { phase: 'Validation complete', text: 'Review warnings, then save the test.', percent: 65, state: 'success' }
+      : { phase: 'Validation failed', text: 'Fix blocking JSON errors before saving.', percent: 45, state: 'error' });
+    setNbmeJsonImportBusy(false);
   }
 
   function renderNbmeGeminiJsonValidationSummary(validation) {
@@ -26540,6 +26744,9 @@ const App = (() => {
 
     const items = st.normalizedItems || [];
     if (!items.length) { toast('No normalized questions to save.'); return; }
+    setNbmeJsonImportBusy(true);
+    updateTestCreateStatus('ngj-create-status', { phase: 'Saving test...', text: 'Saving normalized NBME JSON questions.', percent: 85, state: 'active' });
+    try {
 
     // Warn if figure attachments are large (risk of localStorage quota exceeded)
     const figAttachGlobal = st.figureAttachments || {};
@@ -26582,6 +26789,7 @@ const App = (() => {
       const msg = test ? 'Test was not persisted (storage may be full).' : 'DB.createTest failed (storage may be full).';
       st.lastSaveError = msg;
       if (errEl) { errEl.style.display = 'block'; errEl.textContent = msg; }
+      updateTestCreateStatus('ngj-create-status', { phase: 'Saving test failed', text: msg, percent: 85, state: 'error' });
       toast(msg, 6000);
       return;
     }
@@ -26612,6 +26820,7 @@ const App = (() => {
 	      const msg = err?.message || 'Attached figure images could not be persisted.';
 	      st.lastSaveError = msg;
 	      if (errEl) { errEl.style.display = 'block'; errEl.textContent = msg; }
+	      updateTestCreateStatus('ngj-create-status', { phase: 'Saving test failed', text: msg, percent: 85, state: 'error' });
 	      toast(msg, 6000);
 	      return;
 	    }
@@ -26620,11 +26829,14 @@ const App = (() => {
     st.lastSaveError = null;
     if (errEl) errEl.style.display = 'none';
 
-    closeNbmeGeminiJsonImportModal();
     _currentFolder = folderId;
     renderSidebar();
     renderHomeGrid();
+	    updateTestCreateStatus('ngj-create-status', { phase: 'Import complete', text: 'Imported test is saved and visible in the library.', percent: 100, state: 'success' });
 	    toast(`✓ "${testName}" created with ${questions.length} questions${persistedFigureCount ? ` and ${persistedFigureCount} attached figure image(s)` : ''}.`);
+    } finally {
+      setNbmeJsonImportBusy(false);
+    }
 	  }
 
 	  async function saveValidNbmeGeminiJsonQuestionsOnly() {
