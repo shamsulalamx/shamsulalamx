@@ -160,6 +160,23 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 .home-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
 .home-header h2 { font-size: 18px; font-weight: 700; color: var(--navy); }
 .home-header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.home-utilities { position: relative; }
+.home-utilities > summary { list-style: none; }
+.home-utilities > summary::-webkit-details-marker { display: none; }
+.home-utilities-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 120;
+  width: min(250px, calc(100vw - 28px)); padding: 6px;
+  background: var(--white); border: 1px solid var(--border); border-radius: 4px;
+  box-shadow: 0 7px 20px rgba(26,58,92,.18);
+}
+.home-utility-btn {
+  width: 100%; padding: 8px 9px; border: none; border-radius: 3px;
+  background: transparent; color: var(--text); text-align: left;
+  font-size: 12.5px; line-height: 1.35;
+}
+.home-utility-btn:hover, .home-utility-btn:focus-visible { background: #eef4f9; outline: none; }
+.home-utility-btn strong { display: block; color: var(--navy); font-size: 12.5px; }
+.home-utility-btn span { display: block; color: var(--muted); font-size: 11px; }
 .nav-hist-btns { display: flex; gap: 4px; flex-shrink: 0; }
 .nav-hist-btn { background: none; border: 1px solid var(--border, #d0d7e2); border-radius: 6px; padding: 4px 10px; font-size: 15px; cursor: pointer; color: var(--navy); line-height: 1; transition: background .15s; }
 .nav-hist-btn:hover:not(:disabled) { background: var(--hover-bg, #f0f4fa); }
@@ -1308,18 +1325,25 @@ body.quiz-fullscreen-mode .modal-overlay {
             <button class="btn-generate" id="btn-home-generate" onclick="App.openGenerateModal()">
               ＋ Generate Test
             </button>
-            <button class="btn-generate" id="btn-nbme-gemini-json" onclick="App.openNbmeGeminiJsonImportModal()" style="background:#0d5c2b;" title="Import Gemini-extracted NBME JSON">
-              &#x2B07; NBME JSON Import
-            </button>
-            <button class="btn-generate" id="btn-landing-json-import" onclick="App.openLandingJsonImportModal()" style="background:#1a4a7a;" title="Import any app-ready or NBME Gemini JSON file">
-              &#x2B06; Import JSON
-            </button>
             <button class="btn-generate" id="btn-batch-import-center" onclick="App.openBatchImportCenter()" style="background:#425466;" title="Open Batch Import Center foundation">
               Batch Import
             </button>
-            <button class="btn-generate" id="btn-nbme-figure-review" onclick="App.openNbmeFigureReviewModal()" style="background:#5a3f7a;" title="View NBME figure manifests without saving or attaching images">
-              NBME Figure Review
+            <button class="btn-generate" id="btn-landing-json-import" onclick="App.openLandingJsonImportModal()" style="background:#1a4a7a;" title="Import app-ready or NBME JSON as a test">
+              &#x2B06; Import JSON
             </button>
+            <details class="home-utilities" id="home-utilities-menu">
+              <summary class="btn-generate" id="btn-home-utilities" title="Open secondary import utilities">Utilities &#9662;</summary>
+              <div class="home-utilities-menu">
+                <button class="home-utility-btn" id="btn-nbme-gemini-json" onclick="App.closeHomeUtilitiesMenu();App.openNbmeGeminiJsonImportModal()" title="Open the NBME JSON review and figure attachment importer">
+                  <strong>NBME JSON Import</strong>
+                  <span>Advanced NBME validation and figure attachment</span>
+                </button>
+                <button class="home-utility-btn" id="btn-nbme-figure-review" onclick="App.closeHomeUtilitiesMenu();App.openNbmeFigureReviewModal()" title="View NBME figure manifests without saving or attaching images">
+                  <strong>NBME Figure Review</strong>
+                  <span>Review figure manifests and suggested links</span>
+                </button>
+              </div>
+            </details>
           </div>
         </div>
         <div id="home-content">
@@ -21909,6 +21933,11 @@ const App = (() => {
 
   let _landingJsonImport = null;
 
+  function closeHomeUtilitiesMenu() {
+    const menu = document.getElementById('home-utilities-menu');
+    if (menu) menu.open = false;
+  }
+
   function openLandingJsonImportModal() {
     _landingJsonImport = { rawText: '', fileName: '' };
     setLandingJsonImportBusy(false);
@@ -27386,6 +27415,7 @@ const App = (() => {
     refreshBatchImportHistory,
     autoImportBatchOutputJson,
     importValidatedBatchOutputJsonText,
+    closeHomeUtilitiesMenu,
     openLandingJsonImportModal,
     closeLandingJsonImportModal,
     handleLandingJsonFileUpload,
