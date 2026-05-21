@@ -105,14 +105,22 @@ def get_source(registry: dict[str, Any], source_type: str) -> dict[str, Any]:
 def validate_inputs(manifest: dict[str, Any], source: dict[str, Any]) -> list[Path]:
     existing_output_validation = bool(manifest.get("existingOutputValidation"))
     allowed = {".json"} if existing_output_validation else {ext.lower() for ext in source.get("inputExtensions", [])}
+    allow_directories = bool(source.get("allowDirectories")) and not existing_output_validation
     paths: list[Path] = []
     for item in manifest["inputs"]:
         raw_path = item.get("path") if isinstance(item, dict) else None
         if not raw_path:
             raise ValueError("Each input must include path")
         path = Path(raw_path).expanduser().resolve()
-        if not path.exists() or not path.is_file():
+        if not path.exists():
             raise ValueError(f"Input file does not exist: {path}")
+        if path.is_dir():
+            if not allow_directories:
+                raise ValueError(f"Input directories are not supported for this source: {path}")
+            paths.append(path)
+            continue
+        if not path.is_file():
+            raise ValueError(f"Input path is not a file: {path}")
         if allowed and path.suffix.lower() not in allowed:
             raise ValueError(f"Unsupported input extension for {path.name}: {path.suffix}")
         if existing_output_validation and not path.name.endswith("_app_ready.json"):

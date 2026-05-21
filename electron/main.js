@@ -313,7 +313,9 @@ ipcMain.handle('nbme:batch-import:select-files', async (_event, payload) => {
       : [];
     const result = await dialog.showOpenDialog({
       title: existingOutputValidation ? 'Select existing app-ready JSON output' : `Select ${source.label || sourceType} file`,
-      properties: ['openFile', 'multiSelections'],
+      properties: source.allowDirectories && !existingOutputValidation
+        ? ['openFile', 'openDirectory', 'multiSelections']
+        : ['openFile', 'multiSelections'],
       filters: extensions.length
         ? [{ name: existingOutputValidation ? 'App-ready JSON' : (source.label || sourceType), extensions }, { name: 'All Files', extensions: ['*'] }]
         : [{ name: 'All Files', extensions: ['*'] }]

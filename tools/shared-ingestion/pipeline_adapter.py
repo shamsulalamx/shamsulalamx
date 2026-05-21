@@ -9,6 +9,9 @@ existing downstream generation logic.
 from __future__ import annotations
 
 import json
+import mimetypes
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -23,6 +26,9 @@ PROJECT_ROOT = ADAPTER_DIR.parents[1]
 LECTURE_DIR = PROJECT_ROOT / "tools" / "lecture-slide-question-generator"
 NBME_DIR = PROJECT_ROOT / "tools" / "nbme-pdf-json-generator"
 MEHLMAN_DIR = PROJECT_ROOT / "tools" / "mehlman-pdf-question-generator"
+IMAGES_TABLES_DIR = PROJECT_ROOT / "tools" / "images-tables-question-generator"
+IMAGES_TABLES_ASSET_DIR = IMAGES_TABLES_DIR / "output_assets"
+SUPPORTED_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -43,6 +49,109 @@ def rel(path: Path) -> str:
         return str(path.resolve().relative_to(PROJECT_ROOT))
     except ValueError:
         return str(path)
+
+
+def file_sha(path: Path) -> str:
+    import hashlib
+
+    h = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def slugify(value: str) -> str:
+    import re
+
+    value = re.sub(r"[^A-Za-z0-9._-]+", "_", value.strip())
+    value = re.sub(r"_+", "_", value).strip("._")
+    return value or "asset"
+
+
+def mime_for(path: Path) -> str:
+    if path.suffix.lower() in {".jpg", ".jpeg"}:
+        return "image/jpeg"
+    if path.suffix.lower() == ".png":
+        return "image/png"
+    if path.suffix.lower() == ".webp":
+        return "image/webp"
+    return mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+
+
+def image_dimensions(path: Path) -> tuple[int, int]:
+    sips = shutil.which("sips")
+    if not sips:
+        return 0, 0
+    result = subprocess.run(
+        [sips, "-g", "pixelWidth", "-g", "pixelHeight", str(path)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if result.returncode != 0:
+        return 0, 0
+    width = height = 0
+    for line in result.stdout.splitlines():
+        if "pixelWidth:" in line:
+            width = int(line.rsplit(":", 1)[-1].strip() or 0)
+        if "pixelHeight:" in line:
+            height = int(line.rsplit(":", 1)[-1].strip() or 0)
+    return width, height
+
+
+def ocr_image_text(path: Path) -> tuple[str, list[str]]:
+    tesseract = shutil.which("tesseract")
+    if not tesseract:
+        return "", ["OCR unavailable: tesseract not found."]
+    result = subprocess.run(
+        [tesseract, str(path), "stdout", "--psm", "6"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        timeout=60,
+    )
+    warnings: list[str] = []
+    if result.returncode != 0:
+        warnings.append((result.stderr or "OCR failed.").strip()[:240])
+    text = " ".join(result.stdout.split())
+    return text, warnings
+
+
+def supported_images_from_input(input_path: Path, limit: int = 0) -> list[Path]:
+    input_path = input_path.resolve()
+    if input_path.is_file():
+        files = [input_path] if input_path.suffix.lower() in SUPPORTED_IMAGE_EXTS else []
+    elif input_path.is_dir():
+        files = [
+            path for path in sorted(input_path.iterdir())
+            if path.is_file() and not path.name.startswith(".") and path.suffix.lower() in SUPPORTED_IMAGE_EXTS
+        ]
+    else:
+        files = []
+    return files[:limit] if limit else files
+
+
+def classify_images_tables_asset(path: Path, ocr_text: str) -> tuple[str, float, str]:
+    haystack = f"{path.stem} {ocr_text}".lower()
+    if any(token in haystack for token in ("algorithm", "flowchart", "pathway", "process", "approach", "workup")):
+        return "algorithm", 0.86, "filename/OCR matched algorithm or pathway language"
+    if any(token in haystack for token in ("table", "vitamin", "criteria", "score", "lab", "classification")):
+        return "table_image", 0.86, "filename/OCR matched table language"
+    if any(token in haystack for token in ("chart", "graph", "axis", "plot", "curve")):
+        return "chart", 0.78, "filename/OCR matched chart language"
+    if ocr_text:
+        return "stem_image", 0.62, "OCR text present but no table/algorithm/chart signal"
+    return "unknown", 0.45, "no OCR text or filename signal"
+
+
+def copy_images_tables_asset(src: Path) -> Path:
+    IMAGES_TABLES_ASSET_DIR.mkdir(parents=True, exist_ok=True)
+    digest = file_sha(src)[:12]
+    dest = IMAGES_TABLES_ASSET_DIR / f"{slugify(src.stem)}_{digest}{src.suffix.lower()}"
+    if not dest.exists() or file_sha(dest) != file_sha(src):
+        shutil.copy2(src, dest)
+    return dest
 
 
 def _import_lecture_generator() -> Any:
@@ -294,6 +403,93 @@ def mehlman_to_normalized_chunks(input_path: Path, limit: int = 10) -> dict[str,
     )
 
 
+def images_tables_to_normalized_chunks(input_path: Path, limit: int = 5) -> dict[str, Any]:
+    input_path = input_path.resolve()
+    files = supported_images_from_input(input_path, limit=limit)
+    if not files:
+        raise ValueError(f"No supported image assets found in {input_path}. Supported: {', '.join(sorted(SUPPORTED_IMAGE_EXTS))}")
+    chunks: list[dict[str, Any]] = []
+    bundle_warnings: list[str] = []
+    source_file = input_path.name
+    source_path = rel(input_path)
+    for index, src in enumerate(files, start=1):
+        asset_path = copy_images_tables_asset(src)
+        ocr_text, ocr_warnings = ocr_image_text(asset_path)
+        kind, confidence, reason = classify_images_tables_asset(src, ocr_text)
+        width, height = image_dimensions(asset_path)
+        chunk_type = "table" if kind == "table_image" else "image"
+        chunk_id = f"{slugify(src.stem)}_{file_sha(src)[:8]}"
+        grounding = {
+            "assetIndex": index,
+            "sourcePath": rel(src),
+            "assetPath": rel(asset_path),
+            "width": width,
+            "height": height,
+        }
+        image_asset = {
+            "imageId": chunk_id,
+            "path": rel(asset_path),
+            "visibleText": ocr_text,
+            "caption": src.stem.replace("_", " "),
+            "kind": kind,
+            "width": width,
+            "height": height,
+            "mimeType": mime_for(asset_path),
+            "sha256": file_sha(asset_path),
+            "attachmentConfidence": confidence,
+            "classificationReason": reason,
+        }
+        image_refs = normalize_image_refs([image_asset], source_id=chunk_id, source_type="images_tables_source", grounding=grounding)
+        table_refs: list[dict[str, Any]] = []
+        if kind == "table_image":
+            table_refs = normalize_table_refs([{
+                "tableId": f"{chunk_id}_table",
+                "path": rel(asset_path),
+                "text": ocr_text,
+                "title": src.stem.replace("_", " "),
+                "rows": [],
+                "headers": [],
+                "attachmentConfidence": confidence,
+            }], source_id=chunk_id, source_type="images_tables_source", grounding=grounding)
+        warnings = ocr_warnings[:]
+        if not ocr_text:
+            warnings.append("No OCR text extracted; filename/caption used as fallback text.")
+        chunks.append(NormalizedChunk(
+            chunkId=chunk_id,
+            chunkType=chunk_type,  # type: ignore[arg-type]
+            sourceType="images_tables_source",
+            sourceFile=source_file,
+            sourceGrounding=grounding,
+            text=ocr_text or src.stem.replace("_", " "),
+            textBlocks=[{
+                "kind": "ocr",
+                "text": ocr_text,
+                "available": bool(ocr_text),
+                "fallbackText": src.stem.replace("_", " "),
+            }],
+            imageRefs=image_refs,
+            tableRefs=table_refs,
+            confidence=confidence,
+            metadata={
+                "assetKind": kind,
+                "attachmentConfidence": confidence,
+                "classificationReason": reason,
+                "originalFileName": src.name,
+                "mimeType": mime_for(asset_path),
+                "assetPolicy": "preserve",
+            },
+            warnings=warnings,
+        ).to_dict())
+        bundle_warnings.extend(f"{src.name}: {warning}" for warning in warnings if warning)
+    return build_chunk_bundle(
+        source_descriptor=get_source_descriptor("images_tables_source").to_dict(),
+        source_file=source_file,
+        source_path=source_path,
+        chunks=chunks,
+        warnings=bundle_warnings,
+    )
+
+
 def emit_normalized_chunks(source_type: str, input_path: Path, output_path: Path, limit: int = 5, refresh: bool = False) -> dict[str, Any]:
     if source_type == "amboss_pdf":
         bundle = amboss_to_normalized_chunks(input_path, limit=limit)
@@ -305,6 +501,8 @@ def emit_normalized_chunks(source_type: str, input_path: Path, output_path: Path
         bundle = fast_facts_to_normalized_chunks(input_path, limit=limit)
     elif source_type == "mehlman_pdf":
         bundle = mehlman_to_normalized_chunks(input_path, limit=limit)
+    elif source_type == "images_tables_source":
+        bundle = images_tables_to_normalized_chunks(input_path, limit=limit)
     else:
         raise ValueError(f"No normalized chunk adapter exists for source_type: {source_type}")
     write_json(output_path, bundle)

@@ -13,8 +13,8 @@ from typing import Any, Literal
 
 
 Modality = Literal["pdf", "pptx", "image", "audio", "text", "json"]
-ExtractionStyle = Literal["native_text", "ocr", "slide_decomposition", "question_extraction", "transcript"]
-GenerationStyle = Literal["deterministic", "llm_normalization", "llm_generation", "existing_downstream"]
+ExtractionStyle = Literal["native_text", "ocr", "slide_decomposition", "question_extraction", "transcript", "multimodal_asset"]
+GenerationStyle = Literal["deterministic", "llm_normalization", "llm_generation", "existing_downstream", "attachment_first"]
 AssetPolicy = Literal["none", "preserve", "route_to_stem", "route_to_explanation", "manual_review"]
 CachePolicy = Literal["none", "read_only", "read_write", "source_hash"]
 
@@ -91,6 +91,22 @@ SOURCE_DESCRIPTORS: dict[str, SourceDescriptor] = {
             "promptPolicy": "unchanged",
             "pageLimitPolicy": "initial validation capped to first 5-10 pages",
             "assetHandling": "preserve embedded figures and lattice-detected tables as normalized refs",
+        },
+    ),
+    "images_tables_source": SourceDescriptor(
+        source_type="images_tables_source",
+        modality="image",
+        extraction_style="multimodal_asset",
+        generation_style="attachment_first",
+        asset_policy="preserve",
+        cache_policy="source_hash",
+        notes="Image-first and table-first profile source. Emits normalized image/table chunks, preserves assets, and creates lightweight app-ready cards without semantic question generation.",
+        metadata={
+            "profileStatus": "active",
+            "downstreamGenerator": "tools/shared-ingestion/images_tables_profile_runner.py",
+            "supportedInputs": [".png", ".jpg", ".jpeg", ".webp", "small folders containing supported images"],
+            "assetKinds": ["stem_image", "explanation_image", "table_image", "algorithm", "chart", "unknown"],
+            "ocrPolicy": "Use local tesseract when available; otherwise preserve filename-derived text with warning.",
         },
     ),
 }

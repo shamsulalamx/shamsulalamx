@@ -70,7 +70,7 @@ def run_shared_chunk_pipeline(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Emit shared normalized chunks from an existing source pipeline.")
-    parser.add_argument("--source-type", required=True, choices=["amboss_pdf", "nbme_pdf", "fast_facts_pptx", "emma_holiday_pdf", "mehlman_pdf"])
+    parser.add_argument("--source-type", required=True, choices=["amboss_pdf", "nbme_pdf", "fast_facts_pptx", "emma_holiday_pdf", "mehlman_pdf", "images_tables_source"])
     parser.add_argument("--input-file", required=True)
     parser.add_argument("--output-file", required=True)
     parser.add_argument("--limit", type=int, default=5)

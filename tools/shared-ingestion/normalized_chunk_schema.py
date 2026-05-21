@@ -17,7 +17,7 @@ Top-level bundle:
 NormalizedChunk:
 - schemaVersion: "shared-normalized-chunk-v1"
 - chunkId: stable source-derived id
-- chunkType: one of text, slide, question, transcript
+- chunkType: one of text, slide, question, transcript, image, table
 - sourceType: registered source type
 - sourceFile: original file or artifact name
 - sourceGrounding: page/slide/question/audio grounding metadata
@@ -31,7 +31,7 @@ NormalizedChunk:
 
 AssetRef:
 - refId: stable id
-- kind: image, table, stem_image, explanation_image, algorithm, table_image
+- kind: image, table, stem_image, explanation_image, table_image, algorithm, chart, unknown
 - role: stem, explanation, context, review, unknown
 - path: file path when available
 - text: OCR/native visible text when available
@@ -50,8 +50,8 @@ from typing import Any, Literal
 BUNDLE_SCHEMA_VERSION = "shared-normalized-chunk-bundle-v1"
 CHUNK_SCHEMA_VERSION = "shared-normalized-chunk-v1"
 
-ChunkType = Literal["text", "slide", "question", "transcript"]
-AssetKind = Literal["image", "table", "stem_image", "explanation_image", "algorithm", "table_image"]
+ChunkType = Literal["text", "slide", "question", "transcript", "image", "table"]
+AssetKind = Literal["image", "table", "stem_image", "explanation_image", "algorithm", "table_image", "chart", "unknown"]
 AssetRole = Literal["stem", "explanation", "context", "review", "unknown"]
 
 
@@ -147,7 +147,7 @@ def validate_chunk_bundle(bundle: dict[str, Any]) -> list[str]:
         seen.add(chunk_id)
         if chunk.get("schemaVersion") != CHUNK_SCHEMA_VERSION:
             errors.append(f"{chunk_id or index}: invalid chunk schemaVersion.")
-        if chunk.get("chunkType") not in {"text", "slide", "question", "transcript"}:
+        if chunk.get("chunkType") not in {"text", "slide", "question", "transcript", "image", "table"}:
             errors.append(f"{chunk_id or index}: invalid chunkType.")
         if not isinstance(chunk.get("sourceGrounding"), dict):
             errors.append(f"{chunk_id or index}: sourceGrounding must be an object.")

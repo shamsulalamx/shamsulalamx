@@ -53,6 +53,33 @@
       "outputDirectories": ["tools/mehlman-pdf-question-generator/output_json/app_ready"],
       "notes": "Profile-style text-heavy PDF source: emits shared normalized text chunks, then invokes the existing Mehlman generator unchanged. Initial validation is capped to the first 10 pages."
     },
+    "images_tables_source": {
+      "label": "Images & Tables",
+      "status": "active",
+      "requiresGemini": false,
+      "inputExtensions": [".png", ".jpg", ".jpeg", ".webp"],
+      "allowDirectories": true,
+      "workingDirectory": ".",
+      "pythonExecutable": "python3",
+      "dryRunSteps": [
+        {
+          "stage": "normalization",
+          "stageLabel": "Images & Tables shared-ingestion dry-run",
+          "heartbeatSeconds": 10,
+          "args": ["tools/shared-ingestion/images_tables_profile_runner.py", "--mode", "dry-run", "--input-file", "{inputFile}", "--limit", "5"]
+        }
+      ],
+      "liveSteps": [
+        {
+          "stage": "generation",
+          "stageLabel": "Images & Tables attachment-first generation",
+          "heartbeatSeconds": 10,
+          "args": ["tools/shared-ingestion/images_tables_profile_runner.py", "--mode", "generate", "--input-file", "{inputFile}", "--limit", "5"]
+        }
+      ],
+      "outputDirectories": ["tools/images-tables-question-generator/output_json/app_ready"],
+      "notes": "Profile-style image/table source: emits shared normalized image/table chunks and creates lightweight attachment-first app-ready cards without semantic question generation."
+    },
     "fast_facts_pptx": {
       "label": "Fast Facts PPTX",
       "status": "active",

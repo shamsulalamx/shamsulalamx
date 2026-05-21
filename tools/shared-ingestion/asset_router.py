@@ -15,8 +15,9 @@ from typing import Any
 from normalized_chunk_schema import AssetRef
 
 
-ALGORITHM_RE = re.compile(r"\b(algorithm|flowchart|approach|workup|management|diagnostic pathway)\b", re.I)
-TABLE_RE = re.compile(r"\b(table|classification|criteria|score|staging|differential|vs\.?|versus)\b", re.I)
+ALGORITHM_RE = re.compile(r"\b(algorithm|flowchart|approach|workup|management|diagnostic pathway|pathway|process)\b", re.I)
+TABLE_RE = re.compile(r"\b(table|classification|criteria|score|staging|differential|vs\.?|versus|vitamins?|values?|lab)\b", re.I)
+CHART_RE = re.compile(r"\b(chart|graph|plot|curve|axis|trend)\b", re.I)
 
 
 def stable_asset_id(source_id: str, kind: str, index: int, path: str = "", text: str = "") -> str:
@@ -50,12 +51,16 @@ def classify_asset_kind(asset: dict[str, Any], default_kind: str = "image") -> s
         for key in ("text", "visibleText", "caption", "label", "kind")
     )
     if default_kind == "table" or asset.get("tableId"):
-        return "table"
+        return "table_image" if asset.get("path") else "table"
     if ALGORITHM_RE.search(text):
         return "algorithm"
+    if CHART_RE.search(text):
+        return "chart"
     if TABLE_RE.search(text):
         return "table_image"
-    return "image"
+    if default_kind in {"stem_image", "explanation_image", "unknown"}:
+        return default_kind
+    return "stem_image" if asset.get("path") else "unknown"
 
 
 def route_asset_role(asset: dict[str, Any], source_type: str) -> str:
@@ -69,6 +74,10 @@ def route_asset_role(asset: dict[str, Any], source_type: str) -> str:
         return "explanation"
     if source_type in {"fast_facts_pptx", "emma_holiday_pdf", "mehlman_pdf"}:
         return "context"
+    if source_type == "images_tables_source":
+        if "explanation" in location or "explanation" in kind:
+            return "explanation"
+        return "stem"
     return "review"
 
 
