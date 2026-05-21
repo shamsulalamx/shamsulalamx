@@ -66,6 +66,44 @@
       ],
       "outputDirectories": ["output_json/app_ready"],
       "notes": "Uses the existing AMBOSS_PROFILE deterministic extraction path."
+    },
+    "nbme_pdf": {
+      "label": "NBME PDF",
+      "status": "active",
+      "requiresGemini": true,
+      "inputExtensions": [".pdf"],
+      "workingDirectory": "tools/nbme-pdf-json-generator",
+      "pythonExecutable": "python3",
+      "dryRunSteps": [
+        {
+          "stageLabel": "NBME dry-run",
+          "args": ["nbme_batch_wrapper.py", "--stage", "normalization", "--dry-run", "--input-file", "{inputFile}", "--max-pages", "5"]
+        }
+      ],
+      "liveSteps": [
+        {
+          "stageLabel": "OCR",
+          "heartbeatSeconds": 15,
+          "args": ["nbme_batch_wrapper.py", "--stage", "ocr", "--input-file", "{inputFile}", "--max-pages", "5"]
+        },
+        {
+          "stageLabel": "chunking",
+          "heartbeatSeconds": 15,
+          "args": ["nbme_batch_wrapper.py", "--stage", "chunking", "--input-file", "{inputFile}", "--max-pages", "5"]
+        },
+        {
+          "stageLabel": "normalization",
+          "heartbeatSeconds": 20,
+          "args": ["nbme_batch_wrapper.py", "--stage", "normalization", "--input-file", "{inputFile}", "--max-pages", "5"]
+        },
+        {
+          "stageLabel": "app-ready conversion",
+          "heartbeatSeconds": 15,
+          "args": ["nbme_batch_wrapper.py", "--stage", "app-ready", "--input-file", "{inputFile}", "--max-pages", "5"]
+        }
+      ],
+      "outputDirectories": ["output_json/app_ready"],
+      "notes": "Uses a thin Batch Import wrapper around the existing NBME PDF generator stages. Initial validation is capped to the first 5 pages."
     }
   },
   "placeholders": {

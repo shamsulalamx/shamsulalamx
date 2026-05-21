@@ -2282,6 +2282,7 @@ body.quiz-fullscreen-mode .modal-overlay {
         <option value="emma_holiday_pdf">Emma Holiday PDF</option>
         <option value="fast_facts_pptx">Fast Facts PPTX</option>
         <option value="amboss_pdf">Amboss PDF</option>
+        <option value="nbme_pdf">NBME PDF</option>
       </select>
     </div>
     <div class="form-group">
@@ -8439,11 +8440,12 @@ const App = (() => {
   const NOTES_BATCH_MAX_LIVE_REFINEMENTS = 25;
   const NOTES_BATCH_MAX_ATTEMPTS = 2;
   const NOTES_BATCH_MAX_CONSECUTIVE_FAILURES = 3;
-  const BATCH_IMPORT_SOURCE_LABELS = {
-    emma_holiday_pdf: 'Emma Holiday PDF',
-    fast_facts_pptx: 'Fast Facts PPTX',
-    amboss_pdf: 'Amboss PDF'
-  };
+	  const BATCH_IMPORT_SOURCE_LABELS = {
+	    emma_holiday_pdf: 'Emma Holiday PDF',
+	    fast_facts_pptx: 'Fast Facts PPTX',
+	    amboss_pdf: 'Amboss PDF',
+	    nbme_pdf: 'NBME PDF'
+	  };
   // ── Init ───────────────────────────────────────────────────
   function init() {
     window.toast = toast;
@@ -22263,29 +22265,49 @@ const App = (() => {
       return;
     }
 
-    const outputs = Array.isArray(result.outputs) ? result.outputs : [];
-    const validations = [];
-    for (const outputPath of outputs) {
-      const read = await api.readOutputJson(outputPath);
-      if (!read || !read.ok) {
+	    const outputs = Array.isArray(result.outputs) ? result.outputs : [];
+	    const validations = [];
+	    appendBatchImportProgress({
+	      type: 'stage_start',
+	      timestamp: new Date().toISOString(),
+	      stageLabel: 'import',
+	      message: 'import validation started'
+	    });
+	    for (const outputPath of outputs) {
+	      const read = await api.readOutputJson(outputPath);
+	      if (!read || !read.ok) {
         validations.push({ ok: false, outputPath, errors: [read?.message || 'Output JSON could not be read.'], warnings: [], questionCount: 0, imageCount: 0 });
         continue;
       }
       validations.push(validateBatchOutputJsonText(read.text, outputPath));
     }
 
-    let importResult = null;
-    if (runMode === 'generate-auto-import') {
-      const firstValid = validations.find(function(item) { return item.ok; });
-      if (firstValid) {
-        importResult = await importValidatedBatchOutputJsonText(firstValid.rawText, {
-          folderId,
-          testName: firstValid.testName || ''
-        });
-      } else {
-        importResult = { ok: false, error: 'No valid output was available to auto-import.' };
-      }
-    }
+	    let importResult = null;
+	    if (runMode === 'generate-auto-import') {
+	      const firstValid = validations.find(function(item) { return item.ok; });
+	      if (firstValid) {
+	        appendBatchImportProgress({
+	          type: 'stage_start',
+	          timestamp: new Date().toISOString(),
+	          stageLabel: 'import',
+	          message: 'auto-import started'
+	        });
+	        importResult = await importValidatedBatchOutputJsonText(firstValid.rawText, {
+	          folderId,
+	          testName: firstValid.testName || ''
+	        });
+	      } else {
+	        importResult = { ok: false, error: 'No valid output was available to auto-import.' };
+	      }
+	    }
+	    appendBatchImportProgress({
+	      type: importResult && !importResult.ok ? 'stage_failed' : 'stage_complete',
+	      timestamp: new Date().toISOString(),
+	      stageLabel: 'import',
+	      message: importResult
+	        ? (importResult.ok ? `auto-import completed with ${importResult.questionCount || 0} question(s)` : (importResult.error || 'auto-import failed'))
+	        : 'import validation completed'
+	    });
 
     const primary = validations[0] || { ok: true, outputPath: '', warnings: [], errors: [], questionCount: 0, imageCount: 0 };
     const errors = primary.errors ? primary.errors.slice() : [];
@@ -22334,12 +22356,14 @@ const App = (() => {
       warnings = (validation.warnings || []).slice();
       errors = validation.isValid ? [] : (validation.blockingErrors || ['NBME Gemini JSON validation failed.']).slice();
       questionCount = parsed.questions.length;
-      imageCount = parsed.questions.reduce(function(sum, q) {
-        return sum
-          + (Array.isArray(q.figureRefs) ? q.figureRefs.length : 0)
-          + (Array.isArray(q.images) ? q.images.length : 0)
-          + (Array.isArray(q.explanationImages) ? q.explanationImages.length : 0);
-      }, 0);
+	      imageCount = parsed.questions.reduce(function(sum, q) {
+	        return sum
+	          + (Array.isArray(q.figureRefs) ? q.figureRefs.length : 0)
+	          + (Array.isArray(q.images) ? q.images.length : 0)
+	          + (Array.isArray(q.explanationImages) ? q.explanationImages.length : 0)
+	          + (Array.isArray(q.tables) ? q.tables.length : 0)
+	          + (Array.isArray(q.explanationTables) ? q.explanationTables.length : 0);
+	      }, 0);
       return { ok: validation.isValid, outputPath, rawText, testName, questionCount, imageCount, warnings, errors };
     }
 
@@ -22347,9 +22371,13 @@ const App = (() => {
       const questions = parsed.questions.map(_landingJsonQuestionFromInternalAppReady);
       const ok = _validateInternalAppReadyQuestions(questions);
       questionCount = questions.length;
-      imageCount = questions.reduce(function(sum, q) {
-        return sum + (Array.isArray(q.images) ? q.images.length : 0) + (Array.isArray(q.explanationImages) ? q.explanationImages.length : 0);
-      }, 0);
+	      imageCount = questions.reduce(function(sum, q) {
+	        return sum
+	          + (Array.isArray(q.images) ? q.images.length : 0)
+	          + (Array.isArray(q.explanationImages) ? q.explanationImages.length : 0)
+	          + (Array.isArray(q.tables) ? q.tables.length : 0)
+	          + (Array.isArray(q.explanationTables) ? q.explanationTables.length : 0);
+	      }, 0);
       return { ok, outputPath, rawText, testName, questionCount, imageCount, warnings, errors: ok ? [] : ['JSON questions are missing required internal fields (t, o).'] };
     }
 
@@ -22380,7 +22408,7 @@ const App = (() => {
       <div><strong>Target folder:</strong> ${escapeHTML(report.folderId ? `${lbl.srcName} / ${lbl.fldName}` : 'Not selected')}</div>
       <div><strong>Output path:</strong> ${escapeHTML(report.outputPath || 'None discovered')}</div>
       <div><strong>Question count:</strong> ${Number(report.questionCount || 0)}</div>
-      <div><strong>Image count:</strong> ${Number(report.imageCount || 0)}</div>
+	      <div><strong>Image/table count:</strong> ${Number(report.imageCount || 0)}</div>
       <div><strong>Warnings:</strong> ${warnings.length ? escapeHTML(warnings.join('; ')) : 'None'}</div>
       <div><strong>Errors:</strong> ${errors.length ? escapeHTML(errors.join('; ')) : 'None'}</div>
     `;

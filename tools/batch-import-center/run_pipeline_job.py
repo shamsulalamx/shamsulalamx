@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -140,13 +142,45 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
     )
     assert proc.stdout is not None
     last_lines: list[str] = []
-    for line in proc.stdout:
+    lines: queue.Queue[str | None] = queue.Queue()
+
+    def read_stdout() -> None:
+        try:
+            for line in proc.stdout:
+                lines.put(line)
+        finally:
+            lines.put(None)
+
+    reader = threading.Thread(target=read_stdout, daemon=True)
+    reader.start()
+    stream_done = False
+    heartbeat_seconds = float(step.get("heartbeatSeconds") or 0)
+    next_heartbeat = time.time() + heartbeat_seconds if heartbeat_seconds > 0 else 0
+    while not stream_done:
+        try:
+            line = lines.get(timeout=1)
+        except queue.Empty:
+            if heartbeat_seconds > 0 and proc.poll() is None and time.time() >= next_heartbeat:
+                duration = round(time.time() - stage_started_at, 2)
+                emit(
+                    "stage_heartbeat",
+                    message=f"{stage_label} still running after {duration}s",
+                    stageLabel=stage_label,
+                    durationSeconds=duration,
+                    stepIndex=step_index,
+                )
+                next_heartbeat = time.time() + heartbeat_seconds
+            continue
+        if line is None:
+            stream_done = True
+            continue
         message = line.rstrip("\n")
         if message:
             last_lines.append(message)
             last_lines = last_lines[-12:]
         emit("log", message=message, stageLabel=stage_label)
     code = proc.wait()
+    reader.join(timeout=1)
     duration = round(time.time() - stage_started_at, 2)
     if code == 0:
         emit(
