@@ -7,9 +7,16 @@ Allowed: transform slide-supported concepts into realistic clinical vignettes an
 Grounding lock:
 - Each allocation includes ALLOWED_MEDICAL_TERMS and ALLOWED_DISTRACTOR_POOL.
 - Every answer choice and every explanation claim must use only concepts from ALLOWED_MEDICAL_TERMS or generic nonmedical vignette wording.
+- Every explanation must stay grounded while identifying the discriminating clue, reasoning step, or pathophysiologic principle that makes the correct answer best for THIS stem.
 - Distractors must come from the same slide normalized facts or ALLOWED_DISTRACTOR_POOL.
+- All answer choices in one question must answer the same clinical question type and remain in the same semantic category.
+- Do not mix diagnoses, tests, management actions, drugs, complications, mechanisms, findings, or risk factors in one answer set unless the stem explicitly asks for that single category.
+- Distractors must be plausible same-category alternatives that compete with the correct answer under the stem.
 - Never invent outside diseases, drugs, tests, procedures, mechanisms, epidemiology, or management.
-- If there are not enough grounded distractors, use grounded signs, mechanisms, management choices, or abnormalities from the same slide.
+- If there are not enough grounded same-category distractors, use grounded alternatives from the same slide category or ask a narrower grounded question rather than inventing unsupported facts.
+- Do not invent unsupported diagnoses, findings, labs, mechanisms, treatments, dates, statistics, thresholds, or risk factors.
+- If source material is sparse, ask a narrower grounded question. Prefer omission over fabrication.
+- Any clinical detail in the stem, explanation, educational objective, or review pearl must be supported by the provided source.
 - If a safe grounded question cannot be made, return fewer questions for that slide only when explicitly instructed by a repair prompt.
 
 Return valid JSON only, with this exact shape:
@@ -59,7 +66,20 @@ Question rules:
 - Target distribution across the batch: about 70% clinical vignette, 20% mechanism or pathophysiology framed clinically, 10% rapid association.
 - No trivia, "which is true", "all except", buzzword-only recall, or robotic phrasing.
 - Distractors must be clinically related by organ system, symptom cluster, age group, management phase, pathology, or realistic mimic.
+- Distractors must be plausible same-category alternatives that compete with the correct answer under the stem.
 - Distractors must be present in ALLOWED_DISTRACTOR_POOL or directly supported by ALLOWED_MEDICAL_TERMS.
+- Incorrect explanations must explain why each distractor loses specifically in this vignette, not just state a generic definition.
+- Avoid generic filler such as "X is correct because it is associated with Y", "This patient likely has...", and "The answer is X because...".
+- Prefer concise board-style discriminator reasoning over long textbook summaries.
+- Teach how to distinguish the correct answer from the most tempting distractor.
+- If the normalized slide is sparse, use a shorter grounded explanation rather than inventing unsupported clinical details.
+- The educational objective must state the specific tested reasoning task, not merely restate the diagnosis or correct answer.
+- The review pearl must be one concise, board-relevant rule that is testable and high-yield, not a paragraph summary.
+- Do not copy the explanation into the educational objective or review pearl.
+- Each question must test one clear reasoning task.
+- The stem should force diagnosis discrimination, mechanism reasoning, next-step management, complication prediction, risk-factor interpretation, pharmacology distinction, pathology correlation, or another explicit board-style task.
+- Avoid pure paraphrase recall, vague association questions, and buzzword-only stems.
+- The question should require applying the source concept, not merely recognizing copied wording.
 - No absurd or unrelated distractors.
 - No raw bullet formatting.
 - No OCR fragments.

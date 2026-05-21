@@ -26,6 +26,12 @@ Completed and tagged milestones:
 
 Earlier v4.0-v4.3 established Images/Tables generator stability and Emma Holiday lecture-slide generator stability.
 
+## Semantic Prompt-Quality Milestone
+
+The semantic prompt-quality milestone is prompt-only. The UWorld Notes, Anki, OME, Mehlman, Divine, and lecture-slide question prompts now require same-category answer choices, discriminator-focused explanations, one clear reasoning task, source-supported clinical details, and tighter educational objectives and review pearls.
+
+This milestone hardens generation instructions only. It does not claim semantic stability, clinician-reviewed quality, live Gemini validation, validator changes, schema changes, or runtime behavior changes.
+
 ## Validated Sources
 
 | Source | Current status | Validation level |

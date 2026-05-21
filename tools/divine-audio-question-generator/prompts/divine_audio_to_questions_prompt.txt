@@ -10,33 +10,52 @@ STRICT RULES:
 4. Each question must have exactly 4 answer choices labeled A, B, C, D.
 5. The correct answer must be one of A, B, C, or D.
 6. Answer choices must be NBME-style distractors: plausible but clearly distinguishable by a well-prepared student.
-7. NEVER write questions that are podcast-dependent. Do NOT use:
+7. All answer choices in one question must answer the same clinical question type and remain in the same semantic category. Do not mix diagnoses, tests, management actions, drugs, complications, mechanisms, findings, or risk factors in one answer set unless the stem explicitly asks for that single category. Distractors must be plausible same-category alternatives that compete with the correct answer under the stem. If the content cannot support four grounded same-category choices, ask a narrower grounded question rather than inventing unsupported facts.
+8. NEVER write questions that are podcast-dependent. Do NOT use:
    - "According to the podcast..."
    - "The speaker mentions..."
    - "As discussed in this episode..."
    Treat the content as medical knowledge, not podcast trivia.
-8. Avoid superficial recall questions. Prioritize:
+9. Avoid superficial recall questions. Prioritize:
    - Next best step in management
    - Most likely diagnosis (when differential is genuinely challenging)
    - Drug selection with reasoning (when multiple plausible agents exist)
    - Complication recognition and management
    - Contraindication identification
    - Prognostic associations and screening thresholds
-9. Include:
+10. Include:
    - Correct Answer Explanation (2–4 sentences explaining why the answer is correct, with clinical reasoning)
    - Incorrect Answer Explanation (1–2 sentences per wrong choice, grouped into one body)
    - Educational Objective (one clear sentence, ≤ 20 words)
    - retrievalTag: hyperspecific, under 12 words, no vague topics
    - reviewPearl: one high-yield, concise sentence a student would highlight
-10. retrievalTag examples of correct specificity:
+11. Explanation quality:
+    - The explanation must identify the discriminating clue, reasoning step, or pathophysiologic principle that makes the correct answer best for THIS stem.
+    - Incorrect explanations must explain why each distractor loses specifically in this vignette, not just state a generic definition.
+    - Avoid generic filler such as "X is correct because it is associated with Y", "This patient likely has...", and "The answer is X because...".
+    - Prefer concise board-style discriminator reasoning over long textbook summaries.
+    - Teach how to distinguish the correct answer from the most tempting distractor.
+    - If the content is sparse, use a shorter grounded explanation rather than inventing unsupported clinical details.
+    - The educational objective must state the specific tested reasoning task, not merely restate the diagnosis or correct answer.
+    - The review pearl must be one concise, board-relevant rule that is testable and high-yield, not a paragraph summary.
+    - Do not copy the explanation into the educational objective or review pearl.
+    - Do not invent unsupported diagnoses, findings, labs, mechanisms, treatments, dates, statistics, thresholds, or risk factors.
+    - If source material is sparse, ask a narrower grounded question. Prefer omission over fabrication.
+    - Any clinical detail in the stem, explanation, educational objective, or review pearl must be supported by the provided source.
+12. Reasoning-task clarity:
+    - Each question must test one clear reasoning task.
+    - The stem should force diagnosis discrimination, mechanism reasoning, next-step management, complication prediction, risk-factor interpretation, pharmacology distinction, pathology correlation, or another explicit board-style task.
+    - Avoid pure paraphrase recall, vague association questions, and buzzword-only stems.
+    - The question should require applying the source concept, not merely recognizing copied wording.
+13. retrievalTag examples of correct specificity:
     BAD:  "cardiology question"
     BAD:  "heart failure"
     GOOD: "HFrEF GDMT sacubitril valsartan versus ACE inhibitor selection"
     GOOD: "SGLT2 inhibitor benefit in both HFrEF and HFpEF"
     GOOD: "ICD placement EF threshold 3-month GDMT waiting period"
-11. reviewPearl must be one sentence capturing the single most testable fact.
-12. Output raw valid JSON only — no markdown fences, no code blocks, no extra text before or after.
-13. Produce exactly the number of questions requested.
+14. reviewPearl must be one sentence capturing the single most testable fact.
+15. Output raw valid JSON only — no markdown fences, no code blocks, no extra text before or after.
+16. Produce exactly the number of questions requested.
 
 CRITICAL JSON RULE — explanationSections:
 explanationSections is a JSON ARRAY. Every element must be a plain object.
