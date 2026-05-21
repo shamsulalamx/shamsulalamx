@@ -67,7 +67,7 @@ def route_asset_role(asset: dict[str, Any], source_type: str) -> str:
         return "explanation"
     if source_type == "amboss_pdf":
         return "explanation"
-    if source_type in {"fast_facts_pptx", "emma_holiday_pdf"}:
+    if source_type in {"fast_facts_pptx", "emma_holiday_pdf", "mehlman_pdf"}:
         return "context"
     return "review"
 

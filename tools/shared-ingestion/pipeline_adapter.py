@@ -22,6 +22,7 @@ ADAPTER_DIR = Path(__file__).parent.resolve()
 PROJECT_ROOT = ADAPTER_DIR.parents[1]
 LECTURE_DIR = PROJECT_ROOT / "tools" / "lecture-slide-question-generator"
 NBME_DIR = PROJECT_ROOT / "tools" / "nbme-pdf-json-generator"
+MEHLMAN_DIR = PROJECT_ROOT / "tools" / "mehlman-pdf-question-generator"
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -55,6 +56,12 @@ def _import_nbme_modules() -> tuple[Any, Any]:
     import extract_pdfs  # type: ignore
     import nbme_batch_wrapper  # type: ignore
     return extract_pdfs, nbme_batch_wrapper
+
+
+def _import_mehlman_generator() -> Any:
+    sys.path.insert(0, str(MEHLMAN_DIR))
+    import generate_mehlman_questions as generator  # type: ignore
+    return generator
 
 
 def _lecture_slide_chunk(source_type: str, source_file: str, source_path: str, slide: dict[str, Any], chunk_type: str = "slide") -> dict[str, Any]:
@@ -195,6 +202,98 @@ def fast_facts_to_normalized_chunks(input_path: Path, limit: int = 10) -> dict[s
     )
 
 
+def _mehlman_asset_entries(chunk: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    figures: list[dict[str, Any]] = []
+    tables: list[dict[str, Any]] = []
+    for fig in chunk.get("figures") or []:
+        if not isinstance(fig, dict):
+            continue
+        filename = str(fig.get("filename") or "")
+        figures.append({
+            "imageId": Path(filename).stem if filename else "",
+            "path": rel(MEHLMAN_DIR / "extracted_figures" / filename) if filename else "",
+            "visibleText": "",
+            "width": fig.get("width"),
+            "height": fig.get("height"),
+            "confidence": fig.get("confidence"),
+            "kind": "embedded_figure",
+        })
+    for table in chunk.get("tables") or []:
+        if not isinstance(table, dict):
+            continue
+        filename = str(table.get("filename") or "")
+        tables.append({
+            "tableId": Path(filename).stem if filename else "",
+            "path": rel(MEHLMAN_DIR / "extracted_tables" / filename) if filename else "",
+            "text": str(table.get("markdown") or ""),
+            "rows": table.get("rows"),
+            "cols": table.get("cols"),
+            "kind": "embedded_table",
+        })
+    return figures, tables
+
+
+def mehlman_to_normalized_chunks(input_path: Path, limit: int = 10) -> dict[str, Any]:
+    generator = _import_mehlman_generator()
+    input_path = input_path.resolve()
+    for directory in (generator.TEXT_DIR, generator.FIG_DIR, generator.TABLE_DIR, generator.CHUNK_DIR):
+        directory.mkdir(parents=True, exist_ok=True)
+    stats = generator._empty_stats()
+    pages = generator.extract_pdf_pages(input_path, extract_assets=True, stats=stats, max_pages=limit or None)
+    chunks = generator.split_pages_into_chunks(pages)
+    source_file = input_path.name
+    source_path = rel(input_path)
+    normalized_chunks: list[dict[str, Any]] = []
+    page_lookup = {int(page.get("pageNum")): page for page in pages if isinstance(page, dict) and page.get("pageNum")}
+    for item in chunks:
+        if not isinstance(item, dict):
+            continue
+        chunk_id = f"{input_path.stem.replace(' ', '_')}_p{int(item.get('pageStart') or 0):03d}_p{int(item.get('pageEnd') or 0):03d}_c{int(item.get('chunkId') or len(normalized_chunks) + 1):03d}"
+        grounding = {
+            "pageStart": item.get("pageStart"),
+            "pageEnd": item.get("pageEnd"),
+            "sourcePath": source_path,
+        }
+        figures, tables = _mehlman_asset_entries(item)
+        text_blocks = []
+        start = int(item.get("pageStart") or 0)
+        end = int(item.get("pageEnd") or start)
+        for page_num in range(start, end + 1):
+            page = page_lookup.get(page_num)
+            if page:
+                text_blocks.append({
+                    "pageNum": page_num,
+                    "text": str(page.get("text") or ""),
+                    "warnings": list(page.get("warnings") or []),
+                })
+        normalized_chunks.append(NormalizedChunk(
+            chunkId=chunk_id,
+            chunkType="text",
+            sourceType="mehlman_pdf",
+            sourceFile=source_file,
+            sourceGrounding=grounding,
+            text=str(item.get("text") or ""),
+            textBlocks=text_blocks,
+            imageRefs=normalize_image_refs(figures, source_id=chunk_id, source_type="mehlman_pdf", grounding=grounding),
+            tableRefs=normalize_table_refs(tables, source_id=chunk_id, source_type="mehlman_pdf", grounding=grounding),
+            confidence=0.8 if item.get("text") else 0.35,
+            metadata={
+                "charCount": item.get("charCount"),
+                "sourceChunkId": item.get("chunkId"),
+                "totalSourcePages": stats.get("totalSourcePages") or stats.get("totalPages"),
+                "processedPages": stats.get("totalPages"),
+            },
+            warnings=list(item.get("warnings") or []),
+        ).to_dict())
+    return build_chunk_bundle(
+        source_descriptor=get_source_descriptor("mehlman_pdf").to_dict(),
+        source_file=source_file,
+        source_path=source_path,
+        chunks=normalized_chunks,
+        warnings=list(stats.get("warnings") or []),
+    )
+
+
 def emit_normalized_chunks(source_type: str, input_path: Path, output_path: Path, limit: int = 5, refresh: bool = False) -> dict[str, Any]:
     if source_type == "amboss_pdf":
         bundle = amboss_to_normalized_chunks(input_path, limit=limit)
@@ -204,6 +303,8 @@ def emit_normalized_chunks(source_type: str, input_path: Path, output_path: Path
         bundle = nbme_to_normalized_chunks(input_path, limit=limit, refresh=refresh)
     elif source_type == "fast_facts_pptx":
         bundle = fast_facts_to_normalized_chunks(input_path, limit=limit)
+    elif source_type == "mehlman_pdf":
+        bundle = mehlman_to_normalized_chunks(input_path, limit=limit)
     else:
         raise ValueError(f"No normalized chunk adapter exists for source_type: {source_type}")
     write_json(output_path, bundle)

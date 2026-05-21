@@ -77,6 +77,22 @@ SOURCE_DESCRIPTORS: dict[str, SourceDescriptor] = {
             "promptPolicy": "unchanged",
         },
     ),
+    "mehlman_pdf": SourceDescriptor(
+        source_type="mehlman_pdf",
+        modality="pdf",
+        extraction_style="native_text",
+        generation_style="existing_downstream",
+        asset_policy="preserve",
+        cache_policy="source_hash",
+        notes="Profile-style text-heavy PDF source using shared normalized text chunks before invoking the existing Mehlman downstream generator.",
+        metadata={
+            "profileStatus": "active",
+            "downstreamGenerator": "tools/mehlman-pdf-question-generator/generate_mehlman_questions.py",
+            "promptPolicy": "unchanged",
+            "pageLimitPolicy": "initial validation capped to first 5-10 pages",
+            "assetHandling": "preserve embedded figures and lattice-detected tables as normalized refs",
+        },
+    ),
 }
 
 

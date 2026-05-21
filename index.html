@@ -2280,6 +2280,7 @@ body.quiz-fullscreen-mode .modal-overlay {
       <label class="form-label">Source Type</label>
       <select class="form-input" id="bic-source-type" onchange="App.onBatchImportSourceChange()">
         <option value="emma_holiday_pdf">Emma Holiday PDF</option>
+        <option value="mehlman_pdf">Mehlman PDF</option>
         <option value="fast_facts_pptx">Fast Facts PPTX</option>
         <option value="amboss_pdf">Amboss PDF</option>
         <option value="nbme_pdf">NBME PDF</option>
@@ -8447,6 +8448,7 @@ const App = (() => {
   const NOTES_BATCH_MAX_CONSECUTIVE_FAILURES = 3;
 	  const BATCH_IMPORT_SOURCE_LABELS = {
 	    emma_holiday_pdf: 'Emma Holiday PDF',
+	    mehlman_pdf: 'Mehlman PDF',
 	    fast_facts_pptx: 'Fast Facts PPTX',
 	    amboss_pdf: 'Amboss PDF',
 	    nbme_pdf: 'NBME PDF'

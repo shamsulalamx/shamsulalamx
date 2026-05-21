@@ -122,6 +122,7 @@ def extract_pdf_pages(
     filepath: Path,
     extract_assets: bool,
     stats: Dict,
+    max_pages: Optional[int] = None,
 ) -> List[Dict]:
     """
     Extract text per page with pdfplumber (body crop strips header/footer zones).
@@ -144,10 +145,15 @@ def extract_pdf_pages(
 
     with _pdfplumber.open(str(filepath)) as pdf:
         total_pages = len(pdf.pages)
-        stats["totalPages"] = total_pages
-        _uw.log(f"    {total_pages} pages detected")
+        pages_to_process = pdf.pages[:max_pages] if max_pages else pdf.pages
+        stats["totalSourcePages"] = total_pages
+        stats["totalPages"] = len(pages_to_process)
+        if max_pages:
+            _uw.log(f"    {total_pages} pages detected; processing first {len(pages_to_process)} page(s)")
+        else:
+            _uw.log(f"    {total_pages} pages detected")
 
-        for i, page in enumerate(pdf.pages):
+        for i, page in enumerate(pages_to_process):
             page_num = i + 1
             pg: Dict = {
                 "pageNum": page_num,
@@ -411,6 +417,7 @@ def process_pdf(
     *,
     mode: str,                     # "extract_only" | "chunk_only" | "dry_run" | "generate"
     extract_assets: bool,
+    max_pages: Optional[int],
     max_chunks: Optional[int],
     questions_per_chunk: int,
     resume: bool,
@@ -418,11 +425,12 @@ def process_pdf(
 ) -> None:
     t_start = time.time()
     stem    = filepath.stem
+    artifact_stem = f"{stem}_p001_p{max_pages:03d}" if max_pages else stem
     _uw.log(f"Processing: {filepath.name}  [mode={mode}]")
     stats   = _empty_stats()
 
-    text_path  = TEXT_DIR  / f"{stem}_text.json"
-    chunk_path = CHUNK_DIR / f"{stem}_chunks.json"
+    text_path  = TEXT_DIR  / f"{artifact_stem}_text.json"
+    chunk_path = CHUNK_DIR / f"{artifact_stem}_chunks.json"
 
     # ── Stage 1: Per-page text (and asset) extraction ─────────────────────────
     if mode == "chunk_only":
@@ -445,7 +453,7 @@ def process_pdf(
             stats["totalPages"] = len(pages_data)
         else:
             _uw.log(f"  Stage 1: Extracting pages from {filepath.name}…")
-            pages_data = extract_pdf_pages(filepath, extract_assets, stats)
+            pages_data = extract_pdf_pages(filepath, extract_assets, stats, max_pages=max_pages)
             text_path.write_text(
                 json.dumps(pages_data, indent=2), encoding="utf-8"
             )
@@ -592,19 +600,28 @@ def process_pdf(
         stats["warnings"].extend(dup_warns)
 
     # ── Stage 4: Write app-ready JSON ─────────────────────────────────────────
-    app_json = _uw.build_app_ready_json(stem, all_questions, stats["warnings"])
-    app_path = APP_DIR / f"{stem}_app_ready.json"
+    app_json = _uw.build_app_ready_json(artifact_stem, all_questions, stats["warnings"])
+    app_json["sourceFile"] = filepath.name
+    app_json["metadata"] = {
+        **(app_json.get("metadata") if isinstance(app_json.get("metadata"), dict) else {}),
+        "sourceFile": filepath.name,
+        "sourceStem": stem,
+        "artifactStem": artifact_stem,
+        "pageLimit": max_pages,
+    }
+    app_path = APP_DIR / f"{artifact_stem}_app_ready.json"
     app_path.write_text(json.dumps(app_json, indent=2), encoding="utf-8")
     _uw.log(f"  App-ready → {app_path.name} ({len(all_questions)} questions)")
 
     if mode != "dry_run":
-        gen_path = GEN_DIR / f"{stem}_generated.json"
+        gen_path = GEN_DIR / f"{artifact_stem}_generated.json"
         gen_path.write_text(json.dumps(all_questions, indent=2), encoding="utf-8")
 
     elapsed = round(time.time() - t_start, 1)
     report_data["files"][filepath.name] = {
         "status":             "ok",
         "totalPages":         stats["totalPages"],
+        "totalSourcePages":   stats.get("totalSourcePages", stats["totalPages"]),
         "totalTextChars":     stats["totalTextChars"],
         "chunksCreated":      stats["chunksCreated"],
         "chunksProcessed":    stats["chunksProcessed"],
@@ -704,6 +721,18 @@ def main() -> None:
         help="Also extract figures (PyMuPDF) and tables (pdfplumber) alongside text.",
     )
     parser.add_argument(
+        "--input-file",
+        default="",
+        help="Process one selected PDF instead of every PDF in input_pdfs/.",
+    )
+    parser.add_argument(
+        "--max-pages",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Limit processing to the first N pages of each PDF.",
+    )
+    parser.add_argument(
         "--max-chunks",
         type=int,
         default=None,
@@ -762,6 +791,8 @@ def main() -> None:
     _uw.log("Mehlman PDF → Question Generator")
     _uw.log(f"  Mode:                 {mode}")
     _uw.log(f"  Extract assets:       {args.extract_assets}")
+    _uw.log(f"  Input file:           {args.input_file or 'input_pdfs/*.pdf'}")
+    _uw.log(f"  Max pages:            {args.max_pages or 'unlimited'}")
     _uw.log(f"  Max chunks:           {args.max_chunks or 'unlimited'}")
     _uw.log(f"  Questions per chunk:  {args.questions_per_chunk}")
     _uw.log(f"  Resume:               {args.resume}")
@@ -795,7 +826,7 @@ def main() -> None:
             f"{[t.name for t in text_files]}"
         )
     else:
-        input_files = _discover_pdfs()
+        input_files = [Path(args.input_file).expanduser().resolve()] if args.input_file else _discover_pdfs()
         if not input_files:
             _uw.log(
                 f"No PDF files found in {INPUT_DIR}. "
@@ -829,6 +860,7 @@ def main() -> None:
                 filepath,
                 mode=mode,
                 extract_assets=args.extract_assets,
+                max_pages=args.max_pages,
                 max_chunks=args.max_chunks,
                 questions_per_chunk=args.questions_per_chunk,
                 resume=args.resume,

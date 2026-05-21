@@ -27,6 +27,32 @@
       "outputDirectories": ["tools/lecture-slide-question-generator/output_json/app_ready"],
       "notes": "Profile-style source: emits shared normalized chunks first, then invokes the existing Emma generator unchanged."
     },
+    "mehlman_pdf": {
+      "label": "Mehlman PDF",
+      "status": "active",
+      "requiresGemini": true,
+      "inputExtensions": [".pdf"],
+      "workingDirectory": ".",
+      "pythonExecutable": "python3",
+      "dryRunSteps": [
+        {
+          "stage": "normalization",
+          "stageLabel": "Mehlman shared-ingestion dry-run",
+          "heartbeatSeconds": 20,
+          "args": ["tools/shared-ingestion/mehlman_profile_runner.py", "--mode", "dry-run", "--input-file", "{inputFile}", "--limit", "10"]
+        }
+      ],
+      "liveSteps": [
+        {
+          "stage": "normalization",
+          "stageLabel": "Mehlman shared-ingestion live generation",
+          "heartbeatSeconds": 20,
+          "args": ["tools/shared-ingestion/mehlman_profile_runner.py", "--mode", "generate", "--input-file", "{inputFile}", "--limit", "10"]
+        }
+      ],
+      "outputDirectories": ["tools/mehlman-pdf-question-generator/output_json/app_ready"],
+      "notes": "Profile-style text-heavy PDF source: emits shared normalized text chunks, then invokes the existing Mehlman generator unchanged. Initial validation is capped to the first 10 pages."
+    },
     "fast_facts_pptx": {
       "label": "Fast Facts PPTX",
       "status": "active",
