@@ -57,6 +57,10 @@ FAST_FACTS_ATOMIZER_VERSION = "fast-facts-atomizer-v11"
 FAST_FACTS_GENERATION_PROMPT_VERSION = "fast-facts-generation-prompt-v2"
 FAST_FACTS_VALIDATOR_VERSION = "fast-facts-validator-v3"
 FAST_FACTS_ARCHETYPE_ONTOLOGY_VERSION = "fast-facts-archetype-ontology-v2"
+AMBOSS_PROFILE = "AMBOSS_PROFILE"
+AMBOSS_EXTRACTION_PROMPT_VERSION = "amboss-extraction-prompt-v1"
+AMBOSS_IMAGE_ROUTING_VERSION = "amboss-image-routing-v1"
+AMBOSS_VISUAL_STATE_VERSION = "amboss-visual-state-v3"
 LABELS = ["A", "B", "C", "D"]
 MAX_SLIDES_PER_CHUNK = 3
 MAX_GENERATION_ALLOCS_PER_CHUNK = 8
@@ -258,6 +262,16 @@ def supported_pptx(input_dir: Path) -> list[Path]:
     return [
         p for p in sorted(input_dir.iterdir())
         if p.is_file() and not p.name.startswith(".") and p.suffix.lower() == ".pptx"
+    ]
+
+
+def supported_amboss_inputs(input_dir: Path) -> list[Path]:
+    if not input_dir.exists():
+        return []
+    allowed = {".pdf", ".png", ".jpg", ".jpeg"}
+    return [
+        p for p in sorted(input_dir.iterdir())
+        if p.is_file() and not p.name.startswith(".") and p.suffix.lower() in allowed
     ]
 
 
@@ -703,6 +717,46 @@ def raw_gemini_call(api_key: str, prompt: str, temperature: float, max_tokens: i
     if not parts or "text" not in parts[0]:
         raise PipelineError("Gemini candidate had no text part.")
     return str(parts[0].get("text") or "")
+
+
+def raw_gemini_image_call(api_key: str, prompt: str, image_paths: list[Path], temperature: float, max_tokens: int = 8192, timeout_seconds: int = 90) -> str:
+    parts: list[dict[str, Any]] = [{"text": prompt}]
+    for image_path in image_paths:
+        parts.append({
+            "inline_data": {
+                "mime_type": mime_for(image_path),
+                "data": base64.b64encode(image_path.read_bytes()).decode("ascii"),
+            }
+        })
+    url = f"{GEMINI_API_BASE}/{GEMINI_MODEL}:generateContent?key={api_key}"
+    payload = json.dumps({
+        "contents": [{"role": "user", "parts": parts}],
+        "generationConfig": {
+            "temperature": temperature,
+            "maxOutputTokens": max_tokens,
+        },
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout_seconds) as resp:
+            response = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:600]
+        raise PipelineError(f"Gemini HTTP {exc.code}: {detail}") from exc
+    except (TimeoutError, socket.timeout) as exc:
+        raise PipelineError("Gemini request timed out") from exc
+    candidates = response.get("candidates") or []
+    if not candidates:
+        raise PipelineError(f"Gemini returned no candidates: {json.dumps(response)[:300]}")
+    parts_out = candidates[0].get("content", {}).get("parts") or []
+    if not parts_out or "text" not in parts_out[0]:
+        raise PipelineError("Gemini candidate had no text part.")
+    return str(parts_out[0].get("text") or "")
 
 
 def deterministic_normalize_slide(slide: dict[str, Any]) -> dict[str, Any]:
@@ -2179,6 +2233,10 @@ def build_explanation_sections(q: dict[str, Any], table_notes: list[str], explan
     return sections
 
 
+def expected_sequential_labels(count: int) -> list[str]:
+    return [chr(ord("A") + idx) for idx in range(max(0, count))]
+
+
 def sanitize_invalid_explanation_labels(q: dict[str, Any]) -> dict[str, Any]:
     allowed_labels = {
         str(choice.get("label") or "").strip().upper()
@@ -2215,20 +2273,68 @@ def sanitize_invalid_explanation_labels(q: dict[str, Any]) -> dict[str, Any]:
     return q
 
 
+def normalize_amboss_extracted_question(q: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(q, dict):
+        raise PipelineError("AMBOSS extracted question is not an object.")
+    stem = re.sub(r"\s+", " ", str(q.get("stem") or "").strip())
+    choices = q.get("answerChoices") or []
+    if not isinstance(choices, list):
+        choices = []
+    normalized_choices: list[dict[str, str]] = []
+    for choice in choices:
+        if not isinstance(choice, dict):
+            continue
+        label = str(choice.get("label") or "").strip().upper()
+        text = re.sub(r"\s+", " ", str(choice.get("text") or "").strip())
+        if label and text:
+            normalized_choices.append({"label": label, "text": text})
+    if not (2 <= len(normalized_choices) <= 9):
+        raise PipelineError(f"AMBOSS extracted question must have 2-9 choices, got {len(normalized_choices)}.")
+    labels = [choice["label"] for choice in normalized_choices]
+    expected = expected_sequential_labels(len(labels))
+    if labels != expected:
+        raise PipelineError(f"AMBOSS answer labels must be sequential {expected[0]}-{expected[-1]}, got {labels}.")
+    correct = str(q.get("correctAnswer") or "").strip().upper()
+    if correct not in labels:
+        raise PipelineError(f"AMBOSS correctAnswer {correct or '(missing)'} is not present in choices {labels}.")
+    objective = clean_sentence(q.get("educationalObjective") or q.get("correctExplanation") or "Review the extracted AMBOSS explanation.")
+    out = dict(q)
+    out["stem"] = stem
+    out["answerChoices"] = normalized_choices
+    out["correctAnswer"] = correct
+    out["educationalObjective"] = objective
+    out["retrievalTag"] = clean_tag(q.get("retrievalTag") or objective[:80])
+    out["reviewPearl"] = clean_sentence(q.get("reviewPearl") or q.get("correctExplanation") or objective)
+    out["correctExplanation"] = clean_sentence(q.get("correctExplanation"))
+    out["incorrectExplanations"] = [
+        {
+            "label": str(item.get("label") or "").strip().upper(),
+            "explanation": clean_sentence(item.get("explanation")),
+        }
+        for item in (q.get("incorrectExplanations") or [])
+        if isinstance(item, dict)
+        and str(item.get("label") or "").strip().upper() in labels
+        and str(item.get("label") or "").strip().upper() != correct
+        and clean_sentence(item.get("explanation"))
+    ]
+    return out
+
+
 def build_app_ready_payload(normalized_payload: dict[str, Any], generated_questions: list[dict[str, Any]]) -> dict[str, Any]:
     slide_by_id = {s["slideId"]: s for s in normalized_payload.get("slides") or []}
+    is_amboss = normalized_payload.get("profile") == AMBOSS_PROFILE
     questions: list[dict[str, Any]] = []
     for index, gen_q in enumerate(generated_questions, start=1):
         slide_id = str(gen_q.get("slideId") or "")
         slide = slide_by_id.get(slide_id)
         if not slide:
             raise PipelineError(f"Generated Q{index} references unknown slideId: {slide_id}")
-        q = normalize_generated_question(gen_q)
+        q = normalize_amboss_extracted_question(gen_q) if is_amboss else normalize_generated_question(gen_q)
         q = sanitize_invalid_explanation_labels(q)
         images, explanation_images, figure_refs, table_notes, exp_placeholders = build_media_routes(q, slide, index)
         sections = build_explanation_sections(q, table_notes, exp_placeholders)
         question = {
-            "id": f"lecture_slide_q{index:03d}_{short_hash(slide_id)}",
+            "id": f"{'amboss' if is_amboss else 'lecture_slide'}_q{index:03d}_{short_hash(slide_id)}",
             "questionNumber": index,
             "sourceQuestionNumber": slide.get("slideId"),
             "stem": q["stem"],
@@ -2247,8 +2353,9 @@ def build_app_ready_payload(normalized_payload: dict[str, Any], generated_questi
             "sharedGroup": None,
             "extractionWarnings": q.get("extractionWarnings") or [],
             "metadata": {
-                "sourceType": "lecture-slide-generator",
-                "sourceFormat": "lecture-slides",
+                "sourceType": "amboss-profile" if is_amboss else "lecture-slide-generator",
+                "sourceFormat": "amboss-extraction" if is_amboss else "lecture-slides",
+                "profile": AMBOSS_PROFILE if is_amboss else normalized_payload.get("profile"),
                 "slideId": slide_id,
                 "slideTypes": slide.get("slideType") or [],
                 "yieldScore": slide.get("yieldScore"),
@@ -2417,6 +2524,12 @@ def validate_app_ready_payload(payload: dict[str, Any]) -> list[str]:
     if not isinstance(questions, list) or not questions:
         errors.append("questions must be a non-empty array.")
         return errors
+    is_amboss = any(
+        isinstance(q, dict)
+        and isinstance(q.get("metadata"), dict)
+        and q.get("metadata", {}).get("profile") == AMBOSS_PROFILE
+        for q in questions
+    )
     seen_numbers: set[int] = set()
     seen_fps: dict[str, int] = {}
     diagnosis_usage: dict[str, int] = {}
@@ -2438,14 +2551,24 @@ def validate_app_ready_payload(payload: dict[str, Any]) -> list[str]:
         if re.search(r"\b(which of the following is true|all except|except)\b", stem, re.I):
             errors.append(f"{prefix}: forbidden shallow stem phrasing.")
         choices = q.get("answerChoices")
-        if not isinstance(choices, list) or len(choices) != 4:
+        if is_amboss:
+            if not isinstance(choices, list) or not (2 <= len(choices) <= 9):
+                errors.append(f"{prefix}: AMBOSS answerChoices must contain 2-9 choices.")
+                choices = []
+        elif not isinstance(choices, list) or len(choices) != 4:
             errors.append(f"{prefix}: answerChoices must contain exactly 4 choices.")
             choices = []
         labels = [c.get("label") for c in choices if isinstance(c, dict)]
-        if labels != LABELS:
-            errors.append(f"{prefix}: answerChoices labels must be A-D.")
-        if q.get("correctAnswer") not in LABELS:
-            errors.append(f"{prefix}: correctAnswer must be A-D.")
+        if is_amboss:
+            expected = expected_sequential_labels(len(labels))
+            if labels != expected:
+                label_range = f"{expected[0]}-{expected[-1]}" if expected else "A-Z"
+                errors.append(f"{prefix}: AMBOSS answerChoices labels must be sequential {label_range}.")
+        else:
+            if labels != LABELS:
+                errors.append(f"{prefix}: answerChoices labels must be A-D.")
+            if q.get("correctAnswer") not in LABELS:
+                errors.append(f"{prefix}: correctAnswer must be A-D.")
         if q.get("correctAnswer") not in labels:
             errors.append(f"{prefix}: correctAnswer is not present in choices.")
         allowed_label_set = set(labels)
@@ -4075,6 +4198,835 @@ def run_fast_facts_generation_milestone(
     return out_path
 
 
+def amboss_cache_path() -> Path:
+    return CACHE_DIR / "amboss_extraction_cache.json"
+
+
+def empty_amboss_cache() -> dict[str, Any]:
+    return {"schemaVersion": "amboss-extraction-cache-v1", "updatedAt": None, "pages": {}, "questions": {}}
+
+
+def load_amboss_cache() -> dict[str, Any]:
+    path = amboss_cache_path()
+    if not path.exists():
+        return empty_amboss_cache()
+    try:
+        payload = read_json(path)
+    except Exception:
+        return empty_amboss_cache()
+    if not isinstance(payload, dict) or not isinstance(payload.get("pages"), dict):
+        return empty_amboss_cache()
+    payload.setdefault("questions", {})
+    return payload
+
+
+def write_amboss_cache(cache: dict[str, Any]) -> None:
+    cache["updatedAt"] = timestamp_iso()
+    write_json(amboss_cache_path(), cache)
+
+
+def image_dimensions(path: Path) -> tuple[int, int]:
+    try:
+        from PIL import Image  # type: ignore
+        with Image.open(path) as im:
+            return int(im.width), int(im.height)
+    except Exception:
+        return 0, 0
+
+
+def amboss_ocr_image(path: Path) -> str:
+    if not shutil.which("tesseract"):
+        return ""
+    try:
+        proc = subprocess.run(
+            ["tesseract", str(path), "stdout", "--psm", "6"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if proc.returncode != 0:
+            return ""
+        return clean_slide_text(proc.stdout)
+    except Exception:
+        return ""
+
+
+def amboss_asset_entry(asset_path: Path, page_id: str, image_id: str, kind: str) -> dict[str, Any]:
+    width, height = image_dimensions(asset_path)
+    fingerprint = file_sha(asset_path)
+    return {
+        "imageId": image_id,
+        "kind": kind,
+        "assetPath": str(asset_path.relative_to(BASE_DIR)),
+        "mimeType": mime_for(asset_path),
+        "width": width,
+        "height": height,
+        "sha256": fingerprint,
+        "imageFingerprint": fingerprint,
+        "sourcePageId": page_id,
+    }
+
+
+def decompose_amboss_input(input_path: Path, limit_pages: int = 5) -> dict[str, Any]:
+    ensure_dirs()
+    source_hash = file_sha(input_path)
+    stem = slugify(input_path.stem)
+    pages: list[dict[str, Any]] = []
+    failures: list[dict[str, Any]] = []
+    suffix = input_path.suffix.lower()
+    limit_pages = max(1, int(limit_pages or 5))
+    if suffix == ".pdf":
+        fitz = optional_import_fitz()
+        pdfplumber = optional_import_pdfplumber()
+        if not fitz and not pdfplumber:
+            raise PipelineError("AMBOSS_PROFILE PDF input requires pymupdf or pdfplumber.")
+        pdf_doc = None
+        plumber_pdf = None
+        try:
+            if fitz:
+                pdf_doc = fitz.open(str(input_path))
+            if pdfplumber:
+                plumber_pdf = pdfplumber.open(str(input_path))
+            page_count = min(limit_pages, len(pdf_doc) if pdf_doc else len(plumber_pdf.pages))
+            for page_index in range(page_count):
+                page_num = page_index + 1
+                page_id = f"{stem}_p{page_num:04d}_{source_hash[:8]}"
+                text = ""
+                plumber_page = plumber_pdf.pages[page_index] if plumber_pdf else None
+                if plumber_page:
+                    try:
+                        text = plumber_page.extract_text(x_tolerance=1, y_tolerance=3) or ""
+                    except Exception:
+                        text = ""
+                if not text and pdf_doc:
+                    text = pdf_doc.load_page(page_index).get_text("text") or ""
+                image = render_slide_image(fitz, pdf_doc, page_index, stem, page_id) if pdf_doc else None
+                images = [image] if image else []
+                for img in images:
+                    if img:
+                        asset = BASE_DIR / img["assetPath"]
+                        img["imageFingerprint"] = file_sha(asset)
+                        img["sourcePageId"] = page_id
+                        img["kind"] = "page_screenshot"
+                pages.append({
+                    "pageId": page_id,
+                    "pageIndex": page_index,
+                    "pageNumber": page_num,
+                    "sourceFile": input_path.name,
+                    "sourceHash": source_hash,
+                    "pageHash": short_hash((text or "") + json.dumps([i.get("sha256") for i in images])),
+                    "text": clean_slide_text(text),
+                    "ocrText": clean_slide_text(text),
+                    "images": [i for i in images if i],
+                    "tables": extract_tables_from_page(plumber_page),
+                })
+        finally:
+            if plumber_pdf:
+                plumber_pdf.close()
+            if pdf_doc:
+                pdf_doc.close()
+    elif suffix in {".png", ".jpg", ".jpeg"}:
+        page_id = f"{stem}_p0001_{source_hash[:8]}"
+        asset_name = f"{stem}_{page_id}{suffix}"
+        asset_path = ASSET_DIR / asset_name
+        if input_path.resolve() != asset_path.resolve():
+            shutil.copyfile(input_path, asset_path)
+        ocr_text = amboss_ocr_image(asset_path)
+        image = amboss_asset_entry(asset_path, page_id, f"{page_id}_img01", "page_screenshot")
+        pages.append({
+            "pageId": page_id,
+            "pageIndex": 0,
+            "pageNumber": 1,
+            "sourceFile": input_path.name,
+            "sourceHash": source_hash,
+            "pageHash": short_hash(ocr_text + image["imageFingerprint"]),
+            "text": ocr_text,
+            "ocrText": ocr_text,
+            "images": [image],
+            "tables": [],
+        })
+    else:
+        raise PipelineError(f"AMBOSS_PROFILE does not support input type: {input_path.suffix}")
+    payload = {
+        "schemaVersion": "amboss-decomposition-v1",
+        "profile": AMBOSS_PROFILE,
+        "sourceFile": input_path.name,
+        "sourcePath": str(input_path),
+        "sourceHash": source_hash,
+        "createdAt": timestamp_iso(),
+        "pageCount": len(pages),
+        "pages": pages,
+        "failures": failures,
+    }
+    out_path = SLIDES_DIR / f"{stem}_amboss_pages.json"
+    write_json(out_path, payload)
+    log(f"AMBOSS pages -> {out_path.relative_to(BASE_DIR)}")
+    return payload
+
+
+def amboss_page_cache_key(source_hash: str, page: dict[str, Any]) -> str:
+    return hashlib.sha256(json.dumps({
+        "profile": AMBOSS_PROFILE,
+        "sourcePdfHash": source_hash,
+        "pageHash": page.get("pageHash"),
+        "extractionPromptVersion": AMBOSS_EXTRACTION_PROMPT_VERSION,
+        "imageRoutingVersion": AMBOSS_IMAGE_ROUTING_VERSION,
+    }, sort_keys=True).encode("utf-8", errors="replace")).hexdigest()[:16]
+
+
+def amboss_question_hash(question: dict[str, Any]) -> str:
+    return hashlib.sha256(json.dumps({
+        "stem": question.get("stem"),
+        "answerChoices": question.get("answerChoices"),
+        "correctAnswer": question.get("correctAnswer"),
+        "explanation": question.get("correctExplanation"),
+    }, sort_keys=True, ensure_ascii=False).encode("utf-8", errors="replace")).hexdigest()[:16]
+
+
+def amboss_extraction_prompt(page: dict[str, Any]) -> str:
+    image_summary = [
+        {
+            "imageId": img.get("imageId"),
+            "kind": img.get("kind"),
+            "width": img.get("width"),
+            "height": img.get("height"),
+            "imageFingerprint": img.get("imageFingerprint"),
+        }
+        for img in page.get("images") or []
+    ]
+    return f"""
+You are extracting existing AMBOSS-style question content from one visible page or screenshot.
+
+Do not generate new questions. Do not invent answer choices. Do not invent explanations.
+If no complete question is visible, return an empty questions array.
+Return JSON only:
+{{
+  "questions": [
+    {{
+      "sourcePageId": "",
+      "extractionConfidence": 0.0,
+      "stem": "",
+      "answerChoices": [{{"label":"A","text":""}}, {{"label":"B","text":""}}, {{"label":"C","text":""}}, {{"label":"D","text":""}}],
+      "correctAnswer": "A",
+      "correctAnswerVisible": true,
+      "correctExplanation": "",
+      "incorrectExplanations": [{{"label":"B","explanation":""}}],
+      "educationalObjective": "",
+      "imageRouting": [{{"imageId":"","placement":"stem","reason":"","imageConfidence":0.0}}],
+      "extractionWarnings": []
+    }}
+  ],
+  "pageWarnings": []
+}}
+
+Rules:
+- Extract the visible stem and answer choices exactly enough to preserve meaning.
+- Use correctAnswer only if visible or clearly marked. If not visible, set correctAnswerVisible false and use an empty correctAnswer.
+- Images in unanswered question context route to stem.
+- Images in explanation/review/teaching route to explanation.
+- Decorative UI or irrelevant screenshots route to ignored.
+- If the screenshot is just a menu/list without a full question, return no questions.
+
+PAGE_ID: {page.get("pageId")}
+OCR_TEXT:
+{str(page.get("ocrText") or page.get("text") or "")[:12000]}
+
+IMAGES:
+{json.dumps(image_summary, ensure_ascii=False)}
+""".strip()
+
+
+def extract_amboss_page(page: dict[str, Any], source_file: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        raise PipelineError("GEMINI_API_KEY is not set for AMBOSS_PROFILE extraction.")
+    image_paths = [BASE_DIR / img["assetPath"] for img in page.get("images") or [] if img.get("assetPath")]
+    prompt = amboss_extraction_prompt(page)
+    raw = raw_gemini_image_call(api_key, prompt, image_paths[:1], temperature=0.0, max_tokens=8192, timeout_seconds=90)
+    write_debug_raw(source_file, "amboss_extract", str(page.get("pageId") or "page"), "attempt0", raw)
+    parsed = load_largest_valid_json(raw)
+    questions = parsed.get("questions") if isinstance(parsed, dict) else []
+    if not isinstance(questions, list):
+        questions = []
+    cleaned: list[dict[str, Any]] = []
+    for q in questions:
+        if not isinstance(q, dict):
+            continue
+        q["sourcePageId"] = page.get("pageId")
+        q["extractionConfidence"] = float(q.get("extractionConfidence") or 0)
+        q.setdefault("extractionWarnings", [])
+        cleaned.append(q)
+    return cleaned, {"pageWarnings": parsed.get("pageWarnings") if isinstance(parsed, dict) else []}
+
+
+def amboss_visual_state_prompt(page: dict[str, Any], page_questions: list[dict[str, Any]]) -> str:
+    choices = []
+    for q in page_questions:
+        for choice in q.get("answerChoices") or []:
+            if isinstance(choice, dict):
+                choices.append({"label": choice.get("label"), "text": choice.get("text")})
+    image_summary = [
+        {
+            "imageId": img.get("imageId"),
+            "kind": img.get("kind"),
+            "width": img.get("width"),
+            "height": img.get("height"),
+            "imageFingerprint": img.get("imageFingerprint"),
+        }
+        for img in page.get("images") or []
+    ]
+    return f"""
+Analyze this rendered AMBOSS page image for visual answer states only.
+
+Do not solve the question. Do not infer from medical knowledge.
+Use only visible UI styling:
+- green highlighted answer row or green check mark means correct
+- red/pink highlighted answer row means incorrect
+- explanation text immediately under an answer row belongs to that answer choice
+- zoomed or review-only clinical images belong to explanation, not stem
+
+Return JSON only:
+{{
+  "correctAnswer": "",
+  "confidence": 0.0,
+  "answerStates": [
+    {{"label":"A","state":"correct|incorrect|unknown","confidence":0.0,"visibleText":""}}
+  ],
+  "visibleRationales": [
+    {{"label":"A","explanation":"","confidence":0.0}}
+  ],
+  "imageRouting": [
+    {{"imageId":"","placement":"stem|explanation|ignored","reason":"","imageConfidence":0.0}}
+  ],
+  "warnings": []
+}}
+
+PAGE_ID: {page.get("pageId")}
+KNOWN_VISIBLE_CHOICES:
+{json.dumps(choices, ensure_ascii=False)}
+PAGE_IMAGES:
+{json.dumps(image_summary, ensure_ascii=False)}
+""".strip()
+
+
+def detect_amboss_visual_state(page: dict[str, Any], page_questions: list[dict[str, Any]], source_file: str) -> dict[str, Any]:
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        return {"correctAnswer": "", "confidence": 0, "answerStates": [], "visibleRationales": [], "imageRouting": [], "warnings": ["GEMINI_API_KEY missing"]}
+    image_paths = [BASE_DIR / img["assetPath"] for img in page.get("images") or [] if img.get("assetPath")]
+    if not image_paths:
+        return {"correctAnswer": "", "confidence": 0, "answerStates": [], "visibleRationales": [], "imageRouting": [], "warnings": ["no rendered page image"]}
+    prompt = amboss_visual_state_prompt(page, page_questions)
+    raw = raw_gemini_image_call(api_key, prompt, image_paths[:1], temperature=0.0, max_tokens=4096, timeout_seconds=60)
+    write_debug_raw(source_file, "amboss_visual", str(page.get("pageId") or "page"), "attempt0", raw)
+    parsed = load_largest_valid_json(raw)
+    if not isinstance(parsed, dict):
+        return {"correctAnswer": "", "confidence": 0, "answerStates": [], "visibleRationales": [], "imageRouting": [], "warnings": ["visual state response was not object"]}
+    parsed.setdefault("answerStates", [])
+    parsed.setdefault("visibleRationales", [])
+    parsed.setdefault("imageRouting", [])
+    parsed.setdefault("warnings", [])
+    parsed["sourcePageId"] = page.get("pageId")
+    known_image_ids = {str(img.get("imageId") or "") for img in page.get("images") or []}
+    page_image_id = str((page.get("images") or [{}])[0].get("imageId") or "") if page.get("images") else ""
+    normalized_routes: list[dict[str, Any]] = []
+    for route in parsed.get("imageRouting") or []:
+        if not isinstance(route, dict):
+            continue
+        placement = str(route.get("placement") or "ignored").lower()
+        if placement not in {"stem", "explanation", "ignored"}:
+            placement = "ignored"
+        if placement == "stem" and not page_questions:
+            placement = "explanation"
+        image_id = str(route.get("imageId") or "")
+        if image_id not in known_image_ids and page_image_id and placement != "ignored":
+            image_id = page_image_id
+        normalized_routes.append({
+            "imageId": image_id,
+            "placement": placement,
+            "reason": clean_sentence(route.get("reason")),
+            "imageConfidence": float(route.get("imageConfidence") or 0),
+            "sourcePageId": page.get("pageId"),
+        })
+    parsed["imageRouting"] = normalized_routes
+    return parsed
+
+
+def amboss_apply_visual_state_to_question(q: dict[str, Any], visual_state: dict[str, Any]) -> dict[str, Any]:
+    out = copy.deepcopy(q)
+    labels = {
+        str(choice.get("label") or "").strip().upper()
+        for choice in out.get("answerChoices") or []
+        if isinstance(choice, dict)
+    }
+    visual_correct = str(visual_state.get("correctAnswer") or "").strip().upper()
+    if visual_correct and visual_correct in labels:
+        out["correctAnswer"] = visual_correct
+        out["correctAnswerVisible"] = True
+        out["visualCorrectAnswerConfidence"] = float(visual_state.get("confidence") or 0)
+        warnings = [
+            str(w)
+            for w in (out.get("extractionWarnings") or [])
+            if str(w) != "correct answer not visible or invalid"
+        ]
+        warnings.append(f"correct answer detected visually: {visual_correct}")
+        out["extractionWarnings"] = dedupe_preserve_order(warnings)
+    rationale_by_label = {
+        str(item.get("label") or "").strip().upper(): clean_sentence(item.get("explanation"))
+        for item in visual_state.get("visibleRationales") or []
+        if isinstance(item, dict) and item.get("label")
+    }
+    existing = {
+        str(item.get("label") or "").strip().upper(): clean_sentence(item.get("explanation"))
+        for item in out.get("incorrectExplanations") or []
+        if isinstance(item, dict) and item.get("label")
+    }
+    for label, explanation in rationale_by_label.items():
+        if label and explanation and not existing.get(label):
+            existing[label] = explanation
+    correct = str(out.get("correctAnswer") or "").strip().upper()
+    if correct and existing.get(correct) and not clean_sentence(out.get("correctExplanation")):
+        out["correctExplanation"] = existing[correct]
+    out["incorrectExplanations"] = [
+        {"label": label, "explanation": explanation}
+        for label, explanation in sorted(existing.items())
+        if label and explanation and label != correct
+    ]
+    if visual_state.get("imageRouting"):
+        out["imageRouting"] = visual_state.get("imageRouting")
+    out["visualAnswerStates"] = visual_state.get("answerStates") or []
+    return out
+
+
+def amboss_combine_visual_states(page_records: list[dict[str, Any]]) -> dict[str, Any]:
+    combined: dict[str, Any] = {
+        "correctAnswer": "",
+        "confidence": 0.0,
+        "answerStates": [],
+        "visibleRationales": [],
+        "imageRouting": [],
+        "warnings": [],
+        "sourcePageIds": [],
+    }
+    best_confidence = 0.0
+    rationales: dict[str, dict[str, Any]] = {}
+    state_by_label: dict[str, dict[str, Any]] = {}
+    route_keys: set[tuple[str, str]] = set()
+    state_priority = {"correct": 3, "incorrect": 2, "unknown": 1}
+    for record in page_records:
+        state = record.get("visualState") or {}
+        page_id = str((record.get("page") or {}).get("pageId") or state.get("sourcePageId") or "")
+        if page_id:
+            combined["sourcePageIds"].append(page_id)
+        correct = str(state.get("correctAnswer") or "").strip().upper()
+        confidence = float(state.get("confidence") or 0)
+        if correct and confidence >= best_confidence:
+            combined["correctAnswer"] = correct
+            combined["confidence"] = confidence
+            best_confidence = confidence
+        for item in state.get("answerStates") or []:
+            if not isinstance(item, dict):
+                continue
+            label = str(item.get("label") or "").strip().upper()
+            item_state = str(item.get("state") or "").strip().lower()
+            prior = state_by_label.get(label)
+            if label and (
+                not prior
+                or state_priority.get(item_state, 0) > state_priority.get(str(prior.get("state") or ""), 0)
+                or float(item.get("confidence") or 0) > float(prior.get("confidence") or 0)
+            ):
+                state_by_label[label] = item
+        for item in state.get("visibleRationales") or []:
+            if not isinstance(item, dict) or not item.get("label"):
+                continue
+            label = str(item.get("label") or "").strip().upper()
+            explanation = clean_sentence(item.get("explanation"))
+            confidence = float(item.get("confidence") or 0)
+            prior = rationales.get(label)
+            if explanation and (not prior or confidence >= float(prior.get("confidence") or 0)):
+                rationales[label] = {"label": label, "explanation": explanation, "confidence": confidence}
+        for route in state.get("imageRouting") or []:
+            if not isinstance(route, dict):
+                continue
+            key = (str(route.get("sourcePageId") or page_id), str(route.get("imageId") or ""))
+            if key not in route_keys:
+                route_keys.add(key)
+                combined["imageRouting"].append(route)
+        combined["warnings"].extend(str(w) for w in (state.get("warnings") or []) if w)
+    combined["sourcePageIds"] = dedupe_preserve_order(combined["sourcePageIds"])
+    combined["answerStates"] = [state_by_label[label] for label in sorted(state_by_label)]
+    combined["visibleRationales"] = list(rationales.values())
+    combined["warnings"] = dedupe_preserve_order(combined["warnings"])
+    return combined
+
+
+def amboss_dedupe_and_promote_questions(page_records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    best_by_stem: dict[str, dict[str, Any]] = {}
+    visual_state_combined = amboss_combine_visual_states(page_records)
+    visual_correct = str(visual_state_combined.get("correctAnswer") or "").strip().upper()
+    for record in page_records:
+        for q in record.get("questions") or []:
+            key = short_hash(normalize_key(q.get("stem") or "")[:800])
+            candidate = copy.deepcopy(q)
+            if visual_correct:
+                candidate = amboss_apply_visual_state_to_question(candidate, visual_state_combined)
+                candidate["visualSourcePageIds"] = visual_state_combined.get("sourcePageIds") or []
+            score = (
+                len(candidate.get("answerChoices") or []) * 10
+                + len(candidate.get("incorrectExplanations") or []) * 3
+                + (20 if candidate.get("correctAnswer") else 0)
+                + int(10 * float(candidate.get("extractionConfidence") or 0))
+            )
+            prior = best_by_stem.get(key)
+            prior_score = prior.get("_score", -1) if prior else -1
+            if score > prior_score:
+                candidate["_score"] = score
+                best_by_stem[key] = candidate
+    out: list[dict[str, Any]] = []
+    for q in best_by_stem.values():
+        q.pop("_score", None)
+        out.append(q)
+    return out
+
+
+def amboss_normalized_slide_for_question(page: dict[str, Any], q: dict[str, Any], index: int, image_audit: list[dict[str, Any]], support_pages: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    question_id = f"{page['pageId']}_q{index:02d}_{amboss_question_hash(q)}"
+    images: list[dict[str, Any]] = []
+    seen_fingerprints: dict[str, str] = {}
+    source_pages = [page]
+    for support_page in support_pages or []:
+        if support_page and support_page.get("pageId") != page.get("pageId"):
+            source_pages.append(support_page)
+    source_images = [img for source_page in source_pages for img in (source_page.get("images") or [])]
+    for img in source_images:
+        img = dict(img)
+        fp = img.get("imageFingerprint") or img.get("sha256")
+        img["imageFingerprint"] = fp
+        img["routedLocation"] = "ignored"
+        img["imageConfidence"] = 0.0
+        img["duplicateOf"] = None
+        if fp and fp in seen_fingerprints:
+            img["duplicateOf"] = seen_fingerprints[fp]
+            image_audit.append({**img, "dedupeAction": "suppressed_duplicate"})
+            continue
+        if fp:
+            seen_fingerprints[fp] = img.get("imageId")
+        for route in q.get("imageRouting") or []:
+            if isinstance(route, dict) and route.get("imageId") == img.get("imageId"):
+                placement = str(route.get("placement") or "ignored").lower()
+                if placement not in {"stem", "explanation", "ignored"}:
+                    placement = "ignored"
+                img["routedLocation"] = placement
+                img["imageConfidence"] = float(route.get("imageConfidence") or 0)
+        image_audit.append({**img, "dedupeAction": "kept"})
+        images.append(img)
+    return {
+        "slideId": question_id,
+        "slideType": ["HIGH_YIELD_CLINICAL"],
+        "yieldScore": int(100 * min(1.0, float(q.get("extractionConfidence") or 0))),
+        "primaryConcepts": [clean_tag(q.get("educationalObjective") or "AMBOSS extracted question")],
+        "secondaryConcepts": [],
+        "clinicalFacts": [clean_sentence(q.get("stem"))],
+        "diagnosticFacts": [],
+        "managementFacts": [],
+        "mechanismFacts": [],
+        "images": images,
+        "tables": page.get("tables") or [],
+        "questionPotential": 100,
+        "sourceTextHash": amboss_question_hash(q),
+        "metadata": {
+            "profile": AMBOSS_PROFILE,
+            "sourcePageId": page.get("pageId"),
+            "pageNumber": page.get("pageNumber"),
+            "extractionConfidence": q.get("extractionConfidence"),
+        },
+    }
+
+
+def amboss_generated_question(q: dict[str, Any], slide_id: str) -> dict[str, Any] | None:
+    choices = q.get("answerChoices") or []
+    if not isinstance(choices, list) or not (2 <= len(choices) <= 9):
+        return None
+    normalized_choices = [
+        {"label": str(c.get("label") or "").strip().upper(), "text": str(c.get("text") or "").strip()}
+        for c in choices
+        if isinstance(c, dict) and str(c.get("label") or "").strip() and str(c.get("text") or "").strip()
+    ]
+    labels = [c["label"] for c in normalized_choices]
+    if labels != expected_sequential_labels(len(labels)):
+        return None
+    correct = str(q.get("correctAnswer") or "").strip().upper()
+    if correct not in labels:
+        return None
+    stem = clean_sentence(q.get("stem"))
+    if not stem:
+        return None
+    objective = clean_sentence(q.get("educationalObjective") or q.get("correctExplanation") or "Review the extracted AMBOSS explanation.")
+    return {
+        "slideId": slide_id,
+        "questionKind": "extracted_amboss",
+        "stemTemplate": "amboss_extracted",
+        "testedConcept": objective[:120],
+        "diagnosisOrTarget": objective[:120],
+        "distractorFamily": "original Amboss answer choices",
+        "stem": stem,
+        "answerChoices": normalized_choices,
+        "correctAnswer": correct,
+        "correctExplanation": clean_sentence(q.get("correctExplanation")),
+        "incorrectExplanations": [
+            {"label": str(item.get("label") or "").strip().upper(), "explanation": clean_sentence(item.get("explanation"))}
+            for item in (q.get("incorrectExplanations") or [])
+            if isinstance(item, dict) and str(item.get("label") or "").strip().upper() in labels
+        ],
+        "educationalObjective": objective,
+        "retrievalTag": objective[:80],
+        "reviewPearl": clean_sentence(q.get("correctExplanation") or objective),
+        "imageRouting": [
+            {"imageId": r.get("imageId"), "placement": r.get("placement")}
+            for r in (q.get("imageRouting") or [])
+            if isinstance(r, dict) and r.get("placement") in {"stem", "explanation"}
+        ],
+        "tableUse": [],
+        "sourceFactIds": [q.get("sourcePageId")],
+        "extractionWarnings": q.get("extractionWarnings") or [],
+    }
+
+
+def validate_amboss_extraction(q: dict[str, Any]) -> tuple[bool, list[str]]:
+    warnings: list[str] = []
+    if not clean_sentence(q.get("stem")):
+        warnings.append("missing stem")
+    choices = q.get("answerChoices") or []
+    if not isinstance(choices, list) or len(choices) < 4:
+        warnings.append("fewer than 4 answer choices")
+    visible_labels = {
+        str(choice.get("label") or "").strip().upper()
+        for choice in choices
+        if isinstance(choice, dict)
+    }
+    if str(q.get("correctAnswer") or "").strip().upper() not in visible_labels:
+        warnings.append("correct answer not visible or invalid")
+    confidence = float(q.get("extractionConfidence") or 0)
+    if confidence < 0.55:
+        warnings.append("low extraction confidence")
+    return not any(w in warnings for w in ["missing stem", "fewer than 4 answer choices", "correct answer not visible or invalid"]), warnings
+
+
+def amboss_canonical_blockers(q: dict[str, Any]) -> list[str]:
+    blockers: list[str] = []
+    choices = q.get("answerChoices") or []
+    if not isinstance(choices, list) or not (2 <= len(choices) <= 9):
+        blockers.append(f"AMBOSS canonical conversion supports 2-9 choices; extracted {len(choices) if isinstance(choices, list) else 0}")
+    labels = [str(c.get("label") or "").strip().upper() for c in choices if isinstance(c, dict)]
+    expected = expected_sequential_labels(len(labels))
+    if labels != expected:
+        blockers.append(f"AMBOSS labels are not sequential {expected[0] if expected else 'A'}-{expected[-1] if expected else 'Z'}")
+    if str(q.get("correctAnswer") or "").strip().upper() not in labels:
+        blockers.append(f"correct answer {q.get('correctAnswer') or '(missing)'} is not present in extracted labels")
+    return blockers
+
+
+def amboss_audit_page_images(page: dict[str, Any], question: dict[str, Any] | None, image_audit: list[dict[str, Any]], status: str) -> None:
+    routes = question.get("imageRouting") if isinstance(question, dict) else []
+    route_by_id = {
+        str(route.get("imageId")): route
+        for route in (routes or [])
+        if isinstance(route, dict) and route.get("imageId")
+    }
+    seen: dict[str, str] = {}
+    for img in page.get("images") or []:
+        fp = img.get("imageFingerprint") or img.get("sha256")
+        route = route_by_id.get(str(img.get("imageId")))
+        routed = str((route or {}).get("placement") or "ignored").lower()
+        if routed not in {"stem", "explanation", "ignored"}:
+            routed = "ignored"
+        duplicate_of = seen.get(fp) if fp else None
+        if fp and not duplicate_of:
+            seen[fp] = str(img.get("imageId"))
+        image_audit.append({
+            "imageId": img.get("imageId"),
+            "sourcePageId": page.get("pageId"),
+            "assetPath": img.get("assetPath"),
+            "imageFingerprint": fp,
+            "routedLocation": "ignored" if duplicate_of else routed,
+            "imageConfidence": float((route or {}).get("imageConfidence") or 0),
+            "duplicateOf": duplicate_of,
+            "dedupeAction": "suppressed_duplicate" if duplicate_of else "kept",
+            "status": status,
+            "reason": (route or {}).get("reason") or ("no complete canonical question" if status != "canonical" else ""),
+        })
+
+
+def process_amboss_input(input_path: Path, limit_pages: int = 5) -> Path:
+    started = time.time()
+    page_payload = decompose_amboss_input(input_path, limit_pages=limit_pages)
+    source_hash = page_payload["sourceHash"]
+    cache = load_amboss_cache()
+    extracted_questions: list[dict[str, Any]] = []
+    normalized_slides: list[dict[str, Any]] = []
+    generated_questions: list[dict[str, Any]] = []
+    image_audit: list[dict[str, Any]] = []
+    unresolved: list[dict[str, Any]] = []
+    cache_hits = 0
+    cache_misses = 0
+    accepted = 0
+    page_records: list[dict[str, Any]] = []
+    for page in page_payload.get("pages") or []:
+        page_key = amboss_page_cache_key(source_hash, page)
+        cached = (cache.get("pages") or {}).get(page_key)
+        if isinstance(cached, dict) and cached.get("status") == "accepted":
+            page_questions = cached.get("questions") or []
+            page_meta = cached.get("pageMeta") or {}
+            visual_state = cached.get("visualState") if cached.get("visualStateVersion") == AMBOSS_VISUAL_STATE_VERSION else None
+            cache_hits += 1
+        else:
+            cache_misses += 1
+            try:
+                page_questions, page_meta = extract_amboss_page(page, page_payload["sourceFile"])
+            except Exception as exc:
+                unresolved.append({"pageId": page.get("pageId"), "reason": str(exc)})
+                page_questions = []
+                page_meta = {"pageWarnings": [str(exc)]}
+            visual_state = None
+            cache.setdefault("pages", {})[page_key] = {
+                "profile": AMBOSS_PROFILE,
+                "sourcePdfHash": source_hash,
+                "pageHash": page.get("pageHash"),
+                "extractionPromptVersion": AMBOSS_EXTRACTION_PROMPT_VERSION,
+                "imageRoutingVersion": AMBOSS_IMAGE_ROUTING_VERSION,
+                "status": "accepted",
+                "questions": page_questions,
+                "pageMeta": page_meta,
+                "updatedAt": timestamp_iso(),
+            }
+            write_amboss_cache(cache)
+        if visual_state is None:
+            try:
+                visual_state = detect_amboss_visual_state(page, page_questions, page_payload["sourceFile"])
+            except Exception as exc:
+                visual_state = {"correctAnswer": "", "confidence": 0, "answerStates": [], "visibleRationales": [], "imageRouting": [], "warnings": [str(exc)]}
+            page_entry = cache.setdefault("pages", {}).setdefault(page_key, {})
+            page_entry["visualState"] = visual_state
+            page_entry["visualStateVersion"] = AMBOSS_VISUAL_STATE_VERSION
+            page_entry["updatedAt"] = timestamp_iso()
+            write_amboss_cache(cache)
+        page_records.append({"page": page, "questions": page_questions, "visualState": visual_state, "pageMeta": page_meta})
+
+    promoted_questions = amboss_dedupe_and_promote_questions(page_records)
+    page_by_id = {p["pageId"]: p for p in page_payload.get("pages") or []}
+    for q_index, q in enumerate(promoted_questions, start=1):
+        page = page_by_id.get(str(q.get("sourcePageId") or "")) or (page_payload.get("pages") or [{}])[0]
+        ok, warnings = validate_amboss_extraction(q)
+        canonical_blockers = amboss_canonical_blockers(q)
+        q["extractionWarnings"] = dedupe_preserve_order(list(q.get("extractionWarnings") or []) + warnings + canonical_blockers)
+        q["extractionStatus"] = "canonical_ready" if ok and not canonical_blockers else "partial_review"
+        extracted_questions.append(q)
+        extracted_hash = amboss_question_hash(q)
+        q_cache_key = hashlib.sha256(json.dumps({
+            "profile": AMBOSS_PROFILE,
+            "sourcePdfHash": source_hash,
+            "pageHash": page.get("pageHash"),
+            "extractedQuestionHash": extracted_hash,
+            "extractionPromptVersion": AMBOSS_EXTRACTION_PROMPT_VERSION,
+            "imageRoutingVersion": AMBOSS_IMAGE_ROUTING_VERSION,
+            "visualStateVersion": AMBOSS_VISUAL_STATE_VERSION,
+        }, sort_keys=True).encode("utf-8", errors="replace")).hexdigest()[:16]
+        cache.setdefault("questions", {})[q_cache_key] = {
+            "cacheKey": q_cache_key,
+            "profile": AMBOSS_PROFILE,
+            "sourcePdfHash": source_hash,
+            "pageHash": page.get("pageHash"),
+            "extractedQuestionHash": extracted_hash,
+            "extractionPromptVersion": AMBOSS_EXTRACTION_PROMPT_VERSION,
+            "imageRoutingVersion": AMBOSS_IMAGE_ROUTING_VERSION,
+            "visualStateVersion": AMBOSS_VISUAL_STATE_VERSION,
+            "question": q,
+            "status": "accepted" if q["extractionStatus"] == "canonical_ready" else "partial_review",
+            "updatedAt": timestamp_iso(),
+        }
+        write_amboss_cache(cache)
+        if not ok or canonical_blockers:
+            unresolved.append({"pageId": page.get("pageId"), "questionIndex": q_index, "reason": "; ".join(q["extractionWarnings"])})
+            support_ids = q.get("visualSourcePageIds") or [page.get("pageId")]
+            for support_id in support_ids:
+                support_page = page_by_id.get(str(support_id))
+                if support_page:
+                    amboss_audit_page_images(support_page, q, image_audit, "partial_review")
+            continue
+        support_pages = [
+            page_by_id[str(support_id)]
+            for support_id in (q.get("visualSourcePageIds") or [])
+            if str(support_id) in page_by_id
+        ]
+        slide = amboss_normalized_slide_for_question(page, q, q_index, image_audit, support_pages=support_pages)
+        gen_q = amboss_generated_question(q, slide["slideId"])
+        if not gen_q:
+            unresolved.append({"pageId": page.get("pageId"), "questionIndex": q_index, "reason": "could not convert to canonical generated question"})
+            continue
+        normalized_slides.append(slide)
+        generated_questions.append(gen_q)
+        accepted += 1
+    question_page_ids = {str(q.get("sourcePageId") or "") for q in promoted_questions}
+    support_page_ids = {
+        str(page_id)
+        for q in promoted_questions
+        for page_id in (q.get("visualSourcePageIds") or [])
+    }
+    for record in page_records:
+        page = record["page"]
+        if page.get("pageId") not in question_page_ids and page.get("pageId") not in support_page_ids:
+            amboss_audit_page_images(page, None, image_audit, "no_question_detected")
+    stem = slugify(input_path.stem)
+    extracted_path = GENERATED_DIR / f"{stem}_amboss_extracted_questions.json"
+    write_json(extracted_path, {"profile": AMBOSS_PROFILE, "questions": extracted_questions})
+    normalized_payload = {
+        "schemaVersion": "amboss-normalized-v1",
+        "profile": AMBOSS_PROFILE,
+        "sourceFile": input_path.name,
+        "pdfSha256": source_hash,
+        "normalizationWarnings": [],
+        "slides": normalized_slides,
+    }
+    app_payload = build_app_ready_payload(normalized_payload, generated_questions) if generated_questions else None
+    app_ready_path = APP_READY_DIR / f"{stem}_amboss_app_ready.json"
+    validation_errors: list[str] = []
+    if app_payload:
+        validation_errors = validate_app_ready_payload(app_payload)
+        if not validation_errors:
+            write_json(app_ready_path, app_payload)
+    cache_report = {
+        "cachePath": str(amboss_cache_path().relative_to(BASE_DIR)),
+        "cacheHits": cache_hits,
+        "cacheMisses": cache_misses,
+        "reusedQuestions": sum(len(((cache.get("pages") or {}).get(amboss_page_cache_key(source_hash, p)) or {}).get("questions") or []) for p in page_payload.get("pages") or []) if cache_hits else 0,
+        "acceptedQuestions": accepted,
+        "runtimeDurationSeconds": round(time.time() - started, 2),
+    }
+    extraction_report = {
+        "profile": AMBOSS_PROFILE,
+        "sourceFile": input_path.name,
+        "pagesProcessed": len(page_payload.get("pages") or []),
+        "questionsExtracted": len(extracted_questions),
+        "canonicalQuestions": len(generated_questions),
+        "appReadyPath": str(app_ready_path.relative_to(BASE_DIR)) if app_payload and not validation_errors else "",
+        "validationErrors": validation_errors,
+        "cacheReport": cache_report,
+        "unresolvedCount": len(unresolved),
+    }
+    extraction_report_path = write_report(extraction_report, "amboss_extraction_audit_report")
+    image_report_path = write_report({"profile": AMBOSS_PROFILE, "sourceFile": input_path.name, "imageAudit": image_audit}, "amboss_image_routing_audit_report")
+    unresolved_path = write_report({"profile": AMBOSS_PROFILE, "sourceFile": input_path.name, "unresolved": unresolved}, "amboss_unresolved_extraction_report")
+    log(f"AMBOSS extracted -> {extracted_path.relative_to(BASE_DIR)}")
+    log(f"AMBOSS extraction report -> {extraction_report_path.relative_to(BASE_DIR)}")
+    log(f"AMBOSS image report -> {image_report_path.relative_to(BASE_DIR)}")
+    log(f"AMBOSS unresolved report -> {unresolved_path.relative_to(BASE_DIR)}")
+    if app_payload and not validation_errors:
+        log(f"AMBOSS app-ready -> {app_ready_path.relative_to(BASE_DIR)}")
+        return app_ready_path
+    return extracted_path
+
+
 PPTX_NS = {
     "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
     "p": "http://schemas.openxmlformats.org/presentationml/2006/main",
@@ -5314,6 +6266,7 @@ def parse_args() -> argparse.Namespace:
     mode.add_argument("--repair-existing", action="store_true", help="Repair existing generated questions without rerunning full-deck generation.")
     mode.add_argument("--validate-only", default="", help="Validate an app-ready JSON output.")
     parser.add_argument("--fast-facts-profile", action="store_true", help="Use FAST_FACTS_PROFILE PPTX concept graph mode. Combine with --generate for the constrained generation milestone.")
+    parser.add_argument("--amboss-profile", action="store_true", help="Use AMBOSS_PROFILE deterministic extraction mode for PDFs or screenshot exports.")
     parser.add_argument("--reuse-cache", action=argparse.BooleanOptionalAction, default=True, help="Reuse valid Fast Facts cached questions when available.")
     parser.add_argument("--force-regenerate", action="store_true", help="Ignore Fast Facts cache hits and regenerate eligible questions.")
     parser.add_argument("--repair-only", action="store_true", help="Fast Facts only: repair/revalidate cache without generating cache misses.")
@@ -5354,6 +6307,19 @@ def main() -> int:
                 for path in pptx_files[:1]
             ]
             print("Generated Fast Facts files:")
+            for output in outputs:
+                print(f"  {output}")
+            return 0
+        if args.amboss_profile:
+            if args.input_file:
+                amboss_inputs = [Path(args.input_file).expanduser().resolve()]
+            else:
+                input_dir = Path(args.input_dir).resolve() if args.input_dir else INPUT_DIR
+                amboss_inputs = supported_amboss_inputs(input_dir)
+            if not amboss_inputs:
+                raise PipelineError("No PDF/image files found for AMBOSS_PROFILE.")
+            outputs = [process_amboss_input(path, limit_pages=args.limit or 5) for path in amboss_inputs[:1]]
+            print("Generated AMBOSS files:")
             for output in outputs:
                 print(f"  {output}")
             return 0
