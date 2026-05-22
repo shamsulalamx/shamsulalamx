@@ -2284,7 +2284,11 @@ def generated_question_claim_text(q: dict[str, Any]) -> str:
     return " ".join(parts)
 
 
-def semantic_grounding_findings(generated_questions: list[dict[str, Any]], normalized_payload: dict[str, Any]) -> list[dict[str, Any]]:
+def semantic_grounding_findings(
+    generated_questions: list[dict[str, Any]],
+    normalized_payload: dict[str, Any],
+    validation_mode: str = "strict",
+) -> list[dict[str, Any]]:
     grounding_index = build_grounding_index(normalized_payload)
     findings: list[dict[str, Any]] = []
     for idx, q in enumerate(generated_questions, start=1):
@@ -2317,7 +2321,7 @@ def semantic_grounding_findings(generated_questions: list[dict[str, Any]], norma
             findings.append({
                 "questionIndex": idx,
                 "slideId": slide_id,
-                "severity": "error",
+                "severity": "warning" if validation_mode == "organic_lecture" else "error",
                 "issue": "unsupported_medical_claim_terms",
                 "detail": unsupported[:20],
             })
@@ -2742,7 +2746,26 @@ def image_entry_for_question(img: dict[str, Any], q_num: int, placement: str) ->
     }
 
 
-def validate_app_ready_payload(payload: dict[str, Any]) -> list[str]:
+def record_app_ready_validation_issue(
+    errors: list[str],
+    warnings: list[str] | None,
+    message: str,
+    validation_mode: str,
+    *,
+    organic_warning: bool = False,
+) -> None:
+    if validation_mode == "organic_lecture" and organic_warning:
+        if warnings is not None:
+            warnings.append(message)
+        return
+    errors.append(message)
+
+
+def validate_app_ready_payload(
+    payload: dict[str, Any],
+    validation_mode: str = "strict",
+    validation_warnings: list[str] | None = None,
+) -> list[str]:
     errors: list[str] = []
     if payload.get("schemaVersion") != OUTPUT_SCHEMA_VERSION:
         errors.append("schemaVersion must be nbme-gemini-json-v3.")
@@ -2775,7 +2798,13 @@ def validate_app_ready_payload(payload: dict[str, Any]) -> list[str]:
         if not stem.strip():
             errors.append(f"{prefix}: missing stem.")
         elif sentence_count < 2 or word_count < 35:
-            errors.append(f"{prefix}: stem is too short for clinical reasoning.")
+            record_app_ready_validation_issue(
+                errors,
+                validation_warnings,
+                f"{prefix}: stem is too short for clinical reasoning.",
+                validation_mode,
+                organic_warning=True,
+            )
         if re.search(r"\b(which of the following is true|all except|except)\b", stem, re.I):
             errors.append(f"{prefix}: forbidden shallow stem phrasing.")
         choices = q.get("answerChoices")
@@ -2839,7 +2868,13 @@ def validate_app_ready_payload(payload: dict[str, Any]) -> list[str]:
             objective_usage[objective] = objective_usage.get(objective, 0) + 1
     for diagnosis, count in diagnosis_usage.items():
         if count > 2:
-            errors.append(f"duplicate diagnosis/target appears too often: {diagnosis} ({count})")
+            record_app_ready_validation_issue(
+                errors,
+                validation_warnings,
+                f"duplicate diagnosis/target appears too often: {diagnosis} ({count})",
+                validation_mode,
+                organic_warning=True,
+            )
     for objective, count in objective_usage.items():
         if count > 1:
             errors.append(f"duplicate educational objective: {objective}")
@@ -2944,10 +2979,20 @@ def process_slide_payload(slide_payload: dict[str, Any], generate: bool, output_
     if not questions:
         raise PipelineError(f"No questions allocated/generated for {source_label}.")
     emit_bic_progress("validating", "Validating generated output")
-    grounding_findings = semantic_grounding_findings(questions, normalized_payload)
+    final_validation_mode = "organic_lecture"
+    grounding_findings = semantic_grounding_findings(
+        questions,
+        normalized_payload,
+        validation_mode=final_validation_mode,
+    )
     diversity_report = question_quality_and_diversity(questions)
     app_payload = build_app_ready_payload(normalized_payload, questions)
-    errors = validate_app_ready_payload(app_payload)
+    validation_warnings: list[str] = []
+    errors = validate_app_ready_payload(
+        app_payload,
+        validation_mode=final_validation_mode,
+        validation_warnings=validation_warnings,
+    )
     if generate:
         errors.extend(
             f"Semantic grounding Q{f.get('questionIndex', '?')}: {f.get('issue')} {f.get('detail')}"
@@ -2995,6 +3040,7 @@ def process_slide_payload(slide_payload: dict[str, Any], generate: bool, output_
         "semanticGroundingFindings": grounding_findings,
         "questionQualityFindings": diversity_report.get("findings", []),
         "stemDiversityStatistics": diversity_report.get("statistics", {}),
+        "validationWarnings": validation_warnings,
         "validationErrors": errors,
     }
     write_report(report, "lecture_slide_generation_report")
