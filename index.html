@@ -2407,6 +2407,25 @@ body.quiz-fullscreen-mode .modal-overlay {
   </div>
 </div>
 
+<div id="modal-batch-review-draft" class="modal-overlay">
+  <div class="modal-box" style="max-width:900px;">
+    <h3>Review Draft</h3>
+    <div id="bic-review-draft-status" class="notes-import-summary">No review draft loaded.</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;">
+      <button type="button" class="btn-modal" onclick="App.acceptAllValidBatchReviewQuestions()">Accept All Valid</button>
+      <button type="button" class="btn-modal" onclick="App.rejectAllFlaggedBatchReviewQuestions()">Reject All Flagged</button>
+      <button type="button" class="btn-modal" onclick="App.saveBatchReviewDecisions()">Save Decisions</button>
+      <button type="button" class="btn-modal primary" onclick="App.importAcceptedBatchReviewQuestions()">Import Accepted Questions</button>
+    </div>
+    <div id="bic-review-draft-questions" class="notes-import-preview">
+      <div class="notes-import-empty">Draft questions will appear here.</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal" onclick="App.closeBatchReviewDraft()">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ LANDING JSON IMPORT MODAL ═══ -->
 <div id="modal-landing-json-import" class="modal-overlay">
   <div class="modal-box" style="max-width:480px;">
@@ -8520,6 +8539,7 @@ const App = (() => {
   let _nbmeFigureReviewState = null;
   let _nbmeFigureCropState = null;
   let _batchImportState = null;
+  let _batchReviewState = null;
   let _batchImportProgressUnsubscribe = null;
   let _batchImportQueueUnsubscribe = null;
   let _ankiImportPreview = null;
@@ -22515,6 +22535,7 @@ const App = (() => {
       const outputRoot = String(job.outputRoot || '').trim() || 'None';
       const warnings = Array.isArray(job.warnings) && job.warnings.length ? job.warnings.join('\n') : 'None';
       const errors = Array.isArray(job.errors) && job.errors.length ? job.errors.join('\n') : 'None';
+      const canReviewDraft = job.status === 'needs_review' && draftPath !== 'None';
       const interruptedMessage = job.status === 'interrupted'
         ? '<div class="notes-import-text" style="color:#9b3d24;">Interrupted during previous app session. Retry to run again.</div>'
         : '';
@@ -22530,6 +22551,7 @@ const App = (() => {
           <div style="display:flex;gap:6px;margin-top:6px;">
             ${cancelable ? `<button type="button" class="btn-modal" onclick="App.cancelBatchImportQueueJob('${escapeHTML(job.jobId || '')}')">Cancel</button>` : ''}
             ${retryable ? `<button type="button" class="btn-modal" onclick="App.retryBatchImportQueueJob('${escapeHTML(job.jobId || '')}')">Retry</button>` : ''}
+            ${canReviewDraft ? `<button type="button" class="btn-modal primary" onclick="App.openBatchReviewDraft('${escapeHTML(job.jobId || '')}')">Review Draft</button>` : ''}
             <button type="button" class="btn-modal" onclick="App.openBatchImportQueueArtifacts('${escapeHTML(job.jobId || '')}')">Open Artifacts</button>
             ${removable ? `<button type="button" class="btn-modal" onclick="App.removeBatchImportQueueJob('${escapeHTML(job.jobId || '')}')">Remove</button>` : ''}
           </div>
@@ -22594,6 +22616,216 @@ Errors: ${escapeHTML(errors)}</div>
     }
     const result = await api.readQueueJobLogs({ jobId, limit: 80 });
     renderBatchImportQueueJobLogs(jobId, result?.lines || [], result?.ok ? '' : (result?.message || 'Durable queue logs could not be loaded.'));
+  }
+
+  function batchReviewItemsForQuestion(index) {
+    return (Array.isArray(_batchReviewState?.draft?.reviewItems) ? _batchReviewState.draft.reviewItems : []).filter(function(item) {
+      return Number(item?.questionIndex || 0) === index;
+    });
+  }
+
+  function batchReviewDecision(index) {
+    return _batchReviewState?.decisions?.[index] || 'pending';
+  }
+
+  function batchReviewStatusText() {
+    const questions = Array.isArray(_batchReviewState?.draft?.candidateQuestions) ? _batchReviewState.draft.candidateQuestions : [];
+    let accepted = 0;
+    let rejected = 0;
+    questions.forEach(function(_question, offset) {
+      if (batchReviewDecision(offset + 1) === 'accept') accepted += 1;
+      if (batchReviewDecision(offset + 1) === 'reject') rejected += 1;
+    });
+    return `Accepted ${accepted} · Rejected ${rejected} · Pending ${Math.max(0, questions.length - accepted - rejected)}`;
+  }
+
+  function batchReviewExplanationText(question) {
+    const sections = Array.isArray(question?.explanationSections) ? question.explanationSections : [];
+    const lines = [];
+    sections.forEach(function(section) {
+      if (section?.title) lines.push(section.title);
+      (Array.isArray(section?.body) ? section.body : []).forEach(function(line) { if (line) lines.push(line); });
+    });
+    return lines.join('\n') || question?.explanation || question?.correctBlurb || '';
+  }
+
+  function renderBatchReviewDraft() {
+    const target = document.getElementById('bic-review-draft-questions');
+    const status = document.getElementById('bic-review-draft-status');
+    const questions = Array.isArray(_batchReviewState?.draft?.candidateQuestions) ? _batchReviewState.draft.candidateQuestions : [];
+    if (status) status.textContent = _batchReviewState
+      ? `${batchReviewStatusText()} · ${_batchReviewState.jobId}`
+      : 'No review draft loaded.';
+    if (!target) return;
+    if (!questions.length) {
+      target.innerHTML = '<div class="notes-import-empty">This review draft has no candidate questions.</div>';
+      return;
+    }
+    target.innerHTML = questions.map(function(question, offset) {
+      const index = offset + 1;
+      const decision = batchReviewDecision(index);
+      const issues = batchReviewItemsForQuestion(index);
+      const choices = (Array.isArray(question?.answerChoices) ? question.answerChoices : []).map(function(choice) {
+        return `${choice?.label || ''}. ${choice?.text || ''}`;
+      }).join('\n');
+      const objective = question?.educationalObjective || '';
+      const pearl = question?.reviewPearl || question?.clinicalPearl || '';
+      const slideId = question?.metadata?.slideId || question?.slideId || question?.sourceQuestionNumber || '';
+      return `
+        <div class="notes-import-block">
+          <div class="notes-import-block-head">
+            <span class="notes-import-type">Question ${index}</span>
+            <span class="notes-import-path">${escapeHTML(slideId || 'No slide id')}</span>
+          </div>
+          <div class="notes-import-text" style="white-space:pre-wrap;">${escapeHTML(question?.stem || 'Missing stem')}</div>
+          <div class="notes-import-summary" style="white-space:pre-wrap;margin-top:6px;">${escapeHTML(choices || 'No answer choices')}</div>
+          <div class="notes-import-text">Correct answer: ${escapeHTML(question?.correctAnswer || 'Unknown')}</div>
+          ${objective ? `<div class="notes-import-text">Objective: ${escapeHTML(objective)}</div>` : ''}
+          ${pearl ? `<div class="notes-import-text">Pearl: ${escapeHTML(pearl)}</div>` : ''}
+          ${batchReviewExplanationText(question) ? `<div class="notes-import-summary" style="white-space:pre-wrap;margin-top:6px;">${escapeHTML(batchReviewExplanationText(question))}</div>` : ''}
+          ${issues.length ? `<div class="notes-import-summary" style="white-space:pre-wrap;margin-top:6px;">${escapeHTML(issues.map(function(item) { return `${item.severity || 'review'}: ${item.message || item.category || 'Review item'}`; }).join('\n'))}</div>` : ''}
+          <div style="display:flex;gap:6px;align-items:center;margin-top:6px;">
+            <button type="button" class="btn-modal${decision === 'accept' ? ' primary' : ''}" onclick="App.setBatchReviewDecision(${index}, 'accept')">Accept</button>
+            <button type="button" class="btn-modal" onclick="App.setBatchReviewDecision(${index}, 'reject')">Reject</button>
+            <span class="notes-import-text">Decision: ${escapeHTML(decision)}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  async function openBatchReviewDraft(jobId) {
+    const api = window.nbmeDesktop && window.nbmeDesktop.batchImport;
+    const status = document.getElementById('bic-review-draft-status');
+    const modal = document.getElementById('modal-batch-review-draft');
+    if (modal) modal.style.display = 'flex';
+    if (status) status.textContent = 'Loading durable review draft...';
+    if (!api || !api.readReviewDraft) {
+      if (status) status.textContent = 'Review drafts are available only in the Electron app.';
+      return;
+    }
+    const result = await api.readReviewDraft({ jobId });
+    if (!result?.ok) {
+      if (status) status.textContent = result?.message || 'Review draft could not be loaded.';
+      return;
+    }
+    const validIndexes = new Set(Array.isArray(result.draft?.validQuestionIndexes) ? result.draft.validQuestionIndexes.map(Number) : []);
+    const flaggedIndexes = new Set((Array.isArray(result.draft?.reviewItems) ? result.draft.reviewItems : []).map(function(item) {
+      return Number(item?.questionIndex || 0);
+    }).filter(Boolean));
+    const decisions = {};
+    (Array.isArray(result.draft?.candidateQuestions) ? result.draft.candidateQuestions : []).forEach(function(_question, offset) {
+      const index = offset + 1;
+      decisions[index] = validIndexes.has(index) && !flaggedIndexes.has(index) ? 'accept' : 'pending';
+    });
+    (Array.isArray(result.decisions) ? result.decisions : []).forEach(function(item) {
+      if (decisions[item.questionIndex] && ['accept', 'reject', 'pending'].includes(item.decision)) {
+        decisions[item.questionIndex] = item.decision;
+      }
+    });
+    _batchReviewState = { jobId, draftPath: result.draftPath, draft: result.draft, decisions, flaggedIndexes, validIndexes };
+    renderBatchReviewDraft();
+  }
+
+  function closeBatchReviewDraft() {
+    const modal = document.getElementById('modal-batch-review-draft');
+    if (modal) modal.style.display = 'none';
+    _batchReviewState = null;
+  }
+
+  function setBatchReviewDecision(index, decision) {
+    if (!_batchReviewState || !['accept', 'reject', 'pending'].includes(decision)) return;
+    _batchReviewState.decisions[index] = decision;
+    renderBatchReviewDraft();
+  }
+
+  function acceptAllValidBatchReviewQuestions() {
+    if (!_batchReviewState) return;
+    _batchReviewState.validIndexes.forEach(function(index) { _batchReviewState.decisions[index] = 'accept'; });
+    renderBatchReviewDraft();
+  }
+
+  function rejectAllFlaggedBatchReviewQuestions() {
+    if (!_batchReviewState) return;
+    _batchReviewState.flaggedIndexes.forEach(function(index) { _batchReviewState.decisions[index] = 'reject'; });
+    renderBatchReviewDraft();
+  }
+
+  function batchReviewDecisionPayload() {
+    if (!_batchReviewState) return [];
+    return Object.keys(_batchReviewState.decisions).map(function(key) {
+      return { questionIndex: Number(key), decision: _batchReviewState.decisions[key] };
+    });
+  }
+
+  async function saveBatchReviewDecisions() {
+    const api = window.nbmeDesktop && window.nbmeDesktop.batchImport;
+    const status = document.getElementById('bic-review-draft-status');
+    if (!_batchReviewState || !api || !api.saveReviewDecisions) return null;
+    const result = await api.saveReviewDecisions({ jobId: _batchReviewState.jobId, decisions: batchReviewDecisionPayload() });
+    if (status) status.textContent = result?.ok
+      ? `${batchReviewStatusText()} · Decisions saved.`
+      : (result?.message || 'Review decisions could not be saved.');
+    if (result?.ok) await refreshBatchImportQueue();
+    return result;
+  }
+
+  async function importAcceptedBatchReviewQuestions() {
+    const api = window.nbmeDesktop && window.nbmeDesktop.batchImport;
+    const status = document.getElementById('bic-review-draft-status');
+    if (!_batchReviewState || !api || !api.writeAcceptedReviewSurvivors) return;
+    const jobs = Array.isArray(_batchImportState?.queue) ? _batchImportState.queue : [];
+    const job = jobs.find(function(item) { return item.jobId === _batchReviewState.jobId; }) || {};
+    if (job.importedTestId) {
+      if (status) status.textContent = 'Accepted survivor questions were already imported for this job.';
+      return;
+    }
+    const acceptedCount = batchReviewDecisionPayload().filter(function(item) { return item.decision === 'accept'; }).length;
+    if (!acceptedCount) {
+      if (status) status.textContent = 'Accept at least one question before import.';
+      return;
+    }
+    const saved = await saveBatchReviewDecisions();
+    if (!saved?.ok) return;
+    const testName = String(job.testName || _batchReviewState.draft?.testTitle || 'Reviewed Batch Import').trim();
+    const survivor = await api.writeAcceptedReviewSurvivors({
+      jobId: _batchReviewState.jobId,
+      decisions: batchReviewDecisionPayload(),
+      testName
+    });
+    if (!survivor?.ok) {
+      if (status) status.textContent = survivor?.message || 'Accepted survivor JSON could not be written.';
+      return;
+    }
+    const importResult = await autoImportBatchOutputJson(survivor.survivorPath, {
+      folderId: job.destinationFolderId || String(document.getElementById('bic-target-folder')?.value || '').trim(),
+      testName,
+      statusTarget: 'bic-create-status'
+    });
+    if (!importResult?.ok) {
+      if (status) status.textContent = importResult?.error || 'Accepted survivor import failed.';
+      return;
+    }
+    const importedAt = new Date().toISOString();
+    await api.updateJobReport({
+      jobId: _batchReviewState.jobId,
+      report: Object.assign({}, job.report || {}, {
+        status: 'completed_with_review',
+        completedAt: importedAt,
+        importedAt,
+        importedTestId: importResult.testId,
+        importedTestName: importResult.testName,
+        importedAcceptedQuestionCount: importResult.questionCount,
+        decisionsPath: saved.decisionsPath,
+        acceptedSurvivorsPath: survivor.survivorPath,
+        draftPath: _batchReviewState.draftPath,
+        warnings: Array.isArray(job.warnings) ? job.warnings : [],
+        errors: Array.isArray(job.errors) ? job.errors : []
+      })
+    });
+    if (status) status.textContent = `Imported ${importResult.questionCount} accepted question(s) as ${importResult.testName}.`;
+    await refreshBatchImportQueue();
+    await refreshBatchImportHistory();
   }
 
   function renderBatchImportHistory(jobs) {
@@ -27782,6 +28014,13 @@ Errors: ${escapeHTML(errors)}</div>
     retryBatchImportQueueJob,
     refreshBatchImportQueue,
     toggleBatchImportQueueDetails,
+    openBatchReviewDraft,
+    closeBatchReviewDraft,
+    setBatchReviewDecision,
+    acceptAllValidBatchReviewQuestions,
+    rejectAllFlaggedBatchReviewQuestions,
+    saveBatchReviewDecisions,
+    importAcceptedBatchReviewQuestions,
     openBatchImportQueueArtifacts,
     removeBatchImportQueueJob,
     inspectBatchImportHistoryJob,

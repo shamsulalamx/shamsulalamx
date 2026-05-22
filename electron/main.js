@@ -74,6 +74,79 @@ function knownBatchJobLogsPath(job) {
   return path.resolve(logsPath);
 }
 
+function knownBatchJobReviewDraftPath(job) {
+  const outputRoot = knownBatchJobOutputRoot(job);
+  const draftPath = String(job?.draftPath || '').trim();
+  if (!outputRoot || !draftPath || !pathLivesUnder(outputRoot, draftPath)) return '';
+  if (path.basename(draftPath) !== 'lecture_slide_review_draft.json') return '';
+  return path.resolve(draftPath);
+}
+
+function knownBatchJobReviewDecisionsPath(job) {
+  const outputRoot = knownBatchJobOutputRoot(job);
+  const decisionsPath = String(job?.decisionsPath || '').trim();
+  if (!outputRoot || !decisionsPath || !pathLivesUnder(outputRoot, decisionsPath)) return '';
+  if (path.basename(decisionsPath) !== 'review_decisions.json') return '';
+  return path.resolve(decisionsPath);
+}
+
+function batchReviewDir(job) {
+  const outputRoot = knownBatchJobOutputRoot(job);
+  if (!outputRoot) return '';
+  const reviewDir = path.join(outputRoot, 'review');
+  if (fs.existsSync(reviewDir) && fs.lstatSync(reviewDir).isSymbolicLink()) return '';
+  return reviewDir;
+}
+
+function sanitizeBatchReviewDecisions(value) {
+  const decisions = Array.isArray(value) ? value : [];
+  return decisions.map(item => ({
+    questionIndex: Number(item?.questionIndex),
+    decision: item?.decision === 'accept' || item?.decision === 'reject' ? item.decision : 'pending'
+  })).filter(item => Number.isInteger(item.questionIndex) && item.questionIndex > 0);
+}
+
+function batchReviewDecisionSummary(draft, decisions) {
+  const candidateCount = Array.isArray(draft?.candidateQuestions) ? draft.candidateQuestions.length : 0;
+  const byIndex = new Map(decisions.map(item => [item.questionIndex, item.decision]));
+  let acceptedCount = 0;
+  let rejectedCount = 0;
+  for (let index = 1; index <= candidateCount; index += 1) {
+    if (byIndex.get(index) === 'accept') acceptedCount += 1;
+    if (byIndex.get(index) === 'reject') rejectedCount += 1;
+  }
+  return { acceptedCount, rejectedCount, pendingReviewCount: Math.max(0, candidateCount - acceptedCount - rejectedCount) };
+}
+
+function readKnownBatchReviewDraft(job) {
+  const draftPath = knownBatchJobReviewDraftPath(job);
+  if (!draftPath) return safeError('BATCH_REVIEW_DRAFT_REJECTED', 'Review draft path is not recorded under this durable queue job.');
+  if (!fs.existsSync(draftPath) || fs.lstatSync(draftPath).isSymbolicLink() || !fs.statSync(draftPath).isFile()) {
+    return safeError('BATCH_REVIEW_DRAFT_MISSING', 'Review draft file was not found.');
+  }
+  try {
+    const draft = JSON.parse(fs.readFileSync(draftPath, 'utf8'));
+    if (!draft || draft.draftVersion !== 1 || !Array.isArray(draft.candidateQuestions)) {
+      return safeError('BATCH_REVIEW_DRAFT_INVALID', 'Review draft is not a supported durable draft.');
+    }
+    return { ok: true, draftPath, draft };
+  } catch (err) {
+    return safeError('BATCH_REVIEW_DRAFT_INVALID', err.message || String(err));
+  }
+}
+
+function readKnownBatchReviewDecisions(job) {
+  const decisionsPath = knownBatchJobReviewDecisionsPath(job);
+  if (!decisionsPath || !fs.existsSync(decisionsPath) || fs.lstatSync(decisionsPath).isSymbolicLink() || !fs.statSync(decisionsPath).isFile()) {
+    return [];
+  }
+  try {
+    return sanitizeBatchReviewDecisions(JSON.parse(fs.readFileSync(decisionsPath, 'utf8'))?.decisions);
+  } catch (_err) {
+    return [];
+  }
+}
+
 function batchQueuePath() {
   const queueDir = path.join(app.getPath('userData'), 'batch-import-center', 'queue');
   fs.mkdirSync(queueDir, { recursive: true });
@@ -459,6 +532,85 @@ ipcMain.handle('nbme:batch-import:read-queue-job-logs', async (_event, payload) 
   }
 });
 
+ipcMain.handle('nbme:batch-import:read-review-draft', async (_event, payload) => {
+  try {
+    const job = knownBatchQueueJob(payload?.jobId);
+    if (!job) return safeError('BATCH_QUEUE_JOB_NOT_FOUND', 'Queued batch job was not found.');
+    const read = readKnownBatchReviewDraft(job);
+    if (!read.ok) return read;
+    return {
+      ok: true,
+      jobId: job.jobId,
+      draftPath: read.draftPath,
+      outputRoot: knownBatchJobOutputRoot(job),
+      importedTestId: job.importedTestId || null,
+      reviewSummary: job.reviewSummary || null,
+      decisions: readKnownBatchReviewDecisions(job),
+      draft: read.draft
+    };
+  } catch (err) {
+    return safeError('BATCH_REVIEW_DRAFT_READ_FAILED', err.message || String(err));
+  }
+});
+
+ipcMain.handle('nbme:batch-import:save-review-decisions', async (_event, payload) => {
+  try {
+    const job = knownBatchQueueJob(payload?.jobId);
+    if (!job) return safeError('BATCH_QUEUE_JOB_NOT_FOUND', 'Queued batch job was not found.');
+    const read = readKnownBatchReviewDraft(job);
+    if (!read.ok) return read;
+    const decisions = sanitizeBatchReviewDecisions(payload?.decisions);
+    const reviewDir = batchReviewDir(job);
+    if (!reviewDir) return safeError('BATCH_REVIEW_OUTPUT_REJECTED', 'Review output root is not a known durable queue job.');
+    fs.mkdirSync(reviewDir, { recursive: true });
+    const decisionsPath = path.join(reviewDir, 'review_decisions.json');
+    const reviewSummary = batchReviewDecisionSummary(read.draft, decisions);
+    fs.writeFileSync(decisionsPath, JSON.stringify({
+      decisionsVersion: 1,
+      jobId: job.jobId,
+      draftPath: read.draftPath,
+      savedAt: new Date().toISOString(),
+      decisions,
+      reviewSummary
+    }, null, 2), 'utf8');
+    updateBatchQueueJob(job.jobId, { decisionsPath, reviewSummary });
+    updateBatchJobRecord(job.jobId, { decisionsPath, reviewSummary });
+    return { ok: true, jobId: job.jobId, decisionsPath, reviewSummary };
+  } catch (err) {
+    return safeError('BATCH_REVIEW_DECISIONS_SAVE_FAILED', err.message || String(err));
+  }
+});
+
+ipcMain.handle('nbme:batch-import:write-accepted-review-survivors', async (_event, payload) => {
+  try {
+    const job = knownBatchQueueJob(payload?.jobId);
+    if (!job) return safeError('BATCH_QUEUE_JOB_NOT_FOUND', 'Queued batch job was not found.');
+    if (job.importedTestId) return safeError('BATCH_REVIEW_ALREADY_IMPORTED', 'Accepted survivor questions were already imported for this job.');
+    const read = readKnownBatchReviewDraft(job);
+    if (!read.ok) return read;
+    const decisions = sanitizeBatchReviewDecisions(payload?.decisions);
+    const acceptedIndexes = new Set(decisions.filter(item => item.decision === 'accept').map(item => item.questionIndex));
+    const questions = read.draft.candidateQuestions.filter((_question, offset) => acceptedIndexes.has(offset + 1));
+    if (!questions.length) return safeError('BATCH_REVIEW_NO_ACCEPTED', 'Accept at least one draft question before import.');
+    const reviewDir = batchReviewDir(job);
+    if (!reviewDir) return safeError('BATCH_REVIEW_OUTPUT_REJECTED', 'Review output root is not a known durable queue job.');
+    fs.mkdirSync(reviewDir, { recursive: true });
+    const survivorPath = path.join(reviewDir, 'accepted_survivors_app_ready.json');
+    const payloadJson = {
+      schemaVersion: read.draft.schemaVersion || 'nbme-gemini-json-v3',
+      sourceFormat: read.draft.sourceFormat || 'mixed',
+      testTitle: String(payload?.testName || job.testName || 'Reviewed Batch Import').trim() || 'Reviewed Batch Import',
+      questions: questions.map((question, offset) => ({ ...question, questionNumber: offset + 1 }))
+    };
+    fs.writeFileSync(survivorPath, JSON.stringify(payloadJson, null, 2), 'utf8');
+    updateBatchQueueJob(job.jobId, { acceptedSurvivorsPath: survivorPath });
+    updateBatchJobRecord(job.jobId, { acceptedSurvivorsPath: survivorPath });
+    return { ok: true, jobId: job.jobId, survivorPath, acceptedQuestionCount: questions.length };
+  } catch (err) {
+    return safeError('BATCH_REVIEW_SURVIVORS_WRITE_FAILED', err.message || String(err));
+  }
+});
+
 ipcMain.handle('nbme:batch-import:open-queue-job-artifacts', async (_event, payload) => {
   try {
     const job = knownBatchQueueJob(payload?.jobId);
@@ -505,19 +657,27 @@ ipcMain.handle('nbme:batch-import:update-job-report', async (_event, payload) =>
       errors: Array.isArray(report.errors) ? report.errors : undefined,
       importedTestId: report.importedTestId || null,
       importedTestName: report.importedTestName || null,
+      importedAt: report.importedAt || undefined,
+      importedAcceptedQuestionCount: Number.isFinite(report.importedAcceptedQuestionCount) ? report.importedAcceptedQuestionCount : undefined,
+      decisionsPath: report.decisionsPath || undefined,
+      acceptedSurvivorsPath: report.acceptedSurvivorsPath || undefined,
       report
     });
-    if (!updated) return safeError('BATCH_JOB_NOT_FOUND', 'Job history record was not found.');
-    updateBatchQueueJob(jobId, {
+    const queued = updateBatchQueueJob(jobId, {
       status: report.status || payload?.status || undefined,
       finishedAt: report.completedAt || undefined,
       outputPaths: Array.isArray(report.outputPaths) ? report.outputPaths : undefined,
       warnings: Array.isArray(report.warnings) ? report.warnings : undefined,
       errors: Array.isArray(report.errors) ? report.errors : undefined,
       importedTestId: report.importedTestId || undefined,
+      importedAt: report.importedAt || undefined,
+      importedAcceptedQuestionCount: Number.isFinite(report.importedAcceptedQuestionCount) ? report.importedAcceptedQuestionCount : undefined,
+      decisionsPath: report.decisionsPath || undefined,
+      acceptedSurvivorsPath: report.acceptedSurvivorsPath || undefined,
       report
     });
-    return { ok: true, job: updated };
+    if (!updated && !queued) return safeError('BATCH_JOB_NOT_FOUND', 'Batch job record was not found.');
+    return { ok: true, job: updated || queued };
   } catch (err) {
     return safeError('BATCH_HISTORY_UPDATE_FAILED', err.message || String(err));
   }

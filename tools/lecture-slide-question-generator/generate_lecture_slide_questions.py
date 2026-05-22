@@ -3059,6 +3059,8 @@ def write_lecture_review_draft(
     source_type = str(os.environ.get("BIC_PROGRESS_SOURCE") or "").strip() or "lecture_slide_pdf"
     draft = {
         "draftVersion": 1,
+        "schemaVersion": OUTPUT_SCHEMA_VERSION,
+        "sourceFormat": SOURCE_FORMAT,
         "sourceType": source_type,
         "jobId": str(os.environ.get("BIC_JOB_ID") or "").strip(),
         "createdAt": dt.datetime.now(dt.timezone.utc).isoformat(),
@@ -3160,7 +3162,7 @@ def process_slide_payload(slide_payload: dict[str, Any], generate: bool, output_
     }
     review_draft_path = write_lecture_review_draft(
         source_label,
-        questions,
+        app_payload.get("questions") or [],
         errors,
         validation_warnings,
         grounding_findings,
