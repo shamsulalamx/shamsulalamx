@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import csv
+import os
 import re
 import shutil
 import subprocess
@@ -31,7 +32,11 @@ NBME_DIR = PROJECT_ROOT / "tools" / "nbme-pdf-json-generator"
 MEHLMAN_DIR = PROJECT_ROOT / "tools" / "mehlman-pdf-question-generator"
 OME_DIR = PROJECT_ROOT / "tools" / "ome-pdf-question-generator"
 IMAGES_TABLES_DIR = PROJECT_ROOT / "tools" / "images-tables-question-generator"
-IMAGES_TABLES_ASSET_DIR = IMAGES_TABLES_DIR / "output_assets"
+JOB_OUTPUT_ROOT = Path(os.environ["BIC_JOB_OUTPUT_ROOT"]).expanduser().resolve() if os.environ.get("BIC_JOB_OUTPUT_ROOT") else None
+IMAGES_TABLES_ASSET_DIR = (
+    JOB_OUTPUT_ROOT / "images-tables-question-generator" / "output_assets"
+    if JOB_OUTPUT_ROOT else IMAGES_TABLES_DIR / "output_assets"
+)
 SUPPORTED_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
 SUPPORTED_ANKI_EXTS = {".txt", ".md"}
 SUPPORTED_DIVINE_TRANSCRIPT_EXTS = {".txt", ".md"}

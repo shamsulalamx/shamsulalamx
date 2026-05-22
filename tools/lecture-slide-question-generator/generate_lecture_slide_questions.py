@@ -33,7 +33,9 @@ from typing import Any
 
 BASE_DIR = Path(__file__).parent.resolve()
 INPUT_DIR = BASE_DIR / "input_pdfs"
-OUTPUT_DIR = BASE_DIR / "output_json"
+JOB_OUTPUT_ROOT = Path(os.environ["BIC_JOB_OUTPUT_ROOT"]).expanduser().resolve() if os.environ.get("BIC_JOB_OUTPUT_ROOT") else None
+RUNTIME_DIR = JOB_OUTPUT_ROOT / "lecture-slide-question-generator" if JOB_OUTPUT_ROOT else BASE_DIR
+OUTPUT_DIR = RUNTIME_DIR / "output_json"
 SLIDES_DIR = OUTPUT_DIR / "slides"
 NORMALIZED_DIR = OUTPUT_DIR / "normalized"
 MEMORY_DIR = OUTPUT_DIR / "memory"
@@ -41,9 +43,9 @@ GENERATED_DIR = OUTPUT_DIR / "generated"
 APP_READY_DIR = OUTPUT_DIR / "app_ready"
 DEBUG_DIR = OUTPUT_DIR / "debug"
 CACHE_DIR = OUTPUT_DIR / "cache"
-ASSET_DIR = BASE_DIR / "output_assets"
-REPORT_DIR = BASE_DIR / "reports"
-LOG_DIR = BASE_DIR / "logs"
+ASSET_DIR = RUNTIME_DIR / "output_assets"
+REPORT_DIR = RUNTIME_DIR / "reports"
+LOG_DIR = RUNTIME_DIR / "logs"
 PROMPT_DIR = BASE_DIR / "prompts"
 NORMALIZE_PROMPT = PROMPT_DIR / "normalize_slides_prompt.txt"
 GENERATE_PROMPT = PROMPT_DIR / "generate_questions_prompt.txt"

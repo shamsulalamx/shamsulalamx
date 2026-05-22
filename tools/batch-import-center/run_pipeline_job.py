@@ -102,6 +102,8 @@ def validate_manifest(manifest: dict[str, Any]) -> None:
         raise ValueError("Manifest requiresGemini must be true or false")
     if "existingOutputValidation" in manifest and not isinstance(manifest["existingOutputValidation"], bool):
         raise ValueError("Manifest existingOutputValidation must be true or false")
+    if "outputRoot" in manifest and not isinstance(manifest["outputRoot"], str):
+        raise ValueError("Manifest outputRoot must be a string")
 
 
 def get_source(registry: dict[str, Any], source_type: str) -> dict[str, Any]:
@@ -140,14 +142,25 @@ def validate_inputs(manifest: dict[str, Any], source: dict[str, Any]) -> list[Pa
     return paths
 
 
-def output_dirs(source: dict[str, Any]) -> list[Path]:
+def job_output_root(manifest: dict[str, Any]) -> Path | None:
+    raw_path = str(manifest.get("outputRoot") or "").strip()
+    if not raw_path:
+        return None
+    return Path(raw_path).expanduser().resolve()
+
+
+def output_dirs(source: dict[str, Any], manifest: dict[str, Any]) -> list[Path]:
     cwd = (PROJECT_ROOT / source["workingDirectory"]).resolve()
-    return [(cwd / rel).resolve() for rel in source.get("outputDirectories", [])]
+    dirs = [(cwd / rel).resolve() for rel in source.get("outputDirectories", [])]
+    durable_root = job_output_root(manifest)
+    if durable_root:
+        dirs.insert(0, durable_root)
+    return dirs
 
 
-def discover_outputs(source: dict[str, Any]) -> dict[str, float]:
+def discover_outputs(source: dict[str, Any], manifest: dict[str, Any]) -> dict[str, float]:
     found: dict[str, float] = {}
-    for out_dir in output_dirs(source):
+    for out_dir in output_dirs(source, manifest):
         if not out_dir.exists():
             continue
         for path in out_dir.rglob("*_app_ready.json"):
@@ -204,13 +217,18 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
         stepIndex=step_index,
     )
     emit("command_start", cwd=str(cwd), command=cmd, stepIndex=step_index, stageLabel=stage_label)
+    env = os.environ.copy()
+    durable_root = job_output_root(manifest)
+    if durable_root:
+        durable_root.mkdir(parents=True, exist_ok=True)
+        env["BIC_JOB_OUTPUT_ROOT"] = str(durable_root)
     proc = subprocess.Popen(
         cmd,
         cwd=str(cwd),
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
-        env=os.environ.copy(),
+        env=env,
     )
     CURRENT_PROC = proc
     assert proc.stdout is not None
@@ -375,6 +393,7 @@ def completion_report(
         "jobId": manifest.get("jobId"),
         "sourceType": manifest.get("sourceType"),
         "targetFolder": (manifest.get("destination") or {}).get("folderId") or "",
+        "outputRoot": str(job_output_root(manifest) or ""),
         "runtimeSeconds": round(time.time() - run_started_at, 2),
         "questionCount": question_count,
         "imageTableCount": image_table_count,
@@ -391,24 +410,29 @@ def completion_report(
     }
 
 
-def newest_json_report(source: dict[str, Any], pattern: str, started_at: float) -> Path | None:
+def newest_json_report(source: dict[str, Any], manifest: dict[str, Any], pattern: str, started_at: float) -> Path | None:
     cwd = (PROJECT_ROOT / source["workingDirectory"]).resolve()
-    reports_dir = cwd / "reports"
-    if not reports_dir.exists():
-        return None
-    candidates = [
-        path for path in reports_dir.glob(pattern)
-        if path.is_file() and path.stat().st_mtime >= started_at - 1
-    ]
+    reports_dirs = [cwd / "reports"]
+    durable_root = job_output_root(manifest)
+    if durable_root:
+        reports_dirs.insert(0, durable_root / "lecture-slide-question-generator" / "reports")
+    candidates = []
+    for reports_dir in reports_dirs:
+        if not reports_dir.exists():
+            continue
+        candidates.extend(
+            path for path in reports_dir.glob(pattern)
+            if path.is_file() and path.stat().st_mtime >= started_at - 1
+        )
     if not candidates:
         return None
     return max(candidates, key=lambda path: path.stat().st_mtime)
 
 
-def emit_source_summary(source_type: str, source: dict[str, Any], started_at: float) -> dict[str, Any]:
+def emit_source_summary(source_type: str, source: dict[str, Any], manifest: dict[str, Any], started_at: float) -> dict[str, Any]:
     if source_type != "fast_facts_pptx":
         return {}
-    report_path = newest_json_report(source, "fast_facts_generation_validation_report_*.json", started_at)
+    report_path = newest_json_report(source, manifest, "fast_facts_generation_validation_report_*.json", started_at)
     if not report_path:
         emit("cache_summary", message="Fast Facts cache summary unavailable; validation report not produced.")
         return {}
@@ -456,6 +480,7 @@ def main() -> int:
             sourceType=manifest["sourceType"],
             dryRun=bool(manifest.get("dryRun")),
             inputCount=len(inputs),
+            outputRoot=str(job_output_root(manifest) or ""),
         )
         emit(
             "stage_complete",
@@ -466,7 +491,7 @@ def main() -> int:
         )
 
         run_started_at = time.time()
-        before = discover_outputs(source)
+        before = discover_outputs(source, manifest)
         execute_pipeline = bool(manifest.get("executePipeline"))
         existing_output_validation = bool(manifest.get("existingOutputValidation"))
         if existing_output_validation:
@@ -520,8 +545,8 @@ def main() -> int:
                         )
                         return code
 
-        source_summary = emit_source_summary(manifest["sourceType"], source, run_started_at)
-        after = discover_outputs(source)
+        source_summary = emit_source_summary(manifest["sourceType"], source, manifest, run_started_at)
+        after = discover_outputs(source, manifest)
         if existing_output_validation:
             discovered = set(after)
             selected = [str(path.resolve()) for path in inputs]

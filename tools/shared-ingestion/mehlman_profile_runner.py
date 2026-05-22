@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import time
@@ -23,7 +24,8 @@ RUNNER_DIR = Path(__file__).parent.resolve()
 PROJECT_ROOT = RUNNER_DIR.parents[1]
 MEHLMAN_DIR = PROJECT_ROOT / "tools" / "mehlman-pdf-question-generator"
 APP_READY_DIR = MEHLMAN_DIR / "output_json" / "app_ready"
-CHUNK_OUTPUT_DIR = RUNNER_DIR / "output"
+JOB_OUTPUT_ROOT = Path(os.environ["BIC_JOB_OUTPUT_ROOT"]).expanduser().resolve() if os.environ.get("BIC_JOB_OUTPUT_ROOT") else None
+CHUNK_OUTPUT_DIR = JOB_OUTPUT_ROOT / "shared-ingestion" if JOB_OUTPUT_ROOT else RUNNER_DIR / "output"
 
 
 def emit(event_type: str, **payload: Any) -> None:

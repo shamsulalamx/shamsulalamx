@@ -26,8 +26,12 @@ from chunk_pipeline import run_shared_chunk_pipeline
 RUNNER_DIR = Path(__file__).parent.resolve()
 PROJECT_ROOT = RUNNER_DIR.parents[1]
 LECTURE_DIR = PROJECT_ROOT / "tools" / "lecture-slide-question-generator"
-APP_READY_DIR = LECTURE_DIR / "output_json" / "app_ready"
-CHUNK_OUTPUT_DIR = RUNNER_DIR / "output"
+JOB_OUTPUT_ROOT = Path(os.environ["BIC_JOB_OUTPUT_ROOT"]).expanduser().resolve() if os.environ.get("BIC_JOB_OUTPUT_ROOT") else None
+APP_READY_DIR = (
+    JOB_OUTPUT_ROOT / "lecture-slide-question-generator" / "output_json" / "app_ready"
+    if JOB_OUTPUT_ROOT else LECTURE_DIR / "output_json" / "app_ready"
+)
+CHUNK_OUTPUT_DIR = JOB_OUTPUT_ROOT / "shared-ingestion" if JOB_OUTPUT_ROOT else RUNNER_DIR / "output"
 
 
 def emit(event_type: str, **payload: Any) -> None:

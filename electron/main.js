@@ -35,6 +35,12 @@ function batchHistoryPath() {
   return path.join(dir, 'job-history.json');
 }
 
+function batchJobOutputRoot(jobId) {
+  const outputRoot = path.join(app.getPath('userData'), 'batch-import-center', 'jobs', jobId);
+  fs.mkdirSync(outputRoot, { recursive: true });
+  return outputRoot;
+}
+
 function readBatchJobHistory() {
   const historyPath = batchHistoryPath();
   if (!fs.existsSync(historyPath)) return { schemaVersion: BATCH_JOB_HISTORY_VERSION, jobs: [] };
@@ -122,6 +128,7 @@ function initialBatchJobRecord(manifest, source, manifestPath) {
     targetFolderId: manifest.destination?.folderId || '',
     targetTestName: manifest.destination?.testName || '',
     inputPaths: (manifest.inputs || []).map(item => item.path).filter(Boolean),
+    outputRoot: manifest.outputRoot || '',
     manifestPath,
     runtimeSeconds: null,
     currentStage: 'preflight',
@@ -200,9 +207,10 @@ function sanitizeBatchJobPayload(payload, source) {
   if (!sourceType) throw new Error('sourceType is required.');
   if (!inputPaths.length) throw new Error('At least one input file is required.');
 
+  const jobId = `batch-${Date.now().toString(36)}`;
   return {
     manifestVersion: BATCH_JOB_MANIFEST_VERSION,
-    jobId: `batch-${Date.now().toString(36)}`,
+    jobId,
     sourceType,
     inputs: inputPaths.map(inputPath => ({ path: String(inputPath || '').trim() })).filter(item => item.path),
     requiresGemini: existingOutputValidation ? false : !!source?.requiresGemini,
@@ -210,6 +218,7 @@ function sanitizeBatchJobPayload(payload, source) {
     executePipeline,
     existingOutputValidation,
     destination: { folderId, testName },
+    outputRoot: batchJobOutputRoot(jobId),
     createdAt: new Date().toISOString()
   };
 }

@@ -14,6 +14,7 @@ import base64
 import datetime as dt
 import json
 import mimetypes
+import os
 import sys
 import time
 from pathlib import Path
@@ -24,8 +25,12 @@ from chunk_pipeline import run_shared_chunk_pipeline
 
 RUNNER_DIR = Path(__file__).parent.resolve()
 PROJECT_ROOT = RUNNER_DIR.parents[1]
-OUTPUT_DIR = RUNNER_DIR / "output"
-APP_READY_DIR = PROJECT_ROOT / "tools" / "images-tables-question-generator" / "output_json" / "app_ready"
+JOB_OUTPUT_ROOT = Path(os.environ["BIC_JOB_OUTPUT_ROOT"]).expanduser().resolve() if os.environ.get("BIC_JOB_OUTPUT_ROOT") else None
+OUTPUT_DIR = JOB_OUTPUT_ROOT / "shared-ingestion" if JOB_OUTPUT_ROOT else RUNNER_DIR / "output"
+APP_READY_DIR = (
+    JOB_OUTPUT_ROOT / "images-tables-question-generator" / "output_json" / "app_ready"
+    if JOB_OUTPUT_ROOT else PROJECT_ROOT / "tools" / "images-tables-question-generator" / "output_json" / "app_ready"
+)
 SOURCE_TYPE = "images_tables_source"
 OUTPUT_SCHEMA_VERSION = "nbme-internal-app-ready-v2"
 LABELS = ["A", "B", "C", "D"]
