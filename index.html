@@ -2335,7 +2335,7 @@ body.quiz-fullscreen-mode .modal-overlay {
 <div id="modal-batch-import-center" class="modal-overlay">
   <div class="modal-box" style="max-width:680px;">
     <h3>Batch Import Center</h3>
-    <p style="font-size:12px;color:#5a6a7a;margin-bottom:12px;">Foundation only. Registered local Python pipelines can dry-run and report discovered app-ready JSON outputs. Full batch UI is not implemented yet.</p>
+    <p style="font-size:12px;color:#5a6a7a;margin-bottom:12px;">Queue multiple local pipeline jobs for sequential Batch Import execution. Use Run for the current one-job flow and Queue Files for unattended sequential processing.</p>
 
     <div class="notes-import-section-title">Registered Sources</div>
     <div id="bic-registry-status" class="notes-import-summary">Registry not loaded.</div>
@@ -2383,6 +2383,10 @@ body.quiz-fullscreen-mode .modal-overlay {
     <div id="bic-progress-log" class="notes-import-preview">
       <div class="notes-import-empty">Progress events will appear here.</div>
     </div>
+    <div class="notes-import-section-title">Generation Queue</div>
+    <div id="bic-job-queue" class="notes-import-preview">
+      <div class="notes-import-empty">No queued jobs loaded.</div>
+    </div>
     <div class="notes-import-section-title">Completion Report</div>
     <div id="bic-completion-report" class="notes-import-summary">Completion report placeholder.</div>
     <div class="notes-import-section-title">Job History</div>
@@ -2392,6 +2396,7 @@ body.quiz-fullscreen-mode .modal-overlay {
 
     <div class="modal-actions">
       <button class="btn-modal primary" id="bic-run-btn" onclick="App.launchBatchImportJob()">Run</button>
+      <button class="btn-modal" id="bic-queue-btn" onclick="App.queueBatchImportJobs()">Queue Files</button>
       <button class="btn-modal" id="bic-cancel-job-btn" onclick="App.cancelBatchImportJob()" disabled>Cancel Job</button>
       <button class="btn-modal" onclick="App.closeBatchImportCenter()">Close</button>
     </div>
@@ -8512,6 +8517,7 @@ const App = (() => {
   let _nbmeFigureCropState = null;
   let _batchImportState = null;
   let _batchImportProgressUnsubscribe = null;
+  let _batchImportQueueUnsubscribe = null;
   let _ankiImportPreview = null;
   let _omeImportPreview = null;
   let _mehlmanImportPreview = null;
@@ -22319,7 +22325,7 @@ const App = (() => {
     const runStatus = document.getElementById('bic-run-status');
     const log = document.getElementById('bic-progress-log');
     const report = document.getElementById('bic-completion-report');
-    _batchImportState = { lastResult: null, progress: [], files: [], registry: null, history: [], activeJobId: null };
+    _batchImportState = { lastResult: null, progress: [], files: [], registry: null, history: [], queue: [], activeJobId: null };
     setBatchImportBusy(false);
     resetTestCreateStatus('bic-create-status');
     if (registryStatus) registryStatus.textContent = 'Loading registry...';
@@ -22352,6 +22358,15 @@ const App = (() => {
       if (registryStatus) registryStatus.textContent = err?.message || 'Registry could not be loaded.';
     });
     refreshBatchImportHistory();
+    refreshBatchImportQueue();
+    if (_batchImportQueueUnsubscribe) _batchImportQueueUnsubscribe();
+    if (api.onQueueChanged) {
+      _batchImportQueueUnsubscribe = api.onQueueChanged(function(payload) {
+        const jobs = Array.isArray(payload?.queue?.jobs) ? payload.queue.jobs : [];
+        if (_batchImportState) _batchImportState.queue = jobs;
+        renderBatchImportQueue(jobs);
+      });
+    }
   }
 
   function populateBatchImportTargetFolders() {
@@ -22414,6 +22429,57 @@ const App = (() => {
     const jobs = Array.isArray(result.history?.jobs) ? result.history.jobs : [];
     if (_batchImportState) _batchImportState.history = jobs;
     renderBatchImportHistory(jobs);
+  }
+
+  async function refreshBatchImportQueue() {
+    const api = window.nbmeDesktop && window.nbmeDesktop.batchImport;
+    const target = document.getElementById('bic-job-queue');
+    if (!target) return;
+    if (!api || !api.getQueue) {
+      target.innerHTML = '<div class="notes-import-empty">Generation queue is available only in the Electron app.</div>';
+      return;
+    }
+    const result = await api.getQueue();
+    if (!result || !result.ok) {
+      target.innerHTML = '<div class="notes-import-empty">' + escapeHTML(result?.message || 'Generation queue could not be loaded.') + '</div>';
+      return;
+    }
+    const jobs = Array.isArray(result.queue?.jobs) ? result.queue.jobs : [];
+    if (_batchImportState) _batchImportState.queue = jobs;
+    renderBatchImportQueue(jobs);
+  }
+
+  function renderBatchImportQueue(jobs) {
+    const target = document.getElementById('bic-job-queue');
+    if (!target) return;
+    if (!Array.isArray(jobs) || !jobs.length) {
+      target.innerHTML = '<div class="notes-import-empty">No queued jobs.</div>';
+      return;
+    }
+    target.innerHTML = jobs.slice().sort(function(a, b) {
+      return String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
+    }).map(function(job) {
+      const sourceLabel = job.sourceLabel || BATCH_IMPORT_SOURCE_LABELS[job.sourceType] || job.sourceType || 'Unknown source';
+      const filePath = String(job.inputFiles?.[0]?.path || '');
+      const fileName = filePath.split(/[\\/]/).pop() || filePath || 'No file';
+      const retryable = ['failed', 'interrupted', 'canceled', 'needs_review'].includes(job.status);
+      const cancelable = job.status === 'running';
+      const progress = job.progress?.message || job.progress?.phase || 'Waiting.';
+      return `
+        <div class="notes-import-block">
+          <div class="notes-import-block-head">
+            <span class="notes-import-type">${escapeHTML(job.status || 'unknown')}</span>
+            <span class="notes-import-path">${escapeHTML(job.createdAt || '')}</span>
+          </div>
+          <div class="notes-import-text">${escapeHTML(sourceLabel)} · ${escapeHTML(fileName)}</div>
+          <div class="notes-import-text">${escapeHTML(progress)}</div>
+          <div style="display:flex;gap:6px;margin-top:6px;">
+            ${cancelable ? `<button type="button" class="btn-modal" onclick="App.cancelBatchImportQueueJob('${escapeHTML(job.jobId || '')}')">Cancel</button>` : ''}
+            ${retryable ? `<button type="button" class="btn-modal" onclick="App.retryBatchImportQueueJob('${escapeHTML(job.jobId || '')}')">Retry</button>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
   }
 
   function renderBatchImportHistory(jobs) {
@@ -22517,10 +22583,69 @@ const App = (() => {
       _batchImportProgressUnsubscribe();
       _batchImportProgressUnsubscribe = null;
     }
+    if (_batchImportQueueUnsubscribe) {
+      _batchImportQueueUnsubscribe();
+      _batchImportQueueUnsubscribe = null;
+    }
     const modal = document.getElementById('modal-batch-import-center');
     if (modal) modal.style.display = 'none';
     setBatchImportBusy(false);
     resetTestCreateStatus('bic-create-status');
+  }
+
+  async function queueBatchImportJobs() {
+    const api = window.nbmeDesktop && window.nbmeDesktop.batchImport;
+    const runStatus = document.getElementById('bic-run-status');
+    const sourceType = (document.getElementById('bic-source-type')?.value || '').trim();
+    const runMode = (document.getElementById('bic-run-mode')?.value || 'dry-run').trim();
+    const folderId = (document.getElementById('bic-target-folder')?.value || '').trim();
+    const testName = (document.getElementById('bic-test-name')?.value || '').trim();
+    const inputPaths = Array.isArray(_batchImportState?.files) ? _batchImportState.files.slice() : [];
+    const existingOutputValidation = runMode === 'existing-output-auto-import';
+    const isDryRun = runMode === 'dry-run' || existingOutputValidation;
+    if (!api || !api.enqueueJobs) {
+      if (runStatus) runStatus.textContent = 'Generation queue is available only in the Electron app.';
+      return;
+    }
+    if (!inputPaths.length) {
+      if (runStatus) runStatus.textContent = 'Choose at least one file before queueing.';
+      return;
+    }
+    const jobs = inputPaths.map(function(inputPath) {
+      return {
+        sourceType,
+        inputPaths: [inputPath],
+        dryRun: isDryRun,
+        executePipeline: !existingOutputValidation,
+        existingOutputValidation,
+        runMode,
+        destination: { folderId, testName }
+      };
+    });
+    const result = await api.enqueueJobs({ jobs });
+    if (!result || !result.ok) {
+      if (runStatus) runStatus.textContent = result?.message || 'Queueing failed.';
+      return;
+    }
+    if (runStatus) runStatus.textContent = `${result.jobs?.length || jobs.length} job(s) queued. Queue jobs run sequentially.`;
+    const queued = Array.isArray(result.queue?.jobs) ? result.queue.jobs : [];
+    if (_batchImportState) _batchImportState.queue = queued;
+    renderBatchImportQueue(queued);
+  }
+
+  async function cancelBatchImportQueueJob(jobId) {
+    if (_batchImportState) _batchImportState.activeJobId = jobId;
+    await cancelBatchImportJob();
+    await refreshBatchImportQueue();
+  }
+
+  async function retryBatchImportQueueJob(jobId) {
+    const api = window.nbmeDesktop && window.nbmeDesktop.batchImport;
+    const runStatus = document.getElementById('bic-run-status');
+    if (!api || !api.retryQueueJob) return;
+    const result = await api.retryQueueJob({ jobId });
+    if (runStatus) runStatus.textContent = result?.ok ? 'Queued job retry requested.' : (result?.message || 'Retry failed.');
+    await refreshBatchImportQueue();
   }
 
   function appendBatchImportProgress(event) {
@@ -27510,8 +27635,11 @@ const App = (() => {
     closeBatchImportCenter,
     onBatchImportSourceChange,
     selectBatchImportFiles,
+    queueBatchImportJobs,
     launchBatchImportJob,
     cancelBatchImportJob,
+    cancelBatchImportQueueJob,
+    retryBatchImportQueueJob,
     inspectBatchImportHistoryJob,
     refreshBatchImportHistory,
     autoImportBatchOutputJson,

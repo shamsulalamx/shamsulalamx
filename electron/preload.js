@@ -10,9 +10,12 @@ const desktopInfo = Object.freeze({
   batchImport: Object.freeze({
     getRegistry: () => ipcRenderer.invoke('nbme:batch-import:get-registry'),
     getHistory: () => ipcRenderer.invoke('nbme:batch-import:get-history'),
+    getQueue: () => ipcRenderer.invoke('nbme:batch-import:get-queue'),
     selectFiles: payload => ipcRenderer.invoke('nbme:batch-import:select-files', payload),
+    enqueueJobs: payload => ipcRenderer.invoke('nbme:batch-import:enqueue-jobs', payload),
     launchJob: payload => ipcRenderer.invoke('nbme:batch-import:launch-job', payload),
     cancelJob: payload => ipcRenderer.invoke('nbme:batch-import:cancel-job', payload),
+    retryQueueJob: payload => ipcRenderer.invoke('nbme:batch-import:retry-queue-job', payload),
     updateJobReport: payload => ipcRenderer.invoke('nbme:batch-import:update-job-report', payload),
     readOutputJson: outputPath => ipcRenderer.invoke('nbme:batch-import:read-output-json', outputPath),
     onProgress: callback => {
@@ -20,6 +23,12 @@ const desktopInfo = Object.freeze({
       const handler = (_event, payload) => callback(payload);
       ipcRenderer.on('nbme:batch-import:progress', handler);
       return () => ipcRenderer.removeListener('nbme:batch-import:progress', handler);
+    },
+    onQueueChanged: callback => {
+      if (typeof callback !== 'function') return () => {};
+      const handler = (_event, payload) => callback(payload);
+      ipcRenderer.on('nbme:batch-import:queue-changed', handler);
+      return () => ipcRenderer.removeListener('nbme:batch-import:queue-changed', handler);
     }
   })
 });
