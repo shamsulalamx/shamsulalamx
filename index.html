@@ -2384,6 +2384,10 @@ body.quiz-fullscreen-mode .modal-overlay {
       <div class="notes-import-empty">Progress events will appear here.</div>
     </div>
     <div class="notes-import-section-title">Generation Queue</div>
+    <div style="display:flex;gap:6px;align-items:center;justify-content:space-between;margin-bottom:6px;">
+      <div id="bic-job-queue-summary" class="notes-import-summary" style="margin:0;">Queue not loaded.</div>
+      <button type="button" class="btn-modal" onclick="App.refreshBatchImportQueue()">Reload Queue</button>
+    </div>
     <div id="bic-job-queue" class="notes-import-preview">
       <div class="notes-import-empty">No queued jobs loaded.</div>
     </div>
@@ -22449,9 +22453,46 @@ const App = (() => {
     renderBatchImportQueue(jobs);
   }
 
+  function renderBatchImportQueueSummary(jobs) {
+    const target = document.getElementById('bic-job-queue-summary');
+    if (!target) return;
+    const counts = {
+      pending: 0,
+      running: 0,
+      completed: 0,
+      failed: 0,
+      needs_review: 0,
+      interrupted_or_canceled: 0
+    };
+    (Array.isArray(jobs) ? jobs : []).forEach(function(job) {
+      const status = String(job?.status || '');
+      if (status === 'interrupted' || status === 'canceled') {
+        counts.interrupted_or_canceled += 1;
+      } else if (Object.prototype.hasOwnProperty.call(counts, status)) {
+        counts[status] += 1;
+      }
+    });
+    target.textContent = `Pending ${counts.pending} · Running ${counts.running} · Completed ${counts.completed} · Failed ${counts.failed} · Needs review ${counts.needs_review} · Interrupted/canceled ${counts.interrupted_or_canceled}`;
+  }
+
+  function batchImportQueuePathText(paths) {
+    if (!Array.isArray(paths) || !paths.length) return 'None';
+    return paths.map(function(item) { return item?.path || item || ''; }).filter(Boolean).join('\n') || 'None';
+  }
+
+  function batchImportQueueArtifactPath(job, suffix) {
+    const explicit = String(job?.[suffix] || '').trim();
+    if (explicit) return explicit;
+    if (suffix !== 'appReadyPath') return '';
+    return (Array.isArray(job?.outputPaths) ? job.outputPaths : []).find(function(outputPath) {
+      return String(outputPath || '').endsWith('_app_ready.json');
+    }) || '';
+  }
+
   function renderBatchImportQueue(jobs) {
     const target = document.getElementById('bic-job-queue');
     if (!target) return;
+    renderBatchImportQueueSummary(jobs);
     if (!Array.isArray(jobs) || !jobs.length) {
       target.innerHTML = '<div class="notes-import-empty">No queued jobs.</div>';
       return;
@@ -22464,7 +22505,18 @@ const App = (() => {
       const fileName = filePath.split(/[\\/]/).pop() || filePath || 'No file';
       const retryable = ['failed', 'interrupted', 'canceled', 'needs_review'].includes(job.status);
       const cancelable = job.status === 'running';
+      const removable = ['completed', 'failed', 'interrupted', 'canceled'].includes(job.status);
       const progress = job.progress?.message || job.progress?.phase || 'Waiting.';
+      const inputPaths = batchImportQueuePathText(job.inputFiles);
+      const appReadyPath = batchImportQueueArtifactPath(job, 'appReadyPath') || 'None';
+      const reportPath = batchImportQueueArtifactPath(job, 'reportPath') || 'None';
+      const logsPath = String(job.logsPath || '').trim() || 'None';
+      const outputRoot = String(job.outputRoot || '').trim() || 'None';
+      const warnings = Array.isArray(job.warnings) && job.warnings.length ? job.warnings.join('\n') : 'None';
+      const errors = Array.isArray(job.errors) && job.errors.length ? job.errors.join('\n') : 'None';
+      const interruptedMessage = job.status === 'interrupted'
+        ? '<div class="notes-import-text" style="color:#9b3d24;">Interrupted during previous app session. Retry to run again.</div>'
+        : '';
       return `
         <div class="notes-import-block">
           <div class="notes-import-block-head">
@@ -22473,13 +22525,73 @@ const App = (() => {
           </div>
           <div class="notes-import-text">${escapeHTML(sourceLabel)} · ${escapeHTML(fileName)}</div>
           <div class="notes-import-text">${escapeHTML(progress)}</div>
+          ${interruptedMessage}
           <div style="display:flex;gap:6px;margin-top:6px;">
             ${cancelable ? `<button type="button" class="btn-modal" onclick="App.cancelBatchImportQueueJob('${escapeHTML(job.jobId || '')}')">Cancel</button>` : ''}
             ${retryable ? `<button type="button" class="btn-modal" onclick="App.retryBatchImportQueueJob('${escapeHTML(job.jobId || '')}')">Retry</button>` : ''}
+            <button type="button" class="btn-modal" onclick="App.openBatchImportQueueArtifacts('${escapeHTML(job.jobId || '')}')">Open Artifacts</button>
+            ${removable ? `<button type="button" class="btn-modal" onclick="App.removeBatchImportQueueJob('${escapeHTML(job.jobId || '')}')">Remove</button>` : ''}
           </div>
+          <details style="margin-top:6px;" ontoggle="App.toggleBatchImportQueueDetails('${escapeHTML(job.jobId || '')}', this.open)">
+            <summary class="notes-import-text" style="cursor:pointer;">Job details and recent logs</summary>
+            <div class="notes-import-summary" style="white-space:pre-wrap;margin-top:6px;">
+Job ID: ${escapeHTML(job.jobId || 'Unknown')}
+Status: ${escapeHTML(job.status || 'unknown')}
+Source: ${escapeHTML(sourceLabel)}
+Input file(s): ${escapeHTML(inputPaths)}
+Output root: ${escapeHTML(outputRoot)}
+App-ready path: ${escapeHTML(appReadyPath)}
+Report path: ${escapeHTML(reportPath)}
+Logs path: ${escapeHTML(logsPath)}
+Latest progress: ${escapeHTML(progress)}
+Created: ${escapeHTML(job.createdAt || 'Unknown')}
+Started: ${escapeHTML(job.startedAt || 'Not started')}
+Finished: ${escapeHTML(job.finishedAt || 'Not finished')}
+Warnings: ${escapeHTML(warnings)}
+Errors: ${escapeHTML(errors)}</div>
+            <div id="bic-queue-job-logs-${escapeHTML(job.jobId || '')}" class="notes-import-preview" style="margin-top:6px;">
+              <div class="notes-import-empty">Open details to load recent durable log lines.</div>
+            </div>
+          </details>
         </div>
       `;
     }).join('');
+  }
+
+  async function toggleBatchImportQueueDetails(jobId, isOpen) {
+    if (!isOpen) return;
+    await refreshBatchImportQueueJobLogs(jobId);
+  }
+
+  function renderBatchImportQueueJobLogs(jobId, lines, message) {
+    const target = document.getElementById('bic-queue-job-logs-' + jobId);
+    if (!target) return;
+    if (message) {
+      target.innerHTML = '<div class="notes-import-empty">' + escapeHTML(message) + '</div>';
+      return;
+    }
+    if (!Array.isArray(lines) || !lines.length) {
+      target.innerHTML = '<div class="notes-import-empty">No durable queue log lines recorded yet.</div>';
+      return;
+    }
+    target.innerHTML = lines.map(function(line) {
+      let event = null;
+      try { event = JSON.parse(line); } catch (_) {}
+      const type = String(event?.type || 'log');
+      const when = String(event?.timestamp || '');
+      const text = event?.message || event?.error || event?.failureReason || line;
+      return `<div class="notes-import-block"><div class="notes-import-block-head"><span class="notes-import-type">${escapeHTML(type)}</span><span class="notes-import-path">${escapeHTML(when)}</span></div><div class="notes-import-text">${escapeHTML(String(text || ''))}</div></div>`;
+    }).join('');
+  }
+
+  async function refreshBatchImportQueueJobLogs(jobId) {
+    const api = window.nbmeDesktop && window.nbmeDesktop.batchImport;
+    if (!api || !api.readQueueJobLogs) {
+      renderBatchImportQueueJobLogs(jobId, [], 'Durable job logs are available only in the Electron app.');
+      return;
+    }
+    const result = await api.readQueueJobLogs({ jobId, limit: 80 });
+    renderBatchImportQueueJobLogs(jobId, result?.lines || [], result?.ok ? '' : (result?.message || 'Durable queue logs could not be loaded.'));
   }
 
   function renderBatchImportHistory(jobs) {
@@ -22646,6 +22758,32 @@ const App = (() => {
     const result = await api.retryQueueJob({ jobId });
     if (runStatus) runStatus.textContent = result?.ok ? 'Queued job retry requested.' : (result?.message || 'Retry failed.');
     await refreshBatchImportQueue();
+  }
+
+  async function openBatchImportQueueArtifacts(jobId) {
+    const api = window.nbmeDesktop && window.nbmeDesktop.batchImport;
+    const runStatus = document.getElementById('bic-run-status');
+    if (!api || !api.openQueueJobArtifacts) return;
+    const result = await api.openQueueJobArtifacts({ jobId });
+    if (runStatus) runStatus.textContent = result?.ok
+      ? 'Opened durable artifact folder: ' + (result.outputRoot || '')
+      : (result?.message || 'Artifact folder could not be opened.');
+  }
+
+  async function removeBatchImportQueueJob(jobId) {
+    const api = window.nbmeDesktop && window.nbmeDesktop.batchImport;
+    const runStatus = document.getElementById('bic-run-status');
+    if (!api || !api.removeQueueJob) return;
+    if (!confirm('Remove this finished queue job from the visible queue? Output artifacts will stay on disk.')) return;
+    const result = await api.removeQueueJob({ jobId });
+    if (runStatus) runStatus.textContent = result?.ok
+      ? 'Queue job removed. Output artifacts were not deleted.'
+      : (result?.message || 'Queue job could not be removed.');
+    if (result?.ok) {
+      const jobs = Array.isArray(result.queue?.jobs) ? result.queue.jobs : [];
+      if (_batchImportState) _batchImportState.queue = jobs;
+      renderBatchImportQueue(jobs);
+    }
   }
 
   function appendBatchImportProgress(event) {
@@ -27640,6 +27778,10 @@ const App = (() => {
     cancelBatchImportJob,
     cancelBatchImportQueueJob,
     retryBatchImportQueueJob,
+    refreshBatchImportQueue,
+    toggleBatchImportQueueDetails,
+    openBatchImportQueueArtifacts,
+    removeBatchImportQueueJob,
     inspectBatchImportHistoryJob,
     refreshBatchImportHistory,
     autoImportBatchOutputJson,

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, dialog, shell } = require('electron');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
@@ -42,6 +42,36 @@ function batchJobOutputRoot(jobId) {
   const outputRoot = path.join(app.getPath('userData'), 'batch-import-center', 'jobs', jobId);
   fs.mkdirSync(outputRoot, { recursive: true });
   return outputRoot;
+}
+
+function batchJobsRoot() {
+  return path.join(app.getPath('userData'), 'batch-import-center', 'jobs');
+}
+
+function pathLivesUnder(rootPath, candidatePath) {
+  const root = path.resolve(String(rootPath || ''));
+  const candidate = path.resolve(String(candidatePath || ''));
+  return candidate === root || (!path.relative(root, candidate).startsWith('..') && !path.isAbsolute(path.relative(root, candidate)));
+}
+
+function knownBatchQueueJob(jobId) {
+  const cleanJobId = String(jobId || '').trim();
+  if (!cleanJobId) return null;
+  return readBatchQueue().jobs.find(job => job.jobId === cleanJobId) || null;
+}
+
+function knownBatchJobOutputRoot(job) {
+  const outputRoot = String(job?.outputRoot || '').trim();
+  if (!outputRoot || !pathLivesUnder(batchJobsRoot(), outputRoot)) return '';
+  return path.resolve(outputRoot);
+}
+
+function knownBatchJobLogsPath(job) {
+  const outputRoot = knownBatchJobOutputRoot(job);
+  const logsPath = String(job?.logsPath || '').trim();
+  if (!outputRoot || !logsPath || !pathLivesUnder(outputRoot, logsPath)) return '';
+  if (path.basename(logsPath) !== 'queue-events.ndjson') return '';
+  return path.resolve(logsPath);
 }
 
 function batchQueuePath() {
@@ -95,6 +125,19 @@ function persistBatchQueueJob(job) {
   const jobs = queue.jobs.filter(existing => existing.jobId !== job.jobId);
   jobs.push(job);
   writeBatchQueue({ schemaVersion: BATCH_QUEUE_VERSION, jobs });
+  emitBatchQueueChanged();
+  return job;
+}
+
+function removeBatchQueueJob(jobId) {
+  const queue = readBatchQueue();
+  const job = queue.jobs.find(item => item.jobId === jobId);
+  if (!job) return null;
+  if (!['completed', 'failed', 'canceled', 'interrupted'].includes(job.status)) return false;
+  writeBatchQueue({
+    schemaVersion: queue.schemaVersion || BATCH_QUEUE_VERSION,
+    jobs: queue.jobs.filter(item => item.jobId !== jobId)
+  });
   emitBatchQueueChanged();
   return job;
 }
@@ -391,6 +434,60 @@ ipcMain.handle('nbme:batch-import:get-queue', async () => {
     return { ok: true, queue: readBatchQueue() };
   } catch (err) {
     return safeError('BATCH_QUEUE_UNAVAILABLE', err.message || String(err));
+  }
+});
+
+ipcMain.handle('nbme:batch-import:read-queue-job-logs', async (_event, payload) => {
+  try {
+    const job = knownBatchQueueJob(payload?.jobId);
+    if (!job) return safeError('BATCH_QUEUE_JOB_NOT_FOUND', 'Queued batch job was not found.');
+    const logsPath = knownBatchJobLogsPath(job);
+    if (!logsPath) return safeError('BATCH_QUEUE_LOG_REJECTED', 'Job log path is not a known durable queue log.');
+    if (!fs.existsSync(logsPath)) return { ok: true, jobId: job.jobId, logsPath, lines: [] };
+    if (fs.lstatSync(logsPath).isSymbolicLink() || !fs.statSync(logsPath).isFile()) {
+      return safeError('BATCH_QUEUE_LOG_MISSING', 'Job log file was not found.');
+    }
+    const requestedLimit = Number(payload?.limit || 80);
+    const limit = Math.max(1, Math.min(200, Number.isFinite(requestedLimit) ? requestedLimit : 80));
+    const lines = fs.readFileSync(logsPath, 'utf8')
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .slice(-limit);
+    return { ok: true, jobId: job.jobId, logsPath, lines };
+  } catch (err) {
+    return safeError('BATCH_QUEUE_LOG_READ_FAILED', err.message || String(err));
+  }
+});
+
+ipcMain.handle('nbme:batch-import:open-queue-job-artifacts', async (_event, payload) => {
+  try {
+    const job = knownBatchQueueJob(payload?.jobId);
+    if (!job) return safeError('BATCH_QUEUE_JOB_NOT_FOUND', 'Queued batch job was not found.');
+    const outputRoot = knownBatchJobOutputRoot(job);
+    if (!outputRoot) return safeError('BATCH_QUEUE_OUTPUT_REJECTED', 'Job output folder is not under the durable Batch Import jobs root.');
+    if (!fs.existsSync(outputRoot) || !fs.statSync(outputRoot).isDirectory()) {
+      return safeError('BATCH_QUEUE_OUTPUT_MISSING', 'Job output folder was not found.');
+    }
+    const openError = await shell.openPath(outputRoot);
+    if (openError) return safeError('BATCH_QUEUE_OUTPUT_OPEN_FAILED', openError);
+    return { ok: true, jobId: job.jobId, outputRoot };
+  } catch (err) {
+    return safeError('BATCH_QUEUE_OUTPUT_OPEN_FAILED', err.message || String(err));
+  }
+});
+
+ipcMain.handle('nbme:batch-import:remove-queue-job', async (_event, payload) => {
+  try {
+    const jobId = String(payload?.jobId || '').trim();
+    if (!jobId) return safeError('BATCH_JOB_ID_REQUIRED', 'jobId is required.');
+    const removed = removeBatchQueueJob(jobId);
+    if (removed === null) return safeError('BATCH_QUEUE_JOB_NOT_FOUND', 'Queued batch job was not found.');
+    if (removed === false) {
+      return safeError('BATCH_QUEUE_JOB_NOT_REMOVABLE', 'Only completed, failed, canceled, or interrupted jobs can be removed from the queue list.');
+    }
+    return { ok: true, job: removed, queue: readBatchQueue() };
+  } catch (err) {
+    return safeError('BATCH_QUEUE_REMOVE_FAILED', err.message || String(err));
   }
 });
 
@@ -713,6 +810,7 @@ async function runQueuedBatchJob(job) {
         status,
         finishedAt,
         outputPaths,
+        reportPath,
         warnings: wasCancelled ? [...warnings, 'Job canceled by user.'] : warnings,
         errors: finalErrors,
         report: finalReport,
