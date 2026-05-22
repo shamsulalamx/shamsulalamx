@@ -790,9 +790,12 @@ async function runQueuedBatchJob(job) {
       const report = finalEvent?.report && typeof finalEvent.report === 'object' ? finalEvent.report : {};
       const outputPaths = Array.isArray(finalEvent?.outputs) ? finalEvent.outputs : [];
       const fallbackMessage = signal ? `Batch job exited with signal ${signal}.` : `Batch job exited with code ${code}.`;
-      const finalErrors = wasCancelled ? [] : (errors.length ? errors : (ok ? [] : [finalEvent?.error || fallbackMessage]));
+      const reportWarnings = Array.isArray(report.warnings) ? report.warnings.map(String) : [];
+      const reportErrors = Array.isArray(report.errors) ? report.errors.map(String) : [];
+      const finalWarnings = [...warnings, ...reportWarnings];
+      const finalErrors = wasCancelled ? [] : (errors.length ? errors : (ok ? reportErrors : [finalEvent?.error || fallbackMessage]));
       const status = wasCancelled ? 'canceled' : (ok ? (report.status === 'needs_review' ? 'needs_review' : 'completed') : 'failed');
-      const finalReport = { ...report, status, runtimeSeconds, outputPaths, warnings, errors: finalErrors };
+      const finalReport = { ...report, status, runtimeSeconds, outputPaths, warnings: finalWarnings, errors: finalErrors };
       const reportPath = writeBatchCompletionReport(job.outputRoot, finalReport);
       const finishedAt = new Date().toISOString();
       updateBatchJobRecord(manifest.jobId, {
@@ -801,8 +804,9 @@ async function runQueuedBatchJob(job) {
         runtimeSeconds,
         currentStage: status === 'completed' ? 'completed' : report.stage || null,
         outputPaths,
+        draftPath: report.draftPath || '',
         reportPath,
-        warnings: wasCancelled ? [...warnings, 'Job canceled by user.'] : warnings,
+        warnings: wasCancelled ? [...finalWarnings, 'Job canceled by user.'] : finalWarnings,
         errors: finalErrors,
         report: finalReport
       });
@@ -810,8 +814,9 @@ async function runQueuedBatchJob(job) {
         status,
         finishedAt,
         outputPaths,
+        draftPath: report.draftPath || '',
         reportPath,
-        warnings: wasCancelled ? [...warnings, 'Job canceled by user.'] : warnings,
+        warnings: wasCancelled ? [...finalWarnings, 'Job canceled by user.'] : finalWarnings,
         errors: finalErrors,
         report: finalReport,
         progress: { phase: status, message: status === 'completed' ? 'Batch job completed.' : (finalErrors[0] || status), updatedAt: finishedAt }

@@ -46,6 +46,7 @@ CACHE_DIR = OUTPUT_DIR / "cache"
 ASSET_DIR = RUNTIME_DIR / "output_assets"
 REPORT_DIR = RUNTIME_DIR / "reports"
 LOG_DIR = RUNTIME_DIR / "logs"
+REVIEW_DIR = (JOB_OUTPUT_ROOT / "review") if JOB_OUTPUT_ROOT else (RUNTIME_DIR / "review")
 PROMPT_DIR = BASE_DIR / "prompts"
 NORMALIZE_PROMPT = PROMPT_DIR / "normalize_slides_prompt.txt"
 GENERATE_PROMPT = PROMPT_DIR / "generate_questions_prompt.txt"
@@ -231,6 +232,7 @@ def ensure_dirs() -> None:
         ASSET_DIR,
         REPORT_DIR,
         LOG_DIR,
+        REVIEW_DIR,
         PROMPT_DIR,
     ]:
         path.mkdir(parents=True, exist_ok=True)
@@ -2969,7 +2971,118 @@ def validate_figure_routes(prefix: str, q: dict[str, Any], images: list[dict[str
 def write_report(report: dict[str, Any], prefix: str) -> Path:
     path = REPORT_DIR / f"{prefix}_{now_stamp()}.json"
     write_json(path, report)
-    log(f"Report -> {path.relative_to(BASE_DIR)}")
+    try:
+        display_path = path.relative_to(BASE_DIR)
+    except ValueError:
+        display_path = path
+    log(f"Report -> {display_path}")
+    return path
+
+
+def review_issue_question_index(value: Any) -> int | None:
+    match = re.search(r"\bQ(\d+)\b", str(value or ""))
+    return int(match.group(1)) if match else None
+
+
+def review_issue_category(value: Any) -> str:
+    text = str(value or "").strip()
+    text = re.sub(r"^(?:Semantic grounding|Question quality)\s+Q\d+\s*:\s*", "", text, flags=re.I)
+    text = re.sub(r"^Q\d+\s*:\s*", "", text)
+    lead = re.split(r"[:.;]", text, maxsplit=1)[0]
+    return slugify(lead.lower().replace(" ", "_"))[:80] or "validation_finding"
+
+
+def review_item_from_message(message: str, severity: str, questions: list[dict[str, Any]]) -> dict[str, Any]:
+    question_index = review_issue_question_index(message)
+    question = questions[question_index - 1] if question_index and question_index <= len(questions) else {}
+    metadata = question.get("metadata") if isinstance(question, dict) and isinstance(question.get("metadata"), dict) else {}
+    return {
+        "questionIndex": question_index,
+        "questionId": str(question.get("id") or question.get("questionId") or "") if isinstance(question, dict) else "",
+        "slideId": str(question.get("slideId") or metadata.get("slideId") or "") if isinstance(question, dict) else "",
+        "severity": severity,
+        "category": review_issue_category(message),
+        "message": str(message),
+        "recommendedAction": "accept_or_reject_later",
+    }
+
+
+def finding_review_item(finding: dict[str, Any], default_severity: str, questions: list[dict[str, Any]]) -> dict[str, Any]:
+    question_index = finding.get("questionIndex")
+    question = questions[question_index - 1] if isinstance(question_index, int) and 0 < question_index <= len(questions) else {}
+    metadata = question.get("metadata") if isinstance(question, dict) and isinstance(question.get("metadata"), dict) else {}
+    issue = str(finding.get("issue") or "semantic_grounding_finding")
+    detail = str(finding.get("detail") or "").strip()
+    return {
+        "questionIndex": question_index if isinstance(question_index, int) else None,
+        "questionId": str(question.get("id") or question.get("questionId") or "") if isinstance(question, dict) else "",
+        "slideId": str(question.get("slideId") or metadata.get("slideId") or finding.get("slideId") or "") if isinstance(question, dict) else str(finding.get("slideId") or ""),
+        "severity": str(finding.get("severity") or default_severity),
+        "category": slugify(issue.lower().replace(" ", "_"))[:80] or "semantic_grounding_finding",
+        "message": f"{issue}: {detail}".rstrip(": "),
+        "recommendedAction": "accept_or_reject_later",
+    }
+
+
+def write_lecture_review_draft(
+    source_label: str,
+    questions: list[dict[str, Any]],
+    validation_errors: list[str],
+    validation_warnings: list[str],
+    semantic_findings: list[dict[str, Any]],
+    quality_findings: list[dict[str, Any]],
+) -> Path | None:
+    if not questions or not validation_errors:
+        return None
+    top_level_fatal_markers = (
+        "schemaVersion must be",
+        "sourceFormat must remain",
+        "questions must be a non-empty array",
+    )
+    if any(any(marker in message for marker in top_level_fatal_markers) for message in validation_errors):
+        return None
+    error_items = [review_item_from_message(message, "error", questions) for message in validation_errors]
+    warning_items = [review_item_from_message(message, "warning", questions) for message in validation_warnings]
+    semantic_items = [finding_review_item(finding, "warning", questions) for finding in semantic_findings]
+    quality_items = [finding_review_item(finding, "warning", questions) for finding in quality_findings]
+    fatal_question_indexes = {
+        item["questionIndex"]
+        for item in error_items
+        if isinstance(item.get("questionIndex"), int)
+    }
+    valid_indexes = [
+        index for index in range(1, len(questions) + 1)
+        if index not in fatal_question_indexes
+    ]
+    if not valid_indexes:
+        return None
+    source_type = str(os.environ.get("BIC_PROGRESS_SOURCE") or "").strip() or "lecture_slide_pdf"
+    draft = {
+        "draftVersion": 1,
+        "sourceType": source_type,
+        "jobId": str(os.environ.get("BIC_JOB_ID") or "").strip(),
+        "createdAt": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "status": "needs_review",
+        "candidateQuestions": questions,
+        "validationErrors": validation_errors,
+        "validationWarnings": validation_warnings,
+        "semanticGroundingFindings": semantic_findings,
+        "reviewItems": error_items + warning_items + semantic_items + quality_items,
+        "fatalRejects": [item for item in error_items if isinstance(item.get("questionIndex"), int)],
+        "validQuestionIndexes": valid_indexes,
+        "outputPaths": {
+            "reviewDraftPath": "",
+            "appReadyPath": "",
+            "reportPath": "",
+        },
+        "sourceLabel": source_label,
+    }
+    REVIEW_DIR.mkdir(parents=True, exist_ok=True)
+    path = REVIEW_DIR / "lecture_slide_review_draft.json"
+    draft["outputPaths"]["reviewDraftPath"] = str(path.resolve())
+    write_json(path, draft)
+    json.loads(path.read_text(encoding="utf-8"))
+    log(f"Review draft -> {path}")
     return path
 
 
@@ -3045,7 +3158,23 @@ def process_slide_payload(slide_payload: dict[str, Any], generate: bool, output_
         "validationWarnings": validation_warnings,
         "validationErrors": errors,
     }
-    write_report(report, "lecture_slide_generation_report")
+    review_draft_path = write_lecture_review_draft(
+        source_label,
+        questions,
+        errors,
+        validation_warnings,
+        grounding_findings,
+        diversity_report.get("findings", []),
+    ) if generate and errors else None
+    if review_draft_path:
+        report["status"] = "needs_review"
+        report["draftPath"] = str(review_draft_path.resolve())
+    report_path = write_report(report, "lecture_slide_generation_report")
+    if review_draft_path:
+        draft = read_json(review_draft_path)
+        if isinstance(draft, dict) and isinstance(draft.get("outputPaths"), dict):
+            draft["outputPaths"]["reportPath"] = str(report_path.resolve())
+            write_json(review_draft_path, draft)
     if errors:
         raise PipelineError("Final validation failed:\n" + "\n".join(f"- {err}" for err in errors[:80]))
     out_path = APP_READY_DIR / f"{slugify(output_stem)}_lecture_app_ready.json"

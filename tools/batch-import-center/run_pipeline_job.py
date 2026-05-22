@@ -169,6 +169,32 @@ def discover_outputs(source: dict[str, Any], manifest: dict[str, Any]) -> dict[s
     return found
 
 
+def discover_review_draft(manifest: dict[str, Any], started_at: float) -> dict[str, Any] | None:
+    durable_root = job_output_root(manifest)
+    if not durable_root:
+        return None
+    path = durable_root / "review" / "lecture_slide_review_draft.json"
+    if not path.is_file() or path.stat().st_mtime < started_at - 1:
+        return None
+    try:
+        draft = load_json(path)
+    except Exception as exc:
+        emit("warning", message=f"Review draft could not be read: {exc}", draftPath=str(path))
+        return None
+    candidates = draft.get("candidateQuestions")
+    survivors = draft.get("validQuestionIndexes")
+    if (
+        draft.get("draftVersion") != 1
+        or draft.get("status") != "needs_review"
+        or not isinstance(candidates, list)
+        or not candidates
+        or not isinstance(survivors, list)
+        or not survivors
+    ):
+        return None
+    return {"path": str(path.resolve()), "draft": draft}
+
+
 def expand_args(args: list[str], input_file: Path) -> list[str]:
     return [arg.replace("{inputFile}", str(input_file)) for arg in args]
 
@@ -222,6 +248,7 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
     if durable_root:
         durable_root.mkdir(parents=True, exist_ok=True)
         env["BIC_JOB_OUTPUT_ROOT"] = str(durable_root)
+        env["BIC_JOB_ID"] = str(manifest.get("jobId") or "")
     proc = subprocess.Popen(
         cmd,
         cwd=str(cwd),
@@ -375,6 +402,7 @@ def completion_report(
     run_started_at: float,
     outputs: list[str],
     source_summary: dict[str, Any] | None,
+    review_draft: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     question_count = 0
     image_table_count = 0
@@ -388,7 +416,7 @@ def completion_report(
         figure_refs.extend(metrics["figureRefs"])
         warnings.extend(metrics["warnings"])
         errors.extend(metrics["errors"])
-    return {
+    report = {
         "schemaVersion": "batch-import-completion-report-v1",
         "jobId": manifest.get("jobId"),
         "sourceType": manifest.get("sourceType"),
@@ -408,6 +436,17 @@ def completion_report(
         "importedTestName": None,
         "stage": "completed",
     }
+    if isinstance(review_draft, dict) and isinstance(review_draft.get("draft"), dict):
+        draft = review_draft["draft"]
+        report.update({
+            "status": "needs_review",
+            "stage": "needs_review",
+            "draftPath": str(review_draft.get("path") or ""),
+            "questionCount": len(draft.get("candidateQuestions") or []),
+            "warnings": [str(item) for item in draft.get("validationWarnings") or []][:50],
+            "errors": [str(item) for item in draft.get("validationErrors") or []][:50],
+        })
+    return report
 
 
 def newest_json_report(source: dict[str, Any], manifest: dict[str, Any], pattern: str, started_at: float) -> Path | None:
@@ -566,7 +605,8 @@ def main() -> int:
             }
             outputs = sorted(new_outputs | touched_outputs)
         emit("outputs_discovered", outputs=outputs, count=len(outputs))
-        report = completion_report(manifest, source, run_started_at, outputs, source_summary)
+        review_draft = discover_review_draft(manifest, run_started_at)
+        report = completion_report(manifest, source, run_started_at, outputs, source_summary, review_draft)
         emit(
             "stage_complete",
             stage="completed",

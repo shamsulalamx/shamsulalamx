@@ -22509,6 +22509,7 @@ const App = (() => {
       const progress = job.progress?.message || job.progress?.phase || 'Waiting.';
       const inputPaths = batchImportQueuePathText(job.inputFiles);
       const appReadyPath = batchImportQueueArtifactPath(job, 'appReadyPath') || 'None';
+      const draftPath = batchImportQueueArtifactPath(job, 'draftPath') || 'None';
       const reportPath = batchImportQueueArtifactPath(job, 'reportPath') || 'None';
       const logsPath = String(job.logsPath || '').trim() || 'None';
       const outputRoot = String(job.outputRoot || '').trim() || 'None';
@@ -22541,6 +22542,7 @@ Source: ${escapeHTML(sourceLabel)}
 Input file(s): ${escapeHTML(inputPaths)}
 Output root: ${escapeHTML(outputRoot)}
 App-ready path: ${escapeHTML(appReadyPath)}
+Review draft path: ${escapeHTML(draftPath)}
 Report path: ${escapeHTML(reportPath)}
 Logs path: ${escapeHTML(logsPath)}
 Latest progress: ${escapeHTML(progress)}

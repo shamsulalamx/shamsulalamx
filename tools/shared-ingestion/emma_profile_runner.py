@@ -32,6 +32,7 @@ APP_READY_DIR = (
     if JOB_OUTPUT_ROOT else LECTURE_DIR / "output_json" / "app_ready"
 )
 CHUNK_OUTPUT_DIR = JOB_OUTPUT_ROOT / "shared-ingestion" if JOB_OUTPUT_ROOT else RUNNER_DIR / "output"
+REVIEW_DRAFT_PATH = JOB_OUTPUT_ROOT / "review" / "lecture_slide_review_draft.json" if JOB_OUTPUT_ROOT else None
 
 
 def emit(event_type: str, **payload: Any) -> None:
@@ -56,6 +57,24 @@ def newest_app_ready_since(started_at: float) -> list[str]:
         if path.is_file() and path.stat().st_mtime >= started_at - 1
     ]
     return [str(path.resolve()) for path in sorted(paths, key=lambda p: p.stat().st_mtime)]
+
+
+def review_draft_since(started_at: float) -> str:
+    if not REVIEW_DRAFT_PATH or not REVIEW_DRAFT_PATH.is_file():
+        return ""
+    if REVIEW_DRAFT_PATH.stat().st_mtime < started_at - 1:
+        return ""
+    try:
+        payload = json.loads(REVIEW_DRAFT_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return ""
+    if not isinstance(payload, dict) or payload.get("draftVersion") != 1 or payload.get("status") != "needs_review":
+        return ""
+    if not isinstance(payload.get("candidateQuestions"), list) or not payload["candidateQuestions"]:
+        return ""
+    if not isinstance(payload.get("validQuestionIndexes"), list) or not payload["validQuestionIndexes"]:
+        return ""
+    return str(REVIEW_DRAFT_PATH.resolve())
 
 
 def run_existing_emma_generator(input_file: Path, mode: str, limit: int, normalized_chunks: Path | None = None) -> tuple[int, float, list[str]]:
@@ -160,9 +179,12 @@ def main() -> int:
     )
     code, downstream_runtime, outputs = run_existing_emma_generator(input_file, args.mode, limit, normalized_chunks=normalized_input)
     total_runtime = round(time.time() - started_at, 3)
+    draft_path = review_draft_since(started_at)
+    needs_review = code != 0 and bool(draft_path)
     final_report = {
         "schemaVersion": "emma-profile-runner-report-v1",
         "sourceType": "emma_holiday_pdf",
+        "status": "needs_review" if needs_review else ("completed" if code == 0 else "failed"),
         "mode": args.mode,
         "downstreamInput": args.downstream_input,
         "normalizedChunkPath": str(chunk_output),
@@ -172,10 +194,14 @@ def main() -> int:
         "downstreamRuntimeSeconds": downstream_runtime,
         "totalRuntimeSeconds": total_runtime,
         "outputPaths": outputs,
+        "draftPath": draft_path,
         "warnings": report.get("warnings", []),
         "errors": report.get("errors", []) if code == 0 else [f"Existing Emma generator exited with code {code}"],
     }
-    emit("emma_profile_complete", ok=code == 0, report=final_report, outputs=outputs)
+    emit("emma_profile_complete", ok=code == 0 or needs_review, report=final_report, outputs=outputs)
+    if needs_review:
+        emit_bic_progress("needs_review", "Saved generated Emma questions as a durable review draft.", draftPath=draft_path)
+        return 0
     return code
 
 
