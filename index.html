@@ -286,10 +286,30 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
   cursor: pointer;
   box-shadow: 0 1px 3px rgba(0,0,0,.06);
   transition: box-shadow .15s, transform .15s;
+  position: relative;
 }
 .subfolder-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,.10); transform: translateY(-1px); }
-.subfolder-card-name { font-size: 13px; font-weight: 700; color: var(--navy); margin-bottom: 4px; }
+.subfolder-card-name { font-size: 13px; font-weight: 700; color: var(--navy); margin: 0 30px 4px 0; }
 .subfolder-card-meta { font-size: 11px; color: var(--muted); }
+.subfolder-card-menu {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+.subfolder-card-menu:hover, .subfolder-card-menu:focus-visible {
+  background: #f5f7fa;
+  border-color: var(--border);
+  color: var(--navy);
+}
 
 /* Performance analytics summary */
 .perf-summary { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
@@ -8817,12 +8837,19 @@ const App = (() => {
     menu.id = 'ctx-menu';
     menu.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;background:white;border:1px solid #c8d0da;border-radius:4px;box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:9000;min-width:150px;`;
     menu.innerHTML = `
-      <div class="ctx-item" onclick="App.startRenameFolder('${folder.id}')">✏️ Rename</div>
+      <div class="ctx-item" onclick="App.renameFolder('${folder.id}')">✏️ Rename</div>
       ${workflowLabel ? `<div class="ctx-item" onclick="App.generateInFolder('${folder.id}')">${workflowLabel}</div>` : ''}
       <div class="ctx-item ctx-danger" onclick="App.deleteFolder('${folder.id}')">🗑 Delete Folder</div>`;
     styleContextMenu(menu);
     document.body.appendChild(menu);
     setTimeout(() => document.addEventListener('click', removeContextMenus, { once: true }), 10);
+  }
+
+  function showSubfolderCardMenu(e, id) {
+    e.preventDefault();
+    e.stopPropagation();
+    const folder = DB.getFolders().find(f => f.id === id);
+    if (folder) showFolderContextMenu(e, folder);
   }
 
   function showTestContextMenu(e, test) {
@@ -9140,6 +9167,7 @@ const App = (() => {
     folders.forEach(folder => {
       const tests = DB.getTests(folder.id);
       html += `<div class="subfolder-card" onclick="App.showFolderHome('${folder.id}')">
+        <button class="subfolder-card-menu" onclick="App.showSubfolderCardMenu(event,'${folder.id}')" aria-label="Manage ${escapeHTML(folder.name)} subfolder" title="Manage subfolder">⋯</button>
         <div class="subfolder-card-name">📁 ${escapeHTML(folder.name)}</div>
         <div class="subfolder-card-meta">${tests.length} test${tests.length!==1?'s':''}</div>
       </div>`;
@@ -21730,24 +21758,67 @@ const App = (() => {
     toast(`Folder "${name}" created.`);
   }
 
+  function hasDuplicateSiblingFolderName(folder, name) {
+    const sourceId = folder.sourceId || 'src-nbme';
+    const normalizedName = name.toLocaleLowerCase();
+    return DB.getFolders(sourceId).some(sibling =>
+      sibling.id !== folder.id && sibling.name.trim().toLocaleLowerCase() === normalizedName
+    );
+  }
+
+  function saveRenamedFolder(folder, name) {
+    const nextName = name.trim();
+    if (!nextName) {
+      toast('Please enter a folder name.');
+      return false;
+    }
+    if (hasDuplicateSiblingFolderName(folder, nextName)) {
+      toast('A subfolder with that name already exists in this library.');
+      return false;
+    }
+    if (nextName !== folder.name) DB.renameFolder(folder.id, nextName);
+    renderSidebar();
+    renderHomeGrid();
+    if (_currentFolder === folder.id) document.getElementById('home-title').textContent = nextName;
+    return true;
+  }
+
+  function renameFolder(id) {
+    const folder = DB.getFolders().find(f => f.id === id);
+    if (!folder) return;
+    const name = prompt('Rename subfolder:', folder.name);
+    if (name === null) return;
+    if (saveRenamedFolder(folder, name)) toast('Renamed.');
+  }
+
   function startRenameFolder(id) {
     const label = document.getElementById(`folder-label-${id}`);
-    if (!label) return;
     const folder = DB.getFolders().find(f => f.id === id);
+    if (!folder) return;
+    if (!label) {
+      renameFolder(id);
+      return;
+    }
     const input = document.createElement('input');
     input.className = 'rename-input';
     input.value = folder.name;
     label.replaceWith(input);
     input.focus(); input.select();
+    let cancelled = false;
     const done = () => {
-      const name = input.value.trim() || folder.name;
-      DB.renameFolder(id, name);
-      renderSidebar();
-      renderHomeGrid();
-      if (_currentFolder === id) document.getElementById('home-title').textContent = name;
+      if (cancelled) return;
+      saveRenamedFolder(folder, input.value);
     };
     input.addEventListener('blur', done);
-    input.addEventListener('keydown', e => { if (e.key === 'Enter') { done(); } if (e.key === 'Escape') renderSidebar(); });
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        done();
+      }
+      if (e.key === 'Escape') {
+        cancelled = true;
+        renderSidebar();
+      }
+    });
   }
 
   function startRenameTest(id) {
@@ -21758,7 +21829,13 @@ const App = (() => {
   }
 
   function deleteFolder(id) {
-    if (!confirm('Delete folder and move all tests to Trash?')) return;
+    const folder = DB.getFolders().find(f => f.id === id);
+    if (!folder) return;
+    const tests = DB.getTests(id);
+    const message = tests.length
+      ? `Delete "${folder.name}" subfolder and move its ${tests.length} test${tests.length!==1?'s':''} to Trash?`
+      : `Delete "${folder.name}" subfolder?`;
+    if (!confirm(message)) return;
     DB.deleteFolder(id);
     _currentFolder = null;
     renderSidebar(); renderHomeGrid(); toast('Folder deleted.');
@@ -27385,6 +27462,8 @@ const App = (() => {
     renameSourceFolder,
     promptNewFolder,
     createFolder,
+    showSubfolderCardMenu,
+    renameFolder,
     startRenameFolder,
     startRenameTest,
     deleteFolder,
