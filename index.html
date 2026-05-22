@@ -22421,13 +22421,16 @@ const App = (() => {
       return;
     }
     const result = await api.selectFiles({ sourceType, existingOutputValidation });
-    if (!result || !result.ok) {
+    const selectedPaths = Array.isArray(result)
+      ? result
+      : (Array.isArray(result?.filePaths) ? result.filePaths : []);
+    if (!result || (!Array.isArray(result) && !result.ok)) {
       if (runStatus) runStatus.textContent = result?.message || 'File selection failed.';
       return;
     }
     if (result.canceled) return;
     if (!_batchImportState) _batchImportState = { lastResult: null, progress: [], files: [], registry: null };
-    _batchImportState.files = result.filePaths || [];
+    _batchImportState.files = selectedPaths;
     renderBatchImportSelectedFiles();
     if (runStatus) runStatus.textContent = _batchImportState.files.length + ' file(s) selected.';
   }
