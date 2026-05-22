@@ -1114,6 +1114,22 @@ def normalized_schema_required_keys() -> str:
     }, ensure_ascii=False)
 
 
+def validate_normalized_chunk_slide_types(item: dict[str, Any], slide_id: str, chunk_label: str) -> None:
+    types = item.get("slideType")
+    if isinstance(types, str):
+        types = [types]
+    if not isinstance(types, list):
+        return
+    normalized_types = [str(value).strip().upper() for value in types if str(value).strip()]
+    bad = [value for value in normalized_types if value not in SLIDE_TYPES]
+    if bad:
+        allowed = ", ".join(sorted(SLIDE_TYPES))
+        raise PipelineError(
+            f"Normalization {chunk_label} slide {slide_id} has unsupported slideType values: {bad}. "
+            f"Use only allowed slide types: {allowed}."
+        )
+
+
 def extract_normalized_items(parsed: Any, by_id: dict[str, dict[str, Any]], chunk_label: str) -> list[dict[str, Any]]:
     items = parsed.get("slides") if isinstance(parsed, dict) else parsed
     if not isinstance(items, list):
@@ -1139,6 +1155,7 @@ def extract_normalized_items(parsed: Any, by_id: dict[str, dict[str, Any]], chun
         missing = [key for key in required if key not in item]
         if missing:
             raise PipelineError(f"Normalization {chunk_label} slide {slide_id} missing required keys: {', '.join(missing)}")
+        validate_normalized_chunk_slide_types(item, slide_id, chunk_label)
         seen_ids.add(slide_id)
         merged.append(merge_normalized_with_source(item, by_id[slide_id]))
     missing_ids = expected_ids - seen_ids
@@ -1239,6 +1256,8 @@ def normalize_chunk_with_retries(
         return collected, warnings
 
     slide_id = chunk[0].get("slideId", "(unknown)") if chunk else "(empty)"
+    if "unsupported slideType values" in last_error:
+        raise PipelineError(f"Normalization {chunk_label} failed after retries for slide {slide_id}: {last_error}")
     warnings.append(f"Normalization {chunk_label}: skipped slide {slide_id} after repeated JSON/schema failures: {last_error}")
     return [], warnings
 
