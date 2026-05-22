@@ -1640,13 +1640,24 @@ def question_schema_required_keys() -> str:
     }, ensure_ascii=False)
 
 
-def extract_generated_question_items(parsed: Any, allocations: list[dict[str, Any]], chunk_label: str) -> list[dict[str, Any]]:
+def extract_generated_question_items(
+    parsed: Any,
+    allocations: list[dict[str, Any]],
+    chunk_label: str,
+    *,
+    require_exact_count: bool = True,
+    count_warnings: list[str] | None = None,
+) -> list[dict[str, Any]]:
     items = parsed.get("questions") if isinstance(parsed, dict) else parsed
     if not isinstance(items, list):
         raise PipelineError(f"Generation {chunk_label} did not return a questions array.")
     expected_count = sum(int(a.get("questionCount") or 0) for a in allocations)
     allowed_slide_ids = {a["slideId"] for a in allocations}
-    if len(items) != expected_count:
+    if expected_count > 0 and not items:
+        raise PipelineError(f"Generation {chunk_label} returned 0 questions; expected {expected_count}.")
+    if len(items) > expected_count:
+        raise PipelineError(f"Generation {chunk_label} returned {len(items)} questions; expected {expected_count}.")
+    if require_exact_count and len(items) != expected_count:
         raise PipelineError(f"Generation {chunk_label} returned {len(items)} questions; expected {expected_count}.")
     required = [
         "slideId", "questionKind", "stemTemplate", "testedConcept",
@@ -1666,6 +1677,14 @@ def extract_generated_question_items(parsed: Any, allocations: list[dict[str, An
         choices = item.get("answerChoices")
         if not isinstance(choices, list) or len(choices) != 4:
             raise PipelineError(f"Generation {chunk_label} question {idx} does not have exactly 4 answerChoices.")
+    if not require_exact_count and 0 < len(items) < expected_count:
+        message = (
+            f"Generation {chunk_label} returned {len(items)} questions; requested {expected_count}. "
+            "Keeping valid partial output."
+        )
+        warn(message)
+        if count_warnings is not None:
+            count_warnings.append(message)
     return items
 
 
@@ -1710,6 +1729,7 @@ def call_generation_once(
     retry_label: str,
     repair_raw: str | None = None,
     repair_error: str = "",
+    count_warnings: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     expected_ids = [a["slideId"] for a in chunk]
     if repair_raw is None:
@@ -1729,7 +1749,13 @@ def call_generation_once(
     raw = raw_gemini_call(api_key, prompt, temperature=0.0 if repair_raw else 0.35, max_tokens=12000)
     write_debug_raw(source_file, "generate", chunk_label, retry_label, raw)
     parsed = load_largest_valid_json(raw)
-    return extract_generated_question_items(parsed, chunk, chunk_label)
+    return extract_generated_question_items(
+        parsed,
+        chunk,
+        chunk_label,
+        require_exact_count=False,
+        count_warnings=count_warnings,
+    )
 
 
 def generate_question_chunk_with_retries(
@@ -1745,7 +1771,16 @@ def generate_question_chunk_with_retries(
     last_error = ""
 
     try:
-        return call_generation_once(api_key, template, chunk, memory, source_file, chunk_label, "attempt0"), warnings
+        return call_generation_once(
+            api_key,
+            template,
+            chunk,
+            memory,
+            source_file,
+            chunk_label,
+            "attempt0",
+            count_warnings=warnings,
+        ), warnings
     except Exception as exc:
         last_error = str(exc)
         raw_path = DEBUG_DIR / f"{slugify(Path(source_file).stem)}_generate_{slugify(chunk_label)}_attempt0_raw_response.txt"
@@ -1762,7 +1797,7 @@ def generate_question_chunk_with_retries(
             )
             return call_generation_once(
                 api_key, template, chunk, memory, source_file, chunk_label, "retry1_repair",
-                repair_raw=last_raw, repair_error=last_error,
+                repair_raw=last_raw, repair_error=last_error, count_warnings=warnings,
             ), warnings
         except Exception as exc:
             last_error = str(exc)
