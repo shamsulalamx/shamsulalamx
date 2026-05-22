@@ -18,6 +18,14 @@ const BATCH_QUEUE_VERSION = 'batch-import-queue-v1';
 const activeBatchJobs = new Map();
 const batchQueueWaiters = new Map();
 let batchQueueRunning = false;
+let batchReconciliationRunning = false;
+let batchShutdownInProgress = false;
+
+const singleInstanceLock = app.requestSingleInstanceLock();
+if (!singleInstanceLock) {
+  app.quit();
+  process.exit(0);
+}
 
 ipcMain.handle('nbme:ai:get-status', async () => ({
   available: true,
@@ -153,16 +161,36 @@ function batchQueuePath() {
   return path.join(queueDir, 'jobs.json');
 }
 
-function readBatchQueue() {
+function corruptBatchQueuePath(queuePath) {
+  const corruptPath = `${queuePath}.corrupt.${new Date().toISOString().replace(/[:.]/g, '-')}`;
+  fs.renameSync(queuePath, corruptPath);
+  console.error(`[NBME] Batch queue JSON is corrupt. Preserved original at: ${corruptPath}`);
+  return corruptPath;
+}
+
+function readBatchQueueRaw() {
   const queuePath = batchQueuePath();
   if (!fs.existsSync(queuePath)) return { schemaVersion: BATCH_QUEUE_VERSION, jobs: [] };
   try {
     const parsed = JSON.parse(fs.readFileSync(queuePath, 'utf8'));
     if (!parsed || !Array.isArray(parsed.jobs)) throw new Error('Invalid queue shape');
     return { schemaVersion: parsed.schemaVersion || BATCH_QUEUE_VERSION, jobs: parsed.jobs.filter(job => job && typeof job === 'object') };
-  } catch (_) {
+  } catch (err) {
+    if (err instanceof SyntaxError) {
+      try {
+        corruptBatchQueuePath(queuePath);
+      } catch (renameErr) {
+        console.error(`[NBME] Batch queue JSON is corrupt and could not be renamed: ${renameErr.message || String(renameErr)}`);
+      }
+    } else {
+      console.error(`[NBME] Batch queue could not be read: ${err.message || String(err)}`);
+    }
     return { schemaVersion: BATCH_QUEUE_VERSION, jobs: [] };
   }
+}
+
+function readBatchQueue() {
+  return readBatchQueueRaw();
 }
 
 function writeBatchQueue(queue) {
@@ -240,7 +268,7 @@ function writeBatchCompletionReport(outputRoot, report) {
   }
 }
 
-function readBatchJobHistory() {
+function readBatchJobHistoryRaw() {
   const historyPath = batchHistoryPath();
   if (!fs.existsSync(historyPath)) return { schemaVersion: BATCH_JOB_HISTORY_VERSION, jobs: [] };
   try {
@@ -253,6 +281,10 @@ function readBatchJobHistory() {
   } catch (_) {
     return { schemaVersion: BATCH_JOB_HISTORY_VERSION, jobs: [] };
   }
+}
+
+function readBatchJobHistory() {
+  return readBatchJobHistoryRaw();
 }
 
 function writeBatchJobHistory(history) {
@@ -293,41 +325,280 @@ function updateBatchJobRecord(jobId, patch) {
   return persistBatchJobRecord(updated);
 }
 
-function reconcileStaleBatchJobs() {
-  const history = readBatchJobHistory();
-  let changed = false;
-  const jobs = history.jobs.map(job => {
-    if (job.status === 'running') {
-      changed = true;
-      return {
-        ...job,
-        status: 'failed',
-        completedAt: job.completedAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        errors: [...(job.errors || []), 'The app closed before this job reported completion.']
-      };
+function findExistingAppReadyOutput(outputRoot) {
+  if (!outputRoot || !fs.existsSync(outputRoot)) return '';
+  const pending = [outputRoot];
+  while (pending.length) {
+    const current = pending.pop();
+    let entries = [];
+    try {
+      if (fs.lstatSync(current).isSymbolicLink()) continue;
+      entries = fs.readdirSync(current, { withFileTypes: true });
+    } catch (_) {
+      continue;
     }
-    return job;
-  });
-  if (changed) writeBatchJobHistory({ schemaVersion: BATCH_JOB_HISTORY_VERSION, jobs });
+    for (const entry of entries) {
+      const entryPath = path.join(current, entry.name);
+      if (entry.isSymbolicLink()) continue;
+      if (entry.isDirectory()) {
+        pending.push(entryPath);
+      } else if (entry.isFile() && entry.name.endsWith('_app_ready.json')) {
+        return entryPath;
+      }
+    }
+  }
+  return '';
+}
+
+function batchJobCompletionArtifacts(job) {
+  const outputRoot = knownBatchJobOutputRoot(job);
+  const reportPath = outputRoot ? path.join(outputRoot, 'completion-report.json') : '';
+  const recordedReportPath = String(job?.reportPath || '').trim();
+  const outputPaths = Array.isArray(job?.outputPaths) ? job.outputPaths.map(item => String(item || '').trim()).filter(Boolean) : [];
+  const inputPaths = Array.isArray(job?.inputFiles) ? job.inputFiles.map(item => String(item?.path || '').trim()).filter(Boolean) : [];
+  const appReadyCandidates = [...outputPaths, ...inputPaths];
+  const appReadyPath = appReadyCandidates.find(outputPath => outputPath.endsWith('_app_ready.json') && fs.existsSync(outputPath)) || findExistingAppReadyOutput(outputRoot);
+  const completionReportPath = (reportPath && fs.existsSync(reportPath)) ? reportPath : ((recordedReportPath && fs.existsSync(recordedReportPath)) ? recordedReportPath : '');
+  return { completionReportPath, appReadyPath };
+}
+
+function completedBatchJobPatch(job, artifacts, now) {
+  const outputPaths = Array.isArray(job.outputPaths) ? [...job.outputPaths] : [];
+  if (artifacts.appReadyPath && !outputPaths.includes(artifacts.appReadyPath)) outputPaths.push(artifacts.appReadyPath);
+  return {
+    ...job,
+    status: 'completed',
+    finishedAt: job.finishedAt || job.completedAt || now,
+    completedAt: job.completedAt || job.finishedAt || now,
+    updatedAt: now,
+    outputPaths,
+    reportPath: job.reportPath || artifacts.completionReportPath || null,
+    progress: job.progress || { phase: 'completed', message: 'Batch job completed.', updatedAt: now }
+  };
+}
+
+function interruptedBatchJobPatch(job, now) {
+  return {
+    ...job,
+    status: 'interrupted',
+    finishedAt: job.finishedAt || job.completedAt || now,
+    completedAt: job.completedAt || job.finishedAt || now,
+    updatedAt: now,
+    errors: [...(job.errors || []), 'The app closed before this queued job reported completion.']
+  };
+}
+
+function reconcileQueueAndHistoryOnStartup() {
+  if (batchReconciliationRunning) return;
+  batchReconciliationRunning = true;
+  try {
+    const queue = readBatchQueueRaw();
+    const history = readBatchJobHistoryRaw();
+    let queueChanged = false;
+    let historyChanged = false;
+    const now = new Date().toISOString();
+
+    queue.jobs = queue.jobs.map(job => {
+      const artifacts = batchJobCompletionArtifacts(job);
+      if (artifacts.completionReportPath || artifacts.appReadyPath) {
+        const updated = completedBatchJobPatch(job, artifacts, now);
+        if (JSON.stringify(updated) !== JSON.stringify(job)) queueChanged = true;
+        return updated;
+      }
+      if (job.status === 'running' && !activeBatchJobs.has(job.jobId)) {
+        cleanupTrackedBatchProcess(job, 'startup stale queue job');
+        queueChanged = true;
+        return interruptedBatchJobPatch(job, now);
+      }
+      return job;
+    });
+
+    history.jobs = history.jobs.map(job => {
+      const queueJob = queue.jobs.find(item => item.jobId === job.jobId);
+      const artifacts = batchJobCompletionArtifacts(queueJob || job);
+      if (artifacts.completionReportPath || artifacts.appReadyPath || queueJob?.status === 'completed') {
+        const updated = completedBatchJobPatch({ ...job, outputRoot: job.outputRoot || queueJob?.outputRoot, outputPaths: job.outputPaths || queueJob?.outputPaths }, artifacts, now);
+        if (JSON.stringify(updated) !== JSON.stringify(job)) historyChanged = true;
+        return updated;
+      }
+      if ((job.status === 'running' || job.status === 'queued') && queueJob?.status === 'interrupted') {
+        historyChanged = true;
+        return interruptedBatchJobPatch(job, now);
+      }
+      if (job.status === 'running' && !queueJob) {
+        cleanupTrackedBatchProcess(job, 'startup stale history job');
+        historyChanged = true;
+        return interruptedBatchJobPatch(job, now);
+      }
+      return job;
+    });
+
+    if (queueChanged) writeBatchQueue(queue);
+    if (historyChanged) writeBatchJobHistory({ schemaVersion: BATCH_JOB_HISTORY_VERSION, jobs: history.jobs });
+  } finally {
+    batchReconciliationRunning = false;
+  }
+}
+
+function reconcileStaleBatchJobs() {
+  reconcileQueueAndHistoryOnStartup();
 }
 
 function reconcileInterruptedBatchQueue() {
-  const queue = readBatchQueue();
-  let changed = false;
-  const now = new Date().toISOString();
-  queue.jobs = queue.jobs.map(job => {
-    if (job.status !== 'running' || activeBatchJobs.has(job.jobId)) return job;
-    changed = true;
+  reconcileQueueAndHistoryOnStartup();
+}
+
+function batchProcessRegistryPath(job) {
+  const outputRoot = knownBatchJobOutputRoot(job);
+  if (!outputRoot) return '';
+  return path.join(outputRoot, 'process_registry.json');
+}
+
+function readBatchProcessRegistry(job) {
+  const registryPath = batchProcessRegistryPath(job);
+  if (!registryPath || !fs.existsSync(registryPath)) return null;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+    if (!parsed || typeof parsed !== 'object') return null;
+    const pid = Number(parsed.pid);
+    if (!Number.isFinite(pid)) return null;
     return {
-      ...job,
-      status: 'interrupted',
-      finishedAt: job.finishedAt || now,
-      updatedAt: now,
-      errors: [...(job.errors || []), 'The app closed before this queued job reported completion.']
+      jobId: String(parsed.jobId || job?.jobId || ''),
+      pid,
+      startedAt: Number(parsed.startedAt) || null,
+      status: String(parsed.status || '')
     };
+  } catch (err) {
+    console.warn(`[NBME] Batch process registry ignored safely (${job?.jobId || 'unknown'}): ${err.message || String(err)}`);
+    return null;
+  }
+}
+
+function writeBatchProcessRegistry(job, pid) {
+  const registryPath = batchProcessRegistryPath(job);
+  if (!registryPath || !pid || typeof pid !== 'number') {
+    console.warn(`[NBME] Batch process registry write skipped (${job?.jobId || 'unknown'}): pid missing.`);
+    return;
+  }
+  try {
+    fs.mkdirSync(path.dirname(registryPath), { recursive: true });
+    fs.writeFileSync(registryPath, JSON.stringify({
+      jobId: job.jobId,
+      pid,
+      startedAt: Date.now(),
+      status: 'running'
+    }, null, 2), 'utf8');
+  } catch (err) {
+    console.warn(`[NBME] Batch process registry write failed safely (${job?.jobId || 'unknown'}): ${err.message || String(err)}`);
+  }
+}
+
+function updateBatchProcessRegistryStatus(job, status) {
+  const registryPath = batchProcessRegistryPath(job);
+  if (!registryPath || !fs.existsSync(registryPath)) return;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+    fs.writeFileSync(registryPath, JSON.stringify({ ...parsed, status }, null, 2), 'utf8');
+  } catch (err) {
+    console.warn(`[NBME] Batch process registry update failed safely (${job?.jobId || 'unknown'}): ${err.message || String(err)}`);
+  }
+}
+
+function processRefFromPid(pid) {
+  return Number.isFinite(Number(pid)) ? { pid: Number(pid) } : null;
+}
+
+function safeKillProcessGroup(proc, signal, context) {
+  const pid = proc?.pid;
+  if (!pid || typeof pid !== 'number') {
+    console.warn(`[NBME] Batch process kill skipped (${context || signal}): pid missing.`);
+    return false;
+  }
+  try {
+    process.kill(pid, 0);
+  } catch (err) {
+    console.warn(`[NBME] Batch process kill skipped (${context || signal}): pid ${pid} is not alive (${err.message || String(err)}).`);
+    return false;
+  }
+  try {
+    process.kill(-pid, signal);
+    return true;
+  } catch (err) {
+    console.warn(`[NBME] Batch process group kill failed safely (${context || signal}): pid ${pid}, signal ${signal} (${err.message || String(err)}).`);
+    return false;
+  }
+}
+
+function safeKillProcess(proc, signal, context) {
+  const pid = proc?.pid;
+  if (!pid || typeof pid !== 'number') {
+    console.warn(`[NBME] Batch process kill skipped (${context || signal}): pid missing.`);
+    return false;
+  }
+  try {
+    if (typeof proc.kill === 'function') {
+      proc.kill(signal);
+      return true;
+    }
+  } catch (err) {
+    console.warn(`[NBME] Batch process kill failed safely (${context || signal}): pid ${pid}, signal ${signal} (${err.message || String(err)}).`);
+  }
+  return false;
+}
+
+function cleanupTrackedBatchProcess(job, context) {
+  const registry = readBatchProcessRegistry(job);
+  if (!registry?.pid) {
+    console.warn(`[NBME] Batch process registry cleanup skipped (${context || job?.jobId || 'unknown'}): pid missing.`);
+    return;
+  }
+  const procRef = processRefFromPid(registry.pid);
+  const label = `${context || 'tracked cleanup'} ${job?.jobId || registry.jobId || ''}`.trim();
+  try {
+    const signalled = safeKillProcessGroup(procRef, 'SIGTERM', label);
+    if (signalled) {
+      setTimeout(() => {
+        try {
+          safeKillProcessGroup(procRef, 'SIGKILL', `${label} fallback`);
+        } catch (err) {
+          console.warn(`[NBME] Batch process registry fallback cleanup failed safely (${label}): ${err.message || String(err)}`);
+        }
+      }, 1500);
+    }
+  } catch (err) {
+    console.warn(`[NBME] Batch process registry cleanup failed safely (${label}): ${err.message || String(err)}`);
+  }
+}
+
+function cleanupTrackedBatchProcessesForJobs(jobs, context) {
+  for (const job of jobs || []) {
+    try {
+      cleanupTrackedBatchProcess(job, context);
+    } catch (err) {
+      console.warn(`[NBME] Batch process registry cleanup failed safely (${job?.jobId || 'unknown'}): ${err.message || String(err)}`);
+    }
+  }
+}
+
+function interruptActiveBatchJobsForShutdown() {
+  const now = new Date().toISOString();
+  activeBatchJobs.forEach((active, jobId) => {
+    updateBatchQueueJob(jobId, {
+      status: 'interrupted',
+      finishedAt: now,
+      errors: [...(active.errors || []), 'The app closed before this queued job reported completion.']
+    });
+    updateBatchJobRecord(jobId, {
+      status: 'interrupted',
+      completedAt: now,
+      errors: [...(active.errors || []), 'The app closed before this job reported completion.']
+    });
+    if (active.proc?.pid) {
+      safeKillProcessGroup(active.proc, 'SIGTERM', `shutdown ${jobId}`) || safeKillProcess(active.proc, 'SIGTERM', `shutdown ${jobId}`);
+    } else {
+      console.warn(`[NBME] Batch process kill skipped (shutdown ${jobId}): pid missing.`);
+    }
   });
-  if (changed) writeBatchQueue(queue);
 }
 
 function initialBatchJobRecord(manifest, source, manifestPath) {
@@ -705,16 +976,14 @@ ipcMain.handle('nbme:batch-import:cancel-job', async (_event, payload) => {
       warnings: [...(active.warnings || []), 'Job canceled by user.']
     });
     if (active.proc?.pid) {
-      try {
-        process.kill(-active.proc.pid, 'SIGTERM');
-      } catch (_) {
-        try { active.proc.kill('SIGTERM'); } catch (__) {}
-      }
+      safeKillProcessGroup(active.proc, 'SIGTERM', `cancel ${jobId}`) || safeKillProcess(active.proc, 'SIGTERM', `cancel ${jobId}`);
       active.killTimer = setTimeout(() => {
         if (active.proc && active.proc.exitCode === null) {
-          try { process.kill(-active.proc.pid, 'SIGKILL'); } catch (_) {}
+          safeKillProcessGroup(active.proc, 'SIGKILL', `cancel fallback ${jobId}`);
         }
       }, 5000);
+    } else {
+      console.warn(`[NBME] Batch process kill skipped (cancel ${jobId}): pid missing.`);
     }
     return { ok: true, jobId, status: 'canceled' };
   } catch (err) {
@@ -905,6 +1174,7 @@ async function runQueuedBatchJob(job) {
       detached: true
     });
     activeBatchJobs.set(manifest.jobId, { proc, manifest, manifestPath, warnings, errors, cancelled: false, killTimer: null });
+    writeBatchProcessRegistry(job, proc.pid);
 
     let stdoutBuffer = '';
     let stderrBuffer = '';
@@ -986,6 +1256,7 @@ async function runQueuedBatchJob(job) {
         report: finalReport,
         progress: { phase: status, message: status === 'completed' ? 'Batch job completed.' : (finalErrors[0] || status), updatedAt: finishedAt }
       });
+      updateBatchProcessRegistryStatus(job, status);
       const result = {
         ok,
         cancelled: wasCancelled,
@@ -1865,7 +2136,7 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
-  reconcileInterruptedBatchQueue();
+  reconcileQueueAndHistoryOnStartup();
   if (process.env.NBME_ELECTRON_URL) {
     resolvedDevUrl = process.env.NBME_ELECTRON_URL;
     console.log('[NBME] Using external URL override:', resolvedDevUrl);
@@ -1892,10 +2163,37 @@ app.on('window-all-closed', () => {
   app.quit();
 });
 
-app.on('before-quit', () => {
-  if (_embeddedServer) {
-    _embeddedServer.close();
-    _embeddedServer = null;
+app.on('before-quit', event => {
+  try {
+    if (batchShutdownInProgress) return;
+    batchShutdownInProgress = true;
+    cleanupTrackedBatchProcessesForJobs(readBatchQueueRaw().jobs, 'before-quit queue registry');
+    cleanupTrackedBatchProcessesForJobs(readBatchJobHistoryRaw().jobs, 'before-quit history registry');
+    interruptActiveBatchJobsForShutdown();
+    if (_embeddedServer) {
+      _embeddedServer.close();
+      _embeddedServer = null;
+    }
+    if (activeBatchJobs.size) {
+      event.preventDefault();
+      setTimeout(() => {
+        try {
+          activeBatchJobs.forEach((active, jobId) => {
+            if (active.proc && active.proc.exitCode === null) {
+              safeKillProcessGroup(active.proc, 'SIGKILL', `shutdown fallback ${jobId}`);
+            } else {
+              console.warn(`[NBME] Batch process kill skipped (shutdown fallback ${jobId}): process missing or already closed.`);
+            }
+          });
+          activeBatchJobs.clear();
+        } catch (err) {
+          console.warn(`[NBME] Batch shutdown cleanup failed safely: ${err.message || String(err)}`);
+        }
+        app.exit(0);
+      }, 5000);
+    }
+  } catch (err) {
+    console.warn(`[NBME] before-quit cleanup failed safely: ${err.message || String(err)}`);
   }
 });
 
