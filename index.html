@@ -8616,7 +8616,7 @@ const App = (() => {
   }
 
   function setBatchImportBusy(busy) {
-    ['bic-source-type', 'bic-select-files-btn', 'bic-target-folder', 'bic-test-name', 'bic-run-mode', 'bic-run-btn'].forEach(function(id) {
+    ['bic-select-files-btn', 'bic-target-folder', 'bic-test-name', 'bic-run-mode', 'bic-run-btn'].forEach(function(id) {
       const el = document.getElementById(id);
       if (el) el.disabled = !!busy;
     });
