@@ -37,6 +37,7 @@ STANDARD_STAGES = {
 }
 CURRENT_PROC: subprocess.Popen[str] | None = None
 CANCEL_REQUESTED = False
+PROGRESS_PREFIX = "BIC_PROGRESS "
 
 
 def emit(event_type: str, **payload: Any) -> None:
@@ -46,6 +47,16 @@ def emit(event_type: str, **payload: Any) -> None:
         **payload,
     }
     print(json.dumps(event, ensure_ascii=False), flush=True)
+
+
+def parse_pipeline_progress(message: str) -> dict[str, Any] | None:
+    if not message.startswith(PROGRESS_PREFIX):
+        return None
+    try:
+        payload = json.loads(message[len(PROGRESS_PREFIX):])
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
 
 
 def handle_cancel_signal(signum: int, _frame: Any) -> None:
@@ -247,6 +258,15 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
         if message:
             last_lines.append(message)
             last_lines = last_lines[-12:]
+        progress = parse_pipeline_progress(message)
+        if progress is not None:
+            emit(
+                "pipeline_progress",
+                **{key: value for key, value in progress.items() if key not in {"type", "timestamp", "stage", "stageLabel", "stepIndex"}},
+                stage=progress.get("stage") or stage,
+                stageLabel=progress.get("stageLabel") or stage_label,
+                stepIndex=step_index,
+            )
         emit("log", message=message, stageLabel=stage_label)
     code = proc.wait()
     CURRENT_PROC = None

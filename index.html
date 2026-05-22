@@ -22456,12 +22456,31 @@ const App = (() => {
     log.scrollTop = log.scrollHeight;
   }
 
+  function batchImportProgressPhase(event) {
+    const phase = String(event?.phase || '').trim();
+    if (!phase) return 'Pipeline detail';
+    return phase.charAt(0).toUpperCase() + phase.slice(1);
+  }
+
+  function batchImportProgressText(event) {
+    if (event?.message) return String(event.message);
+    const detail = [];
+    const fileName = String(event?.file || '').split(/[\\/]/).pop();
+    if (fileName) detail.push(fileName);
+    if (event?.page) detail.push('page ' + event.page + (event?.pageTotal ? '/' + event.pageTotal : ''));
+    if (event?.chunk) detail.push('chunk ' + event.chunk + (event?.chunkTotal ? '/' + event.chunkTotal : ''));
+    if (event?.question) detail.push('question ' + event.question + (event?.questionTotal ? '/' + event.questionTotal : ''));
+    return detail.join(' · ') || 'Pipeline progress reported.';
+  }
+
   function updateBatchImportStatusFromEvent(event) {
     const type = String(event?.type || '');
     const stage = String(event?.stage || event?.stageLabel || '').toLowerCase();
     const message = event?.message || '';
     if (type === 'job_start') {
       updateTestCreateStatus('bic-create-status', { phase: 'Job started', text: message || 'Batch job started.', percent: 10, step: 1, totalSteps: 5, percentKnown: false, state: 'active' });
+    } else if (type === 'pipeline_progress') {
+      updateTestCreateStatus('bic-create-status', { phase: batchImportProgressPhase(event), text: batchImportProgressText(event), percent: 45, step: 3, totalSteps: 5, percentKnown: false, state: 'active' });
     } else if (type === 'stage_start' && stage.includes('preflight')) {
       updateTestCreateStatus('bic-create-status', { phase: 'Preflight', text: message || 'Checking inputs.', percent: 25, step: 2, totalSteps: 5, percentKnown: false, state: 'active' });
     } else if (type === 'stage_start' || type === 'command_start' || type === 'stage_heartbeat') {

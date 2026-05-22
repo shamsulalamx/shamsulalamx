@@ -199,6 +199,19 @@ def warn(message: str) -> None:
     print(f"[WARN] {message}", file=sys.stderr)
 
 
+def emit_bic_progress(phase: str, message: str, source: str | None = None, **payload: Any) -> None:
+    progress_source = str(source or os.environ.get("BIC_PROGRESS_SOURCE") or "").strip()
+    if not progress_source:
+        return
+    print(
+        "BIC_PROGRESS " + json.dumps(
+            {"phase": phase, "source": progress_source, "message": message, **payload},
+            ensure_ascii=False,
+        ),
+        flush=True,
+    )
+
+
 def now_stamp() -> str:
     return dt.datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -396,7 +409,7 @@ def extract_embedded_images(fitz_doc: Any, page_index: int, pdf_stem: str, slide
     return images
 
 
-def decompose_pdf(pdf_path: Path) -> dict[str, Any]:
+def decompose_pdf(pdf_path: Path, progress_source: str | None = None) -> dict[str, Any]:
     ensure_dirs()
     pdfplumber = optional_import_pdfplumber()
     fitz = optional_import_fitz()
@@ -424,6 +437,14 @@ def decompose_pdf(pdf_path: Path) -> dict[str, Any]:
 
         for page_index in range(page_count):
             slide_num = page_index + 1
+            emit_bic_progress(
+                "extracting",
+                f"Extracting page {slide_num}/{page_count} from {pdf_path.name}",
+                source=progress_source,
+                file=str(pdf_path),
+                page=slide_num,
+                pageTotal=page_count,
+            )
             slide_id = f"{slugify(pdf_stem)}_s{slide_num:04d}_{pdf_hash[:8]}"
             plumber_page = plumber_pdf.pages[page_index] if plumber_pdf else None
             text = ""
@@ -480,7 +501,7 @@ def decompose_pdf(pdf_path: Path) -> dict[str, Any]:
     return payload
 
 
-def load_or_decompose_pdf(pdf_path: Path) -> dict[str, Any]:
+def load_or_decompose_pdf(pdf_path: Path, progress_source: str | None = None) -> dict[str, Any]:
     pdf_hash = file_sha(pdf_path)
     existing_path = SLIDES_DIR / f"{slugify(pdf_path.stem)}_slides.json"
     if existing_path.exists():
@@ -488,11 +509,18 @@ def load_or_decompose_pdf(pdf_path: Path) -> dict[str, Any]:
             payload = read_json(existing_path)
             if payload.get("pdfSha256") == pdf_hash and isinstance(payload.get("slides"), list):
                 log(f"Using existing decomposed slides -> {existing_path.relative_to(BASE_DIR)}")
+                emit_bic_progress(
+                    "extracting",
+                    f"Using existing extraction for {pdf_path.name}",
+                    source=progress_source,
+                    file=str(pdf_path),
+                    pageTotal=len(payload.get("slides") or []),
+                )
                 return payload
             warn(f"Existing slide decomposition ignored because input hash changed: {existing_path.name}")
         except Exception as exc:
             warn(f"Existing slide decomposition could not be read ({exc}); recomposing PDF.")
-    return decompose_pdf(pdf_path)
+    return decompose_pdf(pdf_path, progress_source=progress_source)
 
 
 def image_ref_to_slide_image(ref: dict[str, Any]) -> dict[str, Any]:
@@ -1505,12 +1533,24 @@ def generate_questions(normalized_payload: dict[str, Any], allocations: list[dic
     questions: list[dict[str, Any]] = []
     if not work:
         return questions
+    total_questions = sum(int(a.get("questionCount") or 0) for a in work)
     if generate:
         api_key = os.environ.get("GEMINI_API_KEY", "").strip()
         if not api_key:
             raise PipelineError("GEMINI_API_KEY is not set.")
         template = GENERATE_PROMPT.read_text(encoding="utf-8")
-        for chunk_index, chunk in enumerate(chunk_list(work, MAX_GENERATION_ALLOCS_PER_CHUNK), start=1):
+        chunks = chunk_list(work, MAX_GENERATION_ALLOCS_PER_CHUNK)
+        generated_so_far = 0
+        for chunk_index, chunk in enumerate(chunks, start=1):
+            chunk_questions = sum(int(a.get("questionCount") or 0) for a in chunk)
+            emit_bic_progress(
+                "generating",
+                f"Generating question {generated_so_far + 1}/{total_questions} from chunk {chunk_index}/{len(chunks)}",
+                chunk=chunk_index,
+                chunkTotal=len(chunks),
+                question=generated_so_far + 1,
+                questionTotal=total_questions,
+            )
             items, chunk_warnings = generate_question_chunk_with_retries(
                 api_key=api_key,
                 template=template,
@@ -1524,10 +1564,17 @@ def generate_questions(normalized_payload: dict[str, Any], allocations: list[dic
             for item in items:
                 questions.append(item)
                 update_memory_from_question(memory, item)
+            generated_so_far += chunk_questions
     else:
         n = 1
         for allocation in work:
             for _ in range(int(allocation.get("questionCount") or 0)):
+                emit_bic_progress(
+                    "generating",
+                    f"Generating question {n}/{total_questions}",
+                    question=n,
+                    questionTotal=total_questions,
+                )
                 q = dry_run_question(allocation, n)
                 questions.append(q)
                 update_memory_from_question(memory, q)
@@ -1689,6 +1736,11 @@ def generate_question_chunk_with_retries(
 
     if not is_truncation_failure(last_error):
         try:
+            emit_bic_progress(
+                "repairing",
+                f"Repairing generated questions from {chunk_label} after validation failure",
+                chunk=chunk_label,
+            )
             return call_generation_once(
                 api_key, template, chunk, memory, source_file, chunk_label, "retry1_repair",
                 repair_raw=last_raw, repair_error=last_error,
@@ -2837,6 +2889,7 @@ def process_slide_payload(slide_payload: dict[str, Any], generate: bool, output_
     questions = generate_questions(normalized_payload, allocations, memory, generate=generate)
     if not questions:
         raise PipelineError(f"No questions allocated/generated for {source_label}.")
+    emit_bic_progress("validating", "Validating generated output")
     grounding_findings = semantic_grounding_findings(questions, normalized_payload)
     diversity_report = question_quality_and_diversity(questions)
     app_payload = build_app_ready_payload(normalized_payload, questions)
@@ -2894,6 +2947,7 @@ def process_slide_payload(slide_payload: dict[str, Any], generate: bool, output_
     if errors:
         raise PipelineError("Final validation failed:\n" + "\n".join(f"- {err}" for err in errors[:80]))
     out_path = APP_READY_DIR / f"{slugify(output_stem)}_lecture_app_ready.json"
+    emit_bic_progress("writing", "Writing app-ready JSON", file=str(out_path))
     write_json(out_path, app_payload)
     json.loads(out_path.read_text(encoding="utf-8"))
     log(f"App-ready -> {out_path.relative_to(BASE_DIR)}")

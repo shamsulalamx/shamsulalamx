@@ -234,17 +234,26 @@ def amboss_to_normalized_chunks(input_path: Path, limit: int = 5) -> dict[str, A
 
 def emma_to_normalized_chunks(input_path: Path, limit: int = 5) -> dict[str, Any]:
     generator = _import_lecture_generator()
-    payload = generator.load_or_decompose_pdf(input_path.resolve())
+    payload = generator.load_or_decompose_pdf(input_path.resolve(), progress_source="emma_holiday_pdf")
     source_file = str(payload.get("sourceFile") or input_path.name)
     source_path = str(payload.get("sourcePath") or input_path)
     slides = payload.get("slides") or []
     if limit:
         slides = slides[:limit]
-    chunks = [
-        _lecture_slide_chunk("emma_holiday_pdf", source_file, source_path, slide, chunk_type="slide")
-        for slide in slides
-        if isinstance(slide, dict)
-    ]
+    chunks = []
+    total = sum(1 for slide in slides if isinstance(slide, dict))
+    for slide in slides:
+        if not isinstance(slide, dict):
+            continue
+        generator.emit_bic_progress(
+            "chunking",
+            f"Building chunk {len(chunks) + 1}/{total}",
+            source="emma_holiday_pdf",
+            file=str(input_path),
+            chunk=len(chunks) + 1,
+            chunkTotal=total,
+        )
+        chunks.append(_lecture_slide_chunk("emma_holiday_pdf", source_file, source_path, slide, chunk_type="slide"))
     return build_chunk_bundle(
         source_descriptor=get_source_descriptor("emma_holiday_pdf").to_dict(),
         source_file=source_file,

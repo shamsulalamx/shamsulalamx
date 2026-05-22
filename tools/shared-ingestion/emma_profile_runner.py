@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import time
@@ -31,6 +32,16 @@ CHUNK_OUTPUT_DIR = RUNNER_DIR / "output"
 
 def emit(event_type: str, **payload: Any) -> None:
     print(json.dumps({"type": event_type, **payload}, ensure_ascii=False), flush=True)
+
+
+def emit_bic_progress(phase: str, message: str, **payload: Any) -> None:
+    print(
+        "BIC_PROGRESS " + json.dumps(
+            {"phase": phase, "source": "emma_holiday_pdf", "message": message, **payload},
+            ensure_ascii=False,
+        ),
+        flush=True,
+    )
 
 
 def newest_app_ready_since(started_at: float) -> list[str]:
@@ -61,12 +72,16 @@ def run_existing_emma_generator(input_file: Path, mode: str, limit: int, normali
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
+        env={**os.environ, "BIC_PROGRESS_SOURCE": "emma_holiday_pdf"},
     )
     assert proc.stdout is not None
     for line in proc.stdout:
         message = line.rstrip("\n")
         if message:
-            emit("emma_downstream_log", message=message)
+            if message.startswith("BIC_PROGRESS "):
+                print(message, flush=True)
+            else:
+                emit("emma_downstream_log", message=message)
     code = proc.wait()
     runtime = round(time.time() - started_at, 3)
     return code, runtime, newest_app_ready_since(started_at)
@@ -97,6 +112,8 @@ def main() -> int:
     started_at = time.time()
 
     emit("emma_profile_start", inputFile=str(input_file), mode=args.mode, limit=limit)
+    emit_bic_progress("extracting", f"Starting extraction for {input_file.name}", file=str(input_file))
+    emit_bic_progress("chunking", "Preparing normalized chunks", file=str(input_file))
     shared = run_shared_chunk_pipeline(
         source_type="emma_holiday_pdf",
         input_path=input_file,
@@ -104,6 +121,19 @@ def main() -> int:
         limit=limit,
     )
     report = shared["report"]
+    emit_bic_progress(
+        "validating",
+        "Validating normalized chunks",
+        file=str(input_file),
+        chunkTotal=report.get("chunkCount", 0),
+    )
+    emit_bic_progress(
+        "chunking",
+        f"Built {report.get('chunkCount', 0)} normalized chunk(s)",
+        file=str(input_file),
+        chunk=report.get("chunkCount", 0),
+        chunkTotal=report.get("chunkCount", 0),
+    )
     emit(
         "emma_normalized_chunks",
         outputPath=str(chunk_output),
@@ -118,6 +148,12 @@ def main() -> int:
         return 1
 
     normalized_input = chunk_output if args.downstream_input == "normalized-chunks" else None
+    emit_bic_progress(
+        "generating",
+        "Starting downstream question generation" if args.mode == "generate" else "Starting dry-run question generation",
+        file=str(input_file),
+        chunkTotal=report.get("chunkCount", 0),
+    )
     code, downstream_runtime, outputs = run_existing_emma_generator(input_file, args.mode, limit, normalized_chunks=normalized_input)
     total_runtime = round(time.time() - started_at, 3)
     final_report = {
