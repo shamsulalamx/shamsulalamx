@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from chunk_pipeline import run_shared_chunk_pipeline
+from recovery_contract import recovery_metadata
 
 
 RUNNER_DIR = Path(__file__).parent.resolve()
@@ -198,6 +199,26 @@ def main() -> int:
         "warnings": report.get("warnings", []),
         "errors": report.get("errors", []) if code == 0 else [f"Existing Emma generator exited with code {code}"],
     }
+    draft: dict[str, Any] = {}
+    if draft_path:
+        try:
+            draft = json.loads(Path(draft_path).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            draft = {}
+    candidates = draft.get("candidateQuestions") if isinstance(draft.get("candidateQuestions"), list) else []
+    survivors = draft.get("validQuestionIndexes") if isinstance(draft.get("validQuestionIndexes"), list) else []
+    final_report["recovery"] = recovery_metadata(
+        source_type="emma_holiday_pdf",
+        outcome="needs_review" if needs_review else ("completed" if code == 0 else "failed_fatal"),
+        candidate_question_count=len(candidates),
+        surviving_question_count=len(survivors),
+        warnings=final_report["warnings"] + list(draft.get("validationWarnings") or []),
+        fatal_errors=[] if needs_review else final_report["errors"],
+        review_items=draft.get("reviewItems") or [],
+        survivors_import_safe=needs_review and bool(survivors),
+        retry_from_scratch_required=not needs_review and code != 0,
+        resume_checkpoint_safe_later=needs_review,
+    )
     emit("emma_profile_complete", ok=code == 0 or needs_review, report=final_report, outputs=outputs)
     if needs_review:
         emit_bic_progress("needs_review", "Saved generated Emma questions as a durable review draft.", draftPath=draft_path)

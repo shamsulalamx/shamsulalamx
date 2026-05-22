@@ -27,6 +27,7 @@ SUPPORTED_EXTENSIONS = {".txt", ".md"}
 
 sys.path.insert(0, str(SCRIPT_DIR))
 from chunk_pipeline import run_shared_chunk_pipeline  # noqa: E402
+from recovery_contract import recovery_metadata  # noqa: E402
 
 
 SOURCE_TYPE = "divine_transcript"
@@ -174,6 +175,15 @@ def main() -> int:
         "errors": errors,
         "totalRuntimeSeconds": round(time.time() - started_at, 3),
     }
+    final_report["recovery"] = recovery_metadata(
+        source_type=SOURCE_TYPE,
+        outcome="completed" if ok else "failed_fatal",
+        candidate_question_count=int((downstream_report or {}).get("observedQuestionCount") or 0),
+        warnings=final_report["warnings"],
+        fatal_errors=errors,
+        survivors_import_safe=bool(downstream_report),
+        retry_from_scratch_required=not ok,
+    )
     emit("divine_transcript_normalized_chunks", outputPath=str(chunk_output), report=final_report)
     outputs = [str(chunk_output)]
     if downstream_report:

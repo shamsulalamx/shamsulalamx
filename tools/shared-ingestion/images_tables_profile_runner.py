@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from chunk_pipeline import run_shared_chunk_pipeline
+from recovery_contract import recovery_metadata
 
 
 RUNNER_DIR = Path(__file__).parent.resolve()
@@ -290,7 +291,24 @@ def main() -> int:
         payload["metadata"]["normalizedChunkPath"] = str(chunk_output)
         validation_errors = validate_app_ready_payload(payload)
         if validation_errors:
-            emit("images_tables_profile_complete", ok=False, error="App-ready validation failed.", errors=validation_errors)
+            failure_report = {
+                "schemaVersion": "images-tables-profile-runner-report-v1",
+                "sourceType": SOURCE_TYPE,
+                "mode": args.mode,
+                "inputPath": str(input_path),
+                "normalizedChunkPath": str(chunk_output),
+                "warnings": report.get("warnings", []),
+                "validationErrors": validation_errors,
+                "errors": validation_errors,
+                "ok": False,
+            }
+            failure_report["recovery"] = recovery_metadata(
+                source_type=SOURCE_TYPE,
+                outcome="failed_fatal",
+                warnings=failure_report["warnings"],
+                fatal_errors=validation_errors,
+            )
+            emit("images_tables_profile_complete", ok=False, error="App-ready validation failed.", report=failure_report, errors=validation_errors)
             return 1
         app_ready_dir.mkdir(parents=True, exist_ok=True)
         out_path = app_ready_dir / f"images_tables_shared_{now_stamp()}_app_ready.json"
@@ -313,6 +331,15 @@ def main() -> int:
         "validationErrors": validation_errors,
         "ok": True,
     }
+    final_report["recovery"] = recovery_metadata(
+        source_type=SOURCE_TYPE,
+        outcome="completed",
+        candidate_question_count=len(bundle.get("chunks") or []) if args.mode == "generate" else 0,
+        warnings=final_report["warnings"],
+        fatal_errors=validation_errors,
+        survivors_import_safe=bool(output_path),
+        retry_from_scratch_required=False,
+    )
     emit("images_tables_profile_complete", ok=True, report=final_report, outputs=[output_path] if output_path else [])
     return 0
 

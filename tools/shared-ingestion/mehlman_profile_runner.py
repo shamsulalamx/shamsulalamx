@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from chunk_pipeline import run_shared_chunk_pipeline
+from recovery_contract import recovery_metadata
 
 
 RUNNER_DIR = Path(__file__).parent.resolve()
@@ -40,6 +41,18 @@ def newest_app_ready_since(started_at: float) -> list[str]:
         if path.is_file() and path.stat().st_mtime >= started_at - 1
     ]
     return [str(path.resolve()) for path in sorted(paths, key=lambda p: p.stat().st_mtime)]
+
+
+def app_ready_question_count(outputs: list[str]) -> int:
+    count = 0
+    for output in outputs:
+        try:
+            payload = json.loads(Path(output).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(payload, dict) and isinstance(payload.get("questions"), list):
+            count += len(payload["questions"])
+    return count
 
 
 def run_existing_mehlman_generator(input_file: Path, mode: str, page_limit: int) -> tuple[int, float, list[str]]:
@@ -133,6 +146,15 @@ def main() -> int:
         "warnings": report.get("warnings", []),
         "errors": report.get("errors", []) if code == 0 else [f"Existing Mehlman generator exited with code {code}"],
     }
+    final_report["recovery"] = recovery_metadata(
+        source_type="mehlman_pdf",
+        outcome="completed" if code == 0 else "failed_fatal",
+        candidate_question_count=app_ready_question_count(outputs),
+        warnings=final_report["warnings"],
+        fatal_errors=final_report["errors"],
+        survivors_import_safe=code == 0 and bool(outputs),
+        retry_from_scratch_required=code != 0,
+    )
     emit("mehlman_profile_complete", ok=code == 0, report=final_report, outputs=outputs)
     return code
 

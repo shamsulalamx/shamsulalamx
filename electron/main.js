@@ -953,8 +953,11 @@ async function runQueuedBatchJob(job) {
       const reportWarnings = Array.isArray(report.warnings) ? report.warnings.map(String) : [];
       const reportErrors = Array.isArray(report.errors) ? report.errors.map(String) : [];
       const finalWarnings = [...warnings, ...reportWarnings];
-      const finalErrors = wasCancelled ? [] : (errors.length ? errors : (ok ? reportErrors : [finalEvent?.error || fallbackMessage]));
-      const status = wasCancelled ? 'canceled' : (ok ? (report.status === 'needs_review' ? 'needs_review' : 'completed') : 'failed');
+      const recovery = report.recovery && typeof report.recovery === 'object' ? report.recovery : null;
+      const recoveryOutcome = String(recovery?.outcome || '');
+      const reportFatal = recoveryOutcome === 'failed_fatal';
+      const finalErrors = wasCancelled ? [] : (errors.length ? errors : (ok && !reportFatal ? reportErrors : (reportErrors.length ? reportErrors : [finalEvent?.error || fallbackMessage])));
+      const status = wasCancelled ? 'canceled' : (ok && !reportFatal ? (report.status === 'needs_review' ? 'needs_review' : 'completed') : 'failed');
       const finalReport = { ...report, status, runtimeSeconds, outputPaths, warnings: finalWarnings, errors: finalErrors };
       const reportPath = writeBatchCompletionReport(job.outputRoot, finalReport);
       const finishedAt = new Date().toISOString();
@@ -968,6 +971,7 @@ async function runQueuedBatchJob(job) {
         reportPath,
         warnings: wasCancelled ? [...finalWarnings, 'Job canceled by user.'] : finalWarnings,
         errors: finalErrors,
+        recovery,
         report: finalReport
       });
       updateBatchQueueJob(manifest.jobId, {
@@ -978,6 +982,7 @@ async function runQueuedBatchJob(job) {
         reportPath,
         warnings: wasCancelled ? [...finalWarnings, 'Job canceled by user.'] : finalWarnings,
         errors: finalErrors,
+        recovery,
         report: finalReport,
         progress: { phase: status, message: status === 'completed' ? 'Batch job completed.' : (finalErrors[0] || status), updatedAt: finishedAt }
       });

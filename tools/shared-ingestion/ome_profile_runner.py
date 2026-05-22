@@ -26,6 +26,7 @@ OME_GENERATOR = PROJECT_ROOT / "tools" / "ome-pdf-question-generator" / "generat
 
 sys.path.insert(0, str(SCRIPT_DIR))
 from chunk_pipeline import run_shared_chunk_pipeline  # noqa: E402
+from recovery_contract import recovery_metadata  # noqa: E402
 
 SOURCE_TYPE = "ome_pdf"
 
@@ -150,6 +151,12 @@ def main() -> int:
             "errors": [str(exc)],
             "totalRuntimeSeconds": round(time.time() - started_at, 3),
         }
+        final_report["recovery"] = recovery_metadata(
+            source_type=SOURCE_TYPE,
+            outcome="failed_fatal",
+            warnings=final_report["warnings"],
+            fatal_errors=final_report["errors"],
+        )
         emit("ome_profile_complete", ok=False, error=str(exc), report=final_report, outputs=[])
         return 1
 
@@ -168,6 +175,15 @@ def main() -> int:
         "errors": [],
         "totalRuntimeSeconds": round(time.time() - started_at, 3),
     }
+    candidate_count = int((downstream_report or {}).get("questionCount") or 0)
+    final_report["recovery"] = recovery_metadata(
+        source_type=SOURCE_TYPE,
+        outcome="completed",
+        candidate_question_count=candidate_count,
+        warnings=final_report["warnings"],
+        survivors_import_safe=bool(downstream_report),
+        retry_from_scratch_required=False,
+    )
     emit("ome_profile_complete", ok=True, report=final_report, outputs=final_report["outputPaths"])
     return 0
 

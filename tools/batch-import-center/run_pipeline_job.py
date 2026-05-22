@@ -19,6 +19,10 @@ import time
 from pathlib import Path
 from typing import Any
 
+SHARED_INGESTION_DIR = Path(__file__).parent.parent / "shared-ingestion"
+sys.path.insert(0, str(SHARED_INGESTION_DIR.resolve()))
+from recovery_contract import recovery_metadata  # noqa: E402
+
 
 RUNNER_DIR = Path(__file__).parent.resolve()
 PROJECT_ROOT = RUNNER_DIR.parents[1]
@@ -446,6 +450,62 @@ def completion_report(
             "warnings": [str(item) for item in draft.get("validationWarnings") or []][:50],
             "errors": [str(item) for item in draft.get("validationErrors") or []][:50],
         })
+        report["recovery"] = recovery_metadata(
+            source_type=str(manifest.get("sourceType") or ""),
+            outcome="needs_review",
+            candidate_question_count=len(draft.get("candidateQuestions") or []),
+            surviving_question_count=len(draft.get("validQuestionIndexes") or []),
+            warnings=report["warnings"],
+            review_items=draft.get("reviewItems") or [],
+            survivors_import_safe=True,
+            retry_from_scratch_required=False,
+            resume_checkpoint_safe_later=True,
+        )
+    else:
+        completed_outcome = "failed_fatal" if report["errors"] else "completed"
+        report["recovery"] = recovery_metadata(
+            source_type=str(manifest.get("sourceType") or ""),
+            outcome=completed_outcome,
+            candidate_question_count=question_count,
+            warnings=report["warnings"],
+            fatal_errors=report["errors"],
+            survivors_import_safe=bool(outputs and not report["errors"]),
+            retry_from_scratch_required=False,
+        )
+    return report
+
+
+def command_failure_report(
+    manifest: dict[str, Any],
+    run_started_at: float,
+    step_index: int,
+    exit_code: int,
+) -> dict[str, Any]:
+    error = f"Pipeline step {step_index} exited with code {exit_code}."
+    report = {
+        "schemaVersion": "batch-import-completion-report-v1",
+        "jobId": manifest.get("jobId"),
+        "sourceType": manifest.get("sourceType"),
+        "targetFolder": (manifest.get("destination") or {}).get("folderId") or "",
+        "outputRoot": str(job_output_root(manifest) or ""),
+        "runtimeSeconds": round(time.time() - run_started_at, 2),
+        "questionCount": 0,
+        "imageTableCount": 0,
+        "figureRefs": [],
+        "warnings": [],
+        "errors": [error],
+        "outputJsonPath": "",
+        "outputPaths": [],
+        "importedTestId": None,
+        "importedTestName": None,
+        "stage": "failed",
+        "status": "failed",
+    }
+    report["recovery"] = recovery_metadata(
+        source_type=str(manifest.get("sourceType") or ""),
+        outcome="failed_fatal",
+        fatal_errors=report["errors"],
+    )
     return report
 
 
@@ -568,6 +628,7 @@ def main() -> int:
                         )
                         return 130
                     if code != 0:
+                        failure_report = command_failure_report(manifest, run_started_at, step_index, code)
                         emit(
                             "command_failed",
                             message=f"Pipeline step {step_index} exited with code {code}. See stage_failed for the explicit failure reason.",
@@ -580,6 +641,7 @@ def main() -> int:
                             ok=False,
                             dryRun=bool(manifest.get("dryRun")),
                             outputs=[],
+                            report=failure_report,
                             error=f"Pipeline step {step_index} exited with code {code}.",
                         )
                         return code

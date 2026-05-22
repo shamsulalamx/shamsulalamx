@@ -17,6 +17,7 @@ from typing import Any
 
 from normalized_chunk_schema import validate_chunk_bundle
 from pipeline_adapter import emit_normalized_chunks
+from recovery_contract import recovery_metadata
 
 
 STAGES = ("extraction", "OCR", "chunking", "normalization", "asset routing", "validation")
@@ -65,6 +66,13 @@ def run_shared_chunk_pipeline(
         "errors": errors,
         "ok": not errors,
     }
+    report["recovery"] = recovery_metadata(
+        source_type=source_type,
+        outcome="completed" if not errors else "failed_fatal",
+        warnings=report["warnings"],
+        fatal_errors=errors,
+        retry_from_scratch_required=bool(errors),
+    )
     return {"bundle": bundle, "report": report}
 
 
