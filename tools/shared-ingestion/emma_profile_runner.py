@@ -12,6 +12,7 @@ the shared chunk preflight and telemetry around the existing command.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import subprocess
@@ -21,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from chunk_pipeline import run_shared_chunk_pipeline
+from normalized_chunk_schema import validate_chunk_bundle
 from recovery_contract import recovery_metadata
 
 
@@ -34,6 +36,8 @@ APP_READY_DIR = (
 )
 CHUNK_OUTPUT_DIR = JOB_OUTPUT_ROOT / "shared-ingestion" if JOB_OUTPUT_ROOT else RUNNER_DIR / "output"
 REVIEW_DRAFT_PATH = JOB_OUTPUT_ROOT / "review" / "lecture_slide_review_draft.json" if JOB_OUTPUT_ROOT else None
+CHECKPOINT_PATH = Path(os.environ["BIC_CHECKPOINT_PATH"]).expanduser().resolve() if os.environ.get("BIC_CHECKPOINT_PATH") else None
+COMMAND_FINGERPRINT = str(os.environ.get("BIC_COMMAND_FINGERPRINT") or "")
 
 
 def emit(event_type: str, **payload: Any) -> None:
@@ -48,6 +52,132 @@ def emit_bic_progress(phase: str, message: str, **payload: Any) -> None:
         ),
         flush=True,
     )
+
+
+def write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    temp_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    temp_path.replace(path)
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def path_lives_under(root: Path, target: Path) -> bool:
+    try:
+        target.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def load_checkpoint() -> dict[str, Any]:
+    if not CHECKPOINT_PATH or not CHECKPOINT_PATH.is_file():
+        return {}
+    try:
+        payload = json.loads(CHECKPOINT_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def update_normalization_checkpoint(
+    *,
+    chunk_output: Path,
+    report: dict[str, Any],
+    reused: bool,
+    restart_reasons: list[str],
+) -> None:
+    if not CHECKPOINT_PATH or not JOB_OUTPUT_ROOT or not path_lives_under(JOB_OUTPUT_ROOT, CHECKPOINT_PATH):
+        return
+    if not chunk_output.is_file() or not path_lives_under(JOB_OUTPUT_ROOT, chunk_output):
+        return
+    checkpoint = load_checkpoint()
+    checkpoint.setdefault("stages", {})
+    checkpoint["stages"]["normalization"] = {
+        "status": "complete",
+        "reused": reused,
+        "chunkCount": report.get("chunkCount", 0),
+        "artifacts": [{
+            "kind": "normalized_chunk_bundle",
+            "path": str(chunk_output.resolve()),
+            "sha256": sha256_file(chunk_output),
+        }],
+    }
+    checkpoint["lastSafeCheckpoint"] = "normalization"
+    checkpoint["updatedAt"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    checkpoint["resume"] = {
+        "eligible": True,
+        "lastSafeStage": "normalization",
+        "restartReasons": restart_reasons,
+    }
+    write_json(CHECKPOINT_PATH, checkpoint)
+
+
+def normalization_report_from_bundle(bundle: dict[str, Any], chunk_output: Path) -> dict[str, Any]:
+    errors = validate_chunk_bundle(bundle)
+    chunks = [chunk for chunk in bundle.get("chunks") or [] if isinstance(chunk, dict)]
+    return {
+        "schemaVersion": "shared-normalized-chunk-report-v1",
+        "sourceType": "emma_holiday_pdf",
+        "inputPath": str(bundle.get("sourcePath") or ""),
+        "outputPath": str(chunk_output),
+        "chunkCount": int(bundle.get("chunkCount") or len(chunks)),
+        "assetCount": sum(len(chunk.get("imageRefs") or []) + len(chunk.get("tableRefs") or []) for chunk in chunks),
+        "imageRefCount": sum(len(chunk.get("imageRefs") or []) for chunk in chunks),
+        "tableRefCount": sum(len(chunk.get("tableRefs") or []) for chunk in chunks),
+        "stageTimings": {"checkpoint_reuse_seconds": 0},
+        "warnings": list(bundle.get("warnings") or []),
+        "validationErrors": errors,
+        "errors": errors,
+        "ok": not errors,
+    }
+
+
+def reusable_normalized_chunks(chunk_output: Path) -> tuple[dict[str, Any] | None, list[str]]:
+    if not CHECKPOINT_PATH or not JOB_OUTPUT_ROOT:
+        return None, ["checkpoint_context_unavailable"]
+    checkpoint = load_checkpoint()
+    prior_resume = checkpoint.get("resume") if isinstance(checkpoint.get("resume"), dict) else {}
+    reasons = [str(item) for item in prior_resume.get("restartReasons") or [] if item]
+    if checkpoint.get("sourceType") != "emma_holiday_pdf":
+        reasons.append("checkpoint_source_type_mismatch")
+    if not COMMAND_FINGERPRINT or (checkpoint.get("generator") or {}).get("commandFingerprint") != COMMAND_FINGERPRINT:
+        reasons.append("command_config_fingerprint_mismatch")
+    stage = (checkpoint.get("stages") or {}).get("normalization")
+    if not isinstance(stage, dict):
+        return None, reasons
+    artifacts = stage.get("artifacts") if isinstance(stage, dict) else None
+    artifact = artifacts[0] if isinstance(artifacts, list) and artifacts and isinstance(artifacts[0], dict) else {}
+    artifact_path = Path(str(artifact.get("path") or "")).expanduser()
+    if not artifact_path.is_absolute():
+        reasons.append("normalized_artifact_path_missing")
+    elif artifact_path.resolve() != chunk_output.resolve():
+        reasons.append("normalized_artifact_path_changed")
+    elif not path_lives_under(JOB_OUTPUT_ROOT, artifact_path):
+        reasons.append("normalized_artifact_outside_job_root")
+    elif not artifact_path.is_file():
+        reasons.append("normalized_artifact_missing")
+    elif artifact.get("sha256") != sha256_file(artifact_path):
+        reasons.append("normalized_artifact_hash_mismatch")
+    if reasons:
+        return None, reasons
+    try:
+        bundle = json.loads(artifact_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None, ["normalized_artifact_unreadable"]
+    if not isinstance(bundle, dict):
+        return None, ["normalized_artifact_not_object"]
+    report = normalization_report_from_bundle(bundle, artifact_path)
+    if report["errors"]:
+        return None, ["normalized_artifact_schema_invalid"]
+    return report, []
 
 
 def newest_app_ready_since(started_at: float) -> list[str]:
@@ -138,13 +268,49 @@ def main() -> int:
     emit("emma_profile_start", inputFile=str(input_file), mode=args.mode, limit=limit)
     emit_bic_progress("extracting", f"Starting extraction for {input_file.name}", file=str(input_file))
     emit_bic_progress("chunking", "Preparing normalized chunks", file=str(input_file))
-    shared = run_shared_chunk_pipeline(
-        source_type="emma_holiday_pdf",
-        input_path=input_file,
-        output_path=chunk_output,
-        limit=limit,
-    )
-    report = shared["report"]
+    report, checkpoint_restart_reasons = reusable_normalized_chunks(chunk_output)
+    if report:
+        emit(
+            "emma_normalization_checkpoint_reused",
+            outputPath=str(chunk_output),
+            chunkCount=report.get("chunkCount", 0),
+            checkpointPath=str(CHECKPOINT_PATH),
+        )
+        emit_bic_progress(
+            "chunking",
+            f"Reused {report.get('chunkCount', 0)} checkpointed normalized chunk(s)",
+            file=str(input_file),
+            chunk=report.get("chunkCount", 0),
+            chunkTotal=report.get("chunkCount", 0),
+        )
+        update_normalization_checkpoint(
+            chunk_output=chunk_output,
+            report=report,
+            reused=True,
+            restart_reasons=[],
+        )
+    else:
+        if checkpoint_restart_reasons:
+            emit(
+                "emma_normalization_checkpoint_rejected",
+                outputPath=str(chunk_output),
+                checkpointPath=str(CHECKPOINT_PATH or ""),
+                restartReasons=checkpoint_restart_reasons,
+            )
+        shared = run_shared_chunk_pipeline(
+            source_type="emma_holiday_pdf",
+            input_path=input_file,
+            output_path=chunk_output,
+            limit=limit,
+        )
+        report = shared["report"]
+        if report.get("ok"):
+            update_normalization_checkpoint(
+                chunk_output=chunk_output,
+                report=report,
+                reused=False,
+                restart_reasons=checkpoint_restart_reasons,
+            )
     emit_bic_progress(
         "validating",
         "Validating normalized chunks",

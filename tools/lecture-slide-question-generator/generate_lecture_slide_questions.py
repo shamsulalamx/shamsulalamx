@@ -202,6 +202,13 @@ def warn(message: str) -> None:
     print(f"[WARN] {message}", file=sys.stderr)
 
 
+def display_path(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(BASE_DIR))
+    except ValueError:
+        return str(path.resolve())
+
+
 def emit_bic_progress(phase: str, message: str, source: str | None = None, **payload: Any) -> None:
     progress_source = str(source or os.environ.get("BIC_PROGRESS_SOURCE") or "").strip()
     if not progress_source:
@@ -372,7 +379,7 @@ def render_slide_image(fitz_module: Any, fitz_doc: Any, page_index: int, pdf_ste
         return {
             "imageId": f"{slide_id}_slide_image",
             "kind": "slide_image",
-            "assetPath": str(asset_path.relative_to(BASE_DIR)),
+            "assetPath": display_path(asset_path),
             "mimeType": "image/png",
             "width": int(pix.width),
             "height": int(pix.height),
@@ -402,7 +409,7 @@ def extract_embedded_images(fitz_doc: Any, page_index: int, pdf_stem: str, slide
             images.append({
                 "imageId": f"{slide_id}_fig{img_index:02d}",
                 "kind": "embedded_figure",
-                "assetPath": str(asset_path.relative_to(BASE_DIR)),
+                "assetPath": display_path(asset_path),
                 "mimeType": mime_for(asset_path),
                 "width": int(extracted.get("width") or 0),
                 "height": int(extracted.get("height") or 0),
@@ -501,7 +508,7 @@ def decompose_pdf(pdf_path: Path, progress_source: str | None = None) -> dict[st
     }
     out_path = SLIDES_DIR / f"{slugify(pdf_stem)}_slides.json"
     write_json(out_path, payload)
-    log(f"  Slides -> {out_path.relative_to(BASE_DIR)}")
+    log(f"  Slides -> {display_path(out_path)}")
     return payload
 
 
@@ -512,7 +519,7 @@ def load_or_decompose_pdf(pdf_path: Path, progress_source: str | None = None) ->
         try:
             payload = read_json(existing_path)
             if payload.get("pdfSha256") == pdf_hash and isinstance(payload.get("slides"), list):
-                log(f"Using existing decomposed slides -> {existing_path.relative_to(BASE_DIR)}")
+                log(f"Using existing decomposed slides -> {display_path(existing_path)}")
                 emit_bic_progress(
                     "extracting",
                     f"Using existing extraction for {pdf_path.name}",
@@ -1035,7 +1042,7 @@ def normalize_slides(slide_payload: dict[str, Any], generate: bool) -> dict[str,
         payload["provenance"] = slide_payload["provenance"]
     out_path = normalized_output_path_for_source(slide_payload["sourceFile"])
     write_json(out_path, payload)
-    log(f"  Normalized -> {out_path.relative_to(BASE_DIR)}")
+    log(f"  Normalized -> {display_path(out_path)}")
     return payload
 
 
@@ -1606,8 +1613,8 @@ def generate_questions(normalized_payload: dict[str, Any], allocations: list[dic
     write_json(gen_path, {"questions": questions})
     mem_path = MEMORY_DIR / f"{slugify(Path(normalized_payload['sourceFile']).stem)}_rolling_memory.json"
     write_json(mem_path, memory)
-    log(f"  Generated -> {gen_path.relative_to(BASE_DIR)}")
-    log(f"  Memory -> {mem_path.relative_to(BASE_DIR)}")
+    log(f"  Generated -> {display_path(gen_path)}")
+    log(f"  Memory -> {display_path(mem_path)}")
     return questions
 
 
@@ -2150,7 +2157,7 @@ def repair_existing_questions(pdf_path: Path) -> Path:
     out_path = APP_READY_DIR / f"{stem}_lecture_app_ready.json"
     write_json(out_path, app_payload)
     json.loads(out_path.read_text(encoding="utf-8"))
-    log(f"App-ready -> {out_path.relative_to(BASE_DIR)}")
+    log(f"App-ready -> {display_path(out_path)}")
     return out_path
 
 
@@ -2744,7 +2751,7 @@ def image_entry_for_question(img: dict[str, Any], q_num: int, placement: str) ->
         "kind": "figure",
         "source": "lecture-slide-generator",
         "originalFileName": asset_path.name,
-        "assetPath": str(asset_path.relative_to(BASE_DIR)),
+        "assetPath": display_path(asset_path),
         "placement": placement,
         "slideImageId": img.get("imageId"),
     }
@@ -3183,7 +3190,7 @@ def process_slide_payload(slide_payload: dict[str, Any], generate: bool, output_
     emit_bic_progress("writing", "Writing app-ready JSON", file=str(out_path))
     write_json(out_path, app_payload)
     json.loads(out_path.read_text(encoding="utf-8"))
-    log(f"App-ready -> {out_path.relative_to(BASE_DIR)}")
+    log(f"App-ready -> {display_path(out_path)}")
     return out_path
 
 

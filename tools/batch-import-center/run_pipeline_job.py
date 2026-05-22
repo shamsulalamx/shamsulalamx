@@ -9,6 +9,7 @@ delimited JSON progress events, and discovers *_app_ready.json outputs.
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import queue
 import signal
@@ -16,6 +17,7 @@ import subprocess
 import sys
 import threading
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +44,7 @@ STANDARD_STAGES = {
 CURRENT_PROC: subprocess.Popen[str] | None = None
 CANCEL_REQUESTED = False
 PROGRESS_PREFIX = "BIC_PROGRESS "
+CHECKPOINT_VERSION = 1
 
 
 def emit(event_type: str, **payload: Any) -> None:
@@ -91,6 +94,125 @@ def load_json(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError(f"{path} must contain a JSON object")
     return data
+
+
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def sha256_json(payload: Any) -> str:
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def checkpoint_path(manifest: dict[str, Any]) -> Path | None:
+    output_root = job_output_root(manifest)
+    return output_root / "checkpoint" / "job_checkpoint.json" if output_root else None
+
+
+def write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    temp_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    temp_path.replace(path)
+
+
+def input_fingerprint(path: Path) -> dict[str, Any]:
+    stat = path.stat()
+    fingerprint = {
+        "path": str(path.resolve()),
+        "kind": "directory" if path.is_dir() else "file",
+        "size": stat.st_size,
+        "mtimeNs": stat.st_mtime_ns,
+    }
+    if path.is_file():
+        fingerprint["sha256"] = sha256_file(path)
+    return fingerprint
+
+
+def checkpoint_command_fingerprint(source: dict[str, Any], manifest: dict[str, Any]) -> str:
+    return sha256_json({
+        "sourceType": manifest.get("sourceType"),
+        "workingDirectory": source.get("workingDirectory"),
+        "pythonExecutable": source.get("pythonExecutable") or "python3",
+        "dryRun": bool(manifest.get("dryRun")),
+        "executePipeline": bool(manifest.get("executePipeline")),
+        "existingOutputValidation": bool(manifest.get("existingOutputValidation")),
+        "steps": command_steps(source, bool(manifest.get("dryRun"))),
+    })
+
+
+def checkpoint_restart_reasons(
+    existing: dict[str, Any] | None,
+    source_type: str,
+    inputs: list[dict[str, Any]],
+    command_fingerprint: str,
+) -> list[str]:
+    if not existing:
+        return []
+    reasons: list[str] = []
+    if existing.get("sourceType") != source_type:
+        reasons.append("source_type_changed")
+    if existing.get("inputs") != inputs:
+        reasons.append("input_fingerprint_changed")
+    if ((existing.get("generator") or {}).get("commandFingerprint")) != command_fingerprint:
+        reasons.append("command_config_fingerprint_changed")
+    return reasons
+
+
+def initialize_checkpoint(manifest: dict[str, Any], source: dict[str, Any], inputs: list[Path]) -> dict[str, Any] | None:
+    path = checkpoint_path(manifest)
+    if not path:
+        return None
+    fingerprints = [input_fingerprint(path) for path in inputs]
+    command_fingerprint = checkpoint_command_fingerprint(source, manifest)
+    existing: dict[str, Any] | None = None
+    if path.is_file():
+        try:
+            existing = load_json(path)
+        except Exception as exc:
+            emit("checkpoint", message=f"Existing checkpoint could not be read and will not be reused: {exc}", checkpointPath=str(path))
+    restart_reasons = checkpoint_restart_reasons(existing, str(manifest.get("sourceType") or ""), fingerprints, command_fingerprint)
+    reuse_existing_stages = bool(existing) and not restart_reasons and existing.get("checkpointVersion") == CHECKPOINT_VERSION
+    created_at = existing.get("createdAt") if reuse_existing_stages else utc_now_iso()
+    checkpoint = {
+        "checkpointVersion": CHECKPOINT_VERSION,
+        "jobId": str(manifest.get("jobId") or ""),
+        "sourceType": str(manifest.get("sourceType") or ""),
+        "createdAt": created_at,
+        "updatedAt": utc_now_iso(),
+        "inputs": fingerprints,
+        "generator": {
+            "registrySourceType": str(manifest.get("sourceType") or ""),
+            "workingDirectory": source.get("workingDirectory") or "",
+            "commandFingerprint": command_fingerprint,
+        },
+        "stages": existing.get("stages", {}) if reuse_existing_stages else {},
+        "lastSafeCheckpoint": existing.get("lastSafeCheckpoint", "") if reuse_existing_stages else "",
+        "resume": {
+            "eligible": reuse_existing_stages and bool(existing.get("lastSafeCheckpoint")),
+            "lastSafeStage": existing.get("lastSafeCheckpoint", "") if reuse_existing_stages else "",
+            "restartReasons": restart_reasons,
+        },
+    }
+    write_json(path, checkpoint)
+    emit(
+        "checkpoint",
+        message="Checkpoint initialized.",
+        checkpointPath=str(path),
+        lastSafeCheckpoint=checkpoint["lastSafeCheckpoint"],
+        resumeEligible=checkpoint["resume"]["eligible"],
+        restartReasons=restart_reasons,
+    )
+    return {"path": path, "checkpoint": checkpoint}
 
 
 def validate_manifest(manifest: dict[str, Any]) -> None:
@@ -253,6 +375,16 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
         durable_root.mkdir(parents=True, exist_ok=True)
         env["BIC_JOB_OUTPUT_ROOT"] = str(durable_root)
         env["BIC_JOB_ID"] = str(manifest.get("jobId") or "")
+        durable_checkpoint_path = checkpoint_path(manifest)
+        if durable_checkpoint_path:
+            env["BIC_CHECKPOINT_PATH"] = str(durable_checkpoint_path)
+            try:
+                checkpoint = load_json(durable_checkpoint_path)
+            except Exception:
+                checkpoint = {}
+            command_fingerprint = (checkpoint.get("generator") or {}).get("commandFingerprint")
+            if command_fingerprint:
+                env["BIC_COMMAND_FINGERPRINT"] = str(command_fingerprint)
     proc = subprocess.Popen(
         cmd,
         cwd=str(cwd),
@@ -570,6 +702,7 @@ def main() -> int:
         validate_manifest(manifest)
         source = get_source(registry, manifest["sourceType"])
         inputs = validate_inputs(manifest, source)
+        initialize_checkpoint(manifest, source, inputs)
 
         preflight_started_at = time.time()
         emit("stage_start", stage="preflight", stageLabel="preflight", message="preflight started")
