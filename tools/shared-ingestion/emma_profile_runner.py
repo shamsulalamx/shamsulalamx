@@ -99,7 +99,8 @@ def update_normalization_checkpoint(
     if not chunk_output.is_file() or not path_lives_under(JOB_OUTPUT_ROOT, chunk_output):
         return
     checkpoint = load_checkpoint()
-    checkpoint.setdefault("stages", {})
+    if not isinstance(checkpoint.get("stages"), dict):
+        checkpoint["stages"] = {}
     checkpoint["stages"]["normalization"] = {
         "status": "complete",
         "reused": reused,
@@ -140,17 +141,61 @@ def normalization_report_from_bundle(bundle: dict[str, Any], chunk_output: Path)
     }
 
 
+def referenced_asset_restart_reasons(bundle: dict[str, Any]) -> list[str]:
+    if not JOB_OUTPUT_ROOT:
+        return []
+    reasons: list[str] = []
+    chunks = bundle.get("chunks") if isinstance(bundle.get("chunks"), list) else []
+    for chunk in chunks:
+        if not isinstance(chunk, dict):
+            continue
+        image_refs = chunk.get("imageRefs") if isinstance(chunk.get("imageRefs"), list) else []
+        for ref in image_refs:
+            if not isinstance(ref, dict):
+                continue
+            metadata = ref.get("metadata") if isinstance(ref.get("metadata"), dict) else {}
+            raw_path = str(ref.get("path") or metadata.get("assetPath") or "").strip()
+            if not raw_path:
+                continue
+            asset_path = Path(raw_path).expanduser()
+            if not asset_path.is_absolute():
+                asset_path = (PROJECT_ROOT / asset_path).resolve()
+            if not path_lives_under(JOB_OUTPUT_ROOT, asset_path):
+                reasons.append("normalized_asset_outside_job_root")
+                continue
+            if not asset_path.is_file():
+                reasons.append("normalized_asset_missing")
+                continue
+            expected_hash = str(ref.get("sha256") or metadata.get("sha256") or "").strip()
+            if expected_hash and expected_hash != sha256_file(asset_path):
+                reasons.append("normalized_asset_hash_mismatch")
+    return sorted(set(reasons))
+
+
 def reusable_normalized_chunks(chunk_output: Path) -> tuple[dict[str, Any] | None, list[str]]:
     if not CHECKPOINT_PATH or not JOB_OUTPUT_ROOT:
         return None, ["checkpoint_context_unavailable"]
     checkpoint = load_checkpoint()
-    prior_resume = checkpoint.get("resume") if isinstance(checkpoint.get("resume"), dict) else {}
-    reasons = [str(item) for item in prior_resume.get("restartReasons") or [] if item]
+    reasons: list[str] = []
+    generator = checkpoint.get("generator")
+    if "generator" in checkpoint and not isinstance(generator, dict):
+        reasons.append("checkpoint_generator_invalid")
+        generator = {}
+    stages = checkpoint.get("stages")
+    if "stages" in checkpoint and not isinstance(stages, dict):
+        reasons.append("checkpoint_stages_invalid")
+        stages = {}
+    resume = checkpoint.get("resume")
+    if "resume" in checkpoint and not isinstance(resume, dict):
+        reasons.append("checkpoint_resume_invalid")
+        resume = {}
+    prior_resume = resume if isinstance(resume, dict) else {}
+    reasons.extend(str(item) for item in prior_resume.get("restartReasons") or [] if item)
     if checkpoint.get("sourceType") != "emma_holiday_pdf":
         reasons.append("checkpoint_source_type_mismatch")
-    if not COMMAND_FINGERPRINT or (checkpoint.get("generator") or {}).get("commandFingerprint") != COMMAND_FINGERPRINT:
+    if not COMMAND_FINGERPRINT or (generator or {}).get("commandFingerprint") != COMMAND_FINGERPRINT:
         reasons.append("command_config_fingerprint_mismatch")
-    stage = (checkpoint.get("stages") or {}).get("normalization")
+    stage = (stages or {}).get("normalization")
     if not isinstance(stage, dict):
         return None, reasons
     artifacts = stage.get("artifacts") if isinstance(stage, dict) else None
@@ -177,6 +222,9 @@ def reusable_normalized_chunks(chunk_output: Path) -> tuple[dict[str, Any] | Non
     report = normalization_report_from_bundle(bundle, artifact_path)
     if report["errors"]:
         return None, ["normalized_artifact_schema_invalid"]
+    asset_reasons = referenced_asset_restart_reasons(bundle)
+    if asset_reasons:
+        return None, asset_reasons
     return report, []
 
 

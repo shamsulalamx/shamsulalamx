@@ -155,16 +155,26 @@ def checkpoint_restart_reasons(
     source_type: str,
     inputs: list[dict[str, Any]],
     command_fingerprint: str,
+    initial_reasons: list[str] | None = None,
 ) -> list[str]:
+    reasons: list[str] = list(initial_reasons or [])
     if not existing:
-        return []
-    reasons: list[str] = []
+        return reasons
+    if existing.get("checkpointVersion") != CHECKPOINT_VERSION:
+        reasons.append("checkpoint_version_changed")
     if existing.get("sourceType") != source_type:
         reasons.append("source_type_changed")
     if existing.get("inputs") != inputs:
         reasons.append("input_fingerprint_changed")
-    if ((existing.get("generator") or {}).get("commandFingerprint")) != command_fingerprint:
+    generator = existing.get("generator")
+    if not isinstance(generator, dict):
+        reasons.append("checkpoint_generator_invalid")
+    elif generator.get("commandFingerprint") != command_fingerprint:
         reasons.append("command_config_fingerprint_changed")
+    if "stages" in existing and not isinstance(existing.get("stages"), dict):
+        reasons.append("checkpoint_stages_invalid")
+    if "resume" in existing and not isinstance(existing.get("resume"), dict):
+        reasons.append("checkpoint_resume_invalid")
     return reasons
 
 
@@ -175,12 +185,26 @@ def initialize_checkpoint(manifest: dict[str, Any], source: dict[str, Any], inpu
     fingerprints = [input_fingerprint(path) for path in inputs]
     command_fingerprint = checkpoint_command_fingerprint(source, manifest)
     existing: dict[str, Any] | None = None
+    initial_restart_reasons: list[str] = []
     if path.is_file():
         try:
             existing = load_json(path)
         except Exception as exc:
+            initial_restart_reasons.append("checkpoint_manifest_unreadable")
             emit("checkpoint", message=f"Existing checkpoint could not be read and will not be reused: {exc}", checkpointPath=str(path))
-    restart_reasons = checkpoint_restart_reasons(existing, str(manifest.get("sourceType") or ""), fingerprints, command_fingerprint)
+    restart_reasons = checkpoint_restart_reasons(
+        existing,
+        str(manifest.get("sourceType") or ""),
+        fingerprints,
+        command_fingerprint,
+        initial_restart_reasons,
+    )
+    existing_stages = existing.get("stages") if isinstance(existing, dict) and isinstance(existing.get("stages"), dict) else {}
+    existing_last_safe_checkpoint = (
+        existing.get("lastSafeCheckpoint", "")
+        if isinstance(existing, dict) and isinstance(existing.get("lastSafeCheckpoint", ""), str)
+        else ""
+    )
     reuse_existing_stages = bool(existing) and not restart_reasons and existing.get("checkpointVersion") == CHECKPOINT_VERSION
     created_at = existing.get("createdAt") if reuse_existing_stages else utc_now_iso()
     checkpoint = {
@@ -195,11 +219,11 @@ def initialize_checkpoint(manifest: dict[str, Any], source: dict[str, Any], inpu
             "workingDirectory": source.get("workingDirectory") or "",
             "commandFingerprint": command_fingerprint,
         },
-        "stages": existing.get("stages", {}) if reuse_existing_stages else {},
-        "lastSafeCheckpoint": existing.get("lastSafeCheckpoint", "") if reuse_existing_stages else "",
+        "stages": existing_stages if reuse_existing_stages else {},
+        "lastSafeCheckpoint": existing_last_safe_checkpoint if reuse_existing_stages else "",
         "resume": {
-            "eligible": reuse_existing_stages and bool(existing.get("lastSafeCheckpoint")),
-            "lastSafeStage": existing.get("lastSafeCheckpoint", "") if reuse_existing_stages else "",
+            "eligible": reuse_existing_stages and bool(existing_last_safe_checkpoint),
+            "lastSafeStage": existing_last_safe_checkpoint if reuse_existing_stages else "",
             "restartReasons": restart_reasons,
         },
     }
