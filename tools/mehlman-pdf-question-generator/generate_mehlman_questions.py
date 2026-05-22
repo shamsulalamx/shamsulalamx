@@ -83,6 +83,29 @@ _MAX_ASPECT   = 8.0
 _HIGH_CONF_PX = 200
 
 
+def _apply_output_dir(raw_path: str) -> Path:
+    global TEXT_DIR, FIG_DIR, TABLE_DIR, CHUNK_DIR, GEN_DIR, DEBUG_DIR, APP_DIR, REPORT_DIR
+
+    output_root = Path(raw_path).expanduser()
+    if not output_root.is_absolute():
+        output_root = (Path.cwd() / output_root).resolve()
+    else:
+        output_root = output_root.resolve()
+    if output_root.exists() and not output_root.is_dir():
+        raise ValueError(f"--output-dir must be a directory path: {output_root}")
+    TEXT_DIR = output_root / "extracted_text"
+    FIG_DIR = output_root / "extracted_figures"
+    TABLE_DIR = output_root / "extracted_tables"
+    CHUNK_DIR = output_root / "output_json" / "chunks"
+    GEN_DIR = output_root / "output_json" / "generated"
+    DEBUG_DIR = output_root / "output_json" / "generated" / "debug"
+    APP_DIR = output_root / "output_json" / "app_ready"
+    REPORT_DIR = output_root / "reports"
+    _uw.DEBUG_DIR = DEBUG_DIR
+    _uw.REPORT_DIR = REPORT_DIR
+    return output_root
+
+
 # ── Asset helpers ─────────────────────────────────────────────────────────────
 
 def _figure_disposition(w: int, h: int) -> str:
@@ -726,6 +749,11 @@ def main() -> None:
         help="Process one selected PDF instead of every PDF in input_pdfs/.",
     )
     parser.add_argument(
+        "--output-dir",
+        default="",
+        help="Optional output root. Writes extracted assets, app-ready JSON, generated files, and reports under this directory.",
+    )
+    parser.add_argument(
         "--max-pages",
         type=int,
         default=None,
@@ -761,6 +789,10 @@ def main() -> None:
 
     if args.resume and args.force:
         parser.error("--resume and --force are mutually exclusive.")
+    try:
+        output_root = _apply_output_dir(args.output_dir) if args.output_dir else None
+    except ValueError as exc:
+        parser.error(str(exc))
 
     # Default mode when none specified
     if not any([args.extract_only, args.chunk_only, args.dry_run, args.generate]):
@@ -792,6 +824,8 @@ def main() -> None:
     _uw.log(f"  Mode:                 {mode}")
     _uw.log(f"  Extract assets:       {args.extract_assets}")
     _uw.log(f"  Input file:           {args.input_file or 'input_pdfs/*.pdf'}")
+    if output_root:
+        _uw.log(f"  Output root:          {output_root}")
     _uw.log(f"  Max pages:            {args.max_pages or 'unlimited'}")
     _uw.log(f"  Max chunks:           {args.max_chunks or 'unlimited'}")
     _uw.log(f"  Questions per chunk:  {args.questions_per_chunk}")
