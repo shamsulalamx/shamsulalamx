@@ -7226,16 +7226,17 @@ const Quiz = (() => {
       container.appendChild(eoDiv);
     }
 
-    // Structured explanation (nbme-gemini-json / chatgpt-pro-json) — pre-escaped HTML
+    // Structured explanation (nbme-gemini-json / chatgpt-pro-json) — pre-escaped HTML.
+    // When both correctBlurb and explanation are present (some v2 importers populate
+    // both with the same content), render only correctBlurb so the block does not
+    // appear twice.
     if (q.correctBlurb) {
       const blurbDiv = document.createElement('div');
       blurbDiv.className = 'exp-explanation-block exp-blurb';
       blurbDiv.innerHTML = q.correctBlurb;
       container.appendChild(blurbDiv);
-    }
-
-    // Legacy plain-text explanation (pdf import) — only split on \n\n, never \n
-    if (q.explanation) {
+    } else if (q.explanation) {
+      // Legacy plain-text explanation (pdf import) — only split on \n\n, never \n
       const expDiv = document.createElement('div');
       expDiv.className = 'exp-explanation-block';
       const paras = q.explanation.split(/\n\n+/);
@@ -7441,14 +7442,15 @@ window.buildExplanationHTML = function(q, r, container) {
     container.appendChild(eoDiv);
   }
 
+  // When both correctBlurb and explanation are present (some v2 importers populate
+  // both with the same content), render only correctBlurb so the block does not
+  // appear twice.
   if (q.correctBlurb) {
     var blurbDiv = document.createElement('div');
     blurbDiv.className = 'exp-explanation-block exp-blurb';
     blurbDiv.innerHTML = q.correctBlurb;
     container.appendChild(blurbDiv);
-  }
-
-  if (q.explanation) {
+  } else if (q.explanation) {
     var expDiv = document.createElement('div');
     expDiv.className = 'exp-explanation-block';
     var paras = q.explanation.split(/\n\n+/);

@@ -230,13 +230,13 @@ Rules:
 - Classify the screenshot as exactly one of: diagnostic_stem_image, explanation_only_image, explanation_only_table, unclear_skip.
 - Use diagnostic_stem_image only for diagnostic visual stimuli that must be interpreted before answering, such as CT, MRI, x-ray, ultrasound, ECG/EKG, tracing, pathology slide, histology, gross pathology, dermatology photo, clinical physical exam photo, fundoscopic image, or radiology image.
 - Use explanation_only_image for process diagrams, mechanism diagrams, pathways, flowcharts, management algorithms, concept maps, labeled explanatory figures, or images that directly name the diagnosis/pathway/process.
-- Use explanation_only_table for tables by default. Only use diagnostic_stem_image for a table if it is a diagnostic data display that must be interpreted before answering and does not directly reveal the answer.
+- Use explanation_only_table for ALL tables, charts, and graphs without exception. Tables and charts must NEVER appear in the question stem; analyze the table yourself, generate a clinical question about the underlying concept (diagnosis, next best step, mechanism, complication, deficiency, management), and let the table support the answer explanation only. Do not classify a table as diagnostic_stem_image under any circumstance, even if it looks like a diagnostic data display.
 - Use unclear_skip when the screenshot is too unreadable or unsafe to use without hallucinating.
 - Generate exactly one question object unless returning unclear_skip.
 - Use exactly 4 answer choices labeled A, B, C, D.
-- For diagnostic_stem_image, the screenshot must be necessary to answer and the stem must naturally refer to the image, tracing, or stimulus.
+- For diagnostic_stem_image, the screenshot must be necessary to answer and the stem must naturally refer to the image, tracing, or stimulus. Tables and charts are NEVER eligible for this classification.
 - For explanation_only_image and explanation_only_table, generate a Step 2-style question from the concept shown, but do not reveal the screenshot in the stem before answering.
-- For tables, analyze the table and generate a clinical question based on the information in it. Do not ask "what does the table show?"
+- For tables specifically, analyze the table and generate a clinical question based on the information in it. Do not ask "what does the table show?" The table itself must appear only in the answer explanation.
 - Ask about diagnosis, next best step, mechanism, complication, risk factor, management, interpretation, or prevention.
 - Do not merely describe the screenshot.
 - Do not include unsupported schema fields.
@@ -388,7 +388,17 @@ def normalize_classification(parsed: dict[str, Any]) -> str:
     allowed = {"diagnostic_stem_image", "explanation_only_image", "explanation_only_table", "unclear_skip"}
     if placement not in allowed:
         raise GeneratorError(f"Unsupported classification: {raw or '(missing)'}")
+    stimulus = str(parsed.get("stimulusType") or "").strip().lower()
+    if stimulus in {"table", "graph", "chart"} and placement == "diagnostic_stem_image":
+        placement = "explanation_only_table" if stimulus == "table" else "explanation_only_image"
     return placement
+
+
+def asset_path_for_metadata(asset: Path) -> str:
+    try:
+        return str(asset.relative_to(BASE_DIR))
+    except ValueError:
+        return str(asset.resolve())
 
 
 def image_entry(src: Path, asset: Path, mime: str, parsed: dict[str, Any], placement: str) -> dict[str, Any]:
@@ -400,7 +410,7 @@ def image_entry(src: Path, asset: Path, mime: str, parsed: dict[str, Any], place
         "kind": "figure",
         "source": "images-tables-generator",
         "originalFileName": src.name,
-        "assetPath": str(asset.relative_to(BASE_DIR)),
+        "assetPath": asset_path_for_metadata(asset),
         "classification": placement,
         "stimulusType": stimulus_type,
         "placement": "stem" if placement == "diagnostic_stem_image" else "explanation",
@@ -452,7 +462,6 @@ def adapt_question(parsed: dict[str, Any], src: Path, asset: Path, mime: str, q_
         "t": stem,
         "o": choices,
         "c": correct,
-        "explanation": explanation,
         "correctBlurb": explanation.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n\n", "<br><br>"),
         "e": {},
         "tags": [str(parsed.get("retrievalTag") or classification).strip()[:80]],
@@ -465,7 +474,7 @@ def adapt_question(parsed: dict[str, Any], src: Path, asset: Path, mime: str, q_
             "sourceType": "images-tables-generator",
             "sourceFormat": SOURCE_FORMAT,
             "originalFileName": src.name,
-            "assetPath": str(asset.relative_to(BASE_DIR)),
+            "assetPath": asset_path_for_metadata(asset),
             "classification": classification,
             "stimulusType": image.get("stimulusType") or "",
             "stimulusPlacement": classification,
@@ -578,8 +587,12 @@ def validate_payload(payload: dict[str, Any], base_dir: Path = BASE_DIR) -> list
                     errors.append(f"{prefix}: {field}[{img_idx}] is not an object.")
                     continue
                 asset_path = img.get("assetPath")
-                if asset_path and not (base_dir / str(asset_path)).exists():
-                    errors.append(f"{prefix}: referenced asset file missing: {asset_path}")
+                if asset_path:
+                    asset_candidate = Path(str(asset_path))
+                    if not asset_candidate.is_absolute():
+                        asset_candidate = base_dir / asset_candidate
+                    if not asset_candidate.exists():
+                        errors.append(f"{prefix}: referenced asset file missing: {asset_path}")
                 if not img.get("dataUrl") and not img.get("figureKey"):
                     errors.append(f"{prefix}: {field}[{img_idx}] lacks dataUrl or figureKey.")
                 ref_sig = img.get("assetPath") or img.get("figureKey") or img.get("dataUrl")
@@ -609,15 +622,31 @@ def write_log(path: Path, message: str) -> None:
 
 
 def generate(args: argparse.Namespace) -> Path | None:
+    global ASSET_DIR, LOG_DIR, INTERMEDIATE_DIR
     ensure_dirs()
-    input_dir = Path(args.input_dir).resolve() if args.input_dir else INPUT_DIR
     output_dir = Path(args.output_dir).resolve() if args.output_dir else APP_READY_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
-    files = supported_images(input_dir)
-    if args.limit:
-        files = files[: args.limit]
-    if not files:
-        raise GeneratorError(f"No supported input images found in {input_dir}")
+    if args.output_dir:
+        durable_root = output_dir.parent if output_dir.name == "app_ready" else output_dir
+        ASSET_DIR = durable_root / "output_assets"
+        LOG_DIR = durable_root / "logs"
+        INTERMEDIATE_DIR = durable_root / "intermediate"
+        for d in (ASSET_DIR, LOG_DIR, INTERMEDIATE_DIR):
+            d.mkdir(parents=True, exist_ok=True)
+    if args.input_file:
+        selected = Path(args.input_file).expanduser().resolve()
+        if not selected.exists() or not selected.is_file():
+            raise GeneratorError(f"--input-file does not exist or is not a file: {selected}")
+        if selected.suffix.lower() not in SUPPORTED_EXTS:
+            raise GeneratorError(f"--input-file has unsupported extension '{selected.suffix}'. Supported: {sorted(SUPPORTED_EXTS)}")
+        files = [selected]
+    else:
+        input_dir = Path(args.input_dir).resolve() if args.input_dir else INPUT_DIR
+        files = supported_images(input_dir)
+        if args.limit:
+            files = files[: args.limit]
+        if not files:
+            raise GeneratorError(f"No supported input images found in {input_dir}")
     print(f"Found {len(files)} supported image(s).")
     if args.dry_run:
         for path in files:
@@ -688,6 +717,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dry-run", action="store_true", help="Scan files without calling Gemini.")
     parser.add_argument("--limit", type=int, default=0, help="Limit number of images processed.")
     parser.add_argument("--input-dir", default="", help="Input image folder.")
+    parser.add_argument("--input-file", default="", help="Process a single image file (used by Batch Import Center). Overrides --input-dir when set.")
     parser.add_argument("--output-dir", default="", help="Output app-ready JSON folder.")
     parser.add_argument("--validate-only", default="", help="Validate one generated JSON file.")
     return parser.parse_args()

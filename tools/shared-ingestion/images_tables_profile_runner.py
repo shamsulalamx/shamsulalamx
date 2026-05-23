@@ -2,9 +2,15 @@
 """
 Images & Tables shared-ingestion profile runner.
 
-This milestone is attachment-first. It emits normalized image/table chunks and
-creates lightweight app-ready cards that preserve assets, OCR text, and
-provenance without semantic question generation.
+Dry-run emits normalized image/table chunks and lightweight attachment-first
+cards (no Gemini, no semantic generation — useful as a sanity check).
+
+Live mode (`--mode generate`, v4.56) emits normalized chunks first, then
+delegates to `tools/images-tables-question-generator/generate_images_tables_questions.py`
+to run real per-image Gemini classification + NBME-style question generation.
+Image placement follows the canonical rule set: diagnostic images go in the
+stem when interpretation is needed; explanation-only images and ALL tables go
+in the answer explanation.
 """
 
 from __future__ import annotations
@@ -15,6 +21,7 @@ import datetime as dt
 import json
 import mimetypes
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -32,9 +39,11 @@ APP_READY_DIR = (
     JOB_OUTPUT_ROOT / "images-tables-question-generator" / "output_json" / "app_ready"
     if JOB_OUTPUT_ROOT else PROJECT_ROOT / "tools" / "images-tables-question-generator" / "output_json" / "app_ready"
 )
+IMAGES_TABLES_GENERATOR = PROJECT_ROOT / "tools" / "images-tables-question-generator" / "generate_images_tables_questions.py"
 SOURCE_TYPE = "images_tables_source"
 OUTPUT_SCHEMA_VERSION = "nbme-internal-app-ready-v2"
 LABELS = ["A", "B", "C", "D"]
+SUPPORTED_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
 
 
 def emit(event_type: str, **payload: Any) -> None:
@@ -242,6 +251,185 @@ def classification_summary(bundle: dict[str, Any]) -> dict[str, int]:
     return summary
 
 
+def discover_input_files(input_path: Path) -> list[Path]:
+    if input_path.is_file():
+        return [input_path]
+    if not input_path.is_dir():
+        return []
+    files = []
+    for path in sorted(input_path.iterdir()):
+        if path.name.startswith(".") or not path.is_file():
+            continue
+        if path.suffix.lower() in SUPPORTED_IMAGE_EXTS:
+            files.append(path)
+    return files
+
+
+def run_images_tables_generator_live(input_path: Path, output_root: Path) -> dict[str, Any]:
+    files = discover_input_files(input_path)
+    if not files:
+        raise FileNotFoundError(f"No supported image files found at: {input_path}")
+
+    app_ready_dir = output_root / "app_ready"
+    app_ready_dir.mkdir(parents=True, exist_ok=True)
+    per_file_outputs: list[Path] = []
+    per_file_errors: list[str] = []
+
+    for file_index, image_file in enumerate(files, start=1):
+        emit(
+            "images_tables_downstream_file_start",
+            inputFile=str(image_file),
+            fileIndex=file_index,
+            totalFiles=len(files),
+        )
+        command = [
+            sys.executable,
+            str(IMAGES_TABLES_GENERATOR),
+            "--generate",
+            "--input-file",
+            str(image_file),
+            "--output-dir",
+            str(app_ready_dir),
+        ]
+        started_at = time.time()
+        proc = subprocess.run(
+            command,
+            cwd=str(PROJECT_ROOT),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        runtime = round(time.time() - started_at, 3)
+        if proc.stdout.strip():
+            emit("images_tables_downstream_stdout", message=proc.stdout.strip()[-2000:], fileIndex=file_index)
+        if proc.stderr.strip():
+            emit("images_tables_downstream_stderr", message=proc.stderr.strip()[-2000:], fileIndex=file_index)
+        if proc.returncode != 0:
+            per_file_errors.append(f"{image_file.name}: exit {proc.returncode} ({proc.stderr.strip().splitlines()[-1] if proc.stderr.strip() else 'no stderr'})")
+            emit(
+                "images_tables_downstream_file_failed",
+                inputFile=str(image_file),
+                exitCode=proc.returncode,
+                runtimeSeconds=runtime,
+            )
+            continue
+        produced = sorted(app_ready_dir.glob("images_tables_*_app_ready.json"), key=lambda p: p.stat().st_mtime)
+        recent = [p for p in produced if p.stat().st_mtime >= started_at - 1]
+        if not recent:
+            per_file_errors.append(f"{image_file.name}: generator returned 0 but no app-ready JSON discovered")
+            emit(
+                "images_tables_downstream_file_failed",
+                inputFile=str(image_file),
+                exitCode=0,
+                runtimeSeconds=runtime,
+                reason="missing app-ready output",
+            )
+            continue
+        latest = recent[-1]
+        per_file_outputs.append(latest)
+        emit(
+            "images_tables_downstream_file_complete",
+            inputFile=str(image_file),
+            outputPath=str(latest),
+            runtimeSeconds=runtime,
+        )
+        # Small pause to avoid timestamp collisions in filenames produced by the generator.
+        time.sleep(1)
+
+    if not per_file_outputs:
+        raise RuntimeError(
+            "Images & Tables live generation produced no app-ready outputs. "
+            + (per_file_errors[0] if per_file_errors else "See per-file events.")
+        )
+
+    combined_path = merge_per_image_outputs(per_file_outputs, app_ready_dir)
+    emit(
+        "images_tables_combined_app_ready",
+        outputPath=str(combined_path),
+        combinedQuestionCount=len(json.loads(combined_path.read_text(encoding="utf-8")).get("questions", [])),
+        perImageOutputCount=len(per_file_outputs),
+    )
+
+    return {
+        "outputRoot": str(output_root),
+        "combinedAppReadyOutputPath": str(combined_path),
+        "perImageOutputPaths": [str(p) for p in per_file_outputs],
+        "filesAttempted": len(files),
+        "filesSucceeded": len(per_file_outputs),
+        "filesFailed": len(per_file_errors),
+        "perFileErrors": per_file_errors,
+    }
+
+
+def merge_per_image_outputs(per_file_outputs: list[Path], app_ready_dir: Path) -> Path:
+    """Combine one-question-per-image JSONs into a single combined app-ready JSON.
+
+    BIC calls this runner once per input file, so a multi-file job invokes the
+    runner N times. Each invocation:
+      1) Renames its own fresh per-image outputs to *_per_image.json (so BIC's
+         discover_outputs *_app_ready.json glob does not pick them up).
+      2) Scans the entire app-ready directory for ALL *_per_image.json files
+         (including ones from prior invocations in the same job).
+      3) Writes a single stable-named combined file with all questions found.
+
+    The stable filename means later invocations overwrite earlier combined files,
+    so by the time the last input completes, exactly one combined app-ready JSON
+    exists and contains every question generated for the job. BIC auto-import
+    then loads it and imports the full set in one shot.
+    """
+    # Step 1: rename fresh per-image outputs so they fall outside BIC discovery.
+    for path in per_file_outputs:
+        if path.exists() and path.name.endswith("_app_ready.json"):
+            renamed = path.with_name(path.name.removesuffix("_app_ready.json") + "_per_image.json")
+            try:
+                path.rename(renamed)
+            except OSError:
+                pass
+
+    # Step 2: gather every per-image file in the directory (this invocation + prior).
+    per_image_paths = sorted(app_ready_dir.glob("*_per_image.json"))
+    if not per_image_paths:
+        # Should not happen given step 1 just ran, but defend anyway.
+        raise RuntimeError(f"No per-image outputs found in {app_ready_dir} to merge.")
+
+    combined_questions: list[dict[str, Any]] = []
+    combined_warnings: list[Any] = []
+    source_format = "images-tables"
+    schema_version = OUTPUT_SCHEMA_VERSION
+    name_seed = ""
+    for index, path in enumerate(per_image_paths, start=1):
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if not name_seed:
+            name_seed = str(payload.get("name") or "Images Tables Generated")
+            source_format = str(payload.get("sourceFormat") or source_format)
+            schema_version = str(payload.get("schemaVersion") or schema_version)
+        for question in payload.get("questions") or []:
+            if not isinstance(question, dict):
+                continue
+            renumbered = dict(question)
+            renumbered["questionNumber"] = index
+            renumbered["sourceQuestionNumber"] = index
+            renumbered["n"] = index
+            combined_questions.append(renumbered)
+        combined_warnings.extend(payload.get("generationWarnings") or [])
+
+    combined_payload = {
+        "schemaVersion": schema_version,
+        "name": name_seed or "Images Tables Generated",
+        "sourceFormat": source_format,
+        "expectedQuestionCount": len(per_image_paths),
+        "actualExtractedQuestionCount": len(combined_questions),
+        "imageAttachmentStrategy": "q.images[] for stem images; q.explanationImages[] for explanation images; both persisted through FigureStore",
+        "generationWarnings": combined_warnings,
+        "questions": combined_questions,
+    }
+    # Stable filename — later runner invocations in the same BIC job overwrite this,
+    # so exactly one combined file exists in the job output root at completion.
+    combined_path = app_ready_dir / "images_tables_combined_app_ready.json"
+    write_json(combined_path, combined_payload)
+    return combined_path
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run Images & Tables shared-ingestion profile.")
     parser.add_argument("--mode", choices=["dry-run", "generate"], default="dry-run")
@@ -285,12 +473,19 @@ def main() -> int:
         emit("images_tables_profile_complete", ok=False, error="Shared normalized chunk validation failed.", report=report)
         return 1
     output_path = ""
+    output_paths: list[str] = []
     validation_errors: list[str] = []
+    live_summary: dict[str, Any] = {}
     if args.mode == "generate":
-        payload = build_app_ready_payload(bundle, input_path)
-        payload["metadata"]["normalizedChunkPath"] = str(chunk_output)
-        validation_errors = validate_app_ready_payload(payload)
-        if validation_errors:
+        live_output_root = (
+            Path(args.output_dir).expanduser().resolve()
+            if args.output_dir
+            else (JOB_OUTPUT_ROOT / "images-tables-question-generator" if JOB_OUTPUT_ROOT else PROJECT_ROOT / "tools" / "images-tables-question-generator")
+        )
+        emit("images_tables_downstream_start", outputRoot=str(live_output_root), inputPath=str(input_path))
+        try:
+            live_summary = run_images_tables_generator_live(input_path, live_output_root)
+        except Exception as exc:
             failure_report = {
                 "schemaVersion": "images-tables-profile-runner-report-v1",
                 "sourceType": SOURCE_TYPE,
@@ -298,22 +493,22 @@ def main() -> int:
                 "inputPath": str(input_path),
                 "normalizedChunkPath": str(chunk_output),
                 "warnings": report.get("warnings", []),
-                "validationErrors": validation_errors,
-                "errors": validation_errors,
+                "validationErrors": [],
+                "errors": [str(exc)],
                 "ok": False,
             }
             failure_report["recovery"] = recovery_metadata(
                 source_type=SOURCE_TYPE,
                 outcome="failed_fatal",
                 warnings=failure_report["warnings"],
-                fatal_errors=validation_errors,
+                fatal_errors=failure_report["errors"],
             )
-            emit("images_tables_profile_complete", ok=False, error="App-ready validation failed.", report=failure_report, errors=validation_errors)
+            emit("images_tables_profile_complete", ok=False, error=str(exc), report=failure_report)
             return 1
-        app_ready_dir.mkdir(parents=True, exist_ok=True)
-        out_path = app_ready_dir / f"images_tables_shared_{now_stamp()}_app_ready.json"
-        write_json(out_path, payload)
-        output_path = str(out_path.resolve())
+        combined_path = str(live_summary.get("combinedAppReadyOutputPath") or "")
+        output_path = combined_path
+        output_paths = [combined_path] if combined_path else []
+        emit("images_tables_downstream_complete", ok=True, summary=live_summary)
     total_runtime = round(time.time() - started_at, 3)
     final_report = {
         "schemaVersion": "images-tables-profile-runner-report-v1",
@@ -326,6 +521,8 @@ def main() -> int:
         "tableRefCount": report.get("tableRefCount", 0),
         "classificationSummary": classification_summary(bundle),
         "outputPath": output_path,
+        "outputPaths": output_paths,
+        "downstreamSummary": live_summary,
         "runtimeSeconds": total_runtime,
         "warnings": report.get("warnings", []),
         "validationErrors": validation_errors,
@@ -334,13 +531,13 @@ def main() -> int:
     final_report["recovery"] = recovery_metadata(
         source_type=SOURCE_TYPE,
         outcome="completed",
-        candidate_question_count=len(bundle.get("chunks") or []) if args.mode == "generate" else 0,
+        candidate_question_count=int(live_summary.get("filesSucceeded") or 0) if args.mode == "generate" else 0,
         warnings=final_report["warnings"],
         fatal_errors=validation_errors,
-        survivors_import_safe=bool(output_path),
+        survivors_import_safe=bool(output_paths),
         retry_from_scratch_required=False,
     )
-    emit("images_tables_profile_complete", ok=True, report=final_report, outputs=[output_path] if output_path else [])
+    emit("images_tables_profile_complete", ok=True, report=final_report, outputs=output_paths)
     return 0
 
 

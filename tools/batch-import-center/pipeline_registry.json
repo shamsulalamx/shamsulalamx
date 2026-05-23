@@ -56,15 +56,15 @@
     "images_tables_source": {
       "label": "Images & Tables",
       "status": "active",
-      "requiresGemini": false,
-      "inputExtensions": [".png", ".jpg", ".jpeg", ".webp"],
+      "requiresGemini": true,
+      "inputExtensions": [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"],
       "allowDirectories": true,
       "workingDirectory": ".",
       "pythonExecutable": "python3",
       "dryRunSteps": [
         {
           "stage": "normalization",
-          "stageLabel": "Images & Tables shared-ingestion dry-run",
+          "stageLabel": "Images & Tables shared-ingestion dry-run (attachment-first stub, no Gemini)",
           "heartbeatSeconds": 10,
           "args": ["tools/shared-ingestion/images_tables_profile_runner.py", "--mode", "dry-run", "--input-file", "{inputFile}", "--limit", "5"]
         }
@@ -72,13 +72,13 @@
       "liveSteps": [
         {
           "stage": "generation",
-          "stageLabel": "Images & Tables attachment-first generation",
-          "heartbeatSeconds": 10,
-          "args": ["tools/shared-ingestion/images_tables_profile_runner.py", "--mode", "generate", "--input-file", "{inputFile}", "--limit", "5"]
+          "stageLabel": "Images & Tables live Gemini generation (per-image NBME-style questions)",
+          "heartbeatSeconds": 30,
+          "args": ["tools/shared-ingestion/images_tables_profile_runner.py", "--mode", "generate", "--input-file", "{inputFile}", "--limit", "0"]
         }
       ],
       "outputDirectories": ["tools/images-tables-question-generator/output_json/app_ready"],
-      "notes": "Profile-style image/table source: emits shared normalized image/table chunks and creates lightweight attachment-first app-ready cards without semantic question generation."
+      "notes": "Live mode runs per-image Gemini classification + NBME-style question generation via tools/images-tables-question-generator/generate_images_tables_questions.py. Each Gemini call classifies the screenshot as diagnostic_stem_image, explanation_only_image, explanation_only_table, or unclear_skip. Diagnostic images that require interpretation go in q.images[] (stem); explanation-only images and ALL tables/charts go in q.explanationImages[] (explanation). Dry-run emits the prior attachment-first stub (no Gemini). Requires GEMINI_API_KEY. Selecting multiple files queues one generator call per file; selecting a folder scans it for supported image extensions."
     },
     "anki_notes": {
       "label": "Anki Notes",
