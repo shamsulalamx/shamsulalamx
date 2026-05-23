@@ -7044,7 +7044,7 @@ def dedupe_fast_facts_concepts(concepts: list[dict[str, Any]]) -> tuple[list[dic
 
 def process_fast_facts_pptx(
     pptx_path: Path,
-    limit_slides: int = 10,
+    limit_slides: int = 0,
     generate: bool = False,
     reuse_cache: bool = True,
     force_regenerate: bool = False,
@@ -7054,7 +7054,7 @@ def process_fast_facts_pptx(
 ) -> Path:
     if pptx_path.suffix.lower() != ".pptx":
         raise PipelineError(f"Fast Facts profile expects a PPTX file: {pptx_path}")
-    limit_slides = int(limit_slides or 10)
+    limit_slides = max(0, int(limit_slides or 0))
     slide_payload = decompose_fast_facts_pptx(pptx_path, limit_slides=limit_slides)
     deck_hash = slide_payload["pptxSha256"]
     checkpoint = load_fast_facts_checkpoint(pptx_path, deck_hash, limit_slides)
@@ -7196,7 +7196,7 @@ def main() -> int:
             outputs = [
                 process_fast_facts_pptx(
                     path,
-                    limit_slides=args.limit or 10,
+                    limit_slides=args.limit,
                     generate=args.generate or args.repair_only,
                     reuse_cache=args.reuse_cache,
                     force_regenerate=args.force_regenerate,
