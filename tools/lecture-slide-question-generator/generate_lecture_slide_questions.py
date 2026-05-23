@@ -46,8 +46,11 @@ def _load_uoga_module(name: str) -> Any:
 
 
 _execution_graph_module = _load_uoga_module("execution_graph")
+_finalization_module = _load_uoga_module("finalization")
 _retry_module = _load_uoga_module("retry" + "_engine")
 build_execution_graph = _execution_graph_module.build_execution_graph
+finalize_job_gate = _finalization_module.finalize_job_gate
+JobContext = _finalization_module.JobContext
 RetryContext = _retry_module.RetryContext
 RetryExhaustedError = _retry_module.RetryExhaustedError
 RetryStep = _retry_module.RetryStep
@@ -3905,6 +3908,11 @@ def generate_fast_facts_questions(normalized_payload: dict[str, Any], allocation
             "conceptIds": [str(a.get("slideId") or "") for a in chunk],
         })
     graph = build_execution_graph(bic_job_id(), chunk_specs)
+    job_context = JobContext(
+        state="running",
+        active_tasks=0,
+        final_state_path=OUTPUT_DIR / f"{stem}_fast_facts_execution_graph_final.json",
+    )
     telemetry = {
         "events": [],
         "dropped": [],
@@ -3956,6 +3964,10 @@ def generate_fast_facts_questions(normalized_payload: dict[str, Any], allocation
         telemetry["summary"]["totalFinalizedBeforeRepair"] = len(questions)
         telemetry["summary"]["totalReviewRequired"] = len(telemetry["dropped"])
         telemetry["summary"]["totalDropped"] = len(telemetry["dropped"])
+        complete_event = finalize_job_gate(graph, job_context, fast_facts_chunk_event)
+        if complete_event:
+            telemetry["events"].append(complete_event)
+        telemetry["executionGraph"] = graph.to_dict()
     generated_path = GENERATED_DIR / f"{stem}_fast_facts_generated_questions.json"
     write_json(generated_path, {"questions": questions})
     mem_path = MEMORY_DIR / f"{stem}_fast_facts_rolling_memory.json"

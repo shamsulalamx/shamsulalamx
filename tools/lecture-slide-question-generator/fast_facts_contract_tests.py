@@ -131,6 +131,19 @@ def assert_execution_graph(telemetry: dict[str, Any], total_chunks: int, complet
     assert graph["progress"]["droppedChunks"] == dropped
 
 
+def assert_job_complete(events: list[dict[str, Any]], telemetry: dict[str, Any], total_chunks: int) -> None:
+    complete = [e for e in events if e.get("event") == "JOB_COMPLETE"]
+    assert len(complete) == 1, f"expected exactly one JOB_COMPLETE event, got {len(complete)}"
+    event = complete[0]
+    assert event["totalChunks"] == total_chunks
+    assert event["completedChunks"] == total_chunks
+    assert event["status"] == "completed"
+    assert event.get("finalReconciliation"), "JOB_COMPLETE missing final reconciliation"
+    graph = telemetry.get("executionGraph") or {}
+    assert graph.get("jobCompleteEmitted") is True
+    assert graph.get("finalReconciliation"), "final execution graph missing reconciliation"
+
+
 def write_review_for_drops(gen: Any, result: dict[str, Any]) -> Path | None:
     drops = [d for d in result.get("dropped") or [] if isinstance(d, dict)]
     if not drops:
@@ -164,6 +177,7 @@ def test_perfect_input() -> dict[str, Any]:
     assert_retry_bounds(events, telemetry)
     assert events[0]["event"] == event_name("PLAN")
     assert_execution_graph(telemetry, 2, 2, 0)
+    assert_job_complete(events, telemetry, 2)
     return {"events": events, "reviewPath": None}
 
 
@@ -187,6 +201,7 @@ def test_partial_failure_continues() -> dict[str, Any]:
     assert_chunk_lifecycle(telemetry["events"])
     assert_retry_bounds(telemetry["events"], telemetry)
     assert_execution_graph(telemetry, 2, 1, 1)
+    assert_job_complete(telemetry["events"], telemetry, 2)
     return {"events": telemetry["events"], "reviewPath": str(review_path)}
 
 
@@ -207,6 +222,7 @@ def test_total_chunk_failure() -> dict[str, Any]:
     assert any(e["event"] == event_name("DROP") for e in telemetry["events"])
     assert_retry_bounds(telemetry["events"], telemetry)
     assert_execution_graph(telemetry, 1, 0, 1)
+    assert_job_complete(telemetry["events"], telemetry, 1)
     return {"events": telemetry["events"], "reviewPath": str(review_path)}
 
 
@@ -301,6 +317,7 @@ def test_long_run_ten_plus_chunks() -> dict[str, Any]:
     assert len(questions) == 31
     assert_chunk_lifecycle(telemetry["events"])
     assert_execution_graph(telemetry, plan["totalChunks"], plan["totalChunks"], 0)
+    assert_job_complete(telemetry["events"], telemetry, plan["totalChunks"])
     return {"events": telemetry["events"], "reviewPath": None}
 
 

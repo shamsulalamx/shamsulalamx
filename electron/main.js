@@ -1306,6 +1306,7 @@ async function runQueuedBatchJob(job) {
         executionGraph: graph
       };
     };
+    let organicJobComplete = false;
     const sendProgress = eventPayload => {
       const enriched = { jobId: manifest.jobId, ...eventPayload };
       appendBatchLog(job.logsPath, enriched);
@@ -1315,20 +1316,31 @@ async function runQueuedBatchJob(job) {
         chunkProgress.elapsedMs = Number(enriched.elapsedMs || 0);
         chunkProgress.lastEvent = enriched.chunkEvent;
       }
+      if (chunkProgress && (enriched.event === 'JOB_COMPLETE' || enriched.chunkEvent === 'JOB_COMPLETE')) {
+        organicJobComplete = true;
+        chunkProgress.completedChunks = chunkProgress.totalChunks;
+        chunkProgress.currentPhase = 'completed';
+        chunkProgress.activeChunk = '';
+        chunkProgress.retryState = null;
+        chunkProgress.lastEvent = 'JOB_COMPLETE';
+      }
       if (enriched.type === 'stage_start' && enriched.stage) {
         updateBatchJobRecord(manifest.jobId, { currentStage: enriched.stage });
       }
       if (enriched.type === 'stage_start' || enriched.type === 'pipeline_progress' || enriched.type === 'stage_heartbeat' || enriched.type === 'log') {
-        updateBatchQueueJob(manifest.jobId, {
-          progress: {
-            phase: enriched.stage || enriched.phase || enriched.stageLabel || enriched.type,
-            message: enriched.message || enriched.stageLabel || enriched.type,
-            updatedAt: enriched.timestamp || new Date().toISOString(),
-            ...(chunkProgress ? { chunk: chunkProgress } : {})
-          },
-          ...(chunkProgress ? { chunkProgress } : {}),
-          lastHeartbeatAt: enriched.timestamp || new Date().toISOString()
-        });
+        const organicComplete = enriched.event === 'JOB_COMPLETE' || enriched.chunkEvent === 'JOB_COMPLETE';
+        if (!organicJobComplete || organicComplete) {
+          updateBatchQueueJob(manifest.jobId, {
+            progress: {
+              phase: organicComplete ? 'completed' : (enriched.stage || enriched.phase || enriched.stageLabel || enriched.type),
+              message: organicComplete ? 'Organic generation completed.' : (enriched.message || enriched.stageLabel || enriched.type),
+              updatedAt: enriched.timestamp || new Date().toISOString(),
+              ...(chunkProgress ? { chunk: chunkProgress } : {})
+            },
+            ...(chunkProgress ? { chunkProgress } : {}),
+            lastHeartbeatAt: enriched.timestamp || new Date().toISOString()
+          });
+        }
       }
       if (enriched.type === 'warning' || enriched.type === 'cache_summary') {
         const message = enriched.message || enriched.warning;

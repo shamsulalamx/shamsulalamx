@@ -23126,9 +23126,19 @@ Errors: ${escapeHTML(errors)}</div>
 
   function updateBatchImportStatusFromEvent(event) {
     const type = String(event?.type || '');
+    const chunkEvent = String(event?.event || event?.chunkEvent || '');
     const stage = String(event?.stage || event?.stageLabel || '').toLowerCase();
     const message = event?.message || '';
-    if (type === 'job_start') {
+    if (chunkEvent === 'JOB_COMPLETE') {
+      if (_batchImportState) _batchImportState.uogaComplete = true;
+      const cancelBtn = document.getElementById('bic-cancel-job-btn');
+      const runStatus = document.getElementById('bic-run-status');
+      if (cancelBtn) cancelBtn.disabled = true;
+      if (runStatus) runStatus.textContent = 'Organic generation completed.';
+      updateTestCreateStatus('bic-create-status', { phase: 'Completed', text: message || 'Organic generation completed.', percent: 100, step: 5, totalSteps: 5, percentKnown: true, state: 'success' });
+    } else if (_batchImportState?.uogaComplete && !['job_error', 'stage_failed', 'error', 'job_complete'].includes(type)) {
+      return;
+    } else if (type === 'job_start') {
       updateTestCreateStatus('bic-create-status', { phase: 'Job started', text: message || 'Batch job started.', percent: 10, step: 1, totalSteps: 5, percentKnown: false, state: 'active' });
     } else if (type === 'pipeline_progress') {
       updateTestCreateStatus('bic-create-status', { phase: batchImportProgressPhase(event), text: batchImportProgressText(event), percent: 45, step: 3, totalSteps: 5, percentKnown: false, state: 'active' });
@@ -23172,6 +23182,7 @@ Errors: ${escapeHTML(errors)}</div>
     if (_batchImportProgressUnsubscribe) _batchImportProgressUnsubscribe();
     if (_batchImportState) _batchImportState.progress = [];
     if (_batchImportState) _batchImportState.activeJobId = null;
+    if (_batchImportState) _batchImportState.uogaComplete = false;
     const cancelBtn = document.getElementById('bic-cancel-job-btn');
     if (cancelBtn) cancelBtn.disabled = true;
     const log = document.getElementById('bic-progress-log');

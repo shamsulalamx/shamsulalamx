@@ -3,7 +3,10 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 
@@ -71,6 +74,9 @@ class ExecutionGraph:
     chunks: list[ChunkNode]
     global_retry_id: int = 0
     status: str = "running"
+    job_complete_emitted: bool = False
+    final_reconciliation: dict[str, Any] | None = None
+    final_state_path: str = ""
 
     def __post_init__(self) -> None:
         if self.status not in GRAPH_STATUSES:
@@ -137,6 +143,35 @@ class ExecutionGraph:
             "totalChunks": self.total_chunks,
         }
 
+    def terminal_chunks(self) -> int:
+        return sum(1 for chunk in self.chunks if chunk.state in {"completed", "dropped"})
+
+    def has_active_tasks(self) -> bool:
+        return any(chunk.state in {"running", "retrying"} for chunk in self.chunks)
+
+    def finalize_reconciliation(self) -> dict[str, Any]:
+        progress = self.progress()
+        self.final_reconciliation = {
+            "jobId": self.job_id,
+            "totalChunks": self.total_chunks,
+            "completedChunks": progress["completedChunks"],
+            "droppedChunks": progress["droppedChunks"],
+            "terminalChunks": self.terminal_chunks(),
+            "activeTasks": self.has_active_tasks(),
+            "status": self.status,
+            "finalizedAt": datetime.now(timezone.utc).isoformat(),
+        }
+        return self.final_reconciliation
+
+    def persist_final_state(self, path: str | Path | None = None) -> str:
+        if path is None:
+            return ""
+        resolved = Path(path).expanduser().resolve()
+        resolved.parent.mkdir(parents=True, exist_ok=True)
+        self.final_state_path = str(resolved)
+        resolved.write_text(json.dumps(self.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+        return self.final_state_path
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "jobId": self.job_id,
@@ -145,6 +180,9 @@ class ExecutionGraph:
             "globalRetryId": self.global_retry_id,
             "status": self.status,
             "progress": self.progress(),
+            "jobCompleteEmitted": self.job_complete_emitted,
+            "finalReconciliation": self.final_reconciliation,
+            "finalStatePath": self.final_state_path,
         }
 
 

@@ -509,6 +509,7 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
     next_heartbeat = time.time() + heartbeat_seconds if heartbeat_seconds > 0 else 0
     last_chunk_event: dict[str, Any] | None = None
     stall_warning_emitted = False
+    graph_job_complete = False
     while not stream_done:
         if CANCEL_REQUESTED:
             try:
@@ -519,7 +520,7 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
         try:
             line = lines.get(timeout=1)
         except queue.Empty:
-            if heartbeat_seconds > 0 and proc.poll() is None and time.time() >= next_heartbeat:
+            if not graph_job_complete and heartbeat_seconds > 0 and proc.poll() is None and time.time() >= next_heartbeat:
                 duration = round(time.time() - stage_started_at, 2)
                 emit(
                     "stage_heartbeat",
@@ -608,6 +609,10 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
                         f"UOGA chunk telemetry missing executionGraph: sourceType={manifest.get('sourceType')!r} event={progress.get('chunkEvent')!r}"
                     )
                 last_chunk_event = progress
+                if progress.get("chunkEvent") == "JOB_COMPLETE" or progress.get("event") == "JOB_COMPLETE":
+                    graph_job_complete = True
+                    heartbeat_seconds = 0
+                    next_heartbeat = 0
             emit(
                 "pipeline_progress",
                 **{key: value for key, value in progress.items() if key not in {"type", "timestamp", "stage", "stageLabel", "stepIndex"}},
