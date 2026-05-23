@@ -22915,11 +22915,23 @@ Errors: ${escapeHTML(errors)}</div>
         return;
       }
     }
+    // If the BIC main run already auto-imported the validated questions into
+    // a test for this job, append the reviewed-accepted questions to THAT
+    // test instead of creating a parallel duplicate test. importedTestId is
+    // recorded on the queue job record after the main auto-import; the renderer
+    // mirrors it onto job.report as well.
+    const existingTestIdForJob = String(
+      job.importedTestId
+      || (job.report && job.report.importedTestId)
+      || (job.report && job.report.acceptedSurvivorsImportedTestId)
+      || ''
+    ).trim();
     let importResult;
     try {
       importResult = await autoImportBatchOutputJson(survivor.survivorPath, {
         folderId: job.destinationFolderId || String(document.getElementById('bic-target-folder')?.value || '').trim(),
         testName,
+        appendToTestId: existingTestIdForJob,
         statusTarget: 'bic-create-status'
       });
     } catch (err) {
@@ -22963,7 +22975,13 @@ Errors: ${escapeHTML(errors)}</div>
         succeeded: true
       });
     }
-    if (status) status.textContent = `Imported ${importResult.questionCount} accepted question(s) as ${importResult.testName}.`;
+    if (status) {
+      if (importResult.appendedToExistingTest) {
+        status.textContent = `Added ${importResult.questionCount} reviewed question(s) to existing test "${importResult.testName}".`;
+      } else {
+        status.textContent = `Imported ${importResult.questionCount} accepted question(s) as ${importResult.testName}.`;
+      }
+    }
     await refreshBatchImportQueue();
     await refreshBatchImportHistory();
   }
@@ -23719,6 +23737,50 @@ Errors: ${escapeHTML(errors)}</div>
     }
 
     if (!questions || !questions.length) return { ok: false, error: 'No questions found in JSON.' };
+
+    // Append-to-existing path: when the caller already imported some questions
+    // for this BIC job (validated auto-import) and now wants to add reviewed
+    // survivor questions, we merge them into the existing test instead of
+    // creating a parallel duplicate test. Falls back to the normal create
+    // path if the referenced test no longer exists in the library.
+    const appendToTestId = String((destination && destination.appendToTestId) || '').trim();
+    if (appendToTestId) {
+      const existingTest = DB.getTest(appendToTestId);
+      if (existingTest) {
+        reportImportStatus('Appending to existing test...', `Adding ${questions.length} reviewed question(s) to existing test.`, statusIsBatch ? 90 : 85);
+        const existingQuestions = Array.isArray(existingTest.questions) ? existingTest.questions : [];
+        const startN = existingQuestions.length;
+        const renumbered = questions.map(function(q, i) {
+          const out = Object.assign({}, q);
+          out.n = startN + i + 1;
+          if (out.metadata && typeof out.metadata === 'object') {
+            out.metadata = Object.assign({}, out.metadata, { appendedFromReview: true });
+          } else {
+            out.metadata = { appendedFromReview: true };
+          }
+          return out;
+        });
+        const mergedQuestions = existingQuestions.concat(renumbered);
+        DB.updateTest(appendToTestId, { questions: mergedQuestions });
+        const updatedTest = DB.getTest(appendToTestId);
+        try {
+          await _persistLandingJsonInlineImages(updatedTest);
+        } catch (err) {
+          reportImportStatus('Append failed', err.message || 'Image persistence failed.', statusIsBatch ? 90 : 85, 'error');
+          throw err;
+        }
+        _currentFolder = updatedTest.folderId;
+        renderSidebar();
+        renderHomeGrid();
+        reportImportStatus('Append complete', `Added ${questions.length} reviewed question(s) to existing test.`, 100, 'success');
+        return { ok: true, testId: appendToTestId, testName: updatedTest.name, questionCount: questions.length, appendedToExistingTest: true };
+      }
+      // Existing test was deleted between auto-import and review-import. Fall
+      // through and create a new test as a safety net. Surface a warning so
+      // the BIC report records that the append intent was lost.
+      reportImportStatus('Existing test not found', 'Falling back to creating a new test for the reviewed questions.', statusIsBatch ? 90 : 85, 'active');
+    }
+
     reportImportStatus('Saving test...', 'Saving imported questions.', statusIsBatch ? 90 : 85);
     const test = DB.createTest(folderId, testName, questions);
     if (!test) return { ok: false, error: 'Could not create test.' };

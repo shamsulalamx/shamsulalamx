@@ -930,6 +930,62 @@ ipcMain.handle('nbme:batch-import:save-review-decisions', async (_event, payload
   }
 });
 
+// Assemble explanationSections from raw Gemini-shape fields. The lecture-slide
+// generator does this in build_explanation_sections() before producing app-ready
+// JSON; reviewed survivor questions skip that step because they come straight
+// from the review draft's candidateQuestions list. Without this assembly the
+// renderer (which reads explanationSections) shows an empty explanation panel
+// for accepted-review questions, even though the raw correctExplanation and
+// incorrectExplanations fields are present on the question object.
+function assembleReviewedQuestionExplanationSections(question) {
+  const sections = [];
+  const correct = String((question && question.correctExplanation) || '').trim();
+  if (correct) {
+    sections.push({ heading: 'Correct Answer Explanation', body: [correct] });
+  }
+  const rawIncorrect = (question && Array.isArray(question.incorrectExplanations))
+    ? question.incorrectExplanations
+    : [];
+  const incorrectLines = [];
+  for (const entry of rawIncorrect) {
+    if (!entry || typeof entry !== 'object') continue;
+    const label = String(entry.label || '').trim();
+    const text = String(entry.explanation || '').trim();
+    if (!text) continue;
+    incorrectLines.push(label ? `${label}: ${text}` : text);
+  }
+  if (incorrectLines.length) {
+    sections.push({ heading: 'Incorrect Answer Explanation', body: incorrectLines });
+  }
+  const edu = String((question && question.educationalObjective) || '').trim();
+  if (edu) {
+    sections.push({ heading: 'Educational Objective', body: [edu] });
+  }
+  return sections;
+}
+
+// Bring a reviewed-survivor question up to the canonical app-ready shape the
+// renderer expects: assembled explanationSections (when the question does not
+// already carry them), and empty arrays for the figure/image/table fields that
+// downstream validators and the import path treat as required.
+function canonicalizeReviewedSurvivorQuestion(question, offset) {
+  const alreadyAssembled = Array.isArray(question && question.explanationSections)
+    && question.explanationSections.length > 0;
+  const assembled = alreadyAssembled
+    ? question.explanationSections
+    : assembleReviewedQuestionExplanationSections(question || {});
+  return {
+    ...(question || {}),
+    questionNumber: offset + 1,
+    explanationSections: assembled,
+    figureRefs: Array.isArray(question && question.figureRefs) ? question.figureRefs : [],
+    images: Array.isArray(question && question.images) ? question.images : [],
+    explanationImages: Array.isArray(question && question.explanationImages) ? question.explanationImages : [],
+    tables: Array.isArray(question && question.tables) ? question.tables : [],
+    hasEmbeddedFigure: (question && question.hasEmbeddedFigure === true)
+  };
+}
+
 ipcMain.handle('nbme:batch-import:write-accepted-review-survivors', async (_event, payload) => {
   try {
     const job = knownBatchQueueJob(payload?.jobId);
@@ -960,7 +1016,7 @@ ipcMain.handle('nbme:batch-import:write-accepted-review-survivors', async (_even
       schemaVersion: read.draft.schemaVersion || 'nbme-gemini-json-v3',
       sourceFormat: read.draft.sourceFormat || 'mixed',
       testTitle: String(payload?.testName || job.testName || 'Reviewed Batch Import').trim() || 'Reviewed Batch Import',
-      questions: questions.map((question, offset) => ({ ...question, questionNumber: offset + 1 }))
+      questions: questions.map((question, offset) => canonicalizeReviewedSurvivorQuestion(question, offset))
     };
     fs.writeFileSync(survivorPath, JSON.stringify(payloadJson, null, 2), 'utf8');
     updateBatchQueueJob(job.jobId, { acceptedSurvivorsPath: survivorPath });
