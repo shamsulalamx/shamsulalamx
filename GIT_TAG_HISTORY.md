@@ -2,7 +2,7 @@
 
 Last updated: 2026-05-23
 
-This file documents stable v4 tags from v4.0 through the current head tag `v4.49-lecture-chunk-recovery-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+This file documents stable v4 tags from v4.0 through the current head tag `v4.50-fastfacts-review-merge-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
 
 ## v4.0-images-tables-generator-stable
 
@@ -283,3 +283,29 @@ Not validated by this milestone:
 
 - OME, Mehlman, NBME, and Divine generators have separate code paths and have NOT been audited for the same silent-loss class. See `NEXT_STEPS_PRIORITY.md` item 0b.
 - The 2-attempt recovery cap is tuned for a small deck like Test_Emma. Heavier decks may benefit from a higher cap; default should hold for most cases.
+
+## v4.50-fastfacts-review-merge-stable
+
+Commit: `64a8e14`
+
+Meaning: Two fixes to the Fast Facts review-survivor import path that close UX bug #1 (separate parallel test for reviewed-accepted questions) and schema bug #2 (missing explanations for wrong answer choices in reviewed survivors). Together these make the reviewed-accepted questions land where the user expects (the same auto-imported test) and render the full explanation panel the canonical schema promises.
+
+Validated (field, user-reported small Fast Facts PPTX BIC live run after applying the fix):
+
+- 1 validated question auto-imported as a new test.
+- 2 reviewed questions appended to that same test on accept.
+- All 3 questions visible together in one library test.
+- Reviewed-accepted questions render full Correct Answer Explanation + Incorrect Answer Explanation + Educational Objective sections.
+
+Implementation:
+
+- `electron/main.js`: new `assembleReviewedQuestionExplanationSections(question)` and `canonicalizeReviewedSurvivorQuestion(question, offset)` helpers. The `write-accepted-review-survivors` IPC handler maps each accepted question through the canonicalizer before serializing the survivor JSON. Output now carries assembled `explanationSections[]` plus empty `figureRefs` / `images` / `explanationImages` / `tables` arrays.
+- `index.html`: `importValidatedBatchOutputJsonText()` accepts a new `appendToTestId` destination option. When set and the test exists, the new questions are renumbered to continue from the existing question count and merged via `DB.updateTest()` instead of `DB.createTest()`. `_persistLandingJsonInlineImages` then runs against the merged test so `FigureStore` keys stay unique per `(testId, questionNumber)`. Falls back to creating a new test (with a status warning) if the referenced test was deleted between auto-import and review-import.
+- `index.html`: `importAcceptedBatchReviewQuestions()` passes `appendToTestId = job.importedTestId || job.report.importedTestId || job.report.acceptedSurvivorsImportedTestId` so the reviewed survivors merge into the existing per-job test.
+
+Architecture significance: Establishes the survivor write path as a canonical-schema producer, not a raw-Gemini passthrough. Same pattern applies to any future review path for OME, Mehlman, NBME, Divine — if their survivors carry raw fields they will need an analogous canonicalizer.
+
+Not validated by this milestone:
+
+- The migration path for tests already imported via the buggy pre-v4.50 review-survivor path is forward-only. Those orphan tests still have empty `explanationSections[]` and live in their own library entry. Recovery requires either re-running the source through BIC with the new build or running a one-shot recovery script over the existing `accepted_survivors_app_ready.json` files in the affected BIC job dirs.
+- Append behavior was tested with 1 + 2 = 3 questions. Larger appends (10+ reviewed questions into a 20+ question existing test) have not been stressed.

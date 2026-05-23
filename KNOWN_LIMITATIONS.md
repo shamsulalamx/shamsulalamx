@@ -4,6 +4,33 @@ Last updated: 2026-05-23
 
 Current stable tag: `v4.48-lecture-explanation-tables-stable`.
 
+## Fast Facts Review-Survivor Import Bugs (RESOLVED 2026-05-23, tagged v4.50)
+
+History:
+
+A small Fast Facts PPTX produced 1 validated question (auto-imported as a new test) and 2 questions that needed human review. After the user accepted both reviewed questions, two problems surfaced:
+
+1. **Wrong test target.** The 2 accepted-reviewed questions landed in a separate new test instead of being merged into the existing auto-imported test for the same BIC job. The user expected one 3-question test; the library showed a 1-question test plus a parallel 2-question test.
+
+2. **Missing explanations for wrong answers.** The 2 reviewed-accepted questions had empty `explanationSections[]` and so rendered with no explanations at all, violating the canonical schema. The raw Gemini fields (`correctExplanation`, `incorrectExplanations`, `educationalObjective`) WERE present on the question objects, but the renderer reads only from the canonical `explanationSections[]` shape and has no fallback. The lecture-slide generator normally runs a `build_explanation_sections()` step that assembles `explanationSections[]` from the raw fields, but the review-survivor write path skipped that step because it copied questions straight from the review draft's `candidateQuestions` list.
+
+Resolution (tagged `v4.50-fastfacts-review-merge-stable`, commit `64a8e14`):
+
+1. **`electron/main.js`** gained `assembleReviewedQuestionExplanationSections()` and `canonicalizeReviewedSurvivorQuestion()`. The `write-accepted-review-survivors` IPC handler runs every accepted question through the canonicalizer before serializing the survivor JSON. The output now carries assembled `explanationSections[]` plus empty `figureRefs`/`images`/`explanationImages`/`tables` arrays, matching the shape the renderer import path expects.
+
+2. **`index.html`** `importValidatedBatchOutputJsonText` now accepts an `appendToTestId` destination option. When the referenced test exists, the new questions are renumbered to continue from the existing question count and merged via `DB.updateTest()` instead of `DB.createTest()`. `_persistLandingJsonInlineImages` then runs against the merged test so `FigureStore` keys stay unique per `(testId, questionNumber)`. The renderer's `importAcceptedBatchReviewQuestions` passes `appendToTestId = job.importedTestId || job.report.importedTestId || job.report.acceptedSurvivorsImportedTestId`. Falls back to creating a new test (with a status warning) if the referenced test was deleted between auto-import and review-import.
+
+Field-validated on the user's small Fast Facts PPTX BIC live run: 1 validated question auto-imported as a new test, 2 reviewed questions appended to that same test on accept, all 3 visible together in one library test with full Correct + Incorrect + Educational Objective sections.
+
+Migration note for the leftover state from the buggy run:
+
+The fix is forward-only. Any test imported via the buggy review-survivor path before `v4.50` will still have:
+
+- A separate parallel test in the library for the reviewed-accepted questions.
+- Empty `explanationSections[]` on those reviewed questions.
+
+The raw `correctExplanation` / `incorrectExplanations` data is preserved in the corresponding `accepted_survivors_app_ready.json` file under the BIC job's `review/` directory, so a one-shot recovery is possible (read the survivor JSON, run it through the new canonicalizer, append to the originally-intended test, delete the orphan). Easier path: delete the orphan test and re-run the PPTX through BIC with the new build.
+
 ## Lecture-Slide Chunk-Planning Silent Loss (RESOLVED 2026-05-23, tagged v4.49)
 
 History:

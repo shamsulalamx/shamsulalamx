@@ -1,12 +1,27 @@
 # Project Status 2026-05-23
 
-Current stable tag: `v4.49-lecture-chunk-recovery-stable`
+Current stable tag: `v4.50-fastfacts-review-merge-stable`
 Current branch: `phase11-fastfacts-stability`
-Last committed HEAD: `6c0ce4f` (Surface actionable cause when 0-question fatal exit is from quota exhaustion)
+Last committed HEAD: `64a8e14` (Fix two Fast Facts review-survivor import bugs)
 
 Supersedes `docs/archive/PROJECT_STATUS_2026-05-21.md`.
 
 ## What Is New Since 2026-05-21
+
+### v4.50 — Fast Facts review-survivor import merges into the auto-imported test, with full canonical explanations (field-validated)
+
+Two fixes to the Fast Facts review-survivor flow that close a UX bug and a schema bug discovered when the user ran a small Fast Facts PPTX that produced 1 validated question and 2 review-needed questions:
+
+- **UX bug fix**: reviewed-accepted questions now merge into the same auto-imported test for the BIC job instead of being written into a parallel duplicate test. The user gets one 3-question test, not 1 + 2.
+- **Schema bug fix**: reviewed-accepted questions are now written in canonical app-ready shape with assembled `explanationSections[]` instead of the raw Gemini fields. Users see full Correct Answer Explanation + Incorrect Answer Explanation + Educational Objective sections.
+
+Implementation:
+
+- `electron/main.js` gains `assembleReviewedQuestionExplanationSections()` + `canonicalizeReviewedSurvivorQuestion()`. The `write-accepted-review-survivors` IPC handler runs accepted questions through the canonicalizer.
+- `index.html` `importValidatedBatchOutputJsonText()` accepts an `appendToTestId` destination option that merges via `DB.updateTest()` instead of creating a parallel test. `importAcceptedBatchReviewQuestions()` passes `job.importedTestId` so reviewed survivors land in the existing per-job test.
+- Forward-only: tests imported via the buggy pre-v4.50 path still need either re-run or one-shot recovery.
+
+Tag commit: `64a8e14`.
 
 ### v4.49 — Lecture-slide chunk-planning quota-aware recovery (field-validated)
 

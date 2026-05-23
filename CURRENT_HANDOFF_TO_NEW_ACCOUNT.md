@@ -3,9 +3,10 @@ Local repo path: /Users/shamsulalam/Desktop/shamsulalamx
 GitHub repo: https://github.com/shamsulalamx/shamsulalamx
 
 Current local stable baseline:
-`v4.49-lecture-chunk-recovery-stable` at commit `6c0ce4f` on branch `phase11-fastfacts-stability`.
+`v4.50-fastfacts-review-merge-stable` at commit `64a8e14` on branch `phase11-fastfacts-stability`.
 
 Most recent local stable tags (newest first):
+v4.50-fastfacts-review-merge-stable
 v4.49-lecture-chunk-recovery-stable
 v4.48-lecture-explanation-tables-stable
 v4.47-emma-pdf-batch-import-stable
@@ -33,6 +34,7 @@ Reading order on first start:
 
 Critical current state:
 
+- v4.50 fixed two Fast Facts review-survivor bugs: reviewed-accepted questions now merge into the same auto-imported test for the BIC job (instead of creating a parallel duplicate test) and carry the canonical `explanationSections[]` shape (instead of empty placeholders that lost the wrong-answer explanations). Field-validated 2026-05-23 on a small Fast Facts PPTX: 1 validated + 2 reviewed-accepted = one 3-question test with full explanations on all three.
 - v4.49 added quota-aware retry stop + targeted missing-slide recovery to the lecture-slide generator. Field-validated 2026-05-23 on Test_Emma BIC live run (18 allocated → 17 generated, recovery loop fired for 5 slides and recovered 4 of them).
 - v4.48 added structured table rendering in the lecture-slide explanation panel (`renderExplanationTablesInto` in `index.html`; generator no longer emits the `"Table used for explanation only: <tableId>"` placeholder).
 - Phase 10C survivability layer is intact in `electron/main.js`: single-instance lock, `process_registry.json`, filesystem-first queue/history reconciliation, completed-job protection, guarded process-group cleanup, startup cleanup for stale tracked runner PIDs, packaged app parity.

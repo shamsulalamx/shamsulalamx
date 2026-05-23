@@ -308,6 +308,18 @@ Domain boundaries are enforced by `scripts/uoga_dependency_graph_validator.py`:
 
 `tools/chunk_telemetry.py` is a compatibility shim that re-exports the UOGA telemetry engine for legacy callers.
 
+## Review-Survivor Canonicalization Layer (v4.50, field-validated 2026-05-23)
+
+When a BIC run produces some questions that pass validation and some that need human review, the validated set is auto-imported into a new library test immediately. The user later opens the review draft, accepts (and optionally edits) the questions that need review, and the renderer asks Electron to produce an "accepted survivor" JSON which is then imported through the normal BIC import path.
+
+Two important properties of that survivor path:
+
+1. **Canonical schema.** The `write-accepted-review-survivors` IPC handler in `electron/main.js` runs each accepted question through `canonicalizeReviewedSurvivorQuestion()` before serializing. That helper invokes `assembleReviewedQuestionExplanationSections()` to build the canonical `explanationSections[]` array from the raw Gemini-shape fields (`correctExplanation`, `incorrectExplanations`, `educationalObjective`) and fills in empty `figureRefs` / `images` / `explanationImages` / `tables` arrays. Without this step the renderer (which reads only from `explanationSections[]`) would show an empty explanation panel.
+
+2. **Append to existing test.** The renderer's `importValidatedBatchOutputJsonText()` accepts an `appendToTestId` destination option. When set and the referenced test exists, the imported questions are renumbered to continue from the existing test's question count and merged via `DB.updateTest()` instead of creating a parallel test. `_persistLandingJsonInlineImages` then walks the merged test so `FigureStore` keys stay unique per `(testId, questionNumber)`. `importAcceptedBatchReviewQuestions()` passes `appendToTestId = job.importedTestId || job.report.importedTestId || job.report.acceptedSurvivorsImportedTestId`. Falls back to creating a new test (with a status warning) if the referenced test was deleted between auto-import and review-import.
+
+These two together mean that a BIC run with N validated + M reviewed-accepted questions produces ONE library test with N+M questions, all carrying the canonical schema. The pattern is portable to any future source that adopts the review-survivor flow.
+
 ## Lecture-Slide Chunk-Planning Recovery Layer (v4.49, field-validated 2026-05-23)
 
 The lecture-slide generator now defends against two failure modes that previously caused silent question loss:

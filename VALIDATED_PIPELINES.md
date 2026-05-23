@@ -131,6 +131,7 @@ Validated:
 - One visible Electron dev BIC live generation passed from a small Fast Facts PPTX through the capped stabilization registry path.
 - The run emitted app-ready output with 1 final question, discovered that output in BIC, auto-imported it, rendered the first question, scored the imported test, and preserved score history after reload.
 - The newest diagnostic and validation reports for that run did not show `mixed_answer_choice_ontology` or unsupported-term failures.
+- Review-survivor import path fixed and field-validated at v4.50: reviewed-accepted questions now merge into the same auto-imported test for the BIC job, and survivor questions carry canonical `explanationSections[]` instead of the empty placeholder the prior buggy path wrote.
 
 Explicitly not validated:
 
