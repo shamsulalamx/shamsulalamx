@@ -123,6 +123,12 @@ def split_into_chunks(text: str, max_chars: int = 3000) -> List[Dict]:
       1. Heading-based splits (markdown # or ALL-CAPS section labels).
       2. Paragraph-boundary fallback.
       3. Hard-cap each chunk at max_chars, splitting on paragraph boundaries.
+      4. Force-slice any chunk that STILL exceeds max_chars (e.g. inputs with
+         no headings and no double-newline separators — common for Anki .txt
+         exports where each card is a single line). Without this final pass,
+         oversized chunks reach Gemini intact and the response gets truncated
+         at maxOutputTokens. Slice prefers single-newline boundaries, then
+         whitespace, then a hard byte boundary as a last resort.
     """
     boundaries = [m.start() for m in _HEADING_RE.finditer(text)]
     if len(boundaries) >= 2:
@@ -160,9 +166,34 @@ def split_into_chunks(text: str, max_chars: int = 3000) -> List[Dict]:
     if buffer:
         chunks.append(buffer)
 
+    # Force-slice any remaining oversized chunk. This handles inputs that have
+    # no heading boundaries AND no double-newline paragraph boundaries (a real
+    # case for Anki single-line-per-card .txt exports). Prior to this pass,
+    # such inputs collapsed to one giant chunk that the Gemini call would then
+    # truncate at maxOutputTokens.
+    sliced: List[str] = []
+    for chunk in chunks:
+        if len(chunk) <= max_chars:
+            sliced.append(chunk)
+            continue
+        remaining = chunk
+        while len(remaining) > max_chars:
+            window = remaining[:max_chars]
+            # Prefer a clean break: single newline, then whitespace, then hard.
+            cut = window.rfind("\n")
+            if cut < max_chars // 2:
+                ws = window.rfind(" ")
+                cut = ws if ws >= max_chars // 2 else max_chars
+            else:
+                cut = max(cut, 1)
+            sliced.append(remaining[:cut].strip())
+            remaining = remaining[cut:].lstrip()
+        if remaining.strip():
+            sliced.append(remaining.strip())
+
     return [
         {"chunkIndex": i + 1, "chunkText": c, "charCount": len(c)}
-        for i, c in enumerate(chunks)
+        for i, c in enumerate(sliced)
         if c.strip()
     ]
 
@@ -480,7 +511,16 @@ def _raw_gemini_call(api_key: str, prompt: str) -> str:
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
         "generationConfig": {
             "temperature": 0.4,
-            "maxOutputTokens": 8192,
+            # Bumped from 8192 to 16384 to give headroom for chunks that
+            # generate multiple questions. The old cap was hit by Anki .txt
+            # exports where one chunk could ask for 15 questions worth of
+            # JSON in a single response — Gemini truncated mid-string and
+            # the 3-stage JSON cleanup couldn't recover invalid JSON. The
+            # complementary fix is the force-slice pass in split_into_chunks
+            # so chunks themselves stay near 3000 chars and per-chunk
+            # question counts stay small; this token bump is the second-line
+            # safety net.
+            "maxOutputTokens": 16384,
         },
     }).encode("utf-8")
 
