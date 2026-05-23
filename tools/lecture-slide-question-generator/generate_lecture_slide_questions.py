@@ -32,6 +32,10 @@ from pathlib import Path
 from typing import Any
 
 BASE_DIR = Path(__file__).parent.resolve()
+TOOLS_DIR = BASE_DIR.parent
+if str(TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(TOOLS_DIR))
+from chunk_telemetry import ChunkHeartbeat, emit_bic_chunk_event  # noqa: E402
 INPUT_DIR = BASE_DIR / "input_pdfs"
 JOB_OUTPUT_ROOT = Path(os.environ["BIC_JOB_OUTPUT_ROOT"]).expanduser().resolve() if os.environ.get("BIC_JOB_OUTPUT_ROOT") else None
 RUNTIME_DIR = JOB_OUTPUT_ROOT / "lecture-slide-question-generator" if JOB_OUTPUT_ROOT else BASE_DIR
@@ -220,6 +224,10 @@ def emit_bic_progress(phase: str, message: str, source: str | None = None, **pay
         ),
         flush=True,
     )
+
+
+def bic_job_id() -> str:
+    return str(os.environ.get("BIC_JOB_ID") or "").strip()
 
 
 def now_stamp() -> str:
@@ -1699,35 +1707,116 @@ def extract_generated_question_items(
     return items
 
 
+FAST_FACTS_REQUIRED_QUESTION_KEYS = [
+    "slideId", "questionKind", "stemTemplate", "testedConcept",
+    "diagnosisOrTarget", "distractorFamily", "stem", "answerChoices",
+    "correctAnswer", "correctExplanation", "incorrectExplanations",
+    "educationalObjective", "retrievalTag", "reviewPearl",
+    "imageRouting", "tableUse", "sourceFactIds",
+]
+
+
+def coerce_fast_facts_questions_array(parsed: Any) -> tuple[list[Any], list[str]]:
+    warnings: list[str] = []
+    if isinstance(parsed, dict):
+        questions = parsed.get("questions")
+        if isinstance(questions, list):
+            return questions, warnings
+        if isinstance(questions, dict):
+            warnings.append("questions object coerced to one-item array")
+            return [questions], warnings
+        if all(key in parsed for key in ["slideId", "stem", "answerChoices"]):
+            warnings.append("singleton question object coerced to questions array")
+            return [parsed], warnings
+        return [], ["payload missing questions array"]
+    if isinstance(parsed, list):
+        return parsed, warnings
+    return [], ["payload is not an object or array"]
+
+
+def normalize_fast_facts_answer_choices(value: Any) -> list[dict[str, str]]:
+    if isinstance(value, dict):
+        value = [{"label": str(label).strip().upper(), "text": text} for label, text in value.items()]
+    if not isinstance(value, list):
+        return []
+    choices: list[dict[str, str]] = []
+    for idx, choice in enumerate(value[:4]):
+        if isinstance(choice, dict):
+            label = str(choice.get("label") or LABELS[idx]).strip().upper()
+            text = clean_sentence(choice.get("text") or choice.get("choice") or choice.get("answer") or "")
+        else:
+            label = LABELS[idx]
+            text = clean_sentence(choice)
+        if label not in LABELS:
+            label = LABELS[idx]
+        if text:
+            choices.append({"label": label, "text": text})
+    if len(choices) == 4 and [choice["label"] for choice in choices] != LABELS:
+        choices = [{"label": LABELS[idx], "text": choice["text"]} for idx, choice in enumerate(choices)]
+    return choices
+
+
+def normalize_fast_facts_generated_question_items(
+    parsed: Any,
+    allocations: list[dict[str, Any]],
+    chunk_label: str,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    raw_items, warnings = coerce_fast_facts_questions_array(parsed)
+    expected_count = sum(int(a.get("questionCount") or 0) for a in allocations)
+    allowed_slide_ids = [str(a["slideId"]) for a in allocations]
+    accepted: list[dict[str, Any]] = []
+    malformed: list[dict[str, Any]] = []
+    overflow: list[dict[str, Any]] = []
+    for idx, raw_item in enumerate(raw_items, start=1):
+        if not isinstance(raw_item, dict):
+            malformed.append({"index": idx, "reason": "question item is not an object", "rawPayload": raw_item})
+            continue
+        item = copy.deepcopy(raw_item)
+        if not item.get("slideId") and len(allowed_slide_ids) == 1:
+            item["slideId"] = allowed_slide_ids[0]
+            warnings.append(f"item {idx} missing slideId; filled from one-item chunk")
+        item["answerChoices"] = normalize_fast_facts_answer_choices(item.get("answerChoices") or item.get("choices"))
+        missing = [key for key in FAST_FACTS_REQUIRED_QUESTION_KEYS if key not in item]
+        if missing:
+            malformed.append({"index": idx, "slideId": item.get("slideId"), "reason": "missing required keys: " + ", ".join(missing), "rawPayload": raw_item})
+            continue
+        if str(item.get("slideId") or "") not in allowed_slide_ids:
+            malformed.append({"index": idx, "slideId": item.get("slideId"), "reason": "unknown slideId", "rawPayload": raw_item})
+            continue
+        if len(item.get("answerChoices") or []) != 4:
+            malformed.append({"index": idx, "slideId": item.get("slideId"), "reason": "answerChoices did not normalize to four choices", "rawPayload": raw_item})
+            continue
+        accepted.append(item)
+    if expected_count > 0 and len(accepted) > expected_count:
+        overflow = accepted[expected_count:]
+        accepted = accepted[:expected_count]
+        warnings.append(f"returned {len(raw_items)} questions; trimmed to requested {expected_count}")
+    deficit = max(0, expected_count - len(accepted))
+    diagnostics = {
+        "chunkLabel": chunk_label,
+        "expectedCount": expected_count,
+        "returnedCount": len(raw_items),
+        "acceptedCount": len(accepted),
+        "overflowCount": len(overflow),
+        "deficitCount": deficit,
+        "warnings": warnings,
+        "malformedItems": malformed,
+        "overflowItems": overflow,
+        "rawPayload": parsed,
+    }
+    return accepted, diagnostics
+
+
 def extract_fast_facts_generated_question_items(parsed: Any, allocations: list[dict[str, Any]], chunk_label: str) -> list[dict[str, Any]]:
-    try:
-        return extract_generated_question_items(parsed, allocations, chunk_label)
-    except PipelineError as exc:
-        message = str(exc)
-        if len(allocations) != 1 or "returned" not in message or "expected 1" not in message:
-            raise
-        items = parsed.get("questions") if isinstance(parsed, dict) else parsed
-        if not isinstance(items, list):
-            raise
-        slide_id = allocations[0]["slideId"]
-        candidates = [item for item in items if isinstance(item, dict) and item.get("slideId") == slide_id]
-        if not candidates:
-            raise
-        required = [
-            "slideId", "questionKind", "stemTemplate", "testedConcept",
-            "diagnosisOrTarget", "distractorFamily", "stem", "answerChoices",
-            "correctAnswer", "correctExplanation", "incorrectExplanations",
-            "educationalObjective", "retrievalTag", "reviewPearl",
-            "imageRouting", "tableUse", "sourceFactIds",
-        ]
-        valid: list[dict[str, Any]] = []
-        for item in candidates:
-            if all(key in item for key in required) and isinstance(item.get("answerChoices"), list) and len(item.get("answerChoices") or []) == 4:
-                valid.append(item)
-        if not valid:
-            raise
-        warn(f"Fast Facts generation {chunk_label}: received {len(items)} questions for one concept; kept first valid matching question for {slide_id}.")
-        return [valid[0]]
+    items, diagnostics = normalize_fast_facts_generated_question_items(parsed, allocations, chunk_label)
+    expected_count = diagnostics["expectedCount"]
+    if not items:
+        raise PipelineError(f"Fast Facts generation {chunk_label} returned no usable questions; expected {expected_count}.")
+    for warning in diagnostics.get("warnings") or []:
+        warn(f"Fast Facts generation {chunk_label}: {warning}")
+    if diagnostics.get("deficitCount"):
+        warn(f"Fast Facts generation {chunk_label}: accepted {len(items)} of {expected_count}; deficit {diagnostics['deficitCount']}.")
+    return items
 
 
 def call_generation_once(
@@ -3222,6 +3311,12 @@ def review_candidate_from_failed_repair(
         "attemptNotes": list(drop.get("attemptNotes") or []),
         "repairLog": copy.deepcopy(repair_log or {}),
     }
+    if drop.get("rawGenerationPayload") is not None:
+        metadata["rawGenerationPayload"] = drop.get("rawGenerationPayload")
+    if drop.get("chunkOrigin") is not None:
+        metadata["chunkOrigin"] = copy.deepcopy(drop.get("chunkOrigin"))
+    elif isinstance(candidate.get("metadata"), dict) and candidate["metadata"].get("chunkOrigin"):
+        metadata["chunkOrigin"] = copy.deepcopy(candidate["metadata"].get("chunkOrigin"))
     candidate["needsReview"] = True
     candidate.setdefault("extractionWarnings", [])
     if isinstance(candidate["extractionWarnings"], list):
@@ -3264,6 +3359,7 @@ def write_failed_repair_review_draft(
             "severity": "error",
             "category": "repair_failed_validation",
             "message": message,
+            "chunkOrigin": copy.deepcopy((failed_questions[offset - 1].get("metadata") or {}).get("chunkOrigin") or item.get("chunkOrigin") or {}),
             "recommendedAction": "manual_edit_accept_or_reject",
         })
     draft = {
@@ -3712,7 +3808,47 @@ ALLOCATIONS_JSON:
 """.strip()
 
 
-def generate_fast_facts_questions(normalized_payload: dict[str, Any], allocations: list[dict[str, Any]], memory: dict[str, Any]) -> list[dict[str, Any]]:
+def fast_facts_chunk_event(event_type: str, **payload: Any) -> dict[str, Any]:
+    if "jobId" not in payload:
+        payload["jobId"] = bic_job_id()
+    if "phase" not in payload:
+        payload["phase"] = "generating"
+    event = emit_bic_chunk_event(event_type, source="fast_facts_pptx", **payload)
+    log(f"{event_type} " + " ".join(f"{key}={value}" for key, value in payload.items() if key not in {"rawPayload", "overflowItems", "malformedItems"}))
+    return event
+
+
+def fast_facts_review_stub_from_allocation(allocation: dict[str, Any], reason: str, raw_payload: Any = None, attempt_notes: list[str] | None = None) -> dict[str, Any]:
+    slide = allocation.get("slide") or {}
+    return {
+        "slideId": allocation.get("slideId") or slide.get("slideId"),
+        "questionKind": "single-best-answer",
+        "stemTemplate": "fast_facts_generation_failure",
+        "testedConcept": first_nonempty(slide.get("primaryConcepts")) or slide.get("title") or "Fast Facts concept",
+        "diagnosisOrTarget": first_nonempty(slide.get("primaryConcepts")) or slide.get("title") or "Fast Facts concept",
+        "distractorFamily": "manual_review_required",
+        "stem": "Fast Facts generation did not produce a usable question for this concept. Review the preserved source facts and raw payload.",
+        "answerChoices": [{"label": label, "text": "Manual review required"} for label in LABELS],
+        "correctAnswer": "A",
+        "correctExplanation": reason,
+        "incorrectExplanations": [{"label": label, "explanation": reason} for label in LABELS[1:]],
+        "educationalObjective": reason,
+        "retrievalTag": "fast_facts_generation_failure",
+        "reviewPearl": reason,
+        "imageRouting": [],
+        "tableUse": [],
+        "sourceFactIds": [],
+        "metadata": {
+            "slideId": allocation.get("slideId") or slide.get("slideId"),
+            "chunkOrigin": allocation.get("chunkOrigin") or {},
+            "sourceFacts": fast_facts_allowed_source_facts(slide) if slide else [],
+            "rawGenerationPayload": raw_payload,
+            "attemptNotes": attempt_notes or [],
+        },
+    }
+
+
+def generate_fast_facts_questions(normalized_payload: dict[str, Any], allocations: list[dict[str, Any]], memory: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
     if not api_key:
         raise PipelineError("GEMINI_API_KEY is not set.")
@@ -3720,10 +3856,53 @@ def generate_fast_facts_questions(normalized_payload: dict[str, Any], allocation
     questions: list[dict[str, Any]] = []
     stem = slugify(Path(normalized_payload["sourceFile"]).stem)
     if not work:
-        return questions
-    for chunk_index, chunk in enumerate(chunk_list(work, 3), start=1):
+        return questions, {"events": [], "dropped": [], "summary": {}}
+    chunks = chunk_list(work, 3)
+    total_target = sum(int(a.get("questionCount") or 0) for a in work)
+    telemetry = {
+        "events": [],
+        "dropped": [],
+        "summary": {
+            "plannedChunks": len(chunks),
+            "completedChunks": 0,
+            "droppedChunks": 0,
+            "retriedChunks": 0,
+            "totalAllocated": total_target,
+            "totalFinalizedBeforeRepair": 0,
+            "totalReviewRequired": 0,
+            "totalDropped": 0,
+        },
+    }
+    allocation_counts = [sum(int(a.get("questionCount") or 0) for a in chunk) for chunk in chunks]
+    telemetry["events"].append(fast_facts_chunk_event(
+        "FAST_FACTS_PLAN",
+        plannedChunks=len(chunks),
+        targetQuestions=total_target,
+        conceptCount=len(work),
+        chunkAllocation=allocation_counts,
+    ))
+    telemetry["events"].append(fast_facts_chunk_event(
+        "CHUNK_PLAN",
+        totalChunks=len(chunks),
+        totalQuestions=total_target,
+        chunkAllocation=allocation_counts,
+        conceptCount=len(work),
+        phase="planning",
+    ))
+    for chunk_index, chunk in enumerate(chunks, start=1):
         chunk_label = f"fast_facts_chunk{chunk_index}"
-        items = generate_fast_facts_chunk_with_retries(api_key, normalized_payload["sourceFile"], chunk, memory, chunk_label)
+        for allocation in chunk:
+            allocation["chunkOrigin"] = {"chunkLabel": chunk_label, "chunkIndex": chunk_index, "chunkTotal": len(chunks)}
+        result = generate_fast_facts_chunk_with_retries(api_key, normalized_payload["sourceFile"], chunk, memory, chunk_label, chunk_index, len(chunks))
+        items = result.get("items") or []
+        telemetry["events"].extend(result.get("events") or [])
+        telemetry["dropped"].extend(result.get("dropped") or [])
+        if result.get("retried"):
+            telemetry["summary"]["retriedChunks"] += 1
+        if items:
+            telemetry["summary"]["completedChunks"] += 1
+        else:
+            telemetry["summary"]["droppedChunks"] += 1
         slide_by_id = {a["slideId"]: a["slide"] for a in chunk}
         for item in items:
             item = fast_facts_cleanup_question(item)
@@ -3732,13 +3911,28 @@ def generate_fast_facts_questions(normalized_payload: dict[str, Any], allocation
                 item["questionArchetype"] = slide.get("questionArchetype")
             questions.append(item)
             update_memory_from_question(memory, item)
+        telemetry["summary"]["totalFinalizedBeforeRepair"] = len(questions)
+        telemetry["summary"]["totalReviewRequired"] = len(telemetry["dropped"])
+        telemetry["summary"]["totalDropped"] = len(telemetry["dropped"])
     generated_path = GENERATED_DIR / f"{stem}_fast_facts_generated_questions.json"
     write_json(generated_path, {"questions": questions})
     mem_path = MEMORY_DIR / f"{stem}_fast_facts_rolling_memory.json"
     write_json(mem_path, memory)
     log(f"  Fast Facts generated -> {display_path(generated_path)}")
     log(f"  Fast Facts memory -> {display_path(mem_path)}")
-    return questions
+    telemetry["events"].append(fast_facts_chunk_event(
+        "FINAL_RECONCILIATION",
+        plannedChunks=telemetry["summary"]["plannedChunks"],
+        completedChunks=telemetry["summary"]["completedChunks"],
+        droppedChunks=telemetry["summary"]["droppedChunks"],
+        retriedChunks=telemetry["summary"]["retriedChunks"],
+        totalAllocated=telemetry["summary"]["totalAllocated"],
+        totalFinalized=len(questions),
+        totalReviewRequired=len(telemetry["dropped"]),
+        totalDropped=len(telemetry["dropped"]),
+        totalImported=0,
+    ))
+    return questions, telemetry
 
 
 def call_fast_facts_generation_chunk_once(
@@ -3750,10 +3944,14 @@ def call_fast_facts_generation_chunk_once(
     retry_label: str,
     repair_raw: str | None = None,
     repair_error: str = "",
+    chunk_index: int = 1,
+    chunk_total: int = 1,
+    retry_attempt: int = 1,
 ) -> list[dict[str, Any]]:
     if repair_raw is None:
         prompt = fast_facts_generation_prompt(chunk, memory)
         temperature = 0.2
+        phase = "generating"
     else:
         prompt = repair_json_prompt(
             raw=repair_raw,
@@ -3762,8 +3960,29 @@ def call_fast_facts_generation_chunk_once(
             error_message=repair_error,
         )
         temperature = 0.0
-    raw = raw_gemini_call(api_key, prompt, temperature=temperature, max_tokens=9000, timeout_seconds=90)
+        phase = "repairing"
+    with ChunkHeartbeat(
+        fast_facts_chunk_event,
+        job_id=bic_job_id(),
+        chunk_label=chunk_label,
+        chunk_index=chunk_index,
+        total_chunks=chunk_total,
+        phase=phase,
+        retry_attempt=retry_attempt,
+        interval_seconds=3,
+        stall_seconds=25,
+    ):
+        raw = raw_gemini_call(api_key, prompt, temperature=temperature, max_tokens=9000, timeout_seconds=90)
     write_debug_raw(source_file, "generate", chunk_label, retry_label, raw)
+    fast_facts_chunk_event(
+        "CHUNK_HEARTBEAT",
+        chunkLabel=chunk_label,
+        chunkIndex=chunk_index,
+        totalChunks=chunk_total,
+        phase="validating",
+        elapsedMs=0,
+        retryAttempt=retry_attempt,
+    )
     parsed = load_largest_valid_json(raw)
     return extract_fast_facts_generated_question_items(parsed, chunk, chunk_label)
 
@@ -3774,20 +3993,49 @@ def generate_fast_facts_chunk_with_retries(
     chunk: list[dict[str, Any]],
     memory: dict[str, Any],
     chunk_label: str,
-) -> list[dict[str, Any]]:
+    chunk_index: int = 1,
+    chunk_total: int = 1,
+) -> dict[str, Any]:
+    started = time.time()
+    events: list[dict[str, Any]] = []
+    expected = sum(int(a.get("questionCount") or 0) for a in chunk)
+    concept_ids = [str(a.get("slideId") or "") for a in chunk]
+    events.append(fast_facts_chunk_event(
+        "CHUNK_START",
+        chunk=f"{chunk_index}/{chunk_total}",
+        chunkLabel=chunk_label,
+        allocatedQuestions=expected,
+        conceptCount=len(chunk),
+        attempt=1,
+    ))
     last_raw = ""
     last_error = ""
+    retried = False
+    partial_items: list[dict[str, Any]] = []
     try:
-        return call_fast_facts_generation_chunk_once(api_key, source_file, chunk, memory, chunk_label, "attempt0")
+        items = call_fast_facts_generation_chunk_once(api_key, source_file, chunk, memory, chunk_label, "attempt0", chunk_index=chunk_index, chunk_total=chunk_total, retry_attempt=1)
+        if len(items) < expected:
+            partial_items = items
+            last_error = f"under_count accepted {len(items)} of {expected}"
+            raw_path = DEBUG_DIR / f"{slugify(Path(source_file).stem)}_generate_{slugify(chunk_label)}_attempt0_raw_response.txt"
+            if raw_path.exists():
+                last_raw = raw_path.read_text(encoding="utf-8", errors="replace")
+            events.append(fast_facts_chunk_event("CHUNK_RETRY", chunk=chunk_label, reason=last_error, attempt=2, fallbackMode="json_repair"))
+            retried = True
+        else:
+            events.append(fast_facts_chunk_event("CHUNK_SUCCESS", chunk=chunk_label, returnedCount=len(items), acceptedCount=len(items), repairedCount=0, reviewRequiredCount=max(0, expected - len(items)), runtime=round(time.time() - started, 2)))
+            return {"items": items, "events": events, "dropped": [], "retried": retried}
     except Exception as exc:
         last_error = str(exc)
         raw_path = DEBUG_DIR / f"{slugify(Path(source_file).stem)}_generate_{slugify(chunk_label)}_attempt0_raw_response.txt"
         if raw_path.exists():
             last_raw = raw_path.read_text(encoding="utf-8", errors="replace")
         warn(f"Fast Facts generation {chunk_label}: attempt0 failed: {last_error}")
+        events.append(fast_facts_chunk_event("CHUNK_RETRY", chunk=chunk_label, reason=last_error, attempt=2, fallbackMode="json_repair"))
+        retried = True
     if last_raw and not is_truncation_failure(last_error):
         try:
-            return call_fast_facts_generation_chunk_once(
+            items = call_fast_facts_generation_chunk_once(
                 api_key,
                 source_file,
                 chunk,
@@ -3796,17 +4044,46 @@ def generate_fast_facts_chunk_with_retries(
                 "retry1_repair",
                 repair_raw=last_raw,
                 repair_error=last_error,
+                chunk_index=chunk_index,
+                chunk_total=chunk_total,
+                retry_attempt=2,
             )
+            events.append(fast_facts_chunk_event("CHUNK_SUCCESS", chunk=chunk_label, returnedCount=len(items), acceptedCount=len(items), repairedCount=len(items), reviewRequiredCount=max(0, expected - len(items)), runtime=round(time.time() - started, 2)))
+            return {"items": items, "events": events, "dropped": [], "retried": retried}
         except Exception as exc:
             last_error = str(exc)
             warn(f"Fast Facts generation {chunk_label}: retry1 repair failed: {last_error}")
+            events.append(fast_facts_chunk_event("CHUNK_RETRY", chunk=chunk_label, reason=last_error, attempt=3, fallbackMode="single_concept_decomposition"))
+    else:
+        if partial_items:
+            events.append(fast_facts_chunk_event("CHUNK_SUCCESS", chunk=chunk_label, returnedCount=len(partial_items), acceptedCount=len(partial_items), repairedCount=0, reviewRequiredCount=max(0, expected - len(partial_items)), runtime=round(time.time() - started, 2)))
+            return {"items": partial_items, "events": events, "dropped": [], "retried": retried}
+        events.append(fast_facts_chunk_event("CHUNK_RETRY", chunk=chunk_label, reason=last_error or "no raw payload", attempt=3, fallbackMode="single_concept_decomposition"))
     if len(chunk) > 1:
         collected: list[dict[str, Any]] = []
+        dropped: list[dict[str, Any]] = []
         for sub_index, allocation in enumerate(chunk, start=1):
-            collected.extend(generate_fast_facts_chunk_with_retries(api_key, source_file, [allocation], memory, f"{chunk_label}_slide{sub_index}"))
-        return collected
+            result = generate_fast_facts_chunk_with_retries(api_key, source_file, [allocation], memory, f"{chunk_label}_slide{sub_index}", sub_index, len(chunk))
+            collected.extend(result.get("items") or [])
+            events.extend(result.get("events") or [])
+            dropped.extend(result.get("dropped") or [])
+        if collected:
+            events.append(fast_facts_chunk_event("CHUNK_SUCCESS", chunk=chunk_label, returnedCount=len(collected), acceptedCount=len(collected), repairedCount=0, reviewRequiredCount=len(dropped), runtime=round(time.time() - started, 2)))
+            return {"items": collected, "events": events, "dropped": dropped, "retried": True}
+        events.append(fast_facts_chunk_event("CHUNK_DROP", chunk=chunk_label, reason=last_error, conceptIds=concept_ids, reviewArtifactPreserved=bool(dropped)))
+        return {"items": [], "events": events, "dropped": dropped, "retried": True}
     warn(f"Fast Facts generation {chunk_label}: dropped concept {chunk[0].get('slideId')} after generation JSON/schema failures: {last_error}")
-    return []
+    dropped = [{
+        "questionIndex": 0,
+        "slideId": chunk[0].get("slideId"),
+        "reason": "generation_failed_after_bounded_retries",
+        "attemptNotes": [last_error],
+        "validationFailures": [last_error],
+        "rawGenerationPayload": last_raw,
+        "originalQuestion": fast_facts_review_stub_from_allocation(chunk[0], last_error or "generation failed", last_raw, [last_error]),
+    }]
+    events.append(fast_facts_chunk_event("CHUNK_DROP", chunk=chunk_label, reason=last_error, conceptIds=concept_ids, reviewArtifactPreserved=True))
+    return {"items": [], "events": events, "dropped": dropped, "retried": True}
 
 
 def fast_facts_allocations(normalized_payload: dict[str, Any], memory: dict[str, Any]) -> list[dict[str, Any]]:
@@ -4572,8 +4849,9 @@ def generate_fast_facts_questions_with_cache(
 
     regenerated = 0
     generation_failed: list[dict[str, Any]] = []
+    generation_telemetry: dict[str, Any] = {"events": [], "dropped": [], "summary": {}}
     if misses:
-        generated = generate_fast_facts_questions(normalized_payload, misses, memory)
+        generated, generation_telemetry = generate_fast_facts_questions(normalized_payload, misses, memory)
         for question in generated:
             slide_id = str(question.get("slideId") or "")
             if slide_id:
@@ -4616,6 +4894,12 @@ def generate_fast_facts_questions_with_cache(
 
     app_payload_before, before_errors, before_grounding, before_diversity, before_strict = collect_fast_facts_generation_validation(normalized_payload, ordered_questions)
     repaired_questions, repair_report = repair_fast_facts_questions(normalized_payload, ordered_questions, before_errors, before_grounding, before_diversity)
+    generation_dropped = [item for item in generation_telemetry.get("dropped") or [] if isinstance(item, dict)]
+    if generation_dropped:
+        repair_report["droppedQuestions"] = list(repair_report.get("droppedQuestions") or []) + generation_dropped
+        repair_report["droppedQuestionCount"] = int(repair_report.get("droppedQuestionCount") or 0) + len(generation_dropped)
+        repair_report["generationDroppedQuestionCount"] = len(generation_dropped)
+    repair_report["chunkTelemetry"] = generation_telemetry
 
     repaired_slide_ids = {
         str(item.get("slideId") or "")
@@ -4702,6 +4986,8 @@ def generate_fast_facts_questions_with_cache(
         "regeneratedQuestions": regenerated,
         "repairedQuestions": repair_report.get("repairedQuestionCount", 0),
         "droppedQuestions": len(dropped_before_repair) + int(repair_report.get("droppedQuestionCount") or 0),
+        "reviewRequiredQuestions": int(repair_report.get("droppedQuestionCount") or 0),
+        "chunkTelemetry": generation_telemetry,
         "rescuedFromPriorValidCache": rescued_from_prior,
         "invalidationReasons": invalidation_reasons + generation_failed + [
             {

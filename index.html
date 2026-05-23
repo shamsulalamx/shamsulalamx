@@ -22509,6 +22509,22 @@ const App = (() => {
     }) || '';
   }
 
+  function formatBatchChunkProgress(job) {
+    const chunk = job?.chunkProgress || job?.progress?.chunk || null;
+    if (!chunk || typeof chunk !== 'object') return '';
+    const total = Number(chunk.totalChunks || 0);
+    const index = Number(chunk.chunkIndex || 0);
+    const chunkText = total ? `Chunk ${index || '?'} / ${total}` : 'Chunk progress pending';
+    const phase = String(chunk.currentPhase || '').trim();
+    const elapsed = Number(chunk.elapsedMs || 0);
+    const elapsedText = elapsed > 0 ? `${Math.round(elapsed / 1000)}s` : '';
+    const retry = chunk.retryState && Number(chunk.retryState.attempt || 0) > 1
+      ? `Retry attempt ${Number(chunk.retryState.attempt)}${chunk.retryState.fallbackMode ? ` · ${chunk.retryState.fallbackMode}` : ''}`
+      : '';
+    const heartbeat = chunk.heartbeatLastSeen ? `Heartbeat ${String(chunk.heartbeatLastSeen).replace('T', ' ').replace(/\.\d+Z?$/, 'Z')}` : '';
+    return [chunkText, phase ? `Phase ${phase}` : '', retry, elapsedText ? `Elapsed ${elapsedText}` : '', heartbeat].filter(Boolean).join(' · ');
+  }
+
   function renderBatchImportQueue(jobs) {
     const target = document.getElementById('bic-job-queue');
     if (!target) return;
@@ -22527,6 +22543,7 @@ const App = (() => {
       const cancelable = job.status === 'running';
       const removable = ['completed', 'completed_with_review_required', 'completed_with_review', 'failed', 'interrupted', 'canceled'].includes(job.status);
       const progress = job.progress?.message || job.progress?.phase || 'Waiting.';
+      const chunkProgress = formatBatchChunkProgress(job);
       const inputPaths = batchImportQueuePathText(job.inputFiles);
       const appReadyPath = batchImportQueueArtifactPath(job, 'appReadyPath') || 'None';
       const draftPath = batchImportQueueArtifactPath(job, 'draftPath') || 'None';
@@ -22547,6 +22564,7 @@ const App = (() => {
           </div>
           <div class="notes-import-text">${escapeHTML(sourceLabel)} · ${escapeHTML(fileName)}</div>
           <div class="notes-import-text">${escapeHTML(progress)}</div>
+          ${chunkProgress ? `<div class="notes-import-summary">${escapeHTML(chunkProgress)}</div>` : ''}
           ${interruptedMessage}
           <div style="display:flex;gap:6px;margin-top:6px;">
             ${cancelable ? `<button type="button" class="btn-modal" onclick="App.cancelBatchImportQueueJob('${escapeHTML(job.jobId || '')}')">Cancel</button>` : ''}

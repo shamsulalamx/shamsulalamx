@@ -1278,6 +1278,24 @@ async function runQueuedBatchJob(job) {
     const sendProgress = eventPayload => {
       const enriched = { jobId: manifest.jobId, ...eventPayload };
       appendBatchLog(job.logsPath, enriched);
+      const chunkProgress = enriched.chunkEvent ? {
+        event: enriched.chunkEvent,
+        totalChunks: Number(enriched.totalChunks || enriched.plannedChunks || 0),
+        totalQuestions: Number(enriched.totalQuestions || enriched.targetQuestions || 0),
+        chunkAllocation: Array.isArray(enriched.chunkAllocation) ? enriched.chunkAllocation : [],
+        completedChunks: Number(enriched.completedChunks || 0),
+        activeChunk: enriched.chunkLabel || '',
+        chunkIndex: Number(enriched.chunkIndex || 0),
+        currentPhase: enriched.phase || enriched.stage || '',
+        retryState: enriched.retryAttempt || enriched.attempt ? {
+          attempt: Number(enriched.retryAttempt || enriched.attempt || 0),
+          fallbackMode: enriched.fallbackMode || '',
+          reason: enriched.reason || ''
+        } : null,
+        heartbeatLastSeen: enriched.chunkEvent === 'CHUNK_HEARTBEAT' ? (enriched.timestamp || new Date().toISOString()) : '',
+        elapsedMs: Number(enriched.elapsedMs || 0),
+        lastEvent: enriched.chunkEvent
+      } : null;
       if (enriched.type === 'stage_start' && enriched.stage) {
         updateBatchJobRecord(manifest.jobId, { currentStage: enriched.stage });
       }
@@ -1286,8 +1304,10 @@ async function runQueuedBatchJob(job) {
           progress: {
             phase: enriched.stage || enriched.phase || enriched.stageLabel || enriched.type,
             message: enriched.message || enriched.stageLabel || enriched.type,
-            updatedAt: enriched.timestamp || new Date().toISOString()
+            updatedAt: enriched.timestamp || new Date().toISOString(),
+            ...(chunkProgress ? { chunk: chunkProgress } : {})
           },
+          ...(chunkProgress ? { chunkProgress } : {}),
           lastHeartbeatAt: enriched.timestamp || new Date().toISOString()
         });
       }

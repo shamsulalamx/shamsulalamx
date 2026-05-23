@@ -385,7 +385,7 @@ def normalize_stage(step: dict[str, Any]) -> str:
     return stage
 
 
-def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Path, step: dict[str, Any], step_index: int) -> int:
+def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Path, step: dict[str, Any], step_index: int, step_total: int) -> int:
     global CURRENT_PROC
     dry_run = bool(manifest.get("dryRun"))
     cwd = (PROJECT_ROOT / source["workingDirectory"]).resolve()
@@ -393,6 +393,37 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
     stage_label = str(step.get("stageLabel") or f"Pipeline step {step_index}")
     stage = normalize_stage(step)
     stage_started_at = time.time()
+    chunk_label = str(step.get("chunkLabel") or step.get("stageLabel") or f"pipeline_step_{step_index}")
+    emit(
+        "pipeline_progress",
+        phase="planning",
+        source=manifest.get("sourceType"),
+        message=f"Chunk plan: {step_total} pipeline step(s)",
+        chunkEvent="CHUNK_PLAN",
+        jobId=manifest.get("jobId"),
+        totalChunks=step_total,
+        totalQuestions=0,
+        chunkAllocation=[1 for _ in range(step_total)],
+        stage=stage,
+        stageLabel=stage_label,
+        stepIndex=step_index,
+    )
+    emit(
+        "pipeline_progress",
+        phase=stage,
+        source=manifest.get("sourceType"),
+        message=f"Chunk {step_index}/{step_total}: {stage_label} started",
+        chunkEvent="CHUNK_START",
+        jobId=manifest.get("jobId"),
+        chunkLabel=chunk_label,
+        chunkIndex=step_index,
+        totalChunks=step_total,
+        allocatedQuestions=0,
+        retryAttempt=1,
+        stage=stage,
+        stageLabel=stage_label,
+        stepIndex=step_index,
+    )
     emit(
         "stage_start",
         message=f"{stage_label} started for {input_file.name}",
@@ -441,8 +472,14 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
     reader = threading.Thread(target=read_stdout, daemon=True)
     reader.start()
     stream_done = False
-    heartbeat_seconds = float(step.get("heartbeatSeconds") or (20 if stage in {"OCR", "generation"} else 0))
+    heartbeat_seconds = float(step.get("heartbeatSeconds") or 3)
+    if heartbeat_seconds < 2:
+        heartbeat_seconds = 2
+    if heartbeat_seconds > 5:
+        heartbeat_seconds = 5
     next_heartbeat = time.time() + heartbeat_seconds if heartbeat_seconds > 0 else 0
+    last_chunk_event: dict[str, Any] | None = None
+    stall_warning_emitted = False
     while not stream_done:
         if CANCEL_REQUESTED:
             try:
@@ -463,6 +500,46 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
                     durationSeconds=duration,
                     stepIndex=step_index,
                 )
+                last_chunk_event = {
+                    "chunkEvent": "CHUNK_HEARTBEAT",
+                    "chunkLabel": chunk_label,
+                    "chunkIndex": step_index,
+                    "totalChunks": step_total,
+                    "phase": stage,
+                    "elapsedMs": int((time.time() - stage_started_at) * 1000),
+                    "retryAttempt": 1,
+                }
+                emit(
+                    "pipeline_progress",
+                    source=manifest.get("sourceType"),
+                    message=f"Chunk {step_index}/{step_total}: {stage_label} still running",
+                    jobId=manifest.get("jobId"),
+                    stage=stage,
+                    stageLabel=stage_label,
+                    stepIndex=step_index,
+                    **last_chunk_event,
+                )
+                if not stall_warning_emitted and time.time() - stage_started_at >= 25:
+                    emit(
+                        "pipeline_progress",
+                        source=manifest.get("sourceType"),
+                        message=f"Chunk {step_index}/{step_total}: no terminal event after 25s",
+                        chunkEvent="STALL_WARNING",
+                        jobId=manifest.get("jobId"),
+                        chunkLabel=chunk_label,
+                        chunkIndex=step_index,
+                        totalChunks=step_total,
+                        phase=stage,
+                        elapsedMs=int((time.time() - stage_started_at) * 1000),
+                        retryAttempt=1,
+                        lastEvent=last_chunk_event,
+                        chunkState={"chunkLabel": chunk_label, "chunkIndex": step_index, "totalChunks": step_total, "phase": stage},
+                        retryCount=1,
+                        stage=stage,
+                        stageLabel=stage_label,
+                        stepIndex=step_index,
+                    )
+                    stall_warning_emitted = True
                 next_heartbeat = time.time() + heartbeat_seconds
             continue
         if line is None:
@@ -474,6 +551,8 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
             last_lines = last_lines[-12:]
         progress = parse_pipeline_progress(message)
         if progress is not None:
+            if progress.get("chunkEvent"):
+                last_chunk_event = progress
             emit(
                 "pipeline_progress",
                 **{key: value for key, value in progress.items() if key not in {"type", "timestamp", "stage", "stageLabel", "stepIndex"}},
@@ -487,6 +566,22 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
     reader.join(timeout=1)
     duration = round(time.time() - stage_started_at, 2)
     if code == 0:
+        emit(
+            "pipeline_progress",
+            phase="finalizing",
+            source=manifest.get("sourceType"),
+            message=f"Chunk {step_index}/{step_total}: {stage_label} completed",
+            chunkEvent="CHUNK_SUCCESS",
+            jobId=manifest.get("jobId"),
+            chunkLabel=chunk_label,
+            chunkIndex=step_index,
+            totalChunks=step_total,
+            retryAttempt=1,
+            elapsedMs=int((time.time() - stage_started_at) * 1000),
+            stage=stage,
+            stageLabel=stage_label,
+            stepIndex=step_index,
+        )
         emit(
             "stage_complete",
             message=f"{stage_label} completed in {duration}s",
@@ -518,6 +613,25 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
             durationSeconds=duration,
             exitCode=code,
             failureReason=reason,
+            stepIndex=step_index,
+        )
+        emit(
+            "pipeline_progress",
+            phase="finalizing",
+            source=manifest.get("sourceType"),
+            message=f"Chunk {step_index}/{step_total}: {stage_label} dropped",
+            chunkEvent="CHUNK_DROP",
+            jobId=manifest.get("jobId"),
+            chunkLabel=chunk_label,
+            chunkIndex=step_index,
+            totalChunks=step_total,
+            reason="pre_generation_failure" if not last_chunk_event else "stage_failed",
+            raw_error=reason,
+            retry_attempts=1,
+            conceptIds=[],
+            elapsedMs=int((time.time() - stage_started_at) * 1000),
+            stage=stage,
+            stageLabel=stage_label,
             stepIndex=step_index,
         )
     return code
@@ -772,8 +886,9 @@ def main() -> int:
         elif manifest.get("dryRun") and not execute_pipeline:
             emit("dry_run", message="Validated manifest and registry. Pipeline execution skipped by dry-run.")
         else:
+            steps = command_steps(source, bool(manifest.get("dryRun")))
             for input_file in inputs:
-                for step_index, step in enumerate(command_steps(source, bool(manifest.get("dryRun"))), start=1):
+                for step_index, step in enumerate(steps, start=1):
                     if CANCEL_REQUESTED:
                         emit(
                             "job_complete",
@@ -785,7 +900,7 @@ def main() -> int:
                             error="Job cancelled.",
                         )
                         return 130
-                    code = run_command(source, manifest, input_file, step, step_index)
+                    code = run_command(source, manifest, input_file, step, step_index, len(steps))
                     if CANCEL_REQUESTED:
                         emit(
                             "job_complete",
