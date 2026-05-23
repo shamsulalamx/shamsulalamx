@@ -16,7 +16,7 @@ import textwrap
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -367,6 +367,97 @@ def _placeholder_question(n: int) -> Dict:
     }
 
 
+# ── Review-draft writer (v4.53) ────────────────────────────────────────────────
+# When the user enables the review-survivor flow by passing a
+# needs_review_collector list to call_gemini_with_retry(), questions that
+# fail BOTH initial validation AND the repair retry are routed here instead
+# of being silently included in the app-ready output with `extractionWarnings`.
+#
+# The schema below is the same contract BIC's discover_review_draft() and
+# the renderer's readReviewDraft handler already use for the lecture-slide
+# generator. Required: file name ends with `_review_draft.json`,
+# draftVersion == 1, status == 'needs_review', candidateQuestions is a
+# non-empty list, validQuestionIndexes is a list. The renderer surfaces
+# candidates for accept/edit/reject; accepted ones go through the v4.50
+# canonicalize-and-append-to-existing-test path in electron/main.js.
+#
+# OME, Mehlman, Divine, Anki, and UWorld all share this code via
+# `import generate_uworld_questions as _uw`, so adding the writer here
+# enables the review flow for all five wrapping generators.
+
+def _resolve_review_dir() -> Path:
+    """Resolve the review draft directory at call time.
+
+    Always returns BIC_JOB_OUTPUT_ROOT/review when BIC sets that env var
+    (the normal Batch Import path). Otherwise falls back to BASE_DIR/review
+    for standalone CLI runs. Computed at call time so per-wrapper
+    monkey-patching of BASE_DIR is honored without each wrapper having to
+    monkey-patch a REVIEW_DIR constant too.
+    """
+    bic_root = os.environ.get("BIC_JOB_OUTPUT_ROOT")
+    if bic_root:
+        return Path(bic_root).expanduser().resolve() / "review"
+    return BASE_DIR / "review"
+
+
+def write_uworld_family_review_draft(
+    source_label: str,
+    source_type: str,
+    source_format: str,
+    needs_review_entries: List[Dict],
+) -> Optional[Path]:
+    """Write a review_draft.json for questions that failed initial validation
+    AND the repair retry. Returns the path, or None if nothing to write."""
+    if not needs_review_entries:
+        return None
+    review_dir = _resolve_review_dir()
+    review_dir.mkdir(parents=True, exist_ok=True)
+
+    candidate_questions = [entry["question"] for entry in needs_review_entries]
+    review_items = [
+        {
+            "questionIndex": i + 1,  # 1-based; matches renderer convention
+            "severity": "error",
+            "scope": "question",
+            "code": "REPAIR_RETRY_FAILED",
+            "messages": list(entry.get("errors") or []),
+            "chunkIndex": entry.get("chunkIndex"),
+        }
+        for i, entry in enumerate(needs_review_entries)
+    ]
+
+    draft = {
+        "draftVersion": 1,
+        "schemaVersion": "nbme-gemini-json-v3",
+        "sourceFormat": source_format,
+        "sourceType": source_type,
+        "jobId": str(os.environ.get("BIC_JOB_ID") or "").strip(),
+        "createdAt": datetime.now(timezone.utc).isoformat(),
+        "status": "needs_review",
+        "candidateQuestions": candidate_questions,
+        "validationErrors": [],
+        "validationWarnings": [],
+        "semanticGroundingFindings": [],
+        "reviewItems": review_items,
+        "fatalRejects": [],
+        # Intentionally empty: every candidate here failed repair and needs
+        # human review. Clean questions never reach this draft; they go to
+        # the normal app-ready output and BIC auto-imports them.
+        "validQuestionIndexes": [],
+        "outputPaths": {
+            "reviewDraftPath": "",
+            "appReadyPath": "",
+            "reportPath": "",
+        },
+        "sourceLabel": source_label,
+    }
+    path = review_dir / "uworld_family_review_draft.json"
+    draft["outputPaths"]["reviewDraftPath"] = str(path.resolve())
+    path.write_text(json.dumps(draft, indent=2, ensure_ascii=False), encoding="utf-8")
+    log(f"Review draft → {path}")
+    return path
+
+
 # ── Gemini API (raw HTTP — no SDK dependency, matches repo convention) ─────────
 
 def _clean_llm_json(text: str) -> str:
@@ -581,11 +672,20 @@ def call_gemini_with_retry(
     num_questions: int,
     chunk_index: int,
     stats: Dict,
+    needs_review_collector: Optional[List[Dict]] = None,
 ) -> Tuple[List[Dict], List[str]]:
     """
     Call Gemini for one chunk, validate all returned questions.
     Retry invalid questions once with a repair prompt.
     Returns (questions, warnings). Always continues — never raises on partial failure.
+
+    If needs_review_collector is passed, questions that fail BOTH initial
+    validation AND repair are appended to that list (each entry:
+    {question, errors, chunkIndex}) instead of being silently included in
+    the returned `questions` list with extractionWarnings. The caller is
+    responsible for writing those entries to a review_draft.json (see
+    write_uworld_family_review_draft). When None (default), behavior is
+    backward-compatible: failed-repair questions are kept with warnings.
     """
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
     if not api_key:
@@ -644,7 +744,17 @@ def call_gemini_with_retry(
                 warnings.append(fail_msg)
                 stats["repairFailures"] += 1
                 q.setdefault("extractionWarnings", []).extend(errs)
-                valid.append(q)  # include with warnings rather than silently drop
+                if needs_review_collector is not None:
+                    # Route to human review instead of silently keeping with
+                    # warnings. The caller writes these to a review_draft.json
+                    # for the BIC review modal.
+                    needs_review_collector.append({
+                        "question": q,
+                        "errors": list(errs),
+                        "chunkIndex": chunk_index,
+                    })
+                else:
+                    valid.append(q)  # legacy: include with warnings (no review wired)
             else:
                 valid.append(q)
                 stats["repairsSucceeded"] += 1
@@ -727,6 +837,11 @@ def process_file(
     file_warnings: List[str] = []
     all_questions: List[Dict] = []
     chunk_stats:   List[Dict] = []
+    # Questions that failed initial validation AND repair land here in the
+    # live path; routed to a review_draft.json for the BIC review modal
+    # after all chunks finish. Always defined so the dry-run branch and
+    # the per-file report can reference it safely (stays empty in dry-run).
+    needs_review_entries: List[Dict] = []
 
     gen_stats: Dict = {
         "validationFailures": 0,
@@ -759,7 +874,8 @@ def process_file(
 
             try:
                 qs, chunk_warnings = call_gemini_with_retry(
-                    chunk["chunkText"], n, ci + 1, gen_stats
+                    chunk["chunkText"], n, ci + 1, gen_stats,
+                    needs_review_collector=needs_review_entries,
                 )
                 qs = renumber_questions(qs, q_offset)
                 raw_generated.extend(qs)
@@ -799,11 +915,27 @@ def process_file(
         gen_path.write_text(json.dumps(raw_generated, indent=2), encoding="utf-8")
         log(f"  Generated JSON → {gen_path.name} ({len(raw_generated)} questions)")
 
-    # 4. Build and write app-ready JSON
+    # 4. Build and write app-ready JSON (clean + repair-succeeded questions only;
+    # failed-repair questions are surfaced via the review draft below).
     app_json = build_app_ready_json(stem, all_questions, file_warnings)
     app_path = APP_DIR / f"{stem}_app_ready.json"
     app_path.write_text(json.dumps(app_json, indent=2), encoding="utf-8")
     log(f"  App-ready JSON → {app_path.name} ({len(all_questions)} questions)")
+
+    # 4b. Write the review draft when any question failed initial + repair.
+    # needs_review_entries is initialized to [] at the top of process_file
+    # and only grows in the live path; dry_run keeps it empty, so this is a
+    # no-op for dry-run. The draft lands under the BIC job's review/
+    # directory (or BASE_DIR/review for standalone CLI), where the BIC
+    # runner's discover_review_draft() picks it up automatically.
+    review_draft_path: Optional[Path] = None
+    if needs_review_entries:
+        review_draft_path = write_uworld_family_review_draft(
+            source_label=filepath.name,
+            source_type=str(os.environ.get("BIC_PROGRESS_SOURCE") or "uworld_family").strip() or "uworld_family",
+            source_format=str(app_json.get("sourceFormat") or "uworld-notes"),
+            needs_review_entries=needs_review_entries,
+        )
 
     elapsed = round(time.time() - t_start, 1)
     report_data["files"][filepath.name] = {
@@ -811,6 +943,8 @@ def process_file(
         "rawChars":           len(raw_text),
         "chunksProcessed":    len(chunks),
         "questionsGenerated": len(all_questions),
+        "needsReviewCount":   len(needs_review_entries),
+        "reviewDraftPath":    str(review_draft_path.resolve()) if review_draft_path else "",
         "validationFailures": gen_stats["validationFailures"],
         "retries":            gen_stats["retries"],
         "repairsSucceeded":   gen_stats["repairsSucceeded"],
