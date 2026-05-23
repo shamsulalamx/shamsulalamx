@@ -3423,9 +3423,17 @@ def write_failed_repair_review_draft(
     validation_errors: list[str] = []
     for offset, item in enumerate(failed_items, start=1):
         reason = str(item.get("reason") or "repair_failed_validation")
-        failures = [str(v) for v in (item.get("validationFailures") or item.get("unsupportedTerms") or [])]
-        notes = [str(v) for v in (item.get("attemptNotes") or [])]
-        message = "; ".join([reason, *failures, *notes]).strip("; ")
+        failures: list[str] = []
+        seen_failures: set[str] = set()
+        for value in [
+            *(item.get("validationFailures") or item.get("unsupportedTerms") or []),
+            *(item.get("attemptNotes") or []),
+        ]:
+            text = str(value or "").strip()
+            if text and text not in seen_failures:
+                seen_failures.add(text)
+                failures.append(text)
+        message = "; ".join([reason, *failures]).strip("; ")
         validation_errors.append(f"Q{offset}: {message}")
         review_items.append({
             "questionIndex": offset,

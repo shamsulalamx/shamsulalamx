@@ -1427,7 +1427,7 @@ async function runQueuedBatchJob(job) {
       const reviewRequiredStatus = report.status === 'needs_review' || report.status === 'completed_with_review_required';
       const status = wasCancelled ? 'canceled' : (ok && !reportFatal ? (reviewRequiredStatus ? 'completed_with_review_required' : (report.status || 'completed')) : 'failed');
       const finalReport = { ...report, status, runtimeSeconds, outputPaths, warnings: finalWarnings, errors: finalErrors };
-      if (ok && !wasCancelled && !reportFatal && job.runMode === 'generate-auto-import' && !outputPaths.length) {
+      if (ok && !wasCancelled && !reportFatal && job.runMode === 'generate-auto-import' && !reviewRequiredStatus && !outputPaths.length) {
         finalReport.status = 'failed';
         finalReport.stage = 'failed';
         finalReport.errors = [...finalErrors, 'Generation finished but no app-ready output was discovered for auto-import.'];

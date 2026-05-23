@@ -23367,7 +23367,11 @@ Errors: ${escapeHTML(errors)}</div>
     }
 
 	    let importResult = null;
-	    if (runMode === 'generate-auto-import' || existingOutputValidation) {
+	    const pipelineStatus = String(result?.report?.status || '');
+	    const reviewOnlyNoOutput = runMode === 'generate-auto-import'
+	      && (pipelineStatus === 'completed_with_review_required' || pipelineStatus === 'needs_review')
+	      && !outputs.length;
+	    if ((runMode === 'generate-auto-import' || existingOutputValidation) && !reviewOnlyNoOutput) {
 	      const firstValid = validations.find(function(item) { return item.ok; });
 	      if (firstValid) {
 	        appendBatchImportProgress({
@@ -23403,7 +23407,7 @@ Errors: ${escapeHTML(errors)}</div>
 
     const finalReport = buildBatchImportCompletionReport({
       jobId,
-      status: errors.length ? 'failed' : 'completed',
+      status: reviewOnlyNoOutput ? 'completed_with_review_required' : (errors.length ? 'failed' : (pipelineStatus || 'completed')),
       sourceType,
       folderId,
       pipelineReport: result.report || {},
@@ -23419,10 +23423,10 @@ Errors: ${escapeHTML(errors)}</div>
       ? (importResult?.ok ? 'Existing output validation and auto-import completed.' : 'Existing output validation completed.')
       : (isDryRun
         ? 'Dry-run completed.'
-        : (runMode === 'generate-auto-import' && importResult?.ok ? 'Generation and auto-import completed.' : 'Generation completed.'));
+        : (reviewOnlyNoOutput ? 'Generation completed with review required.' : (runMode === 'generate-auto-import' && importResult?.ok ? 'Generation and auto-import completed.' : 'Generation completed.')));
     updateTestCreateStatus('bic-create-status', errors.length
       ? { phase: 'Batch import failed', text: errors[0] || 'Batch import failed.', percent: 90, step: 5, totalSteps: 5, percentKnown: false, state: 'error' }
-      : { phase: 'Complete', text: importResult?.ok ? 'Batch output was imported and saved.' : 'Batch job completed.', percent: 100, step: 5, totalSteps: 5, percentKnown: false, state: 'success' });
+      : { phase: reviewOnlyNoOutput ? 'Needs review' : 'Complete', text: reviewOnlyNoOutput ? 'No importable survivor questions were produced. Review draft is available.' : (importResult?.ok ? 'Batch output was imported and saved.' : 'Batch job completed.'), percent: 100, step: 5, totalSteps: 5, percentKnown: false, state: 'success' });
     } catch (err) {
       if (runStatus) runStatus.textContent = err?.message || 'Batch job failed.';
       updateTestCreateStatus('bic-create-status', { phase: 'Batch import failed', text: err?.message || 'Batch job failed.', percent: 45, percentKnown: false, state: 'error' });
