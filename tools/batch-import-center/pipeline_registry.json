@@ -109,7 +109,7 @@
     "ome_pdf": {
       "label": "OME PDF",
       "status": "active",
-      "requiresGemini": false,
+      "requiresGemini": true,
       "inputExtensions": [".pdf"],
       "workingDirectory": ".",
       "pythonExecutable": "python3",
@@ -118,19 +118,19 @@
           "stage": "normalization",
           "stageLabel": "OME shared-ingestion dry-run",
           "heartbeatSeconds": 10,
-          "args": ["tools/shared-ingestion/ome_profile_runner.py", "--input-file", "{inputFile}", "--limit", "2", "--emit-app-ready-dry-run"]
+          "args": ["tools/shared-ingestion/ome_profile_runner.py", "--mode", "dry-run", "--input-file", "{inputFile}", "--limit", "0"]
         }
       ],
       "liveSteps": [
         {
           "stage": "normalization",
-          "stageLabel": "OME shared-ingestion dry-run handoff",
-          "heartbeatSeconds": 10,
-          "args": ["tools/shared-ingestion/ome_profile_runner.py", "--input-file", "{inputFile}", "--limit", "2", "--emit-app-ready-dry-run"]
+          "stageLabel": "OME shared-ingestion live generation",
+          "heartbeatSeconds": 60,
+          "args": ["tools/shared-ingestion/ome_profile_runner.py", "--mode", "generate", "--input-file", "{inputFile}", "--limit", "0"]
         }
       ],
-      "outputDirectories": ["tools/shared-ingestion/output/ome_app_ready_dry_run"],
-      "notes": "Dry-run orchestration only. Live Gemini OME generation is intentionally not enabled through Batch Import Center yet."
+      "outputDirectories": ["tools/shared-ingestion/output/ome_app_ready_live", "tools/shared-ingestion/output/ome_app_ready_dry_run"],
+      "notes": "Live Gemini OME generation enabled. Dry-run produces placeholder questions; live runs Gemini to generate real clinical questions from the full PDF. Requires GEMINI_API_KEY."
     },
     "divine_transcript": {
       "label": "Divine Transcript",
