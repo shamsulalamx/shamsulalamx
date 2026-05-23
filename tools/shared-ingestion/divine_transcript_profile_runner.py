@@ -23,7 +23,9 @@ PROJECT_ROOT = SCRIPT_DIR.parents[1]
 JOB_OUTPUT_ROOT = Path(os.environ["BIC_JOB_OUTPUT_ROOT"]).expanduser().resolve() if os.environ.get("BIC_JOB_OUTPUT_ROOT") else None
 OUTPUT_DIR = JOB_OUTPUT_ROOT / "shared-ingestion" if JOB_OUTPUT_ROOT else SCRIPT_DIR / "output"
 DIVINE_GENERATOR = PROJECT_ROOT / "tools" / "divine-audio-question-generator" / "generate_divine_questions.py"
-SUPPORTED_EXTENSIONS = {".txt", ".md"}
+SUPPORTED_TEXT_EXTENSIONS = {".txt", ".md"}
+SUPPORTED_AUDIO_EXTENSIONS = {".mp3", ".m4a", ".wav"}
+SUPPORTED_EXTENSIONS = SUPPORTED_TEXT_EXTENSIONS | SUPPORTED_AUDIO_EXTENSIONS
 
 sys.path.insert(0, str(SCRIPT_DIR))
 from chunk_pipeline import run_shared_chunk_pipeline  # noqa: E402
@@ -37,7 +39,7 @@ def emit(event_type: str, **payload: Any) -> None:
     print(json.dumps({"type": event_type, "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"), **payload}, ensure_ascii=False), flush=True)
 
 
-def selected_transcript(raw_path: str) -> Path:
+def selected_input(raw_path: str) -> Path:
     input_path = Path(raw_path).expanduser().resolve()
     if not input_path.exists():
         raise ValueError(f"--input-file does not exist: {input_path}")
@@ -47,6 +49,10 @@ def selected_transcript(raw_path: str) -> Path:
         supported = ", ".join(sorted(SUPPORTED_EXTENSIONS))
         raise ValueError(f"--input-file has unsupported extension '{input_path.suffix}'. Supported: {supported}")
     return input_path
+
+
+def is_audio_input(path: Path) -> bool:
+    return path.suffix.lower() in SUPPORTED_AUDIO_EXTENSIONS
 
 
 def parse_app_ready_json(path: Path) -> dict[str, Any]:
@@ -59,18 +65,20 @@ def parse_app_ready_json(path: Path) -> dict[str, Any]:
     return payload
 
 
-def run_divine_generator_dry_run(input_path: Path) -> dict[str, Any]:
-    output_root = OUTPUT_DIR / "divine_app_ready_dry_run" / input_path.stem.replace(" ", "_")
+def run_divine_generator(input_path: Path, live: bool) -> dict[str, Any]:
+    mode_subdir = "divine_app_ready_live" if live else "divine_app_ready_dry_run"
+    output_root = OUTPUT_DIR / mode_subdir / input_path.stem.replace(" ", "_")
+    mode_flag = "--generate" if live else "--dry-run"
     command = [
         sys.executable,
         str(DIVINE_GENERATOR),
         "--input-file",
         str(input_path),
-        "--dry-run",
+        mode_flag,
         "--output-dir",
         str(output_root),
     ]
-    emit("divine_downstream_start", command=command, outputRoot=str(output_root))
+    emit("divine_downstream_start", command=command, outputRoot=str(output_root), live=live)
     started_at = time.time()
     proc = subprocess.run(
         command,
@@ -85,7 +93,8 @@ def run_divine_generator_dry_run(input_path: Path) -> dict[str, Any]:
     if proc.stderr.strip():
         emit("divine_downstream_stderr", message=proc.stderr.strip()[-4000:])
     if proc.returncode != 0:
-        raise RuntimeError(f"Divine generator dry-run exited with code {proc.returncode}.")
+        mode_label = "live" if live else "dry-run"
+        raise RuntimeError(f"Divine generator {mode_label} exited with code {proc.returncode}.")
 
     app_ready_path = output_root / "app_ready" / f"{input_path.stem}_app_ready.json"
     if not app_ready_path.exists():
@@ -93,10 +102,14 @@ def run_divine_generator_dry_run(input_path: Path) -> dict[str, Any]:
         if len(discovered) == 1:
             app_ready_path = discovered[0]
         else:
-            raise FileNotFoundError(f"Divine generator dry-run did not produce expected app-ready JSON: {app_ready_path}")
+            mode_label = "live" if live else "dry-run"
+            raise FileNotFoundError(f"Divine generator {mode_label} did not produce expected app-ready JSON: {app_ready_path}")
     payload = parse_app_ready_json(app_ready_path)
+    schema_version = (
+        "divine-downstream-live-report-v1" if live else "divine-downstream-dry-run-report-v1"
+    )
     report = {
-        "schemaVersion": "divine-downstream-dry-run-report-v1",
+        "schemaVersion": schema_version,
         "outputRoot": str(output_root),
         "appReadyOutputPath": str(app_ready_path),
         "observedSchemaVersion": payload.get("schemaVersion"),
@@ -104,26 +117,38 @@ def run_divine_generator_dry_run(input_path: Path) -> dict[str, Any]:
         "observedQuestionCount": len(payload["questions"]),
         "runtimeSeconds": runtime,
         "exitCode": proc.returncode,
+        "live": live,
     }
     emit("divine_downstream_complete", ok=True, report=report, outputs=[str(app_ready_path)])
     return report
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Emit transcript-only Divine normalized chunks through shared ingestion.")
-    parser.add_argument("--input-file", required=True, help="Divine transcript text file. Supported: .txt, .md.")
-    parser.add_argument("--limit", type=int, default=0, help="Optional transcript block limit. 0 emits all blocks.")
+    parser = argparse.ArgumentParser(description="Run Divine transcript or audio inputs through Batch Import Center.")
+    parser.add_argument("--input-file", required=True, help="Divine transcript (.txt, .md) or podcast audio (.mp3, .m4a, .wav).")
+    parser.add_argument("--limit", type=int, default=0, help="Optional transcript block limit for text inputs. 0 emits all blocks.")
     parser.add_argument("--chunk-output", default="")
-    parser.add_argument("--emit-app-ready-dry-run", action="store_true", help="After normalized chunk validation, invoke the existing Divine generator in dry-run mode for app-ready output.")
+    parser.add_argument("--emit-app-ready-dry-run", action="store_true", help="After normalized chunk validation, invoke the Divine generator in dry-run mode. Text inputs only.")
+    parser.add_argument("--emit-app-ready-live", action="store_true", help="Invoke the Divine generator in live mode (full transcribe + clean + question generation for audio; full generation for text). Requires GEMINI_API_KEY.")
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
     try:
-        input_path = selected_transcript(args.input_file)
+        input_path = selected_input(args.input_file)
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr, flush=True)
+        return 2
+
+    audio_input = is_audio_input(input_path)
+    if audio_input and args.emit_app_ready_dry_run and not args.emit_app_ready_live:
+        print(
+            "ERROR: Audio inputs (.mp3/.m4a/.wav) require live mode. "
+            "Re-run with --emit-app-ready-live in BIC 'generate' mode.",
+            file=sys.stderr,
+            flush=True,
+        )
         return 2
 
     limit = max(0, int(args.limit or 0))
@@ -131,47 +156,81 @@ def main() -> int:
         OUTPUT_DIR / f"{input_path.stem.replace(' ', '_')}_divine_transcript_normalized_chunks.json"
     )
     started_at = time.time()
-    emit("divine_transcript_profile_start", inputFile=str(input_path), limit=limit)
-    shared = run_shared_chunk_pipeline(
-        source_type=SOURCE_TYPE,
-        input_path=input_path,
-        output_path=chunk_output,
-        limit=limit,
-    )
-    report = shared["report"]
-    chunk_types = report.get("chunkTypes", [])
-    transcript_only = chunk_types == ["transcript"] or (not chunk_types and report.get("chunkCount") == 0)
-    errors = list(report.get("errors", []))
-    if not transcript_only:
-        errors.append(f"Divine transcript runner emitted non-transcript chunk types: {chunk_types}")
-    ok = bool(report.get("ok")) and not errors
+    emit("divine_transcript_profile_start", inputFile=str(input_path), limit=limit, audioInput=audio_input)
+
+    errors: list[str] = []
+    warnings: list[str] = []
+    chunk_types: list[str] = []
+    chunk_count = 0
+    stage_timings: dict[str, Any] = {}
+    ok = True
+
+    if not audio_input:
+        shared = run_shared_chunk_pipeline(
+            source_type=SOURCE_TYPE,
+            input_path=input_path,
+            output_path=chunk_output,
+            limit=limit,
+        )
+        report = shared["report"]
+        chunk_types = report.get("chunkTypes", [])
+        chunk_count = report.get("chunkCount", 0)
+        stage_timings = report.get("stageTimings", {})
+        warnings = list(report.get("warnings", []))
+        errors = list(report.get("errors", []))
+        transcript_only = chunk_types == ["transcript"] or (not chunk_types and chunk_count == 0)
+        if not transcript_only:
+            errors.append(f"Divine transcript runner emitted non-transcript chunk types: {chunk_types}")
+        ok = bool(report.get("ok")) and not errors
+    else:
+        emit(
+            "divine_transcript_audio_input",
+            message="Audio input detected; skipping shared chunk pipeline (chunks emerge after transcription).",
+            inputFile=str(input_path),
+        )
+
     downstream_report: dict[str, Any] | None = None
-    if ok and args.emit_app_ready_dry_run:
+    live_requested = args.emit_app_ready_live
+    if ok and live_requested:
         try:
-            downstream_report = run_divine_generator_dry_run(input_path)
+            downstream_report = run_divine_generator(input_path, live=True)
         except Exception as exc:
             errors.append(str(exc))
             ok = False
+    elif ok and args.emit_app_ready_dry_run:
+        try:
+            downstream_report = run_divine_generator(input_path, live=False)
+        except Exception as exc:
+            errors.append(str(exc))
+            ok = False
+
+    scope_label = (
+        "audio → transcribe → clean → live questions" if audio_input
+        else "transcript-first normalized chunks only"
+    )
+    if downstream_report:
+        downstream_status = "live-completed" if live_requested else "dry-run-completed"
+    elif live_requested or args.emit_app_ready_dry_run:
+        downstream_status = "failed" if not ok else "not-requested"
+    else:
+        downstream_status = "not-requested"
     final_report = {
         "schemaVersion": "divine-transcript-profile-runner-report-v1",
         "sourceType": SOURCE_TYPE,
         "inputPath": str(input_path),
-        "normalizedChunkPath": str(chunk_output),
-        "normalizedChunkCount": report.get("chunkCount", 0),
+        "audioInput": audio_input,
+        "normalizedChunkPath": None if audio_input else str(chunk_output),
+        "normalizedChunkCount": chunk_count,
         "chunkTypes": chunk_types,
-        "sharedStageTimings": report.get("stageTimings", {}),
-        "scope": "transcript-first normalized chunks only",
-        "downstreamStatus": (
-            "dry-run-completed" if downstream_report else
-            "failed" if args.emit_app_ready_dry_run and not ok else
-            "not-requested"
-        ),
+        "sharedStageTimings": stage_timings,
+        "scope": scope_label,
+        "downstreamStatus": downstream_status,
         "downstreamReport": downstream_report,
         "appReadyOutputPath": downstream_report["appReadyOutputPath"] if downstream_report else None,
         "observedSchemaVersion": downstream_report["observedSchemaVersion"] if downstream_report else None,
         "observedSourceFormat": downstream_report["observedSourceFormat"] if downstream_report else None,
         "observedQuestionCount": downstream_report["observedQuestionCount"] if downstream_report else None,
-        "warnings": report.get("warnings", []),
+        "warnings": warnings,
         "errors": errors,
         "totalRuntimeSeconds": round(time.time() - started_at, 3),
     }
@@ -184,8 +243,11 @@ def main() -> int:
         survivors_import_safe=bool(downstream_report),
         retry_from_scratch_required=not ok,
     )
-    emit("divine_transcript_normalized_chunks", outputPath=str(chunk_output), report=final_report)
-    outputs = [str(chunk_output)]
+    chunk_output_str = None if audio_input else str(chunk_output)
+    emit("divine_transcript_normalized_chunks", outputPath=chunk_output_str, report=final_report)
+    outputs: list[str] = []
+    if chunk_output_str:
+        outputs.append(chunk_output_str)
     if downstream_report:
         outputs.append(downstream_report["appReadyOutputPath"])
     emit("divine_transcript_profile_complete", ok=ok, report=final_report, outputs=outputs)

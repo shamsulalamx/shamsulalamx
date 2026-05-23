@@ -110,7 +110,7 @@ def _stem_from_cleaned(path: Path) -> str:
     return path.stem.removesuffix("_cleaned")
 
 
-def _resolve_selected_transcript(raw_path: str) -> Path:
+def _resolve_selected_input(raw_path: str) -> Path:
     selected = Path(raw_path).expanduser()
     if not selected.is_absolute():
         selected = (Path.cwd() / selected).resolve()
@@ -120,14 +120,19 @@ def _resolve_selected_transcript(raw_path: str) -> Path:
         raise ValueError(f"--input-file does not exist: {selected}")
     if not selected.is_file():
         raise ValueError(f"--input-file must be a file: {selected}")
-    if selected.suffix.lower() not in SUPPORTED_TRANSCRIPTS:
-        supported = ", ".join(sorted(SUPPORTED_TRANSCRIPTS))
+    ext = selected.suffix.lower()
+    if ext not in SUPPORTED_TRANSCRIPTS and ext not in SUPPORTED_AUDIO:
+        supported = ", ".join(sorted(SUPPORTED_TRANSCRIPTS | SUPPORTED_AUDIO))
         raise ValueError(f"--input-file has unsupported extension '{selected.suffix}'. Supported: {supported}")
     return selected
 
 
+def _is_audio_input(path: Path) -> bool:
+    return path.suffix.lower() in SUPPORTED_AUDIO
+
+
 def _apply_output_dir(raw_path: str) -> Path:
-    global SEGMENT_DIR, GEN_DIR, DEBUG_DIR, APP_DIR, REPORT_DIR
+    global SEGMENT_DIR, GEN_DIR, DEBUG_DIR, APP_DIR, REPORT_DIR, RAW_DIR, CLEANED_DIR
 
     output_root = Path(raw_path).expanduser()
     if not output_root.is_absolute():
@@ -141,6 +146,8 @@ def _apply_output_dir(raw_path: str) -> Path:
     DEBUG_DIR = output_root / "generated" / "debug"
     APP_DIR = output_root / "app_ready"
     REPORT_DIR = output_root / "reports"
+    RAW_DIR = output_root / "transcripts" / "raw"
+    CLEANED_DIR = output_root / "transcripts" / "cleaned"
     _uw.DEBUG_DIR = DEBUG_DIR
     _uw.REPORT_DIR = REPORT_DIR
     return output_root
@@ -705,12 +712,14 @@ def main() -> None:
     args = parser.parse_args()
 
     try:
-        selected_input = _resolve_selected_transcript(args.input_file) if args.input_file else None
+        selected_input = _resolve_selected_input(args.input_file) if args.input_file else None
         output_root = _apply_output_dir(args.output_dir) if args.output_dir else None
     except ValueError as exc:
         parser.error(str(exc))
+    if selected_input and _is_audio_input(selected_input) and not args.generate:
+        parser.error("--input-file with an audio file (.mp3/.m4a/.wav) is supported only with --generate (full pipeline).")
     if selected_input and (args.transcribe_only or args.clean_only):
-        parser.error("--input-file selects a transcript and is supported only with --dry-run, --chunk-only, or --generate.")
+        parser.error("--input-file is supported only with --dry-run, --chunk-only, or --generate.")
 
     # ── Startup log ────────────────────────────────────────────────────────────
     mode_label = (
@@ -930,20 +939,43 @@ def main() -> None:
     # ══════════════════════════════════════════════════════════════════════════
     elif args.generate:
         if selected_input:
+            stem = selected_input.stem
             try:
-                transcript_text = selected_input.read_text(encoding="utf-8")
+                if _is_audio_input(selected_input):
+                    raw_path = RAW_DIR / f"{stem}_raw.txt"
+                    if raw_path.exists():
+                        _uw.log(f"  Reusing raw transcript: {raw_path.name}")
+                        raw_text = raw_path.read_text(encoding="utf-8")
+                    else:
+                        raw_text = transcribe_audio(selected_input)
+                        if not raw_text.strip():
+                            raise RuntimeError("empty transcription output")
+                        raw_path.write_text(raw_text, encoding="utf-8")
+                        _uw.log(f"  Raw transcript → {raw_path.name} ({len(raw_text):,} chars)")
+
+                    cleaned_path = CLEANED_DIR / f"{stem}_cleaned.txt"
+                    if cleaned_path.exists():
+                        _uw.log(f"  Reusing cleaned transcript: {cleaned_path.name}")
+                        cleaned_text = cleaned_path.read_text(encoding="utf-8")
+                    else:
+                        cleaned_text = clean_transcript(raw_text, api_key)
+                        cleaned_path.write_text(cleaned_text, encoding="utf-8")
+                        _uw.log(f"  Cleaned transcript → {cleaned_path.name} ({len(cleaned_text):,} chars)")
+                else:
+                    cleaned_text = selected_input.read_text(encoding="utf-8")
+
                 _process_cleaned_transcript(
-                    selected_input.stem,
-                    transcript_text,
+                    stem,
+                    cleaned_text,
                     args.questions_per_file,
                     False,
                     report_data,
                 )
             except Exception as exc:
                 _uw.warn(f"Error processing {selected_input.name}: {exc}")
-                report_data["files"][selected_input.stem] = {"status": "error", "error": str(exc)}
+                report_data["files"][stem] = {"status": "error", "error": str(exc)}
             audio_files = []
-            processed_stems = {selected_input.stem}
+            processed_stems = {stem}
         else:
             audio_files = discover_audio_files()
             processed_stems: set = set()

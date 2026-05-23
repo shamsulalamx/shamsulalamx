@@ -133,30 +133,33 @@
       "notes": "Live Gemini OME generation enabled. Dry-run produces placeholder questions; live runs Gemini to generate real clinical questions from the full PDF. Requires GEMINI_API_KEY."
     },
     "divine_transcript": {
-      "label": "Divine Transcript",
+      "label": "Divine (Audio + Transcript)",
       "status": "active",
-      "requiresGemini": false,
-      "inputExtensions": [".txt", ".md"],
+      "requiresGemini": true,
+      "inputExtensions": [".txt", ".md", ".mp3", ".m4a", ".wav"],
       "workingDirectory": ".",
       "pythonExecutable": "python3",
       "dryRunSteps": [
         {
           "stage": "normalization",
-          "stageLabel": "Divine Transcript shared-ingestion dry-run",
+          "stageLabel": "Divine shared-ingestion dry-run (text inputs only)",
           "heartbeatSeconds": 10,
           "args": ["tools/shared-ingestion/divine_transcript_profile_runner.py", "--input-file", "{inputFile}", "--emit-app-ready-dry-run"]
         }
       ],
       "liveSteps": [
         {
-          "stage": "normalization",
-          "stageLabel": "Divine Transcript shared-ingestion dry-run handoff",
-          "heartbeatSeconds": 10,
-          "args": ["tools/shared-ingestion/divine_transcript_profile_runner.py", "--input-file", "{inputFile}", "--emit-app-ready-dry-run"]
+          "stage": "generation",
+          "stageLabel": "Divine live generation (audio → transcribe → clean → questions)",
+          "heartbeatSeconds": 30,
+          "args": ["tools/shared-ingestion/divine_transcript_profile_runner.py", "--input-file", "{inputFile}", "--emit-app-ready-live"]
         }
       ],
-      "outputDirectories": ["tools/shared-ingestion/output/divine_app_ready_dry_run"],
-      "notes": "BIC Divine Transcript currently runs dry-run handoff only. Live Gemini generation is not enabled through BIC. Audio files are not supported through this source."
+      "outputDirectories": [
+        "tools/shared-ingestion/output/divine_app_ready_live",
+        "tools/shared-ingestion/output/divine_app_ready_dry_run"
+      ],
+      "notes": "Accepts Divine Intervention podcast audio (.mp3/.m4a/.wav) and transcripts (.txt/.md). Dry-run handles text inputs only (audio dry-run is rejected to avoid wasting transcription tokens). Live mode runs the full pipeline: Gemini File API upload → transcribe → clean → chunk → generate (sourceFormat=divine-audio, schemaVersion=nbme-gemini-json-v3). Requires GEMINI_API_KEY."
     },
     "fast_facts_pptx": {
       "label": "Fast Facts PPTX",
