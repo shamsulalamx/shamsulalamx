@@ -167,6 +167,74 @@ def split_into_chunks(text: str, max_chars: int = 3000) -> List[Dict]:
     ]
 
 
+# ── Stem-quality helpers ───────────────────────────────────────────────────────
+# Mirrors the lecture-slide generator's stem_has_explicit_final_question check.
+# Shared via this module because OME, Mehlman, Divine, and Anki all wrap
+# validate_question() from here — putting the check in UWorld fixes every
+# wrapping generator in one place. Without this check, Gemini occasionally
+# returns vignettes that end mid-narrative with no direct one-best-answer
+# question sentence, leaving the user unable to tell what is being asked.
+
+import re as _re_stem  # local alias to avoid clashing with any future top-level re usage
+
+_STEM_QUESTION_PROMPT_RE = _re_stem.compile(
+    r"(\?|"
+    r"\bwhich of the following\b|"
+    r"\bwhat is\b|"
+    r"\bwhat are\b|"
+    r"\bwhat should\b|"
+    r"\bhow should\b|"
+    r"\bwhich (?:response|intervention|treatment|therapy|medication|drug|screening|preventive|prevention|counseling|recommendation)\b|"
+    r"\bmost likely\b|"
+    r"\bmost appropriate\b|"
+    r"\bbest (?:explains|describes|accounts for|represents|confirms|treats|managed)\b|"
+    r"\bnext (?:best )?(?:step|test|management|treatment)\b)",
+    _re_stem.I,
+)
+
+
+def _stem_clean(value) -> str:
+    text = str(value or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not text:
+        return ""
+    paragraphs = [
+        _re_stem.sub(r"[ \t]+", " ", paragraph.strip())
+        for paragraph in _re_stem.split(r"\n\s*\n", text)
+        if paragraph.strip()
+    ]
+    return "\n\n".join(paragraphs)
+
+
+def _stem_strip_trailing_artifacts(stem: str) -> str:
+    clean = _stem_clean(stem)
+    clean = _re_stem.sub(r"\n*\s*\[Figure:[^\]]+\]\s*$", "", clean, flags=_re_stem.I)
+    return clean.strip()
+
+
+def _stem_final_sentence(stem: str) -> str:
+    clean = _stem_strip_trailing_artifacts(stem)
+    if not clean:
+        return ""
+    pieces = _re_stem.findall(r"[^.!?]+[.!?]?", clean, flags=_re_stem.S)
+    for piece in reversed(pieces):
+        sentence = _re_stem.sub(r"\s+", " ", piece).strip()
+        if sentence:
+            return sentence
+    return _re_stem.sub(r"\s+", " ", clean).strip()
+
+
+def stem_has_explicit_final_question(stem: str) -> bool:
+    """True iff the stem ends with a recognizable one-best-answer prompt that
+    closes with a question mark. Used by validate_question() below; if this
+    returns False, the question is sent back to Gemini for repair."""
+    final = _stem_final_sentence(stem)
+    if not final:
+        return False
+    if not final.endswith("?"):
+        return False
+    return bool(_STEM_QUESTION_PROMPT_RE.search(final))
+
+
 # ── Validation ─────────────────────────────────────────────────────────────────
 def validate_question(q: Dict) -> List[str]:
     """Returns a list of error strings. Empty = valid."""
@@ -178,6 +246,11 @@ def validate_question(q: Dict) -> List[str]:
     stem = q.get("stem", "")
     if not stem or not stem.strip():
         errors.append("missing or empty stem")
+    elif not stem_has_explicit_final_question(stem):
+        # Forces the repair retry when Gemini returns a vignette that ends
+        # mid-narrative without a one-best-answer question. Shared across all
+        # generators that import this module (OME, Mehlman, Divine, Anki).
+        errors.append("stem must end with an explicit one-best-answer question sentence (ending in '?')")
 
     choices = q.get("answerChoices", [])
     if len(choices) != 4:

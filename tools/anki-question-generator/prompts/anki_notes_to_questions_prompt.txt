@@ -39,6 +39,12 @@ STRICT RULES:
 13. Output raw valid JSON only — no markdown fences, no code blocks, no extra text before or after.
 14. Produce exactly the number of questions requested.
 
+STEM FORMAT RULES:
+- Every stem must end with a clear final question sentence. No exceptions.
+- The final sentence must ask the learner to choose one best answer and must end with a question mark.
+- Use natural final-question wording that fits the tested concept. Acceptable examples include, but are not limited to: "Which of the following is the most likely diagnosis?", "Which of the following is the most appropriate next step?", "Which treatment is contraindicated in this patient?", "Which preventive measure is most appropriate?", and "Which physician response is most appropriate?"
+- Do not return a stem that is only a fragment, topic heading, lab value, diagnosis, or incomplete vignette.
+
 CRITICAL JSON RULE — explanationSections:
 explanationSections is a JSON ARRAY. Every element must be a plain object.
 
