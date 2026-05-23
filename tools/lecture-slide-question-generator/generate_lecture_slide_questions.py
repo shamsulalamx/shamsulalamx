@@ -3091,11 +3091,7 @@ def validate_figure_routes(prefix: str, q: dict[str, Any], images: list[dict[str
 def write_report(report: dict[str, Any], prefix: str) -> Path:
     path = REPORT_DIR / f"{prefix}_{now_stamp()}.json"
     write_json(path, report)
-    try:
-        display_path = path.relative_to(BASE_DIR)
-    except ValueError:
-        display_path = path
-    log(f"Report -> {display_path}")
+    log(f"Report -> {display_path(path)}")
     return path
 
 
