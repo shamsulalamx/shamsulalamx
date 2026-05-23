@@ -1,0 +1,20 @@
+name: UOGA Domain Guard
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  uoga-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Validate domain isolation
+        run: python scripts/uoga_dependency_graph_validator.py

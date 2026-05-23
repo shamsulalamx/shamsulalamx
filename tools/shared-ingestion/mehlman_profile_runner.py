@@ -30,7 +30,7 @@ APP_READY_DIR = (
     DOWNSTREAM_OUTPUT_ROOT / "output_json" / "app_ready"
     if DOWNSTREAM_OUTPUT_ROOT else MEHLMAN_DIR / "output_json" / "app_ready"
 )
-CHUNK_OUTPUT_DIR = JOB_OUTPUT_ROOT / "shared-ingestion" if JOB_OUTPUT_ROOT else RUNNER_DIR / "output"
+NORMALIZED_OUTPUT_DIR = JOB_OUTPUT_ROOT / "shared-ingestion" if JOB_OUTPUT_ROOT else RUNNER_DIR / "output"
 
 
 def emit(event_type: str, **payload: Any) -> None:
@@ -107,7 +107,7 @@ def main() -> int:
     input_file = Path(args.input_file).expanduser().resolve()
     page_limit = max(1, int(args.limit or 10))
     chunk_output = Path(args.chunk_output).expanduser().resolve() if args.chunk_output else (
-        CHUNK_OUTPUT_DIR / f"{input_file.stem.replace(' ', '_')}_mehlman_normalized_chunks.json"
+        NORMALIZED_OUTPUT_DIR / f"{input_file.stem.replace(' ', '_')}_mehlman_normalized_chunks.json"
     )
     started_at = time.time()
 

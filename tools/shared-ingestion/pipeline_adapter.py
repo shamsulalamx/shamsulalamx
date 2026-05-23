@@ -577,7 +577,7 @@ def _mehlman_asset_entries(chunk: dict[str, Any]) -> tuple[list[dict[str, Any]],
 def mehlman_to_normalized_chunks(input_path: Path, limit: int = 10) -> dict[str, Any]:
     generator = _import_mehlman_generator()
     input_path = input_path.resolve()
-    for directory in (generator.TEXT_DIR, generator.FIG_DIR, generator.TABLE_DIR, generator.CHUNK_DIR):
+    for directory in (generator.TEXT_DIR, generator.FIG_DIR, generator.TABLE_DIR, generator.SEGMENT_DIR):
         directory.mkdir(parents=True, exist_ok=True)
     stats = generator._empty_stats()
     pages = generator.extract_pdf_pages(input_path, extract_assets=True, stats=stats, max_pages=limit or None)

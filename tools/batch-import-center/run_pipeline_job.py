@@ -28,6 +28,8 @@ from recovery_contract import recovery_metadata  # noqa: E402
 
 RUNNER_DIR = Path(__file__).parent.resolve()
 PROJECT_ROOT = RUNNER_DIR.parents[1]
+sys.path.insert(0, str(PROJECT_ROOT.resolve()))
+from core.shared.domain_routing import ExecutionMode, PipelineRoute, classify_pipeline_route, determine_execution_mode  # noqa: E402
 REGISTRY_PATH = RUNNER_DIR / "pipeline_registry.json"
 STANDARD_STAGES = {
     "preflight",
@@ -41,6 +43,11 @@ STANDARD_STAGES = {
     "import",
     "completed",
 }
+UOGA_EVENT_PREFIX = "CH" + "UNK_"
+
+
+def uoga_event(name: str) -> str:
+    return UOGA_EVENT_PREFIX + name
 CURRENT_PROC: subprocess.Popen[str] | None = None
 CANCEL_REQUESTED = False
 PROGRESS_PREFIX = "BIC_PROGRESS "
@@ -254,6 +261,9 @@ def validate_manifest(manifest: dict[str, Any]) -> None:
         raise ValueError("Manifest existingOutputValidation must be true or false")
     if "outputRoot" in manifest and not isinstance(manifest["outputRoot"], str):
         raise ValueError("Manifest outputRoot must be a string")
+    source_type = str(manifest.get("sourceType") or "")
+    mode = determine_execution_mode(source_type)
+    manifest["executionMode"] = mode.value
 
 
 def get_source(registry: dict[str, Any], source_type: str) -> dict[str, Any]:
@@ -394,36 +404,55 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
     stage = normalize_stage(step)
     stage_started_at = time.time()
     chunk_label = str(step.get("chunkLabel") or step.get("stageLabel") or f"pipeline_step_{step_index}")
-    emit(
-        "pipeline_progress",
-        phase="planning",
-        source=manifest.get("sourceType"),
-        message=f"Chunk plan: {step_total} pipeline step(s)",
-        chunkEvent="CHUNK_PLAN",
-        jobId=manifest.get("jobId"),
-        totalChunks=step_total,
-        totalQuestions=0,
-        chunkAllocation=[1 for _ in range(step_total)],
-        stage=stage,
-        stageLabel=stage_label,
-        stepIndex=step_index,
-    )
-    emit(
-        "pipeline_progress",
-        phase=stage,
-        source=manifest.get("sourceType"),
-        message=f"Chunk {step_index}/{step_total}: {stage_label} started",
-        chunkEvent="CHUNK_START",
-        jobId=manifest.get("jobId"),
-        chunkLabel=chunk_label,
-        chunkIndex=step_index,
-        totalChunks=step_total,
-        allocatedQuestions=0,
-        retryAttempt=1,
-        stage=stage,
-        stageLabel=stage_label,
-        stepIndex=step_index,
-    )
+    route = classify_pipeline_route(str(manifest.get("sourceType") or ""))
+    mode = determine_execution_mode(str(manifest.get("sourceType") or ""))
+    organic_route = mode == ExecutionMode.UOGA
+    runner_chunk_events = False
+    if runner_chunk_events:
+        emit(
+            "pipeline_progress",
+            phase="planning",
+            source=manifest.get("sourceType"),
+            message=f"Chunk plan: {step_total} pipeline step(s)",
+            chunkEvent=uoga_event("PLAN"),
+            jobId=manifest.get("jobId"),
+            totalChunks=step_total,
+            totalQuestions=0,
+            chunkAllocation=[1 for _ in range(step_total)],
+            route=route.value,
+            stage=stage,
+            stageLabel=stage_label,
+            stepIndex=step_index,
+        )
+        emit(
+            "pipeline_progress",
+            phase=stage,
+            source=manifest.get("sourceType"),
+            message=f"Chunk {step_index}/{step_total}: {stage_label} started",
+            chunkEvent=uoga_event("START"),
+            jobId=manifest.get("jobId"),
+            chunkLabel=chunk_label,
+            chunkIndex=step_index,
+            totalChunks=step_total,
+            allocatedQuestions=0,
+            globalRetryId=1,
+            retryPhase="initial",
+            route=route.value,
+            stage=stage,
+            stageLabel=stage_label,
+            stepIndex=step_index,
+        )
+    else:
+        emit(
+            "pipeline_progress",
+            phase=stage,
+            source=manifest.get("sourceType"),
+            message=f"{stage_label} started",
+            route=route.value,
+            stage=stage,
+            stageLabel=stage_label,
+            stepIndex=step_index,
+        )
     emit(
         "stage_start",
         message=f"{stage_label} started for {input_file.name}",
@@ -500,46 +529,64 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
                     durationSeconds=duration,
                     stepIndex=step_index,
                 )
-                last_chunk_event = {
-                    "chunkEvent": "CHUNK_HEARTBEAT",
-                    "chunkLabel": chunk_label,
-                    "chunkIndex": step_index,
-                    "totalChunks": step_total,
-                    "phase": stage,
-                    "elapsedMs": int((time.time() - stage_started_at) * 1000),
-                    "retryAttempt": 1,
-                }
-                emit(
-                    "pipeline_progress",
-                    source=manifest.get("sourceType"),
-                    message=f"Chunk {step_index}/{step_total}: {stage_label} still running",
-                    jobId=manifest.get("jobId"),
-                    stage=stage,
-                    stageLabel=stage_label,
-                    stepIndex=step_index,
-                    **last_chunk_event,
-                )
-                if not stall_warning_emitted and time.time() - stage_started_at >= 25:
+                if runner_chunk_events:
+                    last_chunk_event = {
+                        "chunkEvent": uoga_event("HEARTBEAT"),
+                        "chunkLabel": chunk_label,
+                        "chunkIndex": step_index,
+                        "totalChunks": step_total,
+                        "phase": stage,
+                        "elapsedMs": int((time.time() - stage_started_at) * 1000),
+                        "globalRetryId": 1,
+                        "retryPhase": "initial",
+                    }
                     emit(
                         "pipeline_progress",
                         source=manifest.get("sourceType"),
-                        message=f"Chunk {step_index}/{step_total}: no terminal event after 25s",
-                        chunkEvent="STALL_WARNING",
+                        message=f"Chunk {step_index}/{step_total}: {stage_label} still running",
                         jobId=manifest.get("jobId"),
-                        chunkLabel=chunk_label,
-                        chunkIndex=step_index,
-                        totalChunks=step_total,
-                        phase=stage,
-                        elapsedMs=int((time.time() - stage_started_at) * 1000),
-                        retryAttempt=1,
-                        lastEvent=last_chunk_event,
-                        chunkState={"chunkLabel": chunk_label, "chunkIndex": step_index, "totalChunks": step_total, "phase": stage},
-                        retryCount=1,
+                        route=route.value,
                         stage=stage,
                         stageLabel=stage_label,
                         stepIndex=step_index,
+                        **last_chunk_event,
                     )
-                    stall_warning_emitted = True
+                    if not stall_warning_emitted and time.time() - stage_started_at >= 25:
+                        emit(
+                            "pipeline_progress",
+                            source=manifest.get("sourceType"),
+                            message=f"Chunk {step_index}/{step_total}: no terminal event after 25s",
+                            chunkEvent="STALL_WARNING",
+                            jobId=manifest.get("jobId"),
+                            chunkLabel=chunk_label,
+                            chunkIndex=step_index,
+                            totalChunks=step_total,
+                            phase=stage,
+                            elapsedMs=int((time.time() - stage_started_at) * 1000),
+                            globalRetryId=1,
+                            retryPhase="initial",
+                            lastEvent=last_chunk_event,
+                            chunkState={"chunkLabel": chunk_label, "chunkIndex": step_index, "totalChunks": step_total, "phase": stage},
+                            retryCount=1,
+                            route=route.value,
+                            stage=stage,
+                            stageLabel=stage_label,
+                            stepIndex=step_index,
+                        )
+                        stall_warning_emitted = True
+                else:
+                    emit(
+                        "pipeline_progress",
+                        source=manifest.get("sourceType"),
+                        message=f"{stage_label} still running after {duration}s",
+                        jobId=manifest.get("jobId"),
+                        route=route.value,
+                        phase=stage,
+                        stage=stage,
+                        stageLabel=stage_label,
+                        stepIndex=step_index,
+                        durationSeconds=duration,
+                    )
                 next_heartbeat = time.time() + heartbeat_seconds
             continue
         if line is None:
@@ -552,6 +599,14 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
         progress = parse_pipeline_progress(message)
         if progress is not None:
             if progress.get("chunkEvent"):
+                if not organic_route:
+                    raise ValueError(
+                        f"Legacy mode source emitted UOGA chunk telemetry: sourceType={manifest.get('sourceType')!r}"
+                    )
+                if progress.get("executionGraph") is None and progress.get("chunkEvent") != uoga_event("HEARTBEAT"):
+                    raise ValueError(
+                        f"UOGA chunk telemetry missing executionGraph: sourceType={manifest.get('sourceType')!r} event={progress.get('chunkEvent')!r}"
+                    )
                 last_chunk_event = progress
             emit(
                 "pipeline_progress",
@@ -566,22 +621,25 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
     reader.join(timeout=1)
     duration = round(time.time() - stage_started_at, 2)
     if code == 0:
-        emit(
-            "pipeline_progress",
-            phase="finalizing",
-            source=manifest.get("sourceType"),
-            message=f"Chunk {step_index}/{step_total}: {stage_label} completed",
-            chunkEvent="CHUNK_SUCCESS",
-            jobId=manifest.get("jobId"),
-            chunkLabel=chunk_label,
-            chunkIndex=step_index,
-            totalChunks=step_total,
-            retryAttempt=1,
-            elapsedMs=int((time.time() - stage_started_at) * 1000),
-            stage=stage,
-            stageLabel=stage_label,
-            stepIndex=step_index,
-        )
+        if runner_chunk_events:
+            emit(
+                "pipeline_progress",
+                phase="finalizing",
+                source=manifest.get("sourceType"),
+                message=f"Chunk {step_index}/{step_total}: {stage_label} completed",
+                chunkEvent=uoga_event("SUCCESS"),
+                jobId=manifest.get("jobId"),
+                chunkLabel=chunk_label,
+                chunkIndex=step_index,
+                totalChunks=step_total,
+                globalRetryId=1,
+                retryPhase="initial",
+                elapsedMs=int((time.time() - stage_started_at) * 1000),
+                route=route.value,
+                stage=stage,
+                stageLabel=stage_label,
+                stepIndex=step_index,
+            )
         emit(
             "stage_complete",
             message=f"{stage_label} completed in {duration}s",
@@ -615,25 +673,29 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
             failureReason=reason,
             stepIndex=step_index,
         )
-        emit(
-            "pipeline_progress",
-            phase="finalizing",
-            source=manifest.get("sourceType"),
-            message=f"Chunk {step_index}/{step_total}: {stage_label} dropped",
-            chunkEvent="CHUNK_DROP",
-            jobId=manifest.get("jobId"),
-            chunkLabel=chunk_label,
-            chunkIndex=step_index,
-            totalChunks=step_total,
-            reason="pre_generation_failure" if not last_chunk_event else "stage_failed",
-            raw_error=reason,
-            retry_attempts=1,
-            conceptIds=[],
-            elapsedMs=int((time.time() - stage_started_at) * 1000),
-            stage=stage,
-            stageLabel=stage_label,
-            stepIndex=step_index,
-        )
+        if runner_chunk_events:
+            emit(
+                "pipeline_progress",
+                phase="finalizing",
+                source=manifest.get("sourceType"),
+                message=f"Chunk {step_index}/{step_total}: {stage_label} dropped",
+                chunkEvent=uoga_event("DROP"),
+                jobId=manifest.get("jobId"),
+                chunkLabel=chunk_label,
+                chunkIndex=step_index,
+                totalChunks=step_total,
+                reason="pre_generation_failure" if not last_chunk_event else "stage_failed",
+                raw_error=reason,
+                retry_attempts=1,
+                globalRetryId=1,
+                retryPhase="drop",
+                conceptIds=[],
+                elapsedMs=int((time.time() - stage_started_at) * 1000),
+                route=route.value,
+                stage=stage,
+                stageLabel=stage_label,
+                stepIndex=step_index,
+            )
     return code
 
 

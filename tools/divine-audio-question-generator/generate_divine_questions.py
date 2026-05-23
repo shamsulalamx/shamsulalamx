@@ -60,7 +60,7 @@ _BASE      = Path(__file__).parent
 AUDIO_DIR  = _BASE / "input_audio"
 RAW_DIR    = _BASE / "transcripts" / "raw"
 CLEANED_DIR = _BASE / "transcripts" / "cleaned"
-CHUNK_DIR  = _BASE / "output_json" / "chunks"
+SEGMENT_DIR  = _BASE / "output_json" / "chunks"
 GEN_DIR    = _BASE / "output_json" / "generated"
 DEBUG_DIR  = _BASE / "output_json" / "generated" / "debug"
 APP_DIR    = _BASE / "output_json" / "app_ready"
@@ -127,7 +127,7 @@ def _resolve_selected_transcript(raw_path: str) -> Path:
 
 
 def _apply_output_dir(raw_path: str) -> Path:
-    global CHUNK_DIR, GEN_DIR, DEBUG_DIR, APP_DIR, REPORT_DIR
+    global SEGMENT_DIR, GEN_DIR, DEBUG_DIR, APP_DIR, REPORT_DIR
 
     output_root = Path(raw_path).expanduser()
     if not output_root.is_absolute():
@@ -136,7 +136,7 @@ def _apply_output_dir(raw_path: str) -> Path:
         output_root = output_root.resolve()
     if output_root.exists() and not output_root.is_dir():
         raise ValueError(f"--output-dir must be a directory path: {output_root}")
-    CHUNK_DIR = output_root / "chunks"
+    SEGMENT_DIR = output_root / "chunks"
     GEN_DIR = output_root / "generated"
     DEBUG_DIR = output_root / "generated" / "debug"
     APP_DIR = output_root / "app_ready"
@@ -481,7 +481,7 @@ def _process_cleaned_transcript(
 
     # Stage 4: Chunk
     chunks = _uw.split_into_chunks(cleaned_text, max_chars=3000)
-    chunk_path = CHUNK_DIR / f"{stem}_chunks.json"
+    chunk_path = SEGMENT_DIR / f"{stem}_chunks.json"
     chunk_path.write_text(
         json.dumps(
             {"sourceFile": f"{stem}_cleaned.txt", "chunks": chunks},
@@ -735,7 +735,7 @@ def main() -> None:
     # ── Create all directories ─────────────────────────────────────────────────
     for d in (
         AUDIO_DIR, RAW_DIR, CLEANED_DIR,
-        CHUNK_DIR, GEN_DIR, DEBUG_DIR, APP_DIR, REPORT_DIR,
+        SEGMENT_DIR, GEN_DIR, DEBUG_DIR, APP_DIR, REPORT_DIR,
     ):
         d.mkdir(parents=True, exist_ok=True)
 
@@ -907,7 +907,7 @@ def main() -> None:
             try:
                 cleaned_text = cf.read_text(encoding="utf-8")
                 chunks = _uw.split_into_chunks(cleaned_text, max_chars=3000)
-                chunk_path = CHUNK_DIR / f"{stem}_chunks.json"
+                chunk_path = SEGMENT_DIR / f"{stem}_chunks.json"
                 chunk_path.write_text(
                     json.dumps(
                         {"sourceFile": cf.name, "chunks": chunks},

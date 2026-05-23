@@ -49,7 +49,7 @@ INPUT_DIR   = _BASE / "input_pdfs"
 TEXT_DIR    = _BASE / "extracted_text"
 FIG_DIR     = _BASE / "extracted_figures"
 TABLE_DIR   = _BASE / "extracted_tables"
-CHUNK_DIR   = _BASE / "output_json" / "chunks"
+SEGMENT_DIR   = _BASE / "output_json" / "chunks"
 GEN_DIR     = _BASE / "output_json" / "generated"
 DEBUG_DIR   = _BASE / "output_json" / "generated" / "debug"
 APP_DIR     = _BASE / "output_json" / "app_ready"
@@ -84,7 +84,7 @@ _HIGH_CONF_PX = 200
 
 
 def _apply_output_dir(raw_path: str) -> Path:
-    global TEXT_DIR, FIG_DIR, TABLE_DIR, CHUNK_DIR, GEN_DIR, DEBUG_DIR, APP_DIR, REPORT_DIR
+    global TEXT_DIR, FIG_DIR, TABLE_DIR, SEGMENT_DIR, GEN_DIR, DEBUG_DIR, APP_DIR, REPORT_DIR
 
     output_root = Path(raw_path).expanduser()
     if not output_root.is_absolute():
@@ -96,7 +96,7 @@ def _apply_output_dir(raw_path: str) -> Path:
     TEXT_DIR = output_root / "extracted_text"
     FIG_DIR = output_root / "extracted_figures"
     TABLE_DIR = output_root / "extracted_tables"
-    CHUNK_DIR = output_root / "output_json" / "chunks"
+    SEGMENT_DIR = output_root / "output_json" / "chunks"
     GEN_DIR = output_root / "output_json" / "generated"
     DEBUG_DIR = output_root / "output_json" / "generated" / "debug"
     APP_DIR = output_root / "output_json" / "app_ready"
@@ -453,7 +453,7 @@ def process_pdf(
     stats   = _empty_stats()
 
     text_path  = TEXT_DIR  / f"{artifact_stem}_text.json"
-    chunk_path = CHUNK_DIR / f"{artifact_stem}_chunks.json"
+    chunk_path = SEGMENT_DIR / f"{artifact_stem}_chunks.json"
 
     # ── Stage 1: Per-page text (and asset) extraction ─────────────────────────
     if mode == "chunk_only":
@@ -836,7 +836,7 @@ def main() -> None:
     # Create output dirs
     for d in (
         TEXT_DIR, FIG_DIR, TABLE_DIR,
-        CHUNK_DIR, GEN_DIR, DEBUG_DIR, APP_DIR, REPORT_DIR,
+        SEGMENT_DIR, GEN_DIR, DEBUG_DIR, APP_DIR, REPORT_DIR,
     ):
         d.mkdir(parents=True, exist_ok=True)
 

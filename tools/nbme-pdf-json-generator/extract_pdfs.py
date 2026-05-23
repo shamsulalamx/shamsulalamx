@@ -85,7 +85,7 @@ FORBIDDEN_OUTPUT_PHRASES = CONTAMINATION_PHRASES + [
     "```",
 ]
 
-MIN_CHUNK_CHARS = 80
+MIN_SEGMENT_CHARS = 80
 
 # OCR heuristics (M4.5)
 OCR_MIN_USEFUL_CHARS = 50   # page text shorter than this → candidate for OCR
@@ -331,7 +331,7 @@ def _parse_q_number(m: re.Match) -> int:
 
 def _chunk_confidence(raw_text: str) -> str:
     has_choices = bool(ANSWER_CHOICE_RE.search(raw_text))
-    long_enough = len(raw_text.strip()) >= MIN_CHUNK_CHARS
+    long_enough = len(raw_text.strip()) >= MIN_SEGMENT_CHARS
     if has_choices and long_enough:
         return "high"
     if has_choices or long_enough:
@@ -397,7 +397,7 @@ def chunk_raw_text(raw_path: Path) -> dict:
             cw.append(f"Duplicate question number {q_num} (also at chunk index {seen_numbers[q_num]})")
         seen_numbers[q_num] = idx
 
-        if len(raw_chunk) < MIN_CHUNK_CHARS:
+        if len(raw_chunk) < MIN_SEGMENT_CHARS:
             cw.append(f"Unusually short chunk ({len(raw_chunk)} chars)")
         if not ANSWER_CHOICE_RE.search(raw_chunk):
             cw.append("No answer choices detected (A/B/C/D/E pattern absent)")

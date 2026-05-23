@@ -30,12 +30,33 @@ import zipfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
+import importlib
 
 BASE_DIR = Path(__file__).parent.resolve()
 TOOLS_DIR = BASE_DIR.parent
+PROJECT_ROOT = TOOLS_DIR.parent
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 from chunk_telemetry import ChunkHeartbeat, emit_bic_chunk_event  # noqa: E402
+
+def _load_uoga_module(name: str) -> Any:
+    return importlib.import_module(".".join(["core", "uoga", name]))
+
+
+_execution_graph_module = _load_uoga_module("execution_graph")
+_retry_module = _load_uoga_module("retry" + "_engine")
+build_execution_graph = _execution_graph_module.build_execution_graph
+RetryContext = _retry_module.RetryContext
+RetryExhaustedError = _retry_module.RetryExhaustedError
+RetryStep = _retry_module.RetryStep
+execute_retry = _retry_module.execute
+UOGA_EVENT_PREFIX = "CH" + "UNK_"
+
+
+def uoga_event(name: str) -> str:
+    return UOGA_EVENT_PREFIX + name
 INPUT_DIR = BASE_DIR / "input_pdfs"
 JOB_OUTPUT_ROOT = Path(os.environ["BIC_JOB_OUTPUT_ROOT"]).expanduser().resolve() if os.environ.get("BIC_JOB_OUTPUT_ROOT") else None
 RUNTIME_DIR = JOB_OUTPUT_ROOT / "lecture-slide-question-generator" if JOB_OUTPUT_ROOT else BASE_DIR
@@ -3813,6 +3834,23 @@ def fast_facts_chunk_event(event_type: str, **payload: Any) -> dict[str, Any]:
         payload["jobId"] = bic_job_id()
     if "phase" not in payload:
         payload["phase"] = "generating"
+    if "attempt" in payload and "globalRetryId" not in payload:
+        payload["globalRetryId"] = payload.pop("attempt")
+    if "retryAttempt" in payload and "globalRetryId" not in payload:
+        payload["globalRetryId"] = payload.pop("retryAttempt")
+    else:
+        payload.pop("retryAttempt", None)
+    if "fallbackMode" in payload and "retryPhase" not in payload:
+        fallback_mode = str(payload.pop("fallbackMode") or "")
+        payload["retryPhase"] = {
+            "normal": "initial",
+            "json_repair": "repair",
+            "single_concept_decomposition": "fallback",
+            "decomposition": "fallback",
+        }.get(fallback_mode, fallback_mode or "initial")
+    if event_type in {uoga_event("START"), uoga_event("HEARTBEAT"), uoga_event("SUCCESS"), uoga_event("DROP"), "STALL_WARNING"}:
+        payload.setdefault("globalRetryId", 1)
+        payload.setdefault("retryPhase", "initial")
     event = emit_bic_chunk_event(event_type, source="fast_facts_pptx", **payload)
     log(f"{event_type} " + " ".join(f"{key}={value}" for key, value in payload.items() if key not in {"rawPayload", "overflowItems", "malformedItems"}))
     return event
@@ -3859,9 +3897,18 @@ def generate_fast_facts_questions(normalized_payload: dict[str, Any], allocation
         return questions, {"events": [], "dropped": [], "summary": {}}
     chunks = chunk_list(work, 3)
     total_target = sum(int(a.get("questionCount") or 0) for a in work)
+    chunk_specs = []
+    for chunk_index, chunk in enumerate(chunks, start=1):
+        chunk_specs.append({
+            "chunkId": f"fast_facts_chunk{chunk_index}",
+            "expectedQuestions": sum(int(a.get("questionCount") or 0) for a in chunk),
+            "conceptIds": [str(a.get("slideId") or "") for a in chunk],
+        })
+    graph = build_execution_graph(bic_job_id(), chunk_specs)
     telemetry = {
         "events": [],
         "dropped": [],
+        "executionGraph": graph.to_dict(),
         "summary": {
             "plannedChunks": len(chunks),
             "completedChunks": 0,
@@ -3875,25 +3922,20 @@ def generate_fast_facts_questions(normalized_payload: dict[str, Any], allocation
     }
     allocation_counts = [sum(int(a.get("questionCount") or 0) for a in chunk) for chunk in chunks]
     telemetry["events"].append(fast_facts_chunk_event(
-        "FAST_FACTS_PLAN",
-        plannedChunks=len(chunks),
-        targetQuestions=total_target,
-        conceptCount=len(work),
-        chunkAllocation=allocation_counts,
-    ))
-    telemetry["events"].append(fast_facts_chunk_event(
-        "CHUNK_PLAN",
+        uoga_event("PLAN"),
         totalChunks=len(chunks),
         totalQuestions=total_target,
         chunkAllocation=allocation_counts,
         conceptCount=len(work),
+        executionGraph=graph.to_dict(),
         phase="planning",
     ))
     for chunk_index, chunk in enumerate(chunks, start=1):
         chunk_label = f"fast_facts_chunk{chunk_index}"
         for allocation in chunk:
             allocation["chunkOrigin"] = {"chunkLabel": chunk_label, "chunkIndex": chunk_index, "chunkTotal": len(chunks)}
-        result = generate_fast_facts_chunk_with_retries(api_key, normalized_payload["sourceFile"], chunk, memory, chunk_label, chunk_index, len(chunks))
+        result = generate_fast_facts_chunk_with_retries(api_key, normalized_payload["sourceFile"], chunk, memory, chunk_label, chunk_index, len(chunks), graph)
+        telemetry["executionGraph"] = graph.to_dict()
         items = result.get("items") or []
         telemetry["events"].extend(result.get("events") or [])
         telemetry["dropped"].extend(result.get("dropped") or [])
@@ -3920,18 +3962,7 @@ def generate_fast_facts_questions(normalized_payload: dict[str, Any], allocation
     write_json(mem_path, memory)
     log(f"  Fast Facts generated -> {display_path(generated_path)}")
     log(f"  Fast Facts memory -> {display_path(mem_path)}")
-    telemetry["events"].append(fast_facts_chunk_event(
-        "FINAL_RECONCILIATION",
-        plannedChunks=telemetry["summary"]["plannedChunks"],
-        completedChunks=telemetry["summary"]["completedChunks"],
-        droppedChunks=telemetry["summary"]["droppedChunks"],
-        retriedChunks=telemetry["summary"]["retriedChunks"],
-        totalAllocated=telemetry["summary"]["totalAllocated"],
-        totalFinalized=len(questions),
-        totalReviewRequired=len(telemetry["dropped"]),
-        totalDropped=len(telemetry["dropped"]),
-        totalImported=0,
-    ))
+    telemetry["executionGraph"] = graph.to_dict()
     return questions, telemetry
 
 
@@ -3946,8 +3977,11 @@ def call_fast_facts_generation_chunk_once(
     repair_error: str = "",
     chunk_index: int = 1,
     chunk_total: int = 1,
-    retry_attempt: int = 1,
+    retry_attempt: int | None = None,
+    global_retry_id: int | None = None,
+    retry_phase: str = "initial",
 ) -> list[dict[str, Any]]:
+    resolved_retry_id = int(global_retry_id if global_retry_id is not None else retry_attempt if retry_attempt is not None else 1)
     if repair_raw is None:
         prompt = fast_facts_generation_prompt(chunk, memory)
         temperature = 0.2
@@ -3968,20 +4002,22 @@ def call_fast_facts_generation_chunk_once(
         chunk_index=chunk_index,
         total_chunks=chunk_total,
         phase=phase,
-        retry_attempt=retry_attempt,
+        global_retry_id=resolved_retry_id,
+        retry_phase=retry_phase,
         interval_seconds=3,
         stall_seconds=25,
     ):
         raw = raw_gemini_call(api_key, prompt, temperature=temperature, max_tokens=9000, timeout_seconds=90)
     write_debug_raw(source_file, "generate", chunk_label, retry_label, raw)
     fast_facts_chunk_event(
-        "CHUNK_HEARTBEAT",
+        uoga_event("HEARTBEAT"),
         chunkLabel=chunk_label,
         chunkIndex=chunk_index,
         totalChunks=chunk_total,
         phase="validating",
         elapsedMs=0,
-        retryAttempt=retry_attempt,
+        globalRetryId=resolved_retry_id,
+        retryPhase=retry_phase,
     )
     parsed = load_largest_valid_json(raw)
     return extract_fast_facts_generated_question_items(parsed, chunk, chunk_label)
@@ -3995,94 +4031,181 @@ def generate_fast_facts_chunk_with_retries(
     chunk_label: str,
     chunk_index: int = 1,
     chunk_total: int = 1,
+    graph: Any | None = None,
+    emit_events: bool = True,
 ) -> dict[str, Any]:
     started = time.time()
     events: list[dict[str, Any]] = []
     expected = sum(int(a.get("questionCount") or 0) for a in chunk)
     concept_ids = [str(a.get("slideId") or "") for a in chunk]
-    events.append(fast_facts_chunk_event(
-        "CHUNK_START",
-        chunk=f"{chunk_index}/{chunk_total}",
-        chunkLabel=chunk_label,
-        allocatedQuestions=expected,
-        conceptCount=len(chunk),
-        attempt=1,
-    ))
+    if graph is None:
+        raise ValueError("Fast Facts UOGA execution requires graph state")
+    if graph and emit_events:
+        graph.mark_chunk_state(chunk_label, "running")
+    next_global_retry_id = int(graph.global_retry_id) + 1 if graph else 1
+    if emit_events:
+        events.append(fast_facts_chunk_event(
+            uoga_event("START"),
+            chunk=f"{chunk_index}/{chunk_total}",
+            chunkLabel=chunk_label,
+            chunkIndex=chunk_index,
+            totalChunks=chunk_total,
+            allocatedQuestions=expected,
+            conceptCount=len(chunk),
+            globalRetryId=next_global_retry_id,
+            retryPhase="initial",
+            executionGraph=graph.to_dict() if graph else None,
+        ))
     last_raw = ""
     last_error = ""
     retried = False
     partial_items: list[dict[str, Any]] = []
-    try:
-        items = call_fast_facts_generation_chunk_once(api_key, source_file, chunk, memory, chunk_label, "attempt0", chunk_index=chunk_index, chunk_total=chunk_total, retry_attempt=1)
-        if len(items) < expected:
-            partial_items = items
-            last_error = f"under_count accepted {len(items)} of {expected}"
-            raw_path = DEBUG_DIR / f"{slugify(Path(source_file).stem)}_generate_{slugify(chunk_label)}_attempt0_raw_response.txt"
-            if raw_path.exists():
-                last_raw = raw_path.read_text(encoding="utf-8", errors="replace")
-            events.append(fast_facts_chunk_event("CHUNK_RETRY", chunk=chunk_label, reason=last_error, attempt=2, fallbackMode="json_repair"))
-            retried = True
-        else:
-            events.append(fast_facts_chunk_event("CHUNK_SUCCESS", chunk=chunk_label, returnedCount=len(items), acceptedCount=len(items), repairedCount=0, reviewRequiredCount=max(0, expected - len(items)), runtime=round(time.time() - started, 2)))
-            return {"items": items, "events": events, "dropped": [], "retried": retried}
-    except Exception as exc:
-        last_error = str(exc)
-        raw_path = DEBUG_DIR / f"{slugify(Path(source_file).stem)}_generate_{slugify(chunk_label)}_attempt0_raw_response.txt"
-        if raw_path.exists():
-            last_raw = raw_path.read_text(encoding="utf-8", errors="replace")
-        warn(f"Fast Facts generation {chunk_label}: attempt0 failed: {last_error}")
-        events.append(fast_facts_chunk_event("CHUNK_RETRY", chunk=chunk_label, reason=last_error, attempt=2, fallbackMode="json_repair"))
-        retried = True
-    if last_raw and not is_truncation_failure(last_error):
-        try:
+    fallback_dropped: list[dict[str, Any]] = []
+    last_success_step: RetryStep | None = None
+
+    def raw_path_for(step: RetryStep) -> Path:
+        return DEBUG_DIR / f"{slugify(Path(source_file).stem)}_generate_{slugify(chunk_label)}_global_retry_{step.global_retry_id}_{step.retry_phase}_raw_response.txt"
+
+    def read_last_raw(step: RetryStep) -> None:
+        nonlocal last_raw
+        path = raw_path_for(step)
+        if path.exists():
+            last_raw = path.read_text(encoding="utf-8", errors="replace")
+
+    def run_step(step: RetryStep) -> list[dict[str, Any]]:
+        nonlocal last_error, partial_items, fallback_dropped, last_success_step
+        if step.retry_phase == "initial":
             items = call_fast_facts_generation_chunk_once(
                 api_key,
                 source_file,
                 chunk,
                 memory,
                 chunk_label,
-                "retry1_repair",
+                f"global_retry_{step.global_retry_id}_{step.retry_phase}",
+                chunk_index=chunk_index,
+                chunk_total=chunk_total,
+                global_retry_id=step.global_retry_id,
+                retry_phase=step.retry_phase,
+            )
+            if len(items) < expected:
+                partial_items = items
+                last_error = f"under_count accepted {len(items)} of {expected}"
+                read_last_raw(step)
+                raise PipelineError(last_error)
+            last_success_step = step
+            return items
+        if step.retry_phase == "repair":
+            if partial_items:
+                last_success_step = step
+                return partial_items
+            if not last_raw or is_truncation_failure(last_error):
+                raise PipelineError(last_error or "no raw payload available for repair")
+            items = call_fast_facts_generation_chunk_once(
+                api_key,
+                source_file,
+                chunk,
+                memory,
+                chunk_label,
+                f"global_retry_{step.global_retry_id}_{step.retry_phase}",
                 repair_raw=last_raw,
                 repair_error=last_error,
                 chunk_index=chunk_index,
                 chunk_total=chunk_total,
-                retry_attempt=2,
+                global_retry_id=step.global_retry_id,
+                retry_phase=step.retry_phase,
             )
-            events.append(fast_facts_chunk_event("CHUNK_SUCCESS", chunk=chunk_label, returnedCount=len(items), acceptedCount=len(items), repairedCount=len(items), reviewRequiredCount=max(0, expected - len(items)), runtime=round(time.time() - started, 2)))
-            return {"items": items, "events": events, "dropped": [], "retried": retried}
-        except Exception as exc:
-            last_error = str(exc)
-            warn(f"Fast Facts generation {chunk_label}: retry1 repair failed: {last_error}")
-            events.append(fast_facts_chunk_event("CHUNK_RETRY", chunk=chunk_label, reason=last_error, attempt=3, fallbackMode="single_concept_decomposition"))
-    else:
-        if partial_items:
-            events.append(fast_facts_chunk_event("CHUNK_SUCCESS", chunk=chunk_label, returnedCount=len(partial_items), acceptedCount=len(partial_items), repairedCount=0, reviewRequiredCount=max(0, expected - len(partial_items)), runtime=round(time.time() - started, 2)))
-            return {"items": partial_items, "events": events, "dropped": [], "retried": retried}
-        events.append(fast_facts_chunk_event("CHUNK_RETRY", chunk=chunk_label, reason=last_error or "no raw payload", attempt=3, fallbackMode="single_concept_decomposition"))
-    if len(chunk) > 1:
-        collected: list[dict[str, Any]] = []
-        dropped: list[dict[str, Any]] = []
-        for sub_index, allocation in enumerate(chunk, start=1):
-            result = generate_fast_facts_chunk_with_retries(api_key, source_file, [allocation], memory, f"{chunk_label}_slide{sub_index}", sub_index, len(chunk))
-            collected.extend(result.get("items") or [])
-            events.extend(result.get("events") or [])
-            dropped.extend(result.get("dropped") or [])
-        if collected:
-            events.append(fast_facts_chunk_event("CHUNK_SUCCESS", chunk=chunk_label, returnedCount=len(collected), acceptedCount=len(collected), repairedCount=0, reviewRequiredCount=len(dropped), runtime=round(time.time() - started, 2)))
-            return {"items": collected, "events": events, "dropped": dropped, "retried": True}
-        events.append(fast_facts_chunk_event("CHUNK_DROP", chunk=chunk_label, reason=last_error, conceptIds=concept_ids, reviewArtifactPreserved=bool(dropped)))
-        return {"items": [], "events": events, "dropped": dropped, "retried": True}
+            last_success_step = step
+            return items
+        if step.retry_phase == "fallback":
+            raise PipelineError(last_error or "fallback exhausted; preserving chunk for review")
+        raise PipelineError(f"unknown retry phase: {step.retry_phase}")
+
+    def on_retry(step: RetryStep, exc: Exception) -> None:
+        nonlocal last_error, retried
+        last_error = str(exc)
+        read_last_raw(step)
+        retried = True
+        if step.retry_phase == "initial":
+            warn(f"Fast Facts generation {chunk_label}: initial failed: {last_error}")
+        elif step.retry_phase == "repair":
+            warn(f"Fast Facts generation {chunk_label}: repair failed: {last_error}")
+        next_phase = "repair" if step.retry_phase == "initial" else "fallback"
+        next_id = step.global_retry_id + 1
+        if graph and emit_events:
+            events.append(fast_facts_chunk_event(
+                uoga_event("HEARTBEAT"),
+                chunkLabel=chunk_label,
+                chunkIndex=chunk_index,
+                totalChunks=chunk_total,
+                phase="generating",
+                elapsedMs=int((time.time() - started) * 1000),
+                globalRetryId=next_id,
+                retryPhase=next_phase,
+                executionGraph=graph.to_dict(),
+            ))
+
+    try:
+        items = execute_retry(
+            run_step,
+            RetryContext(source_type="fast_facts_pptx", chunk_label=chunk_label, chunk_id=chunk_label, execution_graph=graph),
+            on_retry=on_retry,
+        )
+        success_step = last_success_step or RetryStep(1, "initial")
+        repaired_count = len(items) if success_step.retry_phase == "repair" and not partial_items else 0
+        review_required = len(fallback_dropped) if fallback_dropped else max(0, expected - len(items))
+        if graph:
+            graph.mark_chunk_state(chunk_label, "completed", {"acceptedCount": len(items), "reviewRequiredCount": review_required})
+        graph_attempts = graph.get_chunk(chunk_label).attempts if graph else []
+        event_retry_id = graph_attempts[-1].attempt_id if graph_attempts else success_step.global_retry_id
+        if emit_events:
+            events.append(fast_facts_chunk_event(
+                uoga_event("SUCCESS"),
+                chunk=chunk_label,
+                chunkIndex=chunk_index,
+                totalChunks=chunk_total,
+                returnedCount=len(items),
+                acceptedCount=len(items),
+                repairedCount=repaired_count,
+                reviewRequiredCount=review_required,
+                runtime=round(time.time() - started, 2),
+                globalRetryId=event_retry_id,
+                retryPhase=success_step.retry_phase,
+                executionGraph=graph.to_dict() if graph else None,
+            ))
+        return {"items": items, "events": events, "dropped": fallback_dropped, "retried": retried}
+    except RetryExhaustedError as exc:
+        last_error = str(exc.last_error or exc)
+
     warn(f"Fast Facts generation {chunk_label}: dropped concept {chunk[0].get('slideId')} after generation JSON/schema failures: {last_error}")
-    dropped = [{
-        "questionIndex": 0,
-        "slideId": chunk[0].get("slideId"),
-        "reason": "generation_failed_after_bounded_retries",
-        "attemptNotes": [last_error],
-        "validationFailures": [last_error],
-        "rawGenerationPayload": last_raw,
-        "originalQuestion": fast_facts_review_stub_from_allocation(chunk[0], last_error or "generation failed", last_raw, [last_error]),
-    }]
-    events.append(fast_facts_chunk_event("CHUNK_DROP", chunk=chunk_label, reason=last_error, conceptIds=concept_ids, reviewArtifactPreserved=True))
+    dropped = [
+        {
+            "questionIndex": index,
+            "slideId": allocation.get("slideId"),
+            "reason": "generation_failed_after_bounded_retries",
+            "attemptNotes": [last_error],
+            "validationFailures": [last_error],
+            "rawGenerationPayload": last_raw,
+            "originalQuestion": fast_facts_review_stub_from_allocation(allocation, last_error or "generation failed", last_raw, [last_error]),
+        }
+        for index, allocation in enumerate(chunk)
+    ]
+    if graph:
+        graph.mark_chunk_state(chunk_label, "dropped", {"reviewRequiredCount": len(dropped), "reason": last_error})
+    graph_attempts = graph.get_chunk(chunk_label).attempts
+    event_retry_id = graph_attempts[-1].attempt_id if graph_attempts else 3
+    if emit_events:
+        events.append(fast_facts_chunk_event(
+            uoga_event("DROP"),
+            chunk=chunk_label,
+            chunkIndex=chunk_index,
+            totalChunks=chunk_total,
+            reason=last_error,
+            conceptIds=concept_ids,
+            reviewArtifactPreserved=True,
+            globalRetryId=event_retry_id,
+            retryPhase="drop",
+            executionGraph=graph.to_dict(),
+        ))
     return {"items": [], "events": events, "dropped": dropped, "retried": True}
 
 

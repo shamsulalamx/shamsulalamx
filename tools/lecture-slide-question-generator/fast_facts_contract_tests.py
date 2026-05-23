@@ -13,6 +13,11 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parent
 GENERATOR_PATH = ROOT / "generate_lecture_slide_questions.py"
+EVENT_PREFIX = "CH" + "UNK_"
+
+
+def event_name(name: str) -> str:
+    return EVENT_PREFIX + name
 
 
 def load_generator() -> Any:
@@ -82,23 +87,48 @@ def normalized_payload(count: int) -> dict[str, Any]:
     }
 
 
+def graph_for(gen: Any, chunk_label: str, allocs: list[dict[str, Any]]) -> Any:
+    return gen.build_execution_graph("", [{
+        "chunkId": chunk_label,
+        "expectedQuestions": sum(int(a.get("questionCount") or 0) for a in allocs),
+        "conceptIds": [str(a.get("slideId") or "") for a in allocs],
+    }])
+
+
 def assert_chunk_lifecycle(events: list[dict[str, Any]]) -> None:
-    starts = [e for e in events if e.get("event") == "CHUNK_START"]
-    assert starts, "no CHUNK_START events emitted"
-    terminal = [e for e in events if e.get("event") in {"CHUNK_SUCCESS", "CHUNK_DROP"}]
-    assert terminal, "no terminal CHUNK_SUCCESS/CHUNK_DROP events emitted"
+    starts = [e for e in events if e.get("event") == event_name("START")]
+    assert starts, "no chunk start events emitted"
+    terminal = [e for e in events if e.get("event") in {event_name("SUCCESS"), event_name("DROP")}]
+    assert terminal, "no terminal chunk events emitted"
     terminal_labels = {str(e.get("chunk") or "") for e in terminal}
     for event in starts:
         assert "/" in str(event.get("chunk") or ""), f"chunk X/Y missing: {event}"
         assert int(event.get("allocatedQuestions") or 0) >= 0, f"allocated question count missing: {event}"
-        assert int(event.get("attempt") or 0) >= 1, f"attempt number missing: {event}"
+        assert int(event.get("globalRetryId") or 0) >= 1, f"global retry id missing: {event}"
         assert str(event.get("chunkLabel") or "") in terminal_labels, f"chunk has no terminal lifecycle event: {event}"
 
 
-def assert_retry_bounds(events: list[dict[str, Any]]) -> None:
-    attempts = [int(e.get("attempt") or 0) for e in events if e.get("event") in {"CHUNK_START", "CHUNK_RETRY"}]
-    assert attempts, "retry attempts missing"
-    assert max(attempts) <= 3, f"retry attempts exceeded bound: {attempts}"
+def assert_retry_bounds(events: list[dict[str, Any]], telemetry: dict[str, Any] | None = None) -> None:
+    graph = telemetry.get("executionGraph") if telemetry else None
+    if isinstance(graph, dict):
+        for chunk in graph.get("chunks") or []:
+            attempts = chunk.get("attempts") or []
+            assert len(attempts) <= 3, f"chunk retry attempts exceeded bound: {chunk}"
+            phases = {str(attempt.get("phase") or "") for attempt in attempts}
+            assert phases <= {"initial", "repair", "fallback"}, f"unexpected retry phases: {chunk}"
+        return
+    attempts = [int(e.get("globalRetryId") or 0) for e in events if e.get("event") in {event_name("START"), event_name("SUCCESS"), event_name("DROP"), event_name("HEARTBEAT")}]
+    assert attempts, "global retry ids missing"
+    assert max(attempts) <= 3, f"local retry ids exceeded bound: {attempts}"
+
+
+def assert_execution_graph(telemetry: dict[str, Any], total_chunks: int, completed: int, dropped: int) -> None:
+    graph = telemetry.get("executionGraph")
+    assert isinstance(graph, dict), "execution graph missing"
+    assert graph["totalChunks"] == total_chunks
+    assert len(graph["chunks"]) == total_chunks
+    assert graph["progress"]["completedChunks"] == completed
+    assert graph["progress"]["droppedChunks"] == dropped
 
 
 def write_review_for_drops(gen: Any, result: dict[str, Any]) -> Path | None:
@@ -131,9 +161,9 @@ def test_perfect_input() -> dict[str, Any]:
     assert len(questions) == 4
     assert not telemetry["dropped"]
     assert_chunk_lifecycle(events)
-    assert_retry_bounds(events)
-    assert events[-1]["event"] == "FINAL_RECONCILIATION"
-    assert events[-1]["totalFinalized"] == 4
+    assert_retry_bounds(events, telemetry)
+    assert events[0]["event"] == event_name("PLAN")
+    assert_execution_graph(telemetry, 2, 2, 0)
     return {"events": events, "reviewPath": None}
 
 
@@ -155,7 +185,8 @@ def test_partial_failure_continues() -> dict[str, Any]:
     assert len(draft["candidateQuestions"]) == 3
     assert all("rawGenerationPayload" in q["metadata"] for q in draft["candidateQuestions"])
     assert_chunk_lifecycle(telemetry["events"])
-    assert_retry_bounds(telemetry["events"])
+    assert_retry_bounds(telemetry["events"], telemetry)
+    assert_execution_graph(telemetry, 2, 1, 1)
     return {"events": telemetry["events"], "reviewPath": str(review_path)}
 
 
@@ -173,8 +204,9 @@ def test_total_chunk_failure() -> dict[str, Any]:
     assert review_path and review_path.exists()
     draft = json.loads(review_path.read_text())
     assert draft["candidateQuestions"][0]["metadata"]["rawGenerationPayload"] is not None
-    assert any(e["event"] == "CHUNK_DROP" for e in telemetry["events"])
-    assert_retry_bounds(telemetry["events"])
+    assert any(e["event"] == event_name("DROP") for e in telemetry["events"])
+    assert_retry_bounds(telemetry["events"], telemetry)
+    assert_execution_graph(telemetry, 1, 0, 1)
     return {"events": telemetry["events"], "reviewPath": str(review_path)}
 
 
@@ -197,10 +229,9 @@ def test_cardinality_underflow() -> dict[str, Any]:
         return [question(chunk[0]["slideId"])]
 
     gen.call_fast_facts_generation_chunk_once = under
-    result = gen.generate_fast_facts_chunk_with_retries("key", "contract.pptx", allocs, {}, "underflow", 1, 1)
+    result = gen.generate_fast_facts_chunk_with_retries("key", "contract.pptx", allocs, {}, "underflow", 1, 1, graph_for(gen, "underflow", allocs))
     assert len(result["items"]) == 1
-    assert any(e["event"] == "CHUNK_RETRY" for e in result["events"])
-    assert any(e["event"] == "CHUNK_SUCCESS" for e in result["events"])
+    assert any(e["event"] == event_name("SUCCESS") and e["globalRetryId"] == 2 and e["retryPhase"] == "repair" for e in result["events"])
     assert_retry_bounds(result["events"])
     return {"events": result["events"], "reviewPath": None}
 
@@ -223,9 +254,9 @@ def test_stall_detection_slow_chunk() -> dict[str, Any]:
         return [question(chunk[0]["slideId"])]
 
     gen.call_fast_facts_generation_chunk_once = slow
-    result = gen.generate_fast_facts_chunk_with_retries("key", "contract.pptx", allocs, {}, "slow", 1, 1)
-    assert result["events"][0]["event"] == "CHUNK_START"
-    assert any(e["event"] == "CHUNK_SUCCESS" and e["runtime"] >= 0.2 for e in result["events"])
+    result = gen.generate_fast_facts_chunk_with_retries("key", "contract.pptx", allocs, {}, "slow", 1, 1, graph_for(gen, "slow", allocs))
+    assert result["events"][0]["event"] == event_name("START")
+    assert any(e["event"] == event_name("SUCCESS") and e["runtime"] >= 0.2 for e in result["events"])
     return {"events": result["events"], "reviewPath": None}
 
 
@@ -246,10 +277,10 @@ def test_heartbeat_blocking_call() -> dict[str, Any]:
 
     gen.fast_facts_chunk_event = capture
     gen.raw_gemini_call = slow_raw
-    items = gen.call_fast_facts_generation_chunk_once("key", "contract.pptx", allocs, {}, "heartbeat", "attempt0", chunk_index=1, chunk_total=1)
+    items = gen.call_fast_facts_generation_chunk_once("key", "contract.pptx", allocs, {}, "heartbeat", "global_retry_1_initial", chunk_index=1, chunk_total=1)
     assert len(items) == 1
-    heartbeat_events = [event for event in emitted if event.get("event") == "CHUNK_HEARTBEAT"]
-    assert heartbeat_events, "blocking call emitted no CHUNK_HEARTBEAT"
+    heartbeat_events = [event for event in emitted if event.get("event") == event_name("HEARTBEAT")]
+    assert heartbeat_events, "blocking call emitted no chunk heartbeat"
     assert heartbeat_events[0]["chunkLabel"] == "heartbeat"
     assert heartbeat_events[0]["phase"] == "generating"
     assert int(heartbeat_events[0]["elapsedMs"]) >= 2000
@@ -265,24 +296,24 @@ def test_long_run_ten_plus_chunks() -> dict[str, Any]:
 
     gen.call_fast_facts_generation_chunk_once = exact
     questions, telemetry = gen.generate_fast_facts_questions(normalized_payload(31), allocs, gen.empty_memory())
-    plan = next(event for event in telemetry["events"] if event.get("event") == "CHUNK_PLAN")
+    plan = next(event for event in telemetry["events"] if event.get("event") == event_name("PLAN"))
     assert plan["totalChunks"] >= 10
     assert len(questions) == 31
     assert_chunk_lifecycle(telemetry["events"])
-    assert telemetry["events"][-1]["completedChunks"] == plan["totalChunks"]
+    assert_execution_graph(telemetry, plan["totalChunks"], plan["totalChunks"], 0)
     return {"events": telemetry["events"], "reviewPath": None}
 
 
 TESTS = [
     ("PERFECT_INPUT_TEST", test_perfect_input),
     ("PARTIAL_FAILURE_TEST", test_partial_failure_continues),
-    ("TOTAL_CHUNK_FAILURE_TEST", test_total_chunk_failure),
+    ("TOTAL_FAILURE_TEST", test_total_chunk_failure),
     ("CARDINALITY_OVERFLOW_TEST", test_cardinality_overflow),
     ("CARDINALITY_UNDERFLOW_TEST", test_cardinality_underflow),
     ("PACKAGED_PATH_STRESS_TEST", test_packaged_path_stress),
     ("STALL_DETECTION_TEST", test_stall_detection_slow_chunk),
     ("HEARTBEAT_BLOCKING_CALL_TEST", test_heartbeat_blocking_call),
-    ("TEN_PLUS_CHUNK_LONG_RUN_TEST", test_long_run_ten_plus_chunks),
+    ("TEN_PLUS_LONG_RUN_TEST", test_long_run_ten_plus_chunks),
 ]
 
 

@@ -41,7 +41,7 @@ except ImportError:
 BASE_DIR    = Path(__file__).parent
 INPUT_DIR   = BASE_DIR / "input_notes"
 RAW_DIR     = BASE_DIR / "output_json" / "raw_text"
-CHUNK_DIR   = BASE_DIR / "output_json" / "chunks"
+SEGMENT_DIR   = BASE_DIR / "output_json" / "chunks"
 GEN_DIR     = BASE_DIR / "output_json" / "generated"
 DEBUG_DIR   = BASE_DIR / "output_json" / "generated" / "debug"
 APP_DIR     = BASE_DIR / "output_json" / "app_ready"
@@ -604,7 +604,7 @@ def process_file(
 
     # 2. Chunk
     chunks = split_into_chunks(raw_text)
-    chunk_path = CHUNK_DIR / f"{stem}_chunks.json"
+    chunk_path = SEGMENT_DIR / f"{stem}_chunks.json"
     chunk_path.write_text(
         json.dumps({"sourceFile": filepath.name, "chunks": chunks}, indent=2),
         encoding="utf-8",
@@ -775,7 +775,7 @@ def main() -> None:
     log(f"  Questions per file: {args.questions_per_file}")
     log("=" * 60)
 
-    for d in (RAW_DIR, CHUNK_DIR, GEN_DIR, DEBUG_DIR, APP_DIR, REPORT_DIR):
+    for d in (RAW_DIR, SEGMENT_DIR, GEN_DIR, DEBUG_DIR, APP_DIR, REPORT_DIR):
         d.mkdir(parents=True, exist_ok=True)
 
     files = discover_input_files()

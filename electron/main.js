@@ -1275,27 +1275,46 @@ async function runQueuedBatchJob(job) {
       progress: { phase: 'preflight', message: 'Batch runner starting.', updatedAt: new Date().toISOString() }
     });
     updateBatchJobRecord(job.jobId, { status: 'running', startedAt: new Date().toISOString() });
+    const deriveGraphProgress = graph => {
+      if (!graph || typeof graph !== 'object' || !Array.isArray(graph.chunks)) return null;
+      const totalChunks = Number(graph.totalChunks || graph.chunks.length || 0);
+      if (!totalChunks) return null;
+      const completedChunks = graph.chunks.filter(chunk => chunk && chunk.state === 'completed').length;
+      const active = graph.chunks.find(chunk => chunk && (chunk.state === 'running' || chunk.state === 'retrying'))
+        || graph.chunks.find(chunk => chunk && chunk.state === 'planned')
+        || null;
+      const attempts = active && Array.isArray(active.attempts) ? active.attempts : [];
+      const latestAttempt = attempts.length ? attempts[attempts.length - 1] : null;
+      return {
+        event: 'EXECUTION_GRAPH',
+        totalChunks,
+        totalQuestions: 0,
+        chunkAllocation: graph.chunks.map(chunk => Number(chunk.expectedQuestions || 0)),
+        completedChunks,
+        activeChunk: active ? String(active.chunkId || '') : '',
+        chunkIndex: active ? Number(active.index || 0) : 0,
+        currentPhase: active ? String(active.state || '') : '',
+        retryState: latestAttempt ? {
+          globalRetryId: Number(latestAttempt.attemptId || 0),
+          retryPhase: latestAttempt.phase || '',
+          status: latestAttempt.status || '',
+          reason: latestAttempt.error || ''
+        } : null,
+        heartbeatLastSeen: '',
+        elapsedMs: 0,
+        lastEvent: 'EXECUTION_GRAPH',
+        executionGraph: graph
+      };
+    };
     const sendProgress = eventPayload => {
       const enriched = { jobId: manifest.jobId, ...eventPayload };
       appendBatchLog(job.logsPath, enriched);
-      const chunkProgress = enriched.chunkEvent ? {
-        event: enriched.chunkEvent,
-        totalChunks: Number(enriched.totalChunks || enriched.plannedChunks || 0),
-        totalQuestions: Number(enriched.totalQuestions || enriched.targetQuestions || 0),
-        chunkAllocation: Array.isArray(enriched.chunkAllocation) ? enriched.chunkAllocation : [],
-        completedChunks: Number(enriched.completedChunks || 0),
-        activeChunk: enriched.chunkLabel || '',
-        chunkIndex: Number(enriched.chunkIndex || 0),
-        currentPhase: enriched.phase || enriched.stage || '',
-        retryState: enriched.retryAttempt || enriched.attempt ? {
-          attempt: Number(enriched.retryAttempt || enriched.attempt || 0),
-          fallbackMode: enriched.fallbackMode || '',
-          reason: enriched.reason || ''
-        } : null,
-        heartbeatLastSeen: enriched.chunkEvent === 'CHUNK_HEARTBEAT' ? (enriched.timestamp || new Date().toISOString()) : '',
-        elapsedMs: Number(enriched.elapsedMs || 0),
-        lastEvent: enriched.chunkEvent
-      } : null;
+      const chunkProgress = deriveGraphProgress(enriched.executionGraph);
+      if (chunkProgress && enriched.chunkEvent === 'CHUNK_HEARTBEAT') {
+        chunkProgress.heartbeatLastSeen = enriched.timestamp || new Date().toISOString();
+        chunkProgress.elapsedMs = Number(enriched.elapsedMs || 0);
+        chunkProgress.lastEvent = enriched.chunkEvent;
+      }
       if (enriched.type === 'stage_start' && enriched.stage) {
         updateBatchJobRecord(manifest.jobId, { currentStage: enriched.stage });
       }

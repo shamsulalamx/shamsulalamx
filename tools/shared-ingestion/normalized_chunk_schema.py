@@ -48,7 +48,7 @@ from typing import Any, Literal
 
 
 BUNDLE_SCHEMA_VERSION = "shared-normalized-chunk-bundle-v1"
-CHUNK_SCHEMA_VERSION = "shared-normalized-chunk-v1"
+NORMALIZED_SEGMENT_SCHEMA_VERSION = "shared-normalized-chunk-v1"
 
 ChunkType = Literal["text", "slide", "question", "transcript", "image", "table"]
 AssetKind = Literal["image", "table", "stem_image", "explanation_image", "algorithm", "table_image", "chart", "unknown"]
@@ -90,7 +90,7 @@ class NormalizedChunk:
     confidence: float = 0.5
     metadata: dict[str, Any] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
-    schemaVersion: str = CHUNK_SCHEMA_VERSION
+    schemaVersion: str = NORMALIZED_SEGMENT_SCHEMA_VERSION
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
@@ -145,7 +145,7 @@ def validate_chunk_bundle(bundle: dict[str, Any]) -> list[str]:
         elif chunk_id in seen:
             errors.append(f"duplicate chunkId: {chunk_id}")
         seen.add(chunk_id)
-        if chunk.get("schemaVersion") != CHUNK_SCHEMA_VERSION:
+        if chunk.get("schemaVersion") != NORMALIZED_SEGMENT_SCHEMA_VERSION:
             errors.append(f"{chunk_id or index}: invalid chunk schemaVersion.")
         if chunk.get("chunkType") not in {"text", "slide", "question", "transcript", "image", "table"}:
             errors.append(f"{chunk_id or index}: invalid chunkType.")

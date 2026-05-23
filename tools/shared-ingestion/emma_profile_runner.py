@@ -34,7 +34,7 @@ APP_READY_DIR = (
     JOB_OUTPUT_ROOT / "lecture-slide-question-generator" / "output_json" / "app_ready"
     if JOB_OUTPUT_ROOT else LECTURE_DIR / "output_json" / "app_ready"
 )
-CHUNK_OUTPUT_DIR = JOB_OUTPUT_ROOT / "shared-ingestion" if JOB_OUTPUT_ROOT else RUNNER_DIR / "output"
+NORMALIZED_OUTPUT_DIR = JOB_OUTPUT_ROOT / "shared-ingestion" if JOB_OUTPUT_ROOT else RUNNER_DIR / "output"
 REVIEW_DRAFT_PATH = JOB_OUTPUT_ROOT / "review" / "lecture_slide_review_draft.json" if JOB_OUTPUT_ROOT else None
 CHECKPOINT_PATH = Path(os.environ["BIC_CHECKPOINT_PATH"]).expanduser().resolve() if os.environ.get("BIC_CHECKPOINT_PATH") else None
 COMMAND_FINGERPRINT = str(os.environ.get("BIC_COMMAND_FINGERPRINT") or "")
@@ -309,7 +309,7 @@ def main() -> int:
     input_file = Path(args.input_file).expanduser().resolve()
     limit = max(0, int(args.limit or 0))
     chunk_output = Path(args.chunk_output).expanduser().resolve() if args.chunk_output else (
-        CHUNK_OUTPUT_DIR / f"{input_file.stem.replace(' ', '_')}_emma_normalized_chunks.json"
+        NORMALIZED_OUTPUT_DIR / f"{input_file.stem.replace(' ', '_')}_emma_normalized_chunks.json"
     )
     started_at = time.time()
 

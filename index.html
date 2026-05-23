@@ -22511,15 +22511,15 @@ const App = (() => {
 
   function formatBatchChunkProgress(job) {
     const chunk = job?.chunkProgress || job?.progress?.chunk || null;
-    if (!chunk || typeof chunk !== 'object') return '';
+    if (!chunk || typeof chunk !== 'object') return 'Chunk progress not ready';
     const total = Number(chunk.totalChunks || 0);
     const index = Number(chunk.chunkIndex || 0);
     const chunkText = total ? `Chunk ${index || '?'} / ${total}` : 'Chunk progress pending';
     const phase = String(chunk.currentPhase || '').trim();
     const elapsed = Number(chunk.elapsedMs || 0);
     const elapsedText = elapsed > 0 ? `${Math.round(elapsed / 1000)}s` : '';
-    const retry = chunk.retryState && Number(chunk.retryState.attempt || 0) > 1
-      ? `Retry attempt ${Number(chunk.retryState.attempt)}${chunk.retryState.fallbackMode ? ` · ${chunk.retryState.fallbackMode}` : ''}`
+    const retry = chunk.retryState && Number(chunk.retryState.globalRetryId || 0) > 1
+      ? `Retry ${Number(chunk.retryState.globalRetryId)}${chunk.retryState.retryPhase ? ` · ${chunk.retryState.retryPhase}` : ''}`
       : '';
     const heartbeat = chunk.heartbeatLastSeen ? `Heartbeat ${String(chunk.heartbeatLastSeen).replace('T', ' ').replace(/\.\d+Z?$/, 'Z')}` : '';
     return [chunkText, phase ? `Phase ${phase}` : '', retry, elapsedText ? `Elapsed ${elapsedText}` : '', heartbeat].filter(Boolean).join(' · ');

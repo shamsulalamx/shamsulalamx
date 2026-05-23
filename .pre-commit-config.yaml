@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: uoga-domain-guard
+        name: UOGA domain guard
+        entry: python scripts/uoga_dependency_graph_validator.py
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]

@@ -43,7 +43,7 @@ _BASE = Path(__file__).parent
 _uw.BASE_DIR    = _BASE
 _uw.INPUT_DIR   = _BASE / "input_notes"
 _uw.RAW_DIR     = _BASE / "output_json" / "raw_text"
-_uw.CHUNK_DIR   = _BASE / "output_json" / "chunks"
+_uw.SEGMENT_DIR   = _BASE / "output_json" / "chunks"
 _uw.GEN_DIR     = _BASE / "output_json" / "generated"
 _uw.DEBUG_DIR   = _BASE / "output_json" / "generated" / "debug"
 _uw.APP_DIR     = _BASE / "output_json" / "app_ready"
@@ -89,7 +89,7 @@ def _apply_output_dir(raw_path: str) -> Path:
     if output_root.exists() and not output_root.is_dir():
         raise ValueError(f"--output-dir must be a directory path: {output_root}")
     _uw.RAW_DIR = output_root / "raw_text"
-    _uw.CHUNK_DIR = output_root / "chunks"
+    _uw.SEGMENT_DIR = output_root / "chunks"
     _uw.GEN_DIR = output_root / "generated"
     _uw.DEBUG_DIR = output_root / "generated" / "debug"
     _uw.APP_DIR = output_root / "app_ready"
@@ -167,7 +167,7 @@ def main() -> None:
         _uw.log(f"  Output root:        {output_root}")
     _uw.log("=" * 60)
 
-    for d in (_uw.RAW_DIR, _uw.CHUNK_DIR, _uw.GEN_DIR, _uw.DEBUG_DIR, _uw.APP_DIR, _uw.REPORT_DIR):
+    for d in (_uw.RAW_DIR, _uw.SEGMENT_DIR, _uw.GEN_DIR, _uw.DEBUG_DIR, _uw.APP_DIR, _uw.REPORT_DIR):
         d.mkdir(parents=True, exist_ok=True)
 
     files = [selected_input] if selected_input else _uw.discover_input_files()
