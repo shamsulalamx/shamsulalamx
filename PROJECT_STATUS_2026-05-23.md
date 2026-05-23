@@ -1,12 +1,29 @@
 # Project Status 2026-05-23
 
-Current stable tag: `v4.52-uworld-chunk-and-token-fix-stable`
+Current stable tag: `v4.53-uworld-family-review-survivor-stable`
 Current branch: `phase11-fastfacts-stability`
-Last committed HEAD: doc commit landing alongside `f99ded6` + `3772d7a`.
+Last committed HEAD: doc commit landing alongside `8f213d5`.
 
 Supersedes `docs/archive/PROJECT_STATUS_2026-05-21.md`.
 
 ## What Is New Since 2026-05-21
+
+### v4.53 — UWorld-family review-survivor flow (offline-validated; field validation pending organic failure)
+
+Ports the v4.50 review-survivor flow to all five UWorld-wrapping generators (Anki, OME, Mehlman, Divine, UWorld). When a question fails BOTH initial validation AND the repair retry, it now surfaces in the existing BIC review modal for human accept/edit/reject instead of being silently included in the app-ready output with `extractionWarnings` appended.
+
+Single source change in `tools/uworld-notes-question-generator/generate_uworld_questions.py`:
+
+- New `write_uworld_family_review_draft()` helper writes a `uworld_family_review_draft.json` matching the same schema BIC's `discover_review_draft()` and the renderer's `read-review-draft` IPC handler already use for lecture-slide.
+- New `_resolve_review_dir()` picks `BIC_JOB_OUTPUT_ROOT/review` when BIC sets that env var, falls back to `BASE_DIR/review` for standalone CLI.
+- `call_gemini_with_retry()` gained an optional `needs_review_collector` parameter; failed-repair questions go there instead of being silently kept. Backward-compatible default.
+- `process_file()` always passes the collector, writes the draft after all chunks complete when non-empty.
+
+End-to-end: failed-repair questions land in the draft → BIC discovers it → renderer shows them → accept/edit/reject goes through the v4.50 canonicalize + append-to-existing-test path.
+
+No regression for clean runs. Offline-tested. Field-validation of the failure path itself is pending an organic partial-failure run; user chose to wait rather than synthesize.
+
+Tag commit: `8f213d5`.
 
 ### v4.52 — Live Anki generation through BIC + cross-generator chunking and token-cap fix (field-validated)
 

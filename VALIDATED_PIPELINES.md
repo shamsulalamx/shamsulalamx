@@ -123,7 +123,7 @@ Validated at v4.52 (live BIC milestone, 2026-05-23):
 Not validated (still):
 
 - Broad real-world Anki export variation: other languages, complex HTML, media references, `.apkg` files, single-line monolithic exports of much larger decks.
-- Per-question manual review/accept/reject for questions that fail validation: this is currently implemented only in the lecture-slide generator (Fast Facts / Emma / AMBOSS) via the v4.50 review-survivor flow. The UWorld-wrapping generators (Anki, OME, Mehlman, Divine, UWorld) fall back to the in-band repair retry path; if repair still fails, the question is kept with `extractionWarnings` rather than surfaced for human review.
+- Per-question manual review/accept/reject for questions that fail validation now works for the UWorld-family wrappers (Anki, OME, Mehlman, Divine, UWorld) too, via the v4.53 port of the v4.50 review-survivor flow. When repair retry fails, the question is routed to `<jobOutputRoot>/review/uworld_family_review_draft.json` instead of being silently kept with `extractionWarnings`; the BIC review modal surfaces it for accept / edit / reject; accepted candidates merge into the same auto-imported test via the v4.50 append-to-existing-test path. Offline-validated. Field validation of the failure path is pending an organic partial-failure run.
 
 ## Fast Facts
 

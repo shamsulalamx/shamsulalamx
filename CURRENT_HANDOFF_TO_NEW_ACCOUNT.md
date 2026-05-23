@@ -3,9 +3,10 @@ Local repo path: /Users/shamsulalam/Desktop/shamsulalamx
 GitHub repo: https://github.com/shamsulalamx/shamsulalamx
 
 Current local stable baseline:
-`v4.52-uworld-chunk-and-token-fix-stable` (covers commits `f99ded6` + `3772d7a` + doc commit) on branch `phase11-fastfacts-stability`.
+`v4.53-uworld-family-review-survivor-stable` (covers commit `8f213d5` + doc commit) on branch `phase11-fastfacts-stability`.
 
 Most recent local stable tags (newest first):
+v4.53-uworld-family-review-survivor-stable
 v4.52-uworld-chunk-and-token-fix-stable
 v4.51-stem-quality-and-ome-live-stable
 v4.50-fastfacts-review-merge-stable
@@ -36,6 +37,7 @@ Reading order on first start:
 
 Critical current state:
 
+- v4.53 ported the v4.50 review-survivor flow to the UWorld-family wrappers (Anki, OME, Mehlman, Divine, UWorld). Questions that fail both initial validation AND repair retry are now surfaced for human review through the existing BIC review modal instead of being silently kept with `extractionWarnings`. Single source change in `tools/uworld-notes-question-generator/generate_uworld_questions.py`. Offline-validated; failure-path field validation deferred to organic occurrence.
 - v4.52 enabled live Anki generation through BIC and fixed two long-standing bugs in the shared UWorld machinery (`split_into_chunks` not honoring its max_chars cap, `_raw_gemini_call` maxOutputTokens too tight). Field-validated 2026-05-23 on user's 15-card Anki .txt: 15 real questions generated cleanly. Both fixes apply automatically to OME, Mehlman, Divine, Anki, and UWorld.
 - v4.51 enforced an explicit-final-question stem-quality contract across all 6 organic generators (lecture-slide + 5 UWorld-wrapping generators) and enabled OME live generation through BIC. Field-validated 2026-05-23 on user's small OME PDF: questions end with proper one-best-answer question sentences, packaged auto-import succeeded.
 - v4.50 fixed two Fast Facts review-survivor bugs: reviewed-accepted questions now merge into the same auto-imported test for the BIC job (instead of creating a parallel duplicate test) and carry the canonical `explanationSections[]` shape (instead of empty placeholders that lost the wrong-answer explanations). Field-validated 2026-05-23 on a small Fast Facts PPTX: 1 validated + 2 reviewed-accepted = one 3-question test with full explanations on all three.

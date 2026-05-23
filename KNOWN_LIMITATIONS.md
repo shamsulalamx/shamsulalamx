@@ -4,6 +4,42 @@ Last updated: 2026-05-23
 
 Current stable tag: `v4.48-lecture-explanation-tables-stable`.
 
+## UWorld-Family Review-Survivor Flow (RESOLVED 2026-05-23, tagged v4.53)
+
+History:
+
+Before v4.53, the review-survivor flow that lets the user accept / edit / reject questions that failed validation only existed in the lecture-slide generator (Fast Facts / Emma / AMBOSS) via the v4.50 review-survivor work. The UWorld-wrapping generators (Anki, OME, Mehlman, Divine, UWorld) fell back to keeping failed-repair questions with `extractionWarnings` appended — visible in the imported test's metadata but never surfaced for human review. Identified as a gap by the user after the v4.52 Anki run finished 15/15 clean ("if it returns 12/15, I should be able to review then accept/reject/edit the failed ones just like for Emma, right?"). At v4.52 the answer was no; at v4.53 the answer is yes.
+
+Resolution (tagged `v4.53-uworld-family-review-survivor-stable`, commit `8f213d5`):
+
+Single source change in `tools/uworld-notes-question-generator/generate_uworld_questions.py` (the shared UWorld machinery that OME, Mehlman, Divine, Anki, and UWorld all import via `import generate_uworld_questions as _uw`):
+
+- New `write_uworld_family_review_draft()` helper writes a `uworld_family_review_draft.json` matching the same schema BIC's `discover_review_draft()` and the renderer's `read-review-draft` IPC handler already expect for the lecture-slide generator (`draftVersion: 1`, `status: "needs_review"`, populated `candidateQuestions[]`, empty `validQuestionIndexes[]`, `reviewItems[]` with per-question error messages and `chunkIndex`).
+- New `_resolve_review_dir()` helper picks `BIC_JOB_OUTPUT_ROOT/review` when BIC sets that env var, falls back to `BASE_DIR/review` for standalone CLI. Computed at call time so per-wrapper `BASE_DIR` monkey-patching is honored.
+- `call_gemini_with_retry()` gained an optional `needs_review_collector` parameter. When set, questions that fail BOTH initial validation AND repair are appended to it instead of being added to the returned `questions` list with `extractionWarnings`. When None (the historical default), behavior is backward-compatible.
+- `process_file()` initializes `needs_review_entries: List[Dict] = []` at the top, always passes it to `call_gemini_with_retry`, and after the chunk loop calls `write_uworld_family_review_draft()` when the list is non-empty.
+
+End-to-end behavior for a partial-failure run:
+
+- The N − K clean / repair-succeeded questions go into the app-ready output as before; BIC auto-imports them as a new test.
+- The K failed-repair questions go into `<BIC_JOB_OUTPUT_ROOT>/review/uworld_family_review_draft.json`.
+- BIC's `discover_review_draft()` picks it up unchanged (it scans `<jobOutputRoot>/review/*_review_draft.json`).
+- The renderer's existing BIC review modal surfaces the K candidates.
+- User accepts / edits / rejects through the v4.50 review-survivor flow.
+- Accepted candidates go through `canonicalizeReviewedSurvivorQuestion()` (already-canonical UWorld-family questions pass through unchanged) and merge into the same auto-imported test via the v4.50 `appendToTestId` path.
+
+No regression for the clean case: if all questions pass (the user's v4.52 Anki run was 15/15 clean), the collector stays empty, no review draft is written, and BIC behaves exactly as it did at v4.52.
+
+Offline-validated:
+
+- `write_uworld_family_review_draft()` with empty input returns None; with 2 entries it writes a valid `uworld_family_review_draft.json` matching the BIC schema.
+- `_resolve_review_dir()` routes correctly with and without `BIC_JOB_OUTPUT_ROOT`.
+- Syntax check passes.
+
+Not field-validated by this milestone: the failure path itself requires Gemini to produce a question that fails both initial validation and repair on a live run. The user chose to wait for it to happen organically rather than synthesizing now.
+
+Migration note: forward-only. Any pre-v4.53 partial-failure run already silently included failed-repair questions in the app-ready output with `extractionWarnings`. Those tests are unaffected; the new flow applies only to subsequent runs.
+
 ## Anki Live BIC Generation Plus Cross-Generator Chunking And Token-Cap Fix (RESOLVED 2026-05-23, tagged v4.52)
 
 History:

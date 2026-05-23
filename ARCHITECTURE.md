@@ -308,6 +308,30 @@ Domain boundaries are enforced by `scripts/uoga_dependency_graph_validator.py`:
 
 `tools/chunk_telemetry.py` is a compatibility shim that re-exports the UOGA telemetry engine for legacy callers.
 
+## UWorld-Family Review-Survivor Flow (v4.53, offline-validated 2026-05-23)
+
+When a question generated through a UWorld-family wrapper (Anki, OME, Mehlman, Divine, UWorld) fails both initial validation and the repair retry, it now surfaces in the BIC review modal for human accept/edit/reject instead of being silently included in the app-ready output with `extractionWarnings`.
+
+The implementation lives entirely in the shared UWorld machinery (`tools/uworld-notes-question-generator/generate_uworld_questions.py`) so every wrapping generator inherits it:
+
+- `_resolve_review_dir()` returns `BIC_JOB_OUTPUT_ROOT/review` when BIC sets that env var, else `BASE_DIR/review` for standalone CLI. Computed at call time so per-wrapper `BASE_DIR` monkey-patching is honored.
+- `write_uworld_family_review_draft()` writes a `uworld_family_review_draft.json` matching the schema BIC's `discover_review_draft()` and the renderer's `read-review-draft` IPC handler already use for lecture-slide drafts: `draftVersion: 1`, `status: "needs_review"`, populated `candidateQuestions[]`, empty `validQuestionIndexes[]` (every candidate needs review by definition), `reviewItems[]` with per-question error messages and `chunkIndex`.
+- `call_gemini_with_retry()` takes an optional `needs_review_collector` parameter. When set, failed-repair questions go there instead of being added to the returned `questions` list with `extractionWarnings`. When None, behavior is backward-compatible.
+- `process_file()` initializes a per-file `needs_review_entries: List[Dict]`, always passes it to `call_gemini_with_retry`, and writes the review draft after all chunks complete when non-empty.
+
+End-to-end on a partial-failure live run:
+
+1. The clean and repair-succeeded questions go into the app-ready output → BIC auto-imports them as a new test.
+2. The failed-repair questions go into `<jobOutputRoot>/review/uworld_family_review_draft.json`.
+3. BIC's existing `discover_review_draft()` finds it (it scans `<jobOutputRoot>/review/*_review_draft.json`).
+4. The renderer's existing BIC review modal surfaces the candidates.
+5. User accepts / edits / rejects.
+6. Accepted candidates flow through `canonicalizeReviewedSurvivorQuestion()` (pass-through for already-canonical UWorld-family questions) and merge into the same auto-imported test via the v4.50 `appendToTestId` path.
+
+Clean runs (zero failed-repair questions) write no review draft; behavior is identical to v4.52. Dry-run mode never appends to the collector.
+
+This brings the UWorld family to parity with the lecture-slide generator for the review-survivor flow. Both produce drafts in the same format, the same location pattern, and the same renderer flow consumes them generically.
+
 ## UWorld-Family Chunking And Token Headroom (v4.52, field-validated 2026-05-23)
 
 The five UWorld-wrapping generators (UWorld, OME, Mehlman, Divine, Anki) all reuse `split_into_chunks()` and `_raw_gemini_call()` from `tools/uworld-notes-question-generator/generate_uworld_questions.py` via `import generate_uworld_questions as _uw`. Two long-standing bugs in that shared machinery were diagnosed and fixed at v4.52:

@@ -2,7 +2,7 @@
 
 Last updated: 2026-05-23
 
-This file documents stable v4 tags from v4.0 through the current head tag `v4.52-uworld-chunk-and-token-fix-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+This file documents stable v4 tags from v4.0 through the current head tag `v4.53-uworld-family-review-survivor-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
 
 ## v4.0-images-tables-generator-stable
 
@@ -377,3 +377,41 @@ Not validated by this milestone:
 - Broad Anki export variation (other languages, complex HTML, media references, `.apkg` files, very large decks).
 - The v4.50 review-survivor flow is still lecture-slide-only — UWorld-wrapping generators (Anki, OME, Mehlman, Divine, UWorld) fall back to in-band repair retry; if repair still fails, the question is kept with `extractionWarnings` rather than surfaced for human review. See `NEXT_STEPS_PRIORITY.md` item 0c-anki.
 - Allocated-vs-generated parity audit for non-lecture generators is still open (separate concern from this milestone; see `NEXT_STEPS_PRIORITY.md` item 0b).
+
+## v4.53-uworld-family-review-survivor-stable
+
+Commit: `8f213d5` plus the doc commit.
+
+Meaning: Ports the v4.50 review-survivor flow to all five UWorld-wrapping generators (Anki, OME, Mehlman, Divine, UWorld) so that when a question fails BOTH initial validation AND the repair retry, it gets surfaced for human review through the existing BIC review modal instead of being silently included in the app-ready output with `extractionWarnings`.
+
+Implementation (single source change in `tools/uworld-notes-question-generator/generate_uworld_questions.py`):
+
+- New `write_uworld_family_review_draft()` helper writes a `uworld_family_review_draft.json` matching the same schema BIC's `discover_review_draft()` and the renderer's `read-review-draft` IPC handler already expect for the lecture-slide generator (`draftVersion: 1`, `status: "needs_review"`, populated `candidateQuestions[]`, empty `validQuestionIndexes[]`, `reviewItems[]` with per-question error messages and `chunkIndex`).
+- New `_resolve_review_dir()` helper picks `BIC_JOB_OUTPUT_ROOT/review` when BIC sets that env var, falls back to `BASE_DIR/review` for standalone CLI. Computed at call time so per-wrapper `BASE_DIR` monkey-patching is honored.
+- `call_gemini_with_retry()` gained an optional `needs_review_collector: Optional[List[Dict]] = None` parameter. When set, questions that fail BOTH initial validation AND repair are appended to it (each entry: `{question, errors, chunkIndex}`) instead of being added to the returned `questions` list with `extractionWarnings`. When None, behavior is backward-compatible.
+- `process_file()` initializes `needs_review_entries: List[Dict] = []` at the top, always passes it to `call_gemini_with_retry`, and after the chunk loop calls `write_uworld_family_review_draft()` when the list is non-empty. Per-file report gains `reviewDraftPath` and `needsReviewCount` fields.
+
+End-to-end flow when N − K questions pass and K fail repair on a live run:
+
+- N − K go to the app-ready output as before; BIC auto-imports them as a new test.
+- K go into the review draft.
+- BIC's `discover_review_draft()` picks it up unchanged (it scans `<jobOutputRoot>/review/*_review_draft.json` per its existing logic).
+- The renderer's existing BIC review modal surfaces the K candidates.
+- User accepts/edits/rejects through the v4.50 review-survivor flow.
+- Accepted candidates merge into the same auto-imported test via the v4.50 `appendToTestId` path; the v4.50 `canonicalizeReviewedSurvivorQuestion()` is a pass-through because UWorld-family questions are already in the canonical schema.
+
+No regression for the clean case: if all questions pass, the collector stays empty, no review draft is written, and BIC behaves exactly as at v4.52. Dry-run mode is unaffected (the live branch is the only path that appends to the collector).
+
+Validated (offline):
+
+- `write_uworld_family_review_draft()` with empty input returns None; with 2 entries it writes a valid `uworld_family_review_draft.json` matching the BIC schema (draftVersion, status, jobId, sourceType, candidateQuestions, reviewItems all populated correctly).
+- `_resolve_review_dir()` routes to `BIC_JOB_OUTPUT_ROOT/review` when BIC sets that env var, falls back to `BASE_DIR/review` otherwise.
+- Syntax check passes.
+
+Architecture significance: Closes the parity gap between the lecture-slide generator and the UWorld-family generators for the review-survivor flow. Both code paths now produce review drafts in the same format, the same location pattern, and the same renderer flow consumes them generically. Future UWorld-family wrappers (a hypothetical new source that uses the same machinery) inherit the review-survivor capability automatically.
+
+Not validated by this milestone:
+
+- The failure path itself. Requires Gemini to fail both initial validation and the repair retry on a live run. The user chose to wait for that to happen organically rather than synthesizing now.
+- Per-wrapper coverage: the implementation lives in the shared UWorld machinery, but each wrapping generator (Anki, OME, Mehlman, Divine, UWorld) hasn't been individually exercised with a partial-failure case.
+- The renderer/Electron side already handled `*_review_draft.json` files generically (via lecture-slide); no renderer changes were needed. If a UWorld-family-specific renderer affordance is desired later (e.g. a distinct badge), that's a separate enhancement.
