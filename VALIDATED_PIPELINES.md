@@ -15,7 +15,7 @@ This file records what is validated, what is not validated, and the risk level f
 | Mehlman | Shared profile stable | Tagged live profile stable | Validated in v4.12 | Registered in BIC | Stable tag exists; revalidate packaged path before broad claims | Scaling and source variety not fully characterized | Medium |
 | NBME | BIC orchestration stable | Existing NBME pipeline stable for known workflows | Adapter foundation exists | BIC orchestration tagged stable | Earlier figure/image workflows packaged-validated; recheck for new changes | OCR variability, figure linking, source-specific PDFs | Medium |
 | Images & Tables | Shared image/table profile stable | Attachment-first only, no semantic generator | Validated in v4.15 | BIC generate + auto-import validated | Packaged app validated end to end | Heuristic classification, no deep table parsing | Medium |
-| Anki | Shared profile dry-run handoff validated | Not validated; BIC live steps intentionally reuse dry-run handoff | Normalized text chunks validated | Dry-run BIC auto-import validated in dev and packaged app | Packaged dry-run auto-import, quiz rendering, reload persistence, and score history persistence validated | Placeholder questions only; live Gemini generation not enabled or validated | Medium-high |
+| Anki | Shared profile + live BIC generation stable at v4.52 | Field-validated 2026-05-23 on 15-card .txt → 15 real questions with proper stems / choices / explanations | Normalized text chunks validated | Live BIC auto-import validated end-to-end | Packaged app live BIC generation + auto-import + quiz rendering verified on the same run | Broad Anki export variation (other languages, complex HTML, media references) not stressed | Medium |
 | OME | Shared PDF profile stable | Live Gemini OME generation field-validated at v4.51 on small OME PDF | Normalized text chunks validated | Live BIC auto-import validated end-to-end | Packaged app live BIC generation, auto-import, and quiz rendering validated | Broad OME PDF variety not stressed; writable packaged output for live mode follows v4.51 registry change | Medium |
 | Divine Transcript | Dry-run BIC handoff validated | Not validated; BIC live steps intentionally reuse dry-run handoff | Normalized transcript chunks validated | Dry-run BIC auto-import validated in dev and packaged app | Packaged `.txt` and `.md` dry-run auto-import and score history persistence validated | `sourceType` `divine_transcript`; visible source `Divine Transcript`; `sourceFormat` remains `divine-audio`; live generation and audio are unvalidated | Medium-high |
 | Fast Facts | Cache foundation plus narrow screening stabilization | Dev Electron live BIC generation validated only through the capped 3-attempt stabilization path | Adapter foundation exists | Dev BIC app-ready discovery and auto-import validated on one small PPTX | Not run for this Fast Facts fix | Broad deck coverage, broad semantic stability, renderer Gemini-alert mismatch | High |
@@ -102,7 +102,7 @@ Not claimed:
 
 ## Anki
 
-Validated for the dry-run BIC milestone:
+Validated for the dry-run BIC milestone (earlier):
 
 - `anki_notes` shared descriptor and normalized `text` chunk emission.
 - Shared-ingestion dry-run profile runner handoff to the existing Anki wrapper with one selected input.
@@ -111,14 +111,19 @@ Validated for the dry-run BIC milestone:
 - DB persistence, quiz rendering, reload persistence, and score history persistence.
 - Visible BIC UI auto-import in dev Electron and packaged app.
 
-Only dry-run handoff is validated. The current app-ready output is placeholder dry-run output, not proof of live semantic generation.
+Validated at v4.52 (live BIC milestone, 2026-05-23):
 
-Not validated:
+- `anki_profile_runner.py --mode generate` handoff (`--emit-app-ready-dry-run` kept as backward-compatible alias for `--mode dry-run`).
+- BIC `anki_notes` registry entry now has `requiresGemini: true` and live steps that invoke `--mode generate --limit 0`.
+- Live Gemini Anki generation produces app-ready JSON from a user-supplied 15-card .txt export.
+- Generated questions carry explicit one-best-answer final-question sentences (via the v4.51 stem-quality validator in the shared UWorld machinery — Anki wraps it).
+- Cross-generator chunking + token-cap fix in the UWorld machinery (force-slice in `split_into_chunks` plus `maxOutputTokens` raised 8192 → 16384) prevents the truncation that the 15-card test originally hit.
+- Packaged app live BIC auto-import and quiz rendering verified on the same run.
 
-- Live Gemini Anki generation.
-- Real semantic Anki question quality.
-- Broad real-world Anki export variation.
-- Non-Anki regression coverage after the Anki UI additions.
+Not validated (still):
+
+- Broad real-world Anki export variation: other languages, complex HTML, media references, `.apkg` files, single-line monolithic exports of much larger decks.
+- Per-question manual review/accept/reject for questions that fail validation: this is currently implemented only in the lecture-slide generator (Fast Facts / Emma / AMBOSS) via the v4.50 review-survivor flow. The UWorld-wrapping generators (Anki, OME, Mehlman, Divine, UWorld) fall back to the in-band repair retry path; if repair still fails, the question is kept with `extractionWarnings` rather than surfaced for human review.
 
 ## Fast Facts
 

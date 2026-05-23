@@ -231,7 +231,7 @@ cp index.html "dist/mac-arm64/NBME Self-Assessment Suite.app/Contents/Resources/
 
 ## Stable Tagged Milestones
 
-Current stable tag: **`v4.51-stem-quality-and-ome-live-stable`**.
+Current stable tag: **`v4.52-uworld-chunk-and-token-fix-stable`**.
 
 The full milestone log lives in `GIT_TAG_HISTORY.md`. Highlights:
 
@@ -245,6 +245,7 @@ The full milestone log lives in `GIT_TAG_HISTORY.md`. Highlights:
 | `v4.49-lecture-chunk-recovery-stable` | Quota-aware retry stop + targeted missing-slide recovery for lecture-slide generation. Field-validated on Test_Emma: 18 allocated → 17 generated, recovery loop fired for 5 short-returning slides and recovered 4 of them. |
 | `v4.50-fastfacts-review-merge-stable` | Reviewed-accepted questions merge into the same auto-imported test for the BIC job and carry the canonical `explanationSections[]` shape. Field-validated on a small Fast Facts PPTX: 1 validated + 2 reviewed-accepted = one 3-question test with full explanations on all three. |
 | `v4.51-stem-quality-and-ome-live-stable` | Explicit-final-question stem-quality contract across all 6 organic generators (lecture-slide + 5 UWorld-wrapping generators) + enabled OME live generation through BIC. Field-validated on small OME PDF: questions end with proper one-best-answer question sentences, packaged auto-import succeeded. |
+| `v4.52-uworld-chunk-and-token-fix-stable` | Enabled live Anki generation through BIC + fixed two long-standing bugs in the shared UWorld machinery (`split_into_chunks` not honoring its `max_chars` cap; `_raw_gemini_call` `maxOutputTokens` raised 8192 → 16384). Field-validated on 15-card Anki .txt: 15 real questions generated cleanly. Fix applies to OME, Mehlman, Divine, Anki, and UWorld. |
 
 Earlier source-specific tags such as `mehlman-v1-stable`, `divine-v1-stable`, `uworld-gemini-v1-stable`, `ome-v1-stable`, and `anki-v1-stable` remain as historical rollback points for their respective pipelines.
 

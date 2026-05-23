@@ -4,6 +4,28 @@ Last updated: 2026-05-23
 
 Current stable tag: `v4.48-lecture-explanation-tables-stable`.
 
+## Anki Live BIC Generation Plus Cross-Generator Chunking And Token-Cap Fix (RESOLVED 2026-05-23, tagged v4.52)
+
+History:
+
+The user's first live Anki BIC run on a 15-card .txt (32,803 chars) produced 0 questions even though BIC orchestration ran cleanly to completion. The Anki wrapper's output had an empty `questions` array and one `extractionWarning` reading `Chunk 1 JSON parse error: Expecting value: line 1 column 2 (char 1)`. The Gemini response was wrapped in markdown fences AND truncated mid-string at 23 KB, so all three JSON cleanup stages failed.
+
+Two compounding bugs were diagnosed in the shared UWorld machinery (which OME, Mehlman, Divine, Anki, and UWorld all reuse via `import generate_uworld_questions as _uw`):
+
+1. **`split_into_chunks()` silently bypassed its own `max_chars=3000` cap.** The function's "paragraph-boundary fallback" re-splits on `\n{2,}` — the same boundary that already produced the segment list. When the input has no double-newlines (which Anki .txt exports usually don't — each card is one tab-separated line), the segment list is one big block and the fallback returns `[seg]` unchanged. The 32 K Anki text collapsed to one chunk that asked Gemini for all 15 questions in a single response.
+
+2. **`_raw_gemini_call()` set `maxOutputTokens=8192`.** Asking for 15 questions worth of JSON in a single chunk needs ~22 K tokens. Gemini truncated mid-string. The 3-stage JSON cleanup (`_clean_llm_json` → `_extract_json_payload` → final raw retry) cannot recover invalid (truncated) JSON.
+
+Resolution (tagged `v4.52-uworld-chunk-and-token-fix-stable`, commits `f99ded6` + `3772d7a`):
+
+- **Anki BIC enablement** (`tools/shared-ingestion/anki_profile_runner.py` + `tools/batch-import-center/pipeline_registry.json`): same OME-pattern fix from v4.51. Runner now has `--mode {dry-run, generate}` and always invokes the downstream wrapper. Registry's `anki_notes` entry has `requiresGemini: true` and `liveSteps` invoking `--mode generate --limit 0` with 60s heartbeat. Distinct output subdirs for live vs dry-run.
+
+- **UWorld chunking + token fix** (`tools/uworld-notes-question-generator/generate_uworld_questions.py`): `split_into_chunks()` gains a force-slice pass after heading and paragraph splits. Any chunk that still exceeds `max_chars` is sliced at the nearest single-newline boundary, falling back to whitespace, then a hard byte boundary. `_raw_gemini_call()` `maxOutputTokens` raised 8192 → 16384 for ~2x headroom even when per-chunk question counts are uneven. The lecture-slide generator already uses 12000 for comparison and was unaffected.
+
+Field-validated on user's 15-card Anki .txt: 15 questions generated cleanly with proper stems, choices, and explanations. Offline test of the chunking fix exercised a 281 K synthetic input with no double-newlines and got 94 properly-sized chunks (all ≤ 3000 chars).
+
+Migration note: any test imported via the buggy pre-v4.52 live Anki BIC path will have 0 questions or partial truncated questions. Re-run with the new build.
+
 ## Organic-Generator Stems Missing Final Question Sentence (RESOLVED 2026-05-23, tagged v4.51)
 
 History:

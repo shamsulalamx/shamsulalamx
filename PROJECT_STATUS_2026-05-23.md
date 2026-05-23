@@ -1,12 +1,30 @@
 # Project Status 2026-05-23
 
-Current stable tag: `v4.51-stem-quality-and-ome-live-stable`
+Current stable tag: `v4.52-uworld-chunk-and-token-fix-stable`
 Current branch: `phase11-fastfacts-stability`
-Last committed HEAD: doc commit landing alongside `4b2d847` + `cc290d9`.
+Last committed HEAD: doc commit landing alongside `f99ded6` + `3772d7a`.
 
 Supersedes `docs/archive/PROJECT_STATUS_2026-05-21.md`.
 
 ## What Is New Since 2026-05-21
+
+### v4.52 — Live Anki generation through BIC + cross-generator chunking and token-cap fix (field-validated)
+
+Diagnosed and resolved 2026-05-23 after the user's first live Anki BIC run on a 15-card .txt produced 0 questions even though orchestration ran cleanly.
+
+Anki BIC enablement (same OME-pattern fix from v4.51):
+
+- `tools/shared-ingestion/anki_profile_runner.py` gained `--mode {dry-run, generate}` and always invokes the downstream wrapper with the selected mode.
+- `tools/batch-import-center/pipeline_registry.json` `anki_notes` entry flipped `requiresGemini: true` and pointed `liveSteps` at `--mode generate --limit 0`.
+
+Cross-generator chunking + token-cap fix in `tools/uworld-notes-question-generator/generate_uworld_questions.py` (affects OME, Mehlman, Divine, Anki, and UWorld since they all reuse this module):
+
+- `split_into_chunks()` now force-slices any chunk that exceeds `max_chars=3000` after heading and paragraph splits. The prior fallback re-split on the same boundary it already failed at; Anki .txt exports with no double-newlines collapsed to one giant chunk.
+- `_raw_gemini_call()` `maxOutputTokens` raised 8192 → 16384 to give headroom for chunks that ask Gemini for multiple full-JSON questions.
+
+Field-validated on user's 15-card Anki .txt: 15 questions generated cleanly. Offline test exercised a 281 K synthetic input with no double-newlines and got 94 properly-sized chunks (all ≤ 3000 chars).
+
+Tag commits: `f99ded6` (Anki BIC enablement) + `3772d7a` (UWorld chunking + token fix) + doc commit.
 
 ### v4.51 — Stem-quality contract across all organic generators + OME live generation enabled (field-validated)
 

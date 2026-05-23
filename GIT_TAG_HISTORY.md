@@ -2,7 +2,7 @@
 
 Last updated: 2026-05-23
 
-This file documents stable v4 tags from v4.0 through the current head tag `v4.51-stem-quality-and-ome-live-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+This file documents stable v4 tags from v4.0 through the current head tag `v4.52-uworld-chunk-and-token-fix-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
 
 ## v4.0-images-tables-generator-stable
 
@@ -346,3 +346,34 @@ Not validated by this milestone:
 - Allocated-vs-generated parity audit for OME (the v4.49 chunk-planning fix has NOT been ported to `generate_ome_questions.py`; see `NEXT_STEPS_PRIORITY.md` item 0b).
 - Signed or notarized distribution behavior of the live OME output paths.
 - Migration of tests already imported via the buggy pre-v4.51 path is forward-only. Re-run the source through BIC with the new build to get the correct shape; the missing final sentence cannot be inferred from what was emitted.
+
+## v4.52-uworld-chunk-and-token-fix-stable
+
+Commits: `f99ded6` (Anki BIC enablement) + `3772d7a` (UWorld chunking + token fix) + doc commit.
+
+Meaning: Two related fixes that together enable live Anki generation through BIC.
+
+**Anki BIC enablement** — Same OME-pattern fix from v4.51. `tools/shared-ingestion/anki_profile_runner.py` gained `--mode {dry-run, generate}` replacing the implicit gate on `--emit-app-ready-dry-run`. The runner now always invokes the downstream wrapper with the selected mode. `tools/batch-import-center/pipeline_registry.json` `anki_notes` entry now has `requiresGemini: true` and `liveSteps` invoking `--mode generate --limit 0` with 60s heartbeat. Distinct output subdirs for live and dry-run modes.
+
+**UWorld machinery fix** — Two compounding bugs in `tools/uworld-notes-question-generator/generate_uworld_questions.py` that the shared UWorld machinery (used by OME, Mehlman, Divine, Anki, UWorld) carried since the initial implementation:
+
+1. `split_into_chunks()` silently bypassed its own `max_chars=3000` cap. The "paragraph-boundary fallback" re-splits on `\n{2,}` — the same boundary that already produced the segment list. Inputs without double-newlines (Anki .txt exports where each card is one tab-separated line) collapsed to one giant chunk. Now adds a force-slice pass after heading and paragraph splits that slices any remaining oversized chunk at the nearest single-newline boundary, falling back to whitespace, then a hard byte boundary.
+
+2. `_raw_gemini_call()` set `maxOutputTokens=8192`, too tight for chunks that ask Gemini for 15+ questions of full JSON. Raised to 16384 for ~2x headroom. The lecture-slide generator already uses 12000 for comparison and was unaffected.
+
+Field-validated (2026-05-23 user live BIC run on 15-card Anki .txt):
+
+- Pre-fix: 0 questions generated, single chunk of 32,803 chars sent to Gemini which truncated the response at 23 KB.
+- Post-fix: 15 questions generated cleanly with proper stems, choices, and explanations.
+
+Offline-validated:
+
+- `split_into_chunks()` on a 281 K synthetic Anki-shaped input with no double-newlines now produces 94 properly-sized chunks (all ≤ 3000 chars). Small inputs still produce 1 chunk.
+
+Architecture significance: The shared UWorld machinery now actually honors its documented `max_chars` contract, removing a class of silent truncation that affected any UWorld-family generator on inputs without double-newline boundaries. The token-cap bump is defensive headroom for cases the chunking can't fully smooth out.
+
+Not validated by this milestone:
+
+- Broad Anki export variation (other languages, complex HTML, media references, `.apkg` files, very large decks).
+- The v4.50 review-survivor flow is still lecture-slide-only — UWorld-wrapping generators (Anki, OME, Mehlman, Divine, UWorld) fall back to in-band repair retry; if repair still fails, the question is kept with `extractionWarnings` rather than surfaced for human review. See `NEXT_STEPS_PRIORITY.md` item 0c-anki.
+- Allocated-vs-generated parity audit for non-lecture generators is still open (separate concern from this milestone; see `NEXT_STEPS_PRIORITY.md` item 0b).

@@ -42,6 +42,16 @@ Validation: compare `allocated vs generated` from the first live BIC run of each
 
 Risk: Medium. The four UWorld-wrapping generators share machinery, so the fix may port cleanly to UWorld's own loop and benefit all four at once. NBME's separate normalization path needs its own audit.
 
+## 0c-anki. UWorld-family review-survivor flow (new gap surfaced at v4.52)
+
+Rationale: The v4.50 review-survivor flow that lets the user manually accept / reject / edit questions that failed validation only exists in the lecture-slide generator (Fast Facts / Emma / AMBOSS). The UWorld-family wrappers (Anki, OME, Mehlman, Divine, UWorld) fall back to the in-band repair retry path inside `validate_question()`/`call_gemini_with_retry()`; if repair still fails, the question is kept with `extractionWarnings` rather than surfaced for human review.
+
+This is fine when most questions pass validation cleanly (the v4.52 Anki run was 15/15). It becomes a gap when a chunk's parse fails or a non-trivial fraction of questions need review.
+
+Approach: extend the v4.50 review-draft writer pattern to the UWorld wrappers. Each wrapper's wrapper-level `process_file()` would also emit a `review_draft.json` to the BIC job's `review/` directory when one or more questions land in the "kept with warnings" bucket instead of the clean output. The renderer review UI already exists and is generator-agnostic.
+
+Risk: Medium. The validation-loop refactor in UWorld touches every wrapping generator; need to make sure dry-run mode does not produce review drafts and that the wrapper path stays compatible with non-BIC standalone CLI usage.
+
 ## 0c. OME live-generation broader validation
 
 Rationale: v4.51 validated OME live generation on a single small user-supplied PDF. Before claiming broad OME stability:

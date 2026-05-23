@@ -308,6 +308,15 @@ Domain boundaries are enforced by `scripts/uoga_dependency_graph_validator.py`:
 
 `tools/chunk_telemetry.py` is a compatibility shim that re-exports the UOGA telemetry engine for legacy callers.
 
+## UWorld-Family Chunking And Token Headroom (v4.52, field-validated 2026-05-23)
+
+The five UWorld-wrapping generators (UWorld, OME, Mehlman, Divine, Anki) all reuse `split_into_chunks()` and `_raw_gemini_call()` from `tools/uworld-notes-question-generator/generate_uworld_questions.py` via `import generate_uworld_questions as _uw`. Two long-standing bugs in that shared machinery were diagnosed and fixed at v4.52:
+
+- **Chunking force-slice.** `split_into_chunks(text, max_chars=3000)` now always honors its `max_chars` cap. After heading-based and paragraph-based splits, any remaining chunk that exceeds `max_chars` is force-sliced at the nearest single-newline boundary, falling back to whitespace, then a hard byte boundary. Before this fix, inputs with no `\n{2,}` boundaries (Anki .txt exports where each card is one tab-separated line) collapsed to a single chunk regardless of size.
+- **Token headroom.** `_raw_gemini_call()` `maxOutputTokens` raised 8192 → 16384. Gives ~2x headroom for chunks that ask Gemini for multiple full-JSON questions in a single response. The lecture-slide generator already used 12000 for comparison.
+
+Together these fixes prevent the truncation pattern that produced 0 questions on the user's first live Anki BIC run. They apply automatically to OME, Mehlman, Divine, Anki, and UWorld. The lecture-slide generator is a separate codebase and is unaffected.
+
 ## Stem-Quality Contract Across Organic Generators (v4.51, field-validated 2026-05-23)
 
 All six organic generation paths now enforce the same stem-format contract: every generated question's stem must end with a clear final question sentence that ends in `?`. The contract is enforced in two places:
