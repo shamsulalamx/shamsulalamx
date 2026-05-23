@@ -2,9 +2,15 @@
 """
 Run Anki plain-text exports through shared normalized chunk emission.
 
-By default this runner stops after normalized chunks. With
---emit-app-ready-dry-run it invokes the existing Anki wrapper in dry-run mode
-with an explicit selected input file and a controlled output directory.
+Supports two modes:
+  --mode dry-run   (default) Invoke the existing Anki wrapper in dry-run mode,
+                   producing placeholder app-ready JSON without calling Gemini.
+  --mode generate  Invoke the existing Anki wrapper in live mode, calling
+                   Gemini to produce real questions from the card content.
+                   Requires GEMINI_API_KEY in the environment.
+
+The --emit-app-ready-dry-run flag is kept as a backward-compatible alias for
+--mode dry-run so existing CLI invocations continue to work.
 """
 
 from __future__ import annotations
@@ -47,18 +53,26 @@ def parse_app_ready_json(path: Path) -> dict[str, Any]:
     return payload
 
 
-def run_anki_wrapper_dry_run(input_path: Path) -> dict[str, Any]:
-    output_root = OUTPUT_DIR / "anki_app_ready_dry_run" / input_path.stem.replace(" ", "_")
+def run_anki_wrapper(input_path: Path, mode: str) -> dict[str, Any]:
+    """
+    Invoke generate_anki_questions.py in either dry-run or live mode.
+
+    mode="dry-run"   -> passes --dry-run  (no Gemini calls, placeholder output)
+    mode="generate"  -> passes --generate (live Gemini calls, real questions)
+    """
+    label = "dry-run" if mode == "dry-run" else "live"
+    output_root = OUTPUT_DIR / f"anki_app_ready_{label}" / input_path.stem.replace(" ", "_")
+    generator_flag = "--dry-run" if mode == "dry-run" else "--generate"
     command = [
         sys.executable,
         str(ANKI_WRAPPER),
         "--input-file",
         str(input_path),
-        "--dry-run",
+        generator_flag,
         "--output-dir",
         str(output_root),
     ]
-    emit("anki_downstream_start", command=command, outputRoot=str(output_root))
+    emit("anki_downstream_start", mode=mode, command=command, outputRoot=str(output_root))
     started_at = time.time()
     proc = subprocess.run(
         command,
@@ -66,6 +80,7 @@ def run_anki_wrapper_dry_run(input_path: Path) -> dict[str, Any]:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        env={**os.environ},
     )
     runtime = round(time.time() - started_at, 3)
     if proc.stdout.strip():
@@ -73,7 +88,7 @@ def run_anki_wrapper_dry_run(input_path: Path) -> dict[str, Any]:
     if proc.stderr.strip():
         emit("anki_downstream_stderr", message=proc.stderr.strip()[-4000:])
     if proc.returncode != 0:
-        raise RuntimeError(f"Anki wrapper dry-run exited with code {proc.returncode}.")
+        raise RuntimeError(f"Anki wrapper ({label}) exited with code {proc.returncode}.")
 
     app_ready_path = output_root / "app_ready" / f"{input_path.stem}_app_ready.json"
     if not app_ready_path.exists():
@@ -81,10 +96,12 @@ def run_anki_wrapper_dry_run(input_path: Path) -> dict[str, Any]:
         if len(discovered) == 1:
             app_ready_path = discovered[0]
         else:
-            raise FileNotFoundError(f"Anki wrapper dry-run did not produce expected app-ready JSON: {app_ready_path}")
+            raise FileNotFoundError(f"Anki wrapper ({label}) did not produce expected app-ready JSON: {app_ready_path}")
     payload = parse_app_ready_json(app_ready_path)
+    schema_label = f"anki-downstream-{label}-report-v1"
     report = {
-        "schemaVersion": "anki-downstream-dry-run-report-v1",
+        "schemaVersion": schema_label,
+        "mode": mode,
         "outputRoot": str(output_root),
         "appReadyPath": str(app_ready_path),
         "schemaVersionObserved": payload.get("schemaVersion"),
@@ -99,23 +116,46 @@ def run_anki_wrapper_dry_run(input_path: Path) -> dict[str, Any]:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run Anki notes through shared-ingestion normalization.")
-    parser.add_argument("--mode", choices=["dry-run", "generate"], default="dry-run")
+    parser.add_argument(
+        "--mode",
+        choices=["dry-run", "generate"],
+        default="dry-run",
+        help=(
+            "dry-run: produce placeholder app-ready JSON without calling Gemini. "
+            "generate: call Gemini to produce real questions (requires GEMINI_API_KEY)."
+        ),
+    )
     parser.add_argument("--input-file", required=True, help="Anki plain-text export file.")
-    parser.add_argument("--limit", type=int, default=25)
+    parser.add_argument("--limit", type=int, default=0, help="Chunk limit for the normalization run. 0 means all chunks.")
     parser.add_argument("--chunk-output", default="")
-    parser.add_argument("--emit-app-ready-dry-run", action="store_true", help="After normalized chunk validation, invoke the existing Anki wrapper in dry-run mode for app-ready output.")
+    # Backward-compatible alias for older registry/CLI invocations. Treated as
+    # equivalent to --mode dry-run; explicit --mode generate wins if both set.
+    parser.add_argument(
+        "--emit-app-ready-dry-run",
+        action="store_true",
+        help="Alias for --mode dry-run (kept for backward compatibility).",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
+
+    # Resolve effective mode: explicit --mode takes precedence; the alias
+    # --emit-app-ready-dry-run always means dry-run. If both are set
+    # inconsistently, prefer the explicit --mode value and warn so it shows
+    # up in the BIC log.
+    mode = args.mode
+    if args.emit_app_ready_dry_run and mode == "generate":
+        emit("anki_profile_warning", message="--emit-app-ready-dry-run conflicts with --mode generate; using generate.")
+
     input_path = Path(args.input_file).expanduser().resolve()
     limit = max(0, int(args.limit or 0))
     chunk_output = Path(args.chunk_output).expanduser().resolve() if args.chunk_output else (
         OUTPUT_DIR / f"{input_path.stem.replace(' ', '_')}_anki_normalized_chunks.json"
     )
     started_at = time.time()
-    emit("anki_profile_start", inputPath=str(input_path), mode=args.mode, limit=limit)
+    emit("anki_profile_start", inputPath=str(input_path), mode=mode, limit=limit)
     shared = run_shared_chunk_pipeline(
         source_type=SOURCE_TYPE,
         input_path=input_path,
@@ -134,15 +174,15 @@ def main() -> int:
     if not report.get("ok"):
         emit("anki_profile_complete", ok=False, error="Shared normalized chunk validation failed.", report=report)
         return 1
+
     downstream_report: dict[str, Any] | None = None
     try:
-        if args.emit_app_ready_dry_run:
-            downstream_report = run_anki_wrapper_dry_run(input_path)
+        downstream_report = run_anki_wrapper(input_path, mode)
     except Exception as exc:
         final_report = {
             "schemaVersion": "anki-profile-runner-report-v1",
             "sourceType": SOURCE_TYPE,
-            "mode": args.mode,
+            "mode": mode,
             "inputPath": str(input_path),
             "normalizedChunkPath": str(chunk_output),
             "normalizedChunkCount": report.get("chunkCount", 0),
@@ -163,15 +203,16 @@ def main() -> int:
         emit("anki_profile_complete", ok=False, error=str(exc), report=final_report, outputs=[])
         return 1
 
+    downstream_status = f"{mode}-completed" if downstream_report else "not-requested"
     final_report = {
         "schemaVersion": "anki-profile-runner-report-v1",
         "sourceType": SOURCE_TYPE,
-        "mode": args.mode,
+        "mode": mode,
         "inputPath": str(input_path),
         "normalizedChunkPath": str(chunk_output),
         "normalizedChunkCount": report.get("chunkCount", 0),
         "sharedStageTimings": report.get("stageTimings", {}),
-        "downstreamStatus": "dry-run-completed" if downstream_report else "not-requested",
+        "downstreamStatus": downstream_status,
         "downstreamReport": downstream_report,
         "outputPaths": [downstream_report["appReadyPath"]] if downstream_report else [],
         "warnings": report.get("warnings", []),

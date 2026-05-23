@@ -83,7 +83,7 @@
     "anki_notes": {
       "label": "Anki Notes",
       "status": "active",
-      "requiresGemini": false,
+      "requiresGemini": true,
       "inputExtensions": [".txt"],
       "workingDirectory": ".",
       "pythonExecutable": "python3",
@@ -92,19 +92,19 @@
           "stage": "normalization",
           "stageLabel": "Anki shared-ingestion dry-run",
           "heartbeatSeconds": 10,
-          "args": ["tools/shared-ingestion/anki_profile_runner.py", "--mode", "dry-run", "--input-file", "{inputFile}", "--limit", "3", "--emit-app-ready-dry-run"]
+          "args": ["tools/shared-ingestion/anki_profile_runner.py", "--mode", "dry-run", "--input-file", "{inputFile}", "--limit", "0"]
         }
       ],
       "liveSteps": [
         {
           "stage": "normalization",
-          "stageLabel": "Anki shared-ingestion dry-run handoff",
-          "heartbeatSeconds": 10,
-          "args": ["tools/shared-ingestion/anki_profile_runner.py", "--mode", "dry-run", "--input-file", "{inputFile}", "--limit", "3", "--emit-app-ready-dry-run"]
+          "stageLabel": "Anki shared-ingestion live generation",
+          "heartbeatSeconds": 60,
+          "args": ["tools/shared-ingestion/anki_profile_runner.py", "--mode", "generate", "--input-file", "{inputFile}", "--limit", "0"]
         }
       ],
-      "outputDirectories": ["tools/shared-ingestion/output/anki_app_ready_dry_run"],
-      "notes": "Dry-run orchestration only. Live Gemini Anki generation is intentionally not enabled through Batch Import Center yet."
+      "outputDirectories": ["tools/shared-ingestion/output/anki_app_ready_live", "tools/shared-ingestion/output/anki_app_ready_dry_run"],
+      "notes": "Live Gemini Anki generation enabled. Dry-run produces placeholder questions; live runs Gemini to generate real questions (defaults to 15 per file via generate_anki_questions.py --questions-per-file). Requires GEMINI_API_KEY."
     },
     "ome_pdf": {
       "label": "OME PDF",
