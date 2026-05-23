@@ -2,7 +2,7 @@
 
 Last updated: 2026-05-23
 
-Current stable tag: `v4.48-lecture-explanation-tables-stable`.
+Current stable tag: `v4.49-lecture-chunk-recovery-stable`.
 Current branch: `phase11-fastfacts-stability`.
 
 This handoff was originally written when the project migrated to a new ChatGPT + Codex account on 2026-05-22. It is now valid for any subsequent account or agent continuing the project, including the current Claude (Anthropic) agent that took over on 2026-05-23 and produced the v4.48 milestone.
@@ -137,7 +137,8 @@ Do not explain away failures. Capture the exact blocker, preserve the valid part
 
 Current local rollback milestones (newest first):
 
-- `v4.48-lecture-explanation-tables-stable` — current head tag
+- `v4.49-lecture-chunk-recovery-stable` — current head tag
+- `v4.48-lecture-explanation-tables-stable`
 - `v4.47-emma-pdf-batch-import-stable`
 - `v4.46-fastfacts-reviewed-import-after-auto-import-stable`
 - `v4.45-fastfacts-review-only-completion-stable`
@@ -155,6 +156,11 @@ Do not assume the remote has every local tag or commit without checking before a
 
 The current worktree carries untracked generated artifacts under `tools/lecture-slide-question-generator/output_assets/` and `tools/shared-ingestion/output/`. These are workflow/validation artifacts, not source-controlled docs. Keep generated outputs and unrelated dirty runtime work excluded from narrow commits unless the user explicitly requests them.
 
-## Open Issue Going Into The Next Session
+## Open Follow-Ups Going Into The Next Session
 
-Lecture-slide chunk-planning silently drops Gemini short returns. A naive strict-count fix engages the recursive retry path but multiplies API calls aggressively enough to deplete a Gemini prepayment budget mid-run (live-confirmed 2026-05-23, ended at 0 questions). The naive fix is reverted in HEAD. The next session should implement the quota-aware design in `NEXT_STEPS_PRIORITY.md` item 0 — start with the cheapest option (early-stop on `RESOURCE_EXHAUSTED` / HTTP 429) before any cascading change.
+The lecture-slide chunk-planning silent-loss issue diagnosed and partially attempted on 2026-05-23 morning was fully resolved that same day and tagged `v4.49-lecture-chunk-recovery-stable`. Field-validated on Test_Emma BIC live run: 18 allocated → 17 generated, recovery loop fired for 5 short-returning slides and recovered 4 of them.
+
+Follow-ups (not blockers):
+
+- The chunk-planning fix lives only in `generate_lecture_slide_questions.py`. OME, Mehlman, NBME, and Divine generators have separate code paths and may share the same silent-loss class. See `NEXT_STEPS_PRIORITY.md` item 0b.
+- The OME live-generation registry/runner change made by the cowork agent is in the working tree as uncommitted dirty work (`tools/shared-ingestion/ome_profile_runner.py`, `tools/batch-import-center/pipeline_registry.json`). Validation pending — see the OME audit item in priorities. Also: that change flips `requiresGemini: false → true` for OME and crosses a previously documented "dry-run only" validation boundary, so several docs (`VALIDATED_PIPELINES.md`, `KNOWN_LIMITATIONS.md`, `BATCH_IMPORT_ARCHITECTURE.md`) will need updates after live OME validation.

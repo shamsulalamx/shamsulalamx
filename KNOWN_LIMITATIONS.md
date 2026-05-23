@@ -4,29 +4,28 @@ Last updated: 2026-05-23
 
 Current stable tag: `v4.48-lecture-explanation-tables-stable`.
 
-## Lecture-Slide Chunk-Planning Silent Loss (fix landed 2026-05-23, pending live validation)
+## Lecture-Slide Chunk-Planning Silent Loss (RESOLVED 2026-05-23, tagged v4.49)
 
 History:
 
-The lecture-slide generator originally accepted short Gemini returns silently. In `call_generation_once` (`tools/lecture-slide-question-generator/generate_lecture_slide_questions.py`), `extract_generated_question_items` was called with `require_exact_count=False`. When Gemini returned fewer questions than the chunk's allocated count, the partial output was kept with only a `warn()` call to stderr — no retry, no surfaced error. Diagnosed 2026-05-23: the same Test_Emma input produced 16 questions in one BIC run and 7 in the next (chunk1 returned 4 of 8 expected, chunk2 returned 3 of 5 expected).
+The lecture-slide generator originally accepted short Gemini returns silently. In `call_generation_once`, `extract_generated_question_items` was called with `require_exact_count=False`. When Gemini returned fewer questions than the chunk's allocated count, the partial output was kept with only a `warn()` call to stderr — no retry, no surfaced error. Diagnosed 2026-05-23: the same Test_Emma input produced 16 questions in one BIC run and 7 in the next (chunk1 returned 4 of 8 expected, chunk2 returned 3 of 5 expected).
 
 A naive strict-count flip was attempted and reverted: it engaged the existing recursive retry path (repair → halve → single-slide), but the recursion multiplier was aggressive enough to deplete a Gemini prepayment budget mid-run. Live test outcome was 0 questions for the same input.
 
-Current state (after the 2026-05-23 fix, not yet tagged):
+Resolution (tagged `v4.49-lecture-chunk-recovery-stable`, commits `1c1f744` + `6c0ce4f`):
 
-Two complementary changes landed in HEAD:
+Two complementary changes in `tools/lecture-slide-question-generator/generate_lecture_slide_questions.py`:
 
-1. **Quota-aware retry stop** — `is_quota_failure(error)` detects HTTP 429 / `RESOURCE_EXHAUSTED` / prepayment-depleted text. A module-level `_QUOTA_EXHAUSTED` latch is set on first occurrence. Every retry boundary in `generate_question_chunk_with_retries` (initial-attempt failure, repair-retry failure, sub-chunk recursion, single-slide recursion) and the cross-chunk loop in `generate_questions` checks the latch and bails to `[]` instead of making more API calls. This protects whatever was already generated.
+1. **Quota-aware retry stop** — `is_quota_failure(error)` detects HTTP 429 / `RESOURCE_EXHAUSTED` / prepayment-depleted text. A module-level `_QUOTA_EXHAUSTED` latch is set on first occurrence. Every retry boundary in `generate_question_chunk_with_retries` (initial-attempt failure, repair-retry failure, sub-chunk recursion, single-slide recursion) and the cross-chunk loop in `generate_questions` checks the latch and bails to `[]` instead of making more API calls. Field-proven on 2026-05-23 by the depleted-credits run: 1 HTTP 429 caught, all further retries skipped, runtime 10.5s vs 148s for the naive cascade.
 
-2. **Targeted missing-slide recovery** — the chunk loop still uses partial-accept (`require_exact_count=False`) to preserve the historical behavior that prevents unbounded sub-chunking. After all chunks complete, a new loop compares allocated-vs-generated counts per slide and calls `retry_missing_slide_questions()` for each under-delivered slide. That function makes up to `MAX_RECOVERY_ATTEMPTS_PER_SLIDE` (=2) focused single-slide attempts with `require_exact_count=True`. Bounded worst-case extra API calls: `len(work) * 2`. Quota-aware (stops on first 429).
+2. **Targeted missing-slide recovery** — the chunk loop still uses partial-accept (`require_exact_count=False`) to preserve the historical behavior that prevents unbounded sub-chunking. After all chunks complete, `generate_questions` compares allocated-vs-generated counts per slide and calls `retry_missing_slide_questions()` for each under-delivered slide. That function makes up to `MAX_RECOVERY_ATTEMPTS_PER_SLIDE` (=2) focused single-slide attempts with `require_exact_count=True`. Bounded worst-case extra API calls: `len(work) * 2`. Field-validated on Test_Emma BIC live run (job `batch-mpis1xxn-c0i3id`): 18 allocated → 17 generated, recovery loop fired for 5 short-returning slides, 4 successfully recovered, 1 stopped cleanly on a Gemini network timeout via the existing `is_network_failure` check.
 
-Live validation pending: the live test requires Gemini credits. The user's prepayment was depleted by the prior naive-fix test. Once topped up, the expected outcome on the same Test_Emma input is that allocated and generated counts match (or come very close), and that any quota error during the run terminates cleanly with whatever was already generated preserved.
+Bonus: when a run ends with 0 questions because the quota latch fired, the fatal `PipelineError` message now names the cause and points the user at the billing fix instead of bubbling up as the generic "Existing Emma generator exited with code 1."
 
-Offline test coverage already in place:
+Residual considerations:
 
-- `is_quota_failure` correctly classifies HTTP 429 / RESOURCE_EXHAUSTED / "prepayment credits are depleted" as quota failures and rejects normal validation errors and network errors.
-- `mark_quota_exhausted` / `reset_quota_state` flip the latch idempotently.
-- `MAX_RECOVERY_ATTEMPTS_PER_SLIDE` is 2.
+- Per-slide deficit tolerance is bounded by `MAX_RECOVERY_ATTEMPTS_PER_SLIDE` (currently 2). A slide that systematically fails this many attempts is dropped with a clear warning. Tune up if specific decks consistently see >1 dropped slide.
+- This fix is in the lecture-slide generator only. The OME generator (`tools/ome-pdf-question-generator/generate_ome_questions.py`) and other source-specific generators have their own paths and have NOT been audited for the same class of silent-loss bug. Worth checking allocated-vs-generated parity the first time you live-test each.
 
 ## Fast Facts Validation Limit
 

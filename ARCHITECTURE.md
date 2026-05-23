@@ -308,7 +308,7 @@ Domain boundaries are enforced by `scripts/uoga_dependency_graph_validator.py`:
 
 `tools/chunk_telemetry.py` is a compatibility shim that re-exports the UOGA telemetry engine for legacy callers.
 
-## Lecture-Slide Chunk-Planning Recovery Layer (2026-05-23, live validation pending)
+## Lecture-Slide Chunk-Planning Recovery Layer (v4.49, field-validated 2026-05-23)
 
 The lecture-slide generator now defends against two failure modes that previously caused silent question loss:
 
@@ -324,4 +324,4 @@ The latch is reset at the top of each `generate_questions` invocation so multipl
 
 Worst-case extra API cost: `len(allocations_with_questions) * 2`. Bounded by design.
 
-Status: implementation landed in HEAD, packaged app rebuilt, offline predicate/latch tests pass. Live BIC validation on Test_Emma is pending Gemini credit top-up; will be tagged `v4.49-lecture-chunk-recovery-stable` after the run shows allocated ≈ generated counts.
+Status: tagged `v4.49-lecture-chunk-recovery-stable` (commits `1c1f744` + `6c0ce4f`). Field-validated 2026-05-23 on Test_Emma BIC live run (job `batch-mpis1xxn-c0i3id`): 18 allocated → 17 generated (94.4%); targeted recovery loop fired for 5 short-returning slides and successfully recovered 4 of them; the 5th stopped cleanly on a Gemini network timeout via the existing `is_network_failure` check. Auto-import and v4.48 inline table rendering both verified in the same run (4 questions carry inline tables; test imported as "Test Emma Lecture Questions"). Quota-aware retry stop was independently field-validated on an earlier depleted-credits run (job `batch-mpirtu3n-1cfsur`): single HTTP 429 caught on chunk1 attempt0, all subsequent retries skipped, runtime 10.5s vs the prior naive-cascade's 148s.

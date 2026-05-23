@@ -6,29 +6,38 @@ Current stable tag: `v4.48-lecture-explanation-tables-stable`.
 
 This roadmap prioritizes convergence while protecting validated behavior. The new top item is the lecture-slide chunk-planning fix surfaced during the v4.48 validation pass.
 
-## 0. Lecture-Slide Chunk-Planning Quota-Aware Recovery (fix landed, live validation pending)
+## 0. Lecture-Slide Chunk-Planning Quota-Aware Recovery — DONE (tagged v4.49)
 
-Status: Implementation landed in HEAD on 2026-05-23. Two complementary changes in `tools/lecture-slide-question-generator/generate_lecture_slide_questions.py`:
+Resolved 2026-05-23. Tagged `v4.49-lecture-chunk-recovery-stable` covering commits `1c1f744` + `6c0ce4f`.
 
-1. **Quota-aware retry stop.** `is_quota_failure(error)` detects HTTP 429 / `RESOURCE_EXHAUSTED` / prepayment-depleted text. A module-level `_QUOTA_EXHAUSTED` latch is set on first occurrence. Every retry boundary in `generate_question_chunk_with_retries` and the cross-chunk loop in `generate_questions` checks the latch and bails to `[]`. Protects whatever was already generated; no further budget burn.
+Field validation evidence (BIC job `batch-mpis1xxn-c0i3id` on Test_Emma):
 
-2. **Targeted missing-slide retry.** The chunk loop still uses partial-accept (`require_exact_count=False`) to preserve the historical behavior that prevents unbounded sub-chunking. After all chunks complete, `generate_questions` now computes per-slide deficit and calls `retry_missing_slide_questions()` for each under-delivered slide. That function makes up to `MAX_RECOVERY_ATTEMPTS_PER_SLIDE` (=2) focused single-slide attempts with `require_exact_count=True`. Bounded worst-case extra API calls: `len(work) * 2`. Quota-aware.
+- 18 allocated → 17 generated (94.4%).
+- 5 slides initially short-returned (s0001, s0002, s0004, s0007, s0008).
+- Recovery loop fired for each; 4 successfully recovered.
+- 1 (s0008) stopped cleanly after a Gemini network timeout via the existing `is_network_failure` check (attempt 1/2 of recovery).
+- Runtime 369.8s for the full deck (vs the prior naive-fix run that ended with 0 questions and depleted the budget).
+- 4 questions carry inline tables (v4.48 rendering also exercised end-to-end).
+- BIC auto-imported as "Test Emma Lecture Questions" with no errors.
 
-Offline tests pass (predicate classification, latch idempotency, constant value). Packaged app rebuilt.
+Earlier field validation of the defensive half (quota-aware retry stop only) on the depleted-credits run (job `batch-mpirtu3n-1cfsur`): 1 HTTP 429 caught on chunk1 attempt0, all subsequent retries skipped, runtime 10.5s vs the prior 148s naive-cascade run.
 
-Live validation pending: requires Gemini credits. Once topped up, run the same Test_Emma fixture through BIC and verify:
+If the 2-attempt cap proves insufficient on a specific deck, tune `MAX_RECOVERY_ATTEMPTS_PER_SLIDE` upward. Default is deliberately small to keep worst-case cost predictable.
 
-- allocated count ≈ generated count (parity restored),
-- if a 429 lands mid-run, the run terminates cleanly with all questions generated before the 429 preserved (not 0),
-- the total Gemini call count is bounded by `chunks + len(missing_slides) * 2`,
-- the run report should include warnings naming each recovered or unrecovered slide.
+## 0b. OME (and other generators) — audit for same silent-loss class
 
-Tag candidate once live validation passes: `v4.49-lecture-chunk-recovery-stable`.
+Rationale: The chunk-planning fix lives in `generate_lecture_slide_questions.py` (Emma, Fast Facts, AMBOSS share this binary). Other source-specific generators have their own retry paths:
 
-Risk going forward:
+- `tools/ome-pdf-question-generator/generate_ome_questions.py`
+- `tools/mehlman-pdf-question-generator/generate_mehlman_questions.py`
+- `tools/nbme-pdf-json-generator/` (uses Gemini through its own normalization stage)
+- `tools/divine-audio-question-generator/generate_divine_questions.py`
 
-- If Gemini consistently short-returns even at single-slide scope (e.g. a slide whose content fundamentally fails the prompt's constraints), the recovery loop will give up cleanly after 2 attempts with a clear warning. That's the right behavior — better than silent loss and better than runaway retries.
-- The 2-attempt cap can be tuned via `MAX_RECOVERY_ATTEMPTS_PER_SLIDE` if needed. Default deliberately small to keep cost predictable.
+Each should be checked for the same pattern: does the generator silently accept short Gemini returns? If yes, port the same two-part fix.
+
+Validation: compare `allocated vs generated` from the first live BIC run of each source. Mismatch with no surfaced error → port the fix.
+
+Risk: Medium. Each generator has its own structure; the fix pattern is small but the existing retry code can differ.
 
 ## 1. Controlled Divine Audio Operationalization
 

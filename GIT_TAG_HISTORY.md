@@ -2,7 +2,7 @@
 
 Last updated: 2026-05-23
 
-This file documents stable v4 tags from v4.0 through the current head tag `v4.48-lecture-explanation-tables-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+This file documents stable v4 tags from v4.0 through the current head tag `v4.49-lecture-chunk-recovery-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
 
 ## v4.0-images-tables-generator-stable
 
@@ -242,7 +242,44 @@ Validated:
 
 Not validated by this milestone:
 
-- per-question table render across all Emma decks (only one Test_Emma fixture was tested),
-- the lecture-slide chunk-planning silent-loss issue diagnosed alongside this milestone remains open (see `KNOWN_LIMITATIONS.md` and `NEXT_STEPS_PRIORITY.md`).
+- per-question table render across all Emma decks (one Test_Emma fixture was tested at this tag; broader Emma deck coverage came in the v4.49 run which produced 4 questions with inline tables on a separate live run).
+- the lecture-slide chunk-planning silent-loss issue diagnosed alongside this milestone was resolved separately at v4.49.
 
 Architecture significance: Removes a long-standing renderer gap where extracted table content was discarded in favor of a textual reference. Establishes `q.tables` as a first-class renderer input alongside `q.images` and `q.explanationImages`.
+
+## v4.49-lecture-chunk-recovery-stable
+
+Commits: `1c1f744` + `6c0ce4f`.
+
+Meaning: Two complementary fixes to the lecture-slide generator that close the chunk-planning silent-loss bug diagnosed on 2026-05-23, without re-introducing the budget-runaway risk of a naive strict-count flip.
+
+Validated (field, BIC live run on Test_Emma, job `batch-mpis1xxn-c0i3id`):
+
+- 18 allocated → 17 generated (94.4%) in a single live BIC run.
+- Targeted recovery loop fired for each of 5 short-returning slides (s0001, s0002, s0004, s0007, s0008).
+- 4 of the 5 recovered to allocated count.
+- The 5th (s0008) stopped cleanly on a Gemini network timeout at attempt 1/2 via the existing `is_network_failure` check — no pointless retries.
+- Total runtime 369.8s for the full 13-slide deck (vs the prior naive-fix run that ended with 0 questions in 148s).
+- BIC auto-imported the result as "Test Emma Lecture Questions" with no errors.
+- 4 imported questions carry inline `q.tables` content, exercising the v4.48 table renderer end-to-end in the same run.
+
+Validated (field, earlier depleted-credits run, job `batch-mpirtu3n-1cfsur`):
+
+- Single HTTP 429 caught on chunk1 attempt0.
+- `is_quota_failure` predicate fired, `_QUOTA_EXHAUSTED` latch set.
+- All subsequent retries and chunks skipped immediately.
+- Runtime 10.5s vs the prior naive-cascade's 148s on the same input.
+- No retry cascade, no budget runaway.
+
+Validated (offline):
+
+- `is_quota_failure` correctly classifies HTTP 429 / `RESOURCE_EXHAUSTED` / "prepayment credits are depleted" as quota failures and rejects normal validation/network errors.
+- `mark_quota_exhausted` / `reset_quota_state` flip the latch idempotently.
+- `MAX_RECOVERY_ATTEMPTS_PER_SLIDE` = 2.
+
+Architecture significance: Establishes a bounded, quota-aware, source-aware retry/recovery pattern for organic generation. Worst-case extra API cost is `len(allocations_with_questions) * MAX_RECOVERY_ATTEMPTS_PER_SLIDE` — predictable and small. The same pattern (predicate + latch + targeted per-unit recovery instead of recursive sub-chunking) is portable to other source-specific generators that may share the silent-loss class of bug.
+
+Not validated by this milestone:
+
+- OME, Mehlman, NBME, and Divine generators have separate code paths and have NOT been audited for the same silent-loss class. See `NEXT_STEPS_PRIORITY.md` item 0b.
+- The 2-attempt recovery cap is tuned for a small deck like Test_Emma. Heavier decks may benefit from a higher cap; default should hold for most cases.

@@ -1,12 +1,32 @@
 # Project Status 2026-05-23
 
-Current stable tag: `v4.48-lecture-explanation-tables-stable`
+Current stable tag: `v4.49-lecture-chunk-recovery-stable`
 Current branch: `phase11-fastfacts-stability`
-Last committed HEAD: `f3b2bc9` (Render lecture-slide explanation tables instead of placeholder note)
+Last committed HEAD: `6c0ce4f` (Surface actionable cause when 0-question fatal exit is from quota exhaustion)
 
 Supersedes `docs/archive/PROJECT_STATUS_2026-05-21.md`.
 
 ## What Is New Since 2026-05-21
+
+### v4.49 — Lecture-slide chunk-planning quota-aware recovery (field-validated)
+
+Two complementary fixes to `tools/lecture-slide-question-generator/generate_lecture_slide_questions.py` close the chunk-planning silent-loss bug diagnosed on 2026-05-23. Field-validated on the same day by a Test_Emma BIC live run (job `batch-mpis1xxn-c0i3id`):
+
+- 18 allocated → 17 generated. 5 short-returning slides triggered the targeted recovery loop; 4 recovered, 1 stopped cleanly on a Gemini timeout.
+- Runtime 369.8s. BIC auto-imported the result as "Test Emma Lecture Questions" with no errors.
+- 4 of the imported questions carry inline tables, exercising the v4.48 table renderer in the same run.
+
+Defensive half (quota-aware retry stop) was independently field-validated on the earlier depleted-credits run (job `batch-mpirtu3n-1cfsur`): 1 HTTP 429 caught, all subsequent retries skipped, 10.5s runtime vs the prior naive-cascade's 148s.
+
+Implementation:
+
+- `is_quota_failure(error)` predicate (HTTP 429 / `RESOURCE_EXHAUSTED` / "prepayment credits are depleted").
+- `_QUOTA_EXHAUSTED` module-level latch + `quota_exhausted()` / `mark_quota_exhausted()` / `reset_quota_state()` helpers.
+- Latch checked at every retry boundary in `generate_question_chunk_with_retries`, the cross-chunk loop in `generate_questions`, and inside `retry_missing_slide_questions`.
+- `retry_missing_slide_questions(allocation, missing_count, max_attempts=MAX_RECOVERY_ATTEMPTS_PER_SLIDE)`: focused per-slide recovery with `require_exact_count=True`. Worst-case extra API calls = `len(work) * 2`.
+- Clearer fatal-error messaging when 0 questions exit was caused by quota exhaustion.
+
+Tag commits: `1c1f744` (main fix) + `6c0ce4f` (error message follow-up).
 
 ### v4.48 — Lecture-slide explanation tables now render
 
@@ -55,17 +75,29 @@ Key modules:
 
 Domain boundaries enforced: EXTRACTIVE and HYBRID may not import from UOGA; SHARED may not depend on any runtime domain; `ExecutionGraph`, `CHUNK_*` symbols, and `retry_engine` are UOGA-only.
 
-## What Was Investigated But NOT Fixed
+## What Was Investigated, Fixed, And Field-Validated In One Day
 
-### Lecture-slide chunk-planning silent-loss (live diagnosis 2026-05-23)
+### Lecture-slide chunk-planning silent-loss → resolved at v4.49
 
-Symptom: same input PDF can produce 16 questions in one run and 7 in the next without any explanation in the report. `validationWarnings` and `validationErrors` come back empty in both cases. The generator silently accepts short Gemini returns.
+Symptom (diagnosed 2026-05-23 morning): same input PDF could produce 16 questions in one run and 7 in the next without any explanation in the report. `validationWarnings` and `validationErrors` came back empty in both cases. The generator silently accepted short Gemini returns.
 
-Root cause: `call_generation_once` in `generate_lecture_slide_questions.py` passes `require_exact_count=False` to `extract_generated_question_items`. When Gemini returns fewer questions than the chunk's allocated count, the partial output is kept with only a `warn()` call to stderr. No retry, no sub-chunking, no escalation.
+Root cause: `call_generation_once` in `generate_lecture_slide_questions.py` passed `require_exact_count=False` to `extract_generated_question_items`. When Gemini returned fewer questions than the chunk's allocated count, the partial output was kept with only a `warn()` call to stderr. No retry, no sub-chunking, no escalation.
 
-Attempted fix and rollback: flipping the flag to `True` causes the existing retry path to engage as designed (repair → sub-chunk in halves → single-slide attempts). A live test (`/private/tmp/chunk-fix-live-test-1779546582/`) confirmed the retry path engages correctly, but the recursion multiplier was enough to deplete the user's Gemini prepayment credits mid-run (HTTP 429). Once 429s started, every remaining slide got skipped. Final outcome was 0 questions, worse than the original 7. Change reverted in HEAD; packaged app rebuilt to match.
+Investigation timeline:
 
-Open work item: implement a smarter recovery that does NOT cascade-multiply API calls. See `NEXT_STEPS_PRIORITY.md`.
+1. **Naive fix attempted and rolled back.** Flipping the flag to `True` caused the existing retry path to engage (repair → sub-chunk in halves → single-slide attempts). A live test (`/private/tmp/chunk-fix-live-test-1779546582/`) confirmed the retry path engaged correctly, but the recursion multiplier was aggressive enough to deplete the user's Gemini prepayment credits mid-run. Once 429s started, every remaining slide got skipped. Final outcome was 0 questions, worse than the original 7. Change reverted in HEAD; packaged app rebuilt to match.
+
+2. **Quota-aware retry stop + targeted missing-slide recovery designed and landed.** Two complementary changes in one commit (`1c1f744`): the latch protects against runaway, the recovery loop solves the original short-return problem with bounded cost.
+
+3. **Defensive half field-validated on a depleted-credits run.** Even with no credits, the live run confirmed the 429 latch fires correctly and prevents cascade.
+
+4. **Error message follow-up** (`6c0ce4f`): the generic "0 questions" fatal error now names quota exhaustion as the cause when relevant.
+
+5. **Active half field-validated on the topped-up Test_Emma run.** Recovery loop fired for 5 short-returning slides, recovered 4 (the 5th cleanly stopped on a network timeout). 17 of 18 allocated questions delivered. BIC auto-imported.
+
+6. **Tagged `v4.49-lecture-chunk-recovery-stable`.**
+
+No open work item from this thread. See `NEXT_STEPS_PRIORITY.md` item 0b for the follow-up of auditing OME / Mehlman / NBME / Divine generators for the same silent-loss class.
 
 ## Validated Sources (Current Snapshot)
 

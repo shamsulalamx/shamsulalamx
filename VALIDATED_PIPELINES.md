@@ -47,7 +47,10 @@ Validated:
 Known blockers:
 
 - Live generation reached downstream but failed Emma semantic validation on Q1 for unsupported term `dystocia`. This is generation/validator quality, not BIC wiring.
-- Lecture-slide chunk-planning silent-loss had been a blocker. Fix landed in HEAD on 2026-05-23 (quota-aware retry stop + targeted missing-slide recovery in `generate_lecture_slide_questions.py`). Offline predicate/latch tests pass. Live BIC validation on Test_Emma pending Gemini credit top-up; will be tagged `v4.49-lecture-chunk-recovery-stable` after the run shows allocated ≈ generated.
+
+Resolved (previously a blocker):
+
+- Lecture-slide chunk-planning silent-loss. Fixed and tagged `v4.49-lecture-chunk-recovery-stable` on 2026-05-23. Field-validated on Test_Emma BIC live run (job `batch-mpis1xxn-c0i3id`): 18 allocated → 17 generated, targeted recovery loop fired for 5 short-returning slides and recovered 4 of them; the 5th stopped cleanly on a Gemini network timeout. Quota-aware retry stop separately field-validated on the prior depleted-credits run: 1 HTTP 429 caught, no cascade, no further budget burn. Auto-import and explanation-panel table rendering verified in the same run (4 questions with inline tables).
 
 ## Mehlman
 

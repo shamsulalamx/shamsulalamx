@@ -3,9 +3,10 @@ Local repo path: /Users/shamsulalam/Desktop/shamsulalamx
 GitHub repo: https://github.com/shamsulalamx/shamsulalamx
 
 Current local stable baseline:
-`v4.48-lecture-explanation-tables-stable` at commit `f3b2bc9` on branch `phase11-fastfacts-stability`.
+`v4.49-lecture-chunk-recovery-stable` at commit `6c0ce4f` on branch `phase11-fastfacts-stability`.
 
 Most recent local stable tags (newest first):
+v4.49-lecture-chunk-recovery-stable
 v4.48-lecture-explanation-tables-stable
 v4.47-emma-pdf-batch-import-stable
 v4.46-fastfacts-reviewed-import-after-auto-import-stable
@@ -32,13 +33,15 @@ Reading order on first start:
 
 Critical current state:
 
+- v4.49 added quota-aware retry stop + targeted missing-slide recovery to the lecture-slide generator. Field-validated 2026-05-23 on Test_Emma BIC live run (18 allocated → 17 generated, recovery loop fired for 5 slides and recovered 4 of them).
 - v4.48 added structured table rendering in the lecture-slide explanation panel (`renderExplanationTablesInto` in `index.html`; generator no longer emits the `"Table used for explanation only: <tableId>"` placeholder).
 - Phase 10C survivability layer is intact in `electron/main.js`: single-instance lock, `process_registry.json`, filesystem-first queue/history reconciliation, completed-job protection, guarded process-group cleanup, startup cleanup for stale tracked runner PIDs, packaged app parity.
 - UOGA core package under `core/uoga/` is graph-native only for `fast_facts_pptx`. Other organic sources fail fast with "not graph-native, cannot run in hybrid mode." Domain boundaries are enforced by `scripts/uoga_dependency_graph_validator.py`.
 
-Open issue (new in v4.48 diagnosis):
+Open follow-ups (not blockers, see `NEXT_STEPS_PRIORITY.md`):
 
-- Lecture-slide chunk-planning silently drops Gemini short returns. Same input produced 16 questions and then 7 on consecutive BIC runs. A naive strict-count fix triggered budget runaway through recursive sub-chunking and ended with 0 questions when Gemini quota depleted. Reverted in HEAD. See `NEXT_STEPS_PRIORITY.md` item 0 for the quota-aware design options.
+- The chunk-planning fix lives in `generate_lecture_slide_questions.py` only. Other source-specific generators (OME, Mehlman, NBME, Divine) have separate code paths and have NOT been audited for the same silent-loss class. Worth a quick allocated-vs-generated check on first live run of each.
+- The OME live-generation registry change in the working tree (cowork agent's pre-existing dirty work) is uncommitted. Live validation pending.
 
 Working tree:
 
