@@ -117,7 +117,7 @@ Both fields are optional and do not affect import validation. Questions without 
 | `Psych_Shelf_7_repaired_app_ready.json` | 50 | Repaired extraction |
 | `Psych_Shelf_8_full_app_ready.json` | 50 | FigureRefs with lab visibleText (Q25, Q34, Q48) |
 
-Full technical spec: `NBME_JSON_IMPORT.md`.
+Full historical technical spec: `docs/archive/NBME_JSON_IMPORT.md` (preserved for reference; current behavior is documented in `ARCHITECTURE.md` and `BATCH_IMPORT_ARCHITECTURE.md`).
 
 ---
 
@@ -231,14 +231,19 @@ cp index.html "dist/mac-arm64/NBME Self-Assessment Suite.app/Contents/Resources/
 
 ## Stable Tagged Milestones
 
-| Tag | Pipeline | What it marks |
-|---|---|---|
-| `mehlman-v1-stable` | Mehlman | Deterministic notes pipeline complete |
-| `divine-v1-stable` | Divine Podcasts | Deterministic draft layer complete |
-| `divine-gemini-v1-stable` | Divine Podcasts | Electron IPC Gemini refinement complete |
-| `uworld-gemini-v1-stable` | UWorld | Electron IPC Gemini refinement, JSON extraction hardened |
-| `ome-v1-stable` | OME | Cluster index provenance fix, pipeline complete |
-| `anki-v1-stable` | Anki | Approval-state and save-path fixes, pipeline complete |
+Current stable tag: **`v4.48-lecture-explanation-tables-stable`**.
+
+The full milestone log lives in `GIT_TAG_HISTORY.md`. Highlights:
+
+| Tag | What it marks |
+|---|---|
+| `v4.40-phase10c-survivability-stable` | Batch Import queue survives Electron restarts (single-instance lock, filesystem-first reconciliation, durable `process_registry.json`, packaged app parity). |
+| `v4.41-phase11-generation-correctness-stable` | Phase 11 generation correctness hardening. |
+| `v4.44-phase11-observability-stable` | Phase 11.7 observability + unified chunk contract system. |
+| `v4.47-emma-pdf-batch-import-stable` | Emma PDF batch import routing stabilization. |
+| `v4.48-lecture-explanation-tables-stable` | Lecture-slide explanation panel renders structured `q.tables` / `q.metadata.tables` inline instead of the placeholder line. |
+
+Earlier source-specific tags such as `mehlman-v1-stable`, `divine-v1-stable`, `uworld-gemini-v1-stable`, `ome-v1-stable`, and `anki-v1-stable` remain as historical rollback points for their respective pipelines.
 
 ---
 
@@ -246,7 +251,7 @@ cp index.html "dist/mac-arm64/NBME Self-Assessment Suite.app/Contents/Resources/
 
 - **Browser (GitHub Pages):** UWorld and Divine Gemini refinement (Electron IPC) are unavailable. Drive OAuth requires the `https://shamsulalamx.github.io` origin registered in Google Cloud Console as a Web application credential (not Desktop).
 - **NBME PDF:** PDF import uses OCR. Accuracy depends on screenshot or scan quality. Grouped/shared-stem questions are supported but may require review.
-- **NBME Gemini JSON:** Stable. All bugs resolved as of 2026-05-13. Psych Shelf 3–8 and UWorld Notes validated. Figure rendering (VAL-002) and "save valid only" button (VAL-003) have not been end-to-end validated. See `BUGS_AND_NEXT_STEPS.md`.
+- **NBME Gemini JSON:** Stable. Psych Shelf 3–8 and UWorld Notes validated. Figure rendering and "save valid only" button have not been end-to-end validated. See `KNOWN_LIMITATIONS.md` for current open items and `docs/archive/BUGS_AND_NEXT_STEPS.md` for historical context.
 - **UWorld:** DOCX export only. Gemini refinement is one-at-a-time; batch queue can be paused or cancelled. Electron only.
 - **OME:** Short, high-quality PDFs only. No OCR fallback in v1.
 - **Anki:** Plain-text `.txt` export only. `.apkg` files are not supported.

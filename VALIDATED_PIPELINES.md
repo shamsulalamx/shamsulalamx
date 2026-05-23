@@ -1,6 +1,8 @@
 # Validated Pipelines
 
-Last updated: 2026-05-21
+Last updated: 2026-05-23
+
+Current stable tag: `v4.48-lecture-explanation-tables-stable`.
 
 This file records what is validated, what is not validated, and the risk level for each source. Do not upgrade a source's status without evidence.
 
@@ -38,11 +40,14 @@ Validated:
 - Shared-ingestion profile at v4.11.
 - BIC existing-output import mode at v4.13.
 - Normalized-chunk downstream consumption at v4.14.
+- Emma PDF batch import routing stabilization at v4.47.
+- Lecture-slide explanation tables now render structured `q.tables` inline (v4.48). Validated on Test_Emma fixture in packaged app: 3-column / 3-row table renders correctly in the explanation panel.
 - Existing valid Emma app-ready JSON can auto-import through BIC with expected count and folder.
 
-Known blocker:
+Known blockers:
 
 - Live generation reached downstream but failed Emma semantic validation on Q1 for unsupported term `dystocia`. This is generation/validator quality, not BIC wiring.
+- Lecture-slide chunk-planning silently drops Gemini short returns. Same-input runs produced 16 questions then 7 questions on consecutive BIC jobs without any error surfaced. Diagnosed 2026-05-23, fix design under discussion (see `NEXT_STEPS_PRIORITY.md` item 0).
 
 ## Mehlman
 

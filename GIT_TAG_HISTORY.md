@@ -1,8 +1,8 @@
 # Git Tag History
 
-Last updated: 2026-05-21
+Last updated: 2026-05-23
 
-This file documents stable v4 tags from v4.4 through v4.16, plus immediate v4.0-v4.3 context because v4.4 builds on those milestones.
+This file documents stable v4 tags from v4.0 through the current head tag `v4.48-lecture-explanation-tables-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
 
 ## v4.0-images-tables-generator-stable
 
@@ -174,10 +174,75 @@ Validated: Shared-ingestion normalized Anki text chunks, selected-input dry-run 
 
 Architecture significance: Proved a dry-run-only BIC profile can reuse an existing wrapper without claiming live Gemini semantic quality.
 
-## Pending Milestone Candidate
+## v4.19 → v4.30 (Intervening milestones)
 
-The OME dry-run BIC milestone and Divine Transcript dry-run BIC milestone have validation evidence after v4.16, but no stable tag exists yet.
+The Anki, OME, and Divine Transcript dry-run BIC milestones plus assorted source-specific stabilizations were tagged in the v4.17–v4.30 range during Phase 7–10 work. Run `git tag --list 'v4.*' --sort=version:refname` for the exact set on this clone; some intermediate tags may only exist locally and are documented in their individual commit messages.
 
-Pending candidate only: `v4.19-divine-transcript-dry-run-bic-stable`.
+## v4.31 → v4.37 (BIC durability hardening)
 
-Do not add a stable tag-history entry until the commit and tag decision is made.
+| Tag | Meaning |
+|---|---|
+| `v4.31-bic-durable-output-root-stable` | Each BIC job gets a durable per-job output root under app userData. |
+| `v4.32-bic-durable-generation-queue-stable` | Generation queue persists across Electron restarts. |
+| `v4.33-bic-queue-visibility-stable` | Queue UI surfaces job state, retries, and pending work. |
+| `v4.34-organic-lecture-review-drafts-stable` | Organic lecture-slide review draft writer landed. |
+| `v4.35-review-draft-survivor-import-stable` | Reviewed survivors can be imported after manual approval. |
+| `v4.36-unified-recovery-contract-stable` | `organic-generator-recovery-v1` metadata contract added. |
+| `v4.37-mehlman-durable-output-stable` | Mehlman outputs route to the durable job output root. |
+
+## v4.40-phase10c-survivability-stable
+
+Commit: `5f1cffc`
+
+Meaning: Phase 10C survivability layer for the Batch Import queue system.
+
+Validated:
+
+- single-instance Electron lock,
+- queue corruption preservation,
+- filesystem-first queue/history reconciliation,
+- completed-job protection from filesystem artifacts,
+- durable `<outputRoot>/process_registry.json`,
+- guarded process-group cleanup,
+- startup cleanup for stale tracked runner PIDs,
+- rebuilt packaged app parity with current `electron/main.js`.
+
+Architecture significance: Established the surviving-queue baseline that all later v4.41+ work builds on.
+
+## v4.41 → v4.47 (Phase 11 Fast Facts stabilization)
+
+| Tag | Meaning |
+|---|---|
+| `v4.41-per-question-review-draft-stable` | Per-question review draft wiring with manual approve / reject / import flow. |
+| `v4.41-phase11-generation-correctness-stable` | Phase 11 generation correctness hardening. |
+| `v4.42-fastfacts-packaged-path-hotfix-stable` | Packaged Fast Facts path crash hotfix. |
+| `v4.42-source-type-switching` | Allow source type switching with queued files. |
+| `v4.43-fastfacts-limit-removal-stable` | Removed unintended Fast Facts generation caps. |
+| `v4.44-fastfacts-generation-completion-stable` | Fast Facts generation completion stabilized. |
+| `v4.44-phase11-observability-stable` | Phase 11.7 observability plus unified chunk contract system. |
+| `v4.45-fastfacts-review-only-completion-stable` | Fast Facts review-only completion handling. |
+| `v4.46-fastfacts-reviewed-import-after-auto-import-stable` | Reviewed Fast Facts import allowed after auto-import. |
+| `v4.47-emma-pdf-batch-import-stable` | Emma PDF batch import routing stabilization. |
+
+Some adjacent tags share the same major version (e.g. two `v4.41-*` and two `v4.44-*`) because related but separately validated work was tagged independently rather than collapsed. The HEAD tag of each major number is the safest rollback point unless a specific entry above is required.
+
+## v4.48-lecture-explanation-tables-stable
+
+Commit: `f3b2bc9`
+
+Meaning: Lecture-slide explanation panel now renders structured tables (`q.tables` / `q.metadata.tables`) inline instead of the placeholder line `"Table used for explanation only: <tableId>"`.
+
+Validated:
+
+- table extracted into `q.tables` / `q.metadata.tables` via the existing import path,
+- packaged `shamsulalamx.app` renders a 3-column / 3-row HTML table in the explanation block for the Test_Emma fixture,
+- placeholder line no longer emitted by `build_explanation_sections`,
+- section heading renamed `"Slide Figures and Tables"` → `"Slide Figures"`,
+- `renderExplanationTablesInto` wired into both Quiz IIFE and `window.buildExplanationHTML`.
+
+Not validated by this milestone:
+
+- per-question table render across all Emma decks (only one Test_Emma fixture was tested),
+- the lecture-slide chunk-planning silent-loss issue diagnosed alongside this milestone remains open (see `KNOWN_LIMITATIONS.md` and `NEXT_STEPS_PRIORITY.md`).
+
+Architecture significance: Removes a long-standing renderer gap where extracted table content was discarded in favor of a textual reference. Establishes `q.tables` as a first-class renderer input alongside `q.images` and `q.explanationImages`.

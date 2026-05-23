@@ -1,8 +1,10 @@
 # Batch Import Center Architecture
 
-Last updated: 2026-05-21
+Last updated: 2026-05-23
 
-Batch Import Center is the Electron/Python orchestration layer for source profiles.
+Current stable tag: `v4.48-lecture-explanation-tables-stable`.
+
+Batch Import Center is the Electron/Python orchestration layer for source profiles. The Phase 10C survivability layer (tagged at v4.40) protects the queue across process restarts and filesystem inconsistencies.
 
 ## Files
 
@@ -130,3 +132,21 @@ Electron stores BIC job history under app `userData`, not in the repo. It is use
 ## Validation Boundary
 
 BIC proves orchestration and import path. It does not prove semantic quality. A BIC success can coexist with a weak generated question set.
+
+## Phase 10C Survivability (v4.40)
+
+The BIC queue survives Electron restarts, single-instance violations, and filesystem mismatches through:
+
+- `requestSingleInstanceLock` — only one packaged or dev Electron instance owns the queue.
+- Filesystem-first queue/history reconciliation on startup (`reconcileQueueAndHistoryOnStartup`).
+- Queue corruption preservation — corrupt queue files are quarantined, not auto-deleted.
+- Completed-job protection — historical jobs are not invalidated by spurious post-completion filesystem changes.
+- Durable per-job `process_registry.json` under each `<outputRoot>`.
+- Guarded process-group cleanup on cancellation.
+- Startup cleanup for stale tracked runner PIDs that no longer exist.
+
+When making any change to `electron/main.js` or `run_pipeline_job.py`, the rebuilt packaged app must retain these mechanisms. Verify by grepping the packaged `Resources/app/electron/main.js` for `requestSingleInstanceLock`, `process_registry`, and `reconcileQueueAndHistoryOnStartup`.
+
+## Job Output Root Redirection
+
+When BIC launches a Python pipeline, it sets `BIC_JOB_OUTPUT_ROOT=<userData>/batch-import-center/jobs/<jobId>` in the subprocess environment. The lecture-slide generator (and other source-specific generators) honor this by computing `RUNTIME_DIR = JOB_OUTPUT_ROOT / "<generator-dir>"` instead of writing into the repo. This means BIC-driven runs never pollute the source tree under `tools/<generator>/output_json/`; those locations are only used when the generator is run standalone from the CLI.

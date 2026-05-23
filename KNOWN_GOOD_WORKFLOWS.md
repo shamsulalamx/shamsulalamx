@@ -1,7 +1,10 @@
 # NBME Self-Assessment Suite — Known-Good Workflows
 
-**Last updated:** 2026-05-19
+**Last updated:** 2026-05-23
+**Current stable tag:** `v4.48-lecture-explanation-tables-stable`
 **Purpose:** Exact commands, verified test assets, and critical warnings. Copy-paste safe.
+
+> **BIC-driven runs vs. CLI runs.** When you launch a generator through the Batch Import Center (packaged or dev Electron), outputs go to `~/Library/Application Support/nbme-self-assessment-suite/batch-import-center/jobs/<jobId>/<generator-dir>/...` because `BIC_JOB_OUTPUT_ROOT` is set in the subprocess environment. When you run the generator directly from a terminal with the commands below, outputs go to the in-repo `tools/<generator-dir>/output_json/`. Both paths produce the same artifacts.
 
 ---
 

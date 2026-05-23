@@ -1,6 +1,8 @@
 # Shared Ingestion Architecture
 
-Last updated: 2026-05-21
+Last updated: 2026-05-23
+
+Current stable tag: `v4.48-lecture-explanation-tables-stable`.
 
 Shared ingestion is the profile layer that normalizes source material before downstream generation or attachment-first app-ready output.
 

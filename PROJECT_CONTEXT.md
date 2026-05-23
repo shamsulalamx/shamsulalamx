@@ -1,8 +1,10 @@
 # NBME Self-Assessment Suite — Project Context
 
-**Last updated:** 2026-05-19
-**Supersedes:** Previous PROJECT_CONTEXT.md (2026-05-11/13 versions — stale, contained references to Netlify, old architecture, unresolved bugs since fixed)
-**Purpose:** Durable architectural rules and constraints for any session resuming work here. Read this first, then `PROJECT_STATUS.md`, `PIPELINE_ARCHITECTURE.md`, and `CLAUDE_CODE_HANDOFF.md`.
+**Last updated:** 2026-05-23
+**Current stable tag:** `v4.48-lecture-explanation-tables-stable`
+**Current branch:** `phase11-fastfacts-stability`
+**Supersedes:** Previous PROJECT_CONTEXT.md (pre-2026-05-19 versions — stale, contained references to Netlify, old architecture, unresolved bugs since fixed)
+**Purpose:** Durable architectural rules and constraints for any session resuming work here. Read this first, then `PROJECT_STATUS_2026-05-23.md`, `ARCHITECTURE.md`, `BATCH_IMPORT_ARCHITECTURE.md`, `KNOWN_LIMITATIONS.md`, `NEXT_STEPS_PRIORITY.md`, and `MIGRATION_HANDOFF.md`.
 
 ---
 
@@ -174,9 +176,21 @@ New pipelines (like the planned OME external tool) must reuse:
 - No server-side backend. No Netlify. No Supabase. No Firebase.
 - No React. No Vue. No build system.
 - No automated tests (no Jest, no Mocha, no Playwright).
-- No OME external tool pipeline (planned but not yet built — see `NEXT_STEPS_OME.md`).
 - No Phase 2 pearl generation (`ipcMain.handle('nbme:ai:generate-pearls')` — deferred until after exam).
 - No `dist/` is committed — it's gitignored.
+
+## 9b. What Has Been Added Since Pre-Phase-10 PROJECT_CONTEXT
+
+These items are present in current source but were not in the pre-Phase-10 version of this doc:
+
+- `core/uoga/` — Unified Organic Generation Architecture core package. Graph-native only for `fast_facts_pptx`. Enforced by `scripts/uoga_dependency_graph_validator.py`.
+- `core/shared/` and `core/extractive/` and `core/hybrid/` — domain-boundary scaffolding for source routing.
+- BIC durability stack (v4.31 onward): durable per-job output root under `~/Library/Application Support/nbme-self-assessment-suite/batch-import-center/jobs/<jobId>/`, BIC queue UI, queue persistence across Electron restarts.
+- Phase 10C survivability (v4.40): single-instance lock, `process_registry.json`, filesystem-first reconciliation, completed-job protection, guarded process-group cleanup.
+- Phase 11 Fast Facts stabilization (v4.41–v4.47): per-question review draft wiring, generation correctness hardening, unified chunk contract, packaged path fixes, reviewed-import-after-auto-import flow.
+- v4.48 lecture-slide explanation tables now render structured `q.tables` / `q.metadata.tables` inline in the explanation panel via `renderExplanationTablesInto`.
+- `tools/lecture-slide-question-generator/` consumes shared normalized chunks for Emma and is the active downstream for both Emma and Fast Facts (via `--fast-facts-profile`).
+- OME, Anki, Divine Transcript shared-ingestion profiles with dry-run BIC handoffs.
 
 ---
 

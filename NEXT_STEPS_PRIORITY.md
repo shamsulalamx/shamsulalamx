@@ -1,8 +1,28 @@
 # Next Steps Priority
 
-Last updated: 2026-05-21
+Last updated: 2026-05-23
 
-This roadmap prioritizes convergence while protecting validated behavior.
+Current stable tag: `v4.48-lecture-explanation-tables-stable`.
+
+This roadmap prioritizes convergence while protecting validated behavior. The new top item is the lecture-slide chunk-planning fix surfaced during the v4.48 validation pass.
+
+## 0. Lecture-Slide Chunk-Planning Quota-Aware Recovery (new, top priority)
+
+Rationale: Live diagnosis on 2026-05-23 confirmed that `generate_lecture_slide_questions.py` silently accepts Gemini short returns in `call_generation_once` (`require_exact_count=False`). A naive flip to `True` engages the existing recursive retry/sub-chunking path, but live testing shows that path can multiply API calls aggressively enough to deplete a Gemini prepayment budget mid-run and finish with 0 questions for the same input that previously produced 7. The naive fix is reverted in HEAD.
+
+Risk: High if implemented naively (budget runaway, worse-than-broken outcomes); medium if implemented with explicit guards.
+
+Architectural impact: Touches `generate_lecture_slide_questions.py`. May need a shared `is_quota_failure(err)` helper alongside the existing `is_truncation_failure` / `is_network_failure` predicates.
+
+Candidate approaches, listed cheapest first:
+
+1. **Quota-aware early stop (smallest safe change).** Detect HTTP 429 or `RESOURCE_EXHAUSTED` in the error message and immediately stop ALL further retries for the current run. Write whatever was generated and exit cleanly. Does not improve the short-return problem on its own, but stops the runaway. Strongly recommended regardless of which other path is chosen.
+
+2. **Targeted missing-slide retry (correct fix).** Keep the existing partial-accept behavior on the initial chunk attempt. After all chunks complete, compare allocated-vs-generated slide IDs, and make ONE focused per-slide attempt for the missing slides only. Cap at e.g. 2 attempts per missing slide. Predictable cost (≤ slides × cap), recovers most missing questions.
+
+3. **Capped sub-chunking depth.** Keep the strict-count idea but cap recursion at one level (chunk → repair → halves, no further). Avoids the 6× multiplier worst case but is less elegant than option 2.
+
+Validation requirements for whichever path is chosen: live BIC run on the same Test_Emma fixture, allocated-vs-generated parity check, packaged-app validation, and a confirmed-safe cost ceiling (e.g. "≤ 2× allocated questions worth of API calls in the worst case").
 
 ## 1. Controlled Divine Audio Operationalization
 

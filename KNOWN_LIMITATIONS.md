@@ -1,6 +1,18 @@
 # Known Limitations
 
-Last updated: 2026-05-21
+Last updated: 2026-05-23
+
+Current stable tag: `v4.48-lecture-explanation-tables-stable`.
+
+## Lecture-Slide Chunk-Planning Silent Loss (newly diagnosed 2026-05-23)
+
+The lecture-slide generator silently accepts short Gemini returns. In `call_generation_once` (`tools/lecture-slide-question-generator/generate_lecture_slide_questions.py`), the call to `extract_generated_question_items` passes `require_exact_count=False`. When Gemini returns fewer questions than the chunk's allocated count, the partial output is kept with only a `warn()` call to stderr. The lost slides are not retried, not sub-chunked, and not surfaced in `validationWarnings` or `validationErrors` in the run report.
+
+Observed impact: the same Test_Emma input produced 16 questions in one BIC run and 7 in the next. The drop came entirely from short returns in two generation chunks (chunk1 returned 4 of 8 expected, chunk2 returned 3 of 5 expected).
+
+A naive fix (flipping the flag to `True`) does engage the existing retry path correctly — repair retry, then sub-chunking into halves, then single-slide attempts — but the recursion multiplier is aggressive enough that it can deplete a Gemini prepayment budget mid-run. A live test on 2026-05-23 hit HTTP 429 partway through, every remaining slide was skipped, and the final outcome was 0 questions for the same input. The naive fix is reverted in HEAD.
+
+A safe fix requires quota-aware retry stopping or a non-cascading recovery strategy. See `NEXT_STEPS_PRIORITY.md` for the proposed options.
 
 ## Fast Facts Validation Limit
 

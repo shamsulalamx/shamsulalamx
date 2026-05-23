@@ -1,8 +1,10 @@
 # Architecture
 
-Last updated: 2026-05-21
+Last updated: 2026-05-23
 
-This document describes the current v4.16 architecture plus the validated OME and Divine Transcript dry-run BIC milestones after that tag. It distinguishes validated behavior from intended convergence.
+Current stable tag: `v4.48-lecture-explanation-tables-stable`.
+
+This document describes the current architecture through v4.48. It carries forward the v4.16 baseline plus the validated OME and Divine Transcript dry-run BIC milestones, the Phase 10C survivability layer (tagged at v4.40), the Phase 11 Fast Facts stabilization work (v4.41–v4.47), and the lecture-slide explanation-table rendering (v4.48). It distinguishes validated behavior from intended convergence.
 
 ## System Overview
 
@@ -251,3 +253,61 @@ Images & Tables is the first validated image-first/table-first shared profile. I
 - packaged `.app` behavior
 
 It does not validate advanced semantic visual question generation, deep table parsing, or large-folder scaling.
+
+## Lecture-Slide Explanation Table Rendering (v4.48)
+
+The lecture-slide downstream now renders structured `q.tables` (with `q.metadata.tables` as a fallback) inline in the explanation block instead of emitting the placeholder line `"Table used for explanation only: <tableId>"`.
+
+Renderer:
+
+- `renderExplanationTablesInto(q, container)` in `index.html` builds an HTML `<table class="lab-table">` from `headers[]` and `rows[]`.
+- Wired into both the Quiz IIFE explanation builder and `window.buildExplanationHTML` so review-mode rendering picks it up.
+- Skips silently when neither location has populated table data.
+
+Generator:
+
+- `build_explanation_sections` in `generate_lecture_slide_questions.py` no longer extends `extras` with `table_notes`.
+- Section heading renamed `"Slide Figures and Tables"` → `"Slide Figures"`.
+
+Validated for the Test_Emma fixture (3-column / 3-row table) in packaged `shamsulalamx.app`. Not validated across all Emma decks.
+
+## Phase 10C Survivability Layer (v4.40)
+
+The Batch Import queue system is hardened against process restarts, single-instance violations, and filesystem inconsistencies:
+
+- Single-instance Electron lock (`requestSingleInstanceLock`).
+- Queue corruption preservation.
+- Filesystem-first queue/history reconciliation (`reconcileQueueAndHistoryOnStartup`).
+- Completed-job protection from spurious filesystem artifacts.
+- Durable `<outputRoot>/process_registry.json`.
+- Guarded process-group cleanup.
+- Startup cleanup for stale tracked runner PIDs.
+- Packaged app parity with current `electron/main.js`.
+
+These layers are required for any claimed BIC survivability behavior. Do not casually change them.
+
+## UOGA Core Package (Phase 11)
+
+`core/uoga/` is the Unified Organic Generation Architecture. It is currently graph-native only for `fast_facts_pptx`; every other organic source raises "not graph-native, cannot run in hybrid mode."
+
+Modules:
+
+- `execution_graph.py` — authoritative chunk graph with state and attempt tracking.
+- `retry_engine.py` — bounded retry plan (`initial` → `repair` → `fallback`).
+- `finalization.py` — deterministic single-emission `JOB_COMPLETE` gate.
+- `telemetry_engine.py` — UOGA-restricted chunk events with heartbeat thread.
+- `review_artifacts.py` — durable review draft writer.
+- `job_contracts.py` — pipeline-route classification and chunk-event contracts.
+- `validation_engine.py` — chunk accounting and cardinality reconciliation.
+
+Domain boundaries are enforced by `scripts/uoga_dependency_graph_validator.py`:
+
+- EXTRACTIVE and HYBRID may not depend on UOGA.
+- SHARED may not depend on any runtime domain.
+- `ExecutionGraph`, `CHUNK_*` symbols, and `retry_engine` are UOGA-only.
+
+`tools/chunk_telemetry.py` is a compatibility shim that re-exports the UOGA telemetry engine for legacy callers.
+
+## Known Lecture-Slide Chunk-Planning Issue
+
+The lecture-slide generator silently accepts short Gemini returns at the initial-attempt boundary (`call_generation_once` passes `require_exact_count=False`). Live diagnosis on 2026-05-23 confirmed this can cause same-input runs to vary widely (16 questions vs 7 questions). A naive strict-count flip triggers the existing retry/sub-chunking path, but the recursion multiplier is aggressive enough to deplete a Gemini prepayment budget mid-run and end with 0 questions. The naive fix is therefore reverted in HEAD; a quota-aware design is needed before this can be safely changed. See `NEXT_STEPS_PRIORITY.md`.
