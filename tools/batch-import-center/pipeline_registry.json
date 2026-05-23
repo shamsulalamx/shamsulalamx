@@ -12,7 +12,7 @@
         {
           "stage": "normalization",
           "stageLabel": "Emma Holiday shared-ingestion dry-run",
-          "heartbeatSeconds": 20,
+          "heartbeatSeconds": 30,
           "args": ["tools/shared-ingestion/emma_profile_runner.py", "--mode", "dry-run", "--input-file", "{inputFile}", "--limit", "0"]
         }
       ],
@@ -20,7 +20,7 @@
         {
           "stage": "normalization",
           "stageLabel": "Emma Holiday shared-ingestion live generation",
-          "heartbeatSeconds": 20,
+          "heartbeatSeconds": 30,
           "args": ["tools/shared-ingestion/emma_profile_runner.py", "--mode", "generate", "--input-file", "{inputFile}", "--limit", "0"]
         }
       ],

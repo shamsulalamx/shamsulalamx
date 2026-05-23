@@ -35,7 +35,6 @@ ORGANIC_SOURCE_MARKERS = (
     "lecture_slide_pdf",
     "lecture_slide_generator",
     "lecture-slide-generator",
-    "emma",
     "question_synthesis",
     "organic_generation",
 )
@@ -51,6 +50,8 @@ EXTRACTIVE_SOURCE_MARKERS = (
     "anki",
     "uworld",
     "divine",
+    "emma_holiday_pdf",
+    "emma",
     "mehlman_pdf",
     "mehlman",
     "ome_pdf",

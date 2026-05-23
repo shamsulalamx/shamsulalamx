@@ -866,6 +866,19 @@ def is_truncation_failure(error: Exception | str) -> bool:
     )
 
 
+def is_network_failure(error: Exception | str) -> bool:
+    text = str(error).lower()
+    return (
+        "urlopen error" in text
+        or "nodename nor servname provided" in text
+        or "name or service not known" in text
+        or "network is unreachable" in text
+        or "temporary failure in name resolution" in text
+        or "gemini request timed out" in text
+        or "repair_timeout" in text
+    )
+
+
 def raw_gemini_call(api_key: str, prompt: str, temperature: float, max_tokens: int = 8192, timeout_seconds: int = 120) -> str:
     url = f"{GEMINI_API_BASE}/{GEMINI_MODEL}:generateContent?key={api_key}"
     payload = json.dumps({
@@ -1050,6 +1063,11 @@ def normalize_slides(slide_payload: dict[str, Any], generate: bool) -> dict[str,
 
     slide_order = {s["slideId"]: i for i, s in enumerate(slides)}
     normalized = validate_normalized_slides(normalized, {s["slideId"] for s in slides}, allow_missing=True)
+    if generate and not normalized:
+        normalized = [deterministic_normalize_slide(slide) for slide in slides]
+        warnings.append(
+            "Gemini normalization produced no valid slides; fell back to deterministic local normalization."
+        )
     normalized.sort(key=lambda s: slide_order.get(s["slideId"], 10**9))
     normalized_ids = {s["slideId"] for s in normalized}
     skipped_ids = sorted({s["slideId"] for s in slides} - normalized_ids)
@@ -1263,6 +1281,9 @@ def normalize_chunk_with_retries(
         except Exception as exc:
             last_error = str(exc)
             warnings.append(f"Normalization {chunk_label}: retry1 repair failed: {last_error}")
+            if is_network_failure(last_error):
+                warnings.append(f"Normalization {chunk_label}: stopped retries after network failure.")
+                return [], warnings
     else:
         warnings.append(f"Normalization {chunk_label}: truncation detected; splitting chunk without same-size repair.")
 
@@ -1460,14 +1481,17 @@ def allocate_questions(normalized_payload: dict[str, Any], memory: dict[str, Any
 
 def dry_run_question(allocation: dict[str, Any], number: int) -> dict[str, Any]:
     slide = allocation["slide"]
+    slide_id = str(slide.get("slideId") or f"slide-{number}")
     concept = first_nonempty(slide.get("primaryConcepts")) or first_nonempty(slide.get("clinicalFacts")) or "slide-supported concept"
     facts = (slide.get("clinicalFacts") or slide.get("groundingNotes") or [concept])[:3]
     fact_sentence = " ".join(str(f).rstrip(".") + "." for f in facts if str(f).strip())
     if not fact_sentence:
         fact_sentence = f"The slide supports the concept: {concept}."
+    dry_run_marker = chr(ord("a") + ((max(1, number) - 1) % 26))
+    dry_run_context = f"Dry-run source chunk {slide_id}, item {dry_run_marker}"
     stem = (
         f"A patient is evaluated for a finding related to {concept}. "
-        f"The lecture slide emphasizes the following slide-supported information: {fact_sentence} "
+        f"The lecture slide emphasizes the following slide-supported information from {dry_run_context}: {fact_sentence} "
         "The clinician wants to identify the best matching high-yield concept from the slide. "
         "Which of the following is the best answer?"
     )
@@ -1493,7 +1517,7 @@ def dry_run_question(allocation: dict[str, Any], number: int) -> dict[str, Any]:
             {"label": "C", "explanation": "Dry-run distractor placeholder."},
             {"label": "D", "explanation": "Dry-run distractor placeholder."},
         ],
-        "educationalObjective": f"Recognize the slide-supported concept: {concept}.",
+        "educationalObjective": f"Recognize the slide-supported concept from {dry_run_context}: {concept}.",
         "retrievalTag": concept[:80],
         "reviewPearl": fact_sentence[:220],
         "imageRouting": dry_run_image_routing(slide, number),
@@ -1929,6 +1953,9 @@ def generate_question_chunk_with_retries(
         except Exception as exc:
             last_error = str(exc)
             warnings.append(f"Generation {chunk_label}: retry1 repair failed: {last_error}")
+            if is_network_failure(last_error):
+                warnings.append(f"Generation {chunk_label}: stopped retries after network failure.")
+                return [], warnings
     else:
         warnings.append(f"Generation {chunk_label}: truncation detected; splitting chunk without same-size repair.")
 
