@@ -1295,6 +1295,8 @@ async function runQueuedBatchJob(job) {
         chunkIndex: active ? Number(active.index || 0) : 0,
         currentPhase: active ? String(active.state || '') : '',
         retryState: latestAttempt ? {
+          attemptNumber: String(latestAttempt.phase || '') === 'repair' ? 1 : 0,
+          maxRepairAttempts: 1,
           globalRetryId: Number(latestAttempt.attemptId || 0),
           retryPhase: latestAttempt.phase || '',
           status: latestAttempt.status || '',
@@ -1319,7 +1321,8 @@ async function runQueuedBatchJob(job) {
       if (chunkProgress && (enriched.event === 'JOB_COMPLETE' || enriched.chunkEvent === 'JOB_COMPLETE')) {
         organicJobComplete = true;
         chunkProgress.completedChunks = chunkProgress.totalChunks;
-        chunkProgress.currentPhase = 'completed';
+        chunkProgress.chunkIndex = chunkProgress.totalChunks;
+        chunkProgress.currentPhase = 'finalizing';
         chunkProgress.activeChunk = '';
         chunkProgress.retryState = null;
         chunkProgress.lastEvent = 'JOB_COMPLETE';
@@ -1329,18 +1332,17 @@ async function runQueuedBatchJob(job) {
       }
       if (enriched.type === 'stage_start' || enriched.type === 'pipeline_progress' || enriched.type === 'stage_heartbeat' || enriched.type === 'log') {
         const organicComplete = enriched.event === 'JOB_COMPLETE' || enriched.chunkEvent === 'JOB_COMPLETE';
-        if (!organicJobComplete || organicComplete) {
-          updateBatchQueueJob(manifest.jobId, {
-            progress: {
-              phase: organicComplete ? 'completed' : (enriched.stage || enriched.phase || enriched.stageLabel || enriched.type),
-              message: organicComplete ? 'Organic generation completed.' : (enriched.message || enriched.stageLabel || enriched.type),
-              updatedAt: enriched.timestamp || new Date().toISOString(),
-              ...(chunkProgress ? { chunk: chunkProgress } : {})
-            },
-            ...(chunkProgress ? { chunkProgress } : {}),
-            lastHeartbeatAt: enriched.timestamp || new Date().toISOString()
-          });
-        }
+        const updatedAt = enriched.timestamp || new Date().toISOString();
+        updateBatchQueueJob(manifest.jobId, {
+          progress: {
+            phase: organicComplete ? 'finalizing' : (enriched.stage || enriched.phase || enriched.stageLabel || enriched.type),
+            message: organicComplete ? 'Generation finished. Preparing app-ready output.' : (enriched.message || enriched.stageLabel || enriched.type),
+            updatedAt,
+            ...(chunkProgress ? { chunk: chunkProgress } : {})
+          },
+          ...(chunkProgress ? { chunkProgress } : {}),
+          lastHeartbeatAt: updatedAt
+        });
       }
       if (enriched.type === 'warning' || enriched.type === 'cache_summary') {
         const message = enriched.message || enriched.warning;
@@ -1376,6 +1378,7 @@ async function runQueuedBatchJob(job) {
     function consumeLine(line, streamName) {
       const trimmed = line.trim();
       if (!trimmed) return;
+      if (trimmed.startsWith('BIC_PROGRESS ')) return;
       try {
         const parsed = JSON.parse(trimmed);
         if (parsed.type === 'job_complete') finalEvent = parsed;
@@ -1424,42 +1427,50 @@ async function runQueuedBatchJob(job) {
       const reviewRequiredStatus = report.status === 'needs_review' || report.status === 'completed_with_review_required';
       const status = wasCancelled ? 'canceled' : (ok && !reportFatal ? (reviewRequiredStatus ? 'completed_with_review_required' : (report.status || 'completed')) : 'failed');
       const finalReport = { ...report, status, runtimeSeconds, outputPaths, warnings: finalWarnings, errors: finalErrors };
+      if (ok && !wasCancelled && !reportFatal && job.runMode === 'generate-auto-import' && !outputPaths.length) {
+        finalReport.status = 'failed';
+        finalReport.stage = 'failed';
+        finalReport.errors = [...finalErrors, 'Generation finished but no app-ready output was discovered for auto-import.'];
+      }
       const reportPath = writeBatchCompletionReport(job.outputRoot, finalReport);
       const finishedAt = new Date().toISOString();
+      const finalStatus = finalReport.status || status;
+      const finalOk = ok && finalStatus !== 'failed';
+      const finalErrorList = Array.isArray(finalReport.errors) ? finalReport.errors : [];
       updateBatchJobRecord(manifest.jobId, {
-        status,
+        status: finalStatus,
         completedAt: finishedAt,
         runtimeSeconds,
-        currentStage: status === 'completed' || status === 'completed_with_review_required' ? status : report.stage || null,
+        currentStage: finalStatus === 'completed' || finalStatus === 'completed_with_review_required' ? finalStatus : report.stage || null,
         outputPaths,
         draftPath: report.draftPath || '',
         reportPath,
         warnings: wasCancelled ? [...finalWarnings, 'Job canceled by user.'] : finalWarnings,
-        errors: finalErrors,
+        errors: finalErrorList,
         recovery,
         report: finalReport
       });
       updateBatchQueueJob(manifest.jobId, {
-        status,
+        status: finalStatus,
         finishedAt,
         outputPaths,
         draftPath: report.draftPath || '',
         reportPath,
         warnings: wasCancelled ? [...finalWarnings, 'Job canceled by user.'] : finalWarnings,
-        errors: finalErrors,
+        errors: finalErrorList,
         recovery,
         report: finalReport,
         progress: {
-          phase: status,
-          message: status === 'completed'
+          phase: finalStatus,
+          message: finalStatus === 'completed'
             ? 'Batch job completed.'
-            : (status === 'completed_with_review_required' ? 'Batch job completed with review artifacts.' : (finalErrors[0] || status)),
+            : (finalStatus === 'completed_with_review_required' ? 'Batch job completed with review artifacts.' : ((finalReport.errors || [])[0] || finalStatus)),
           updatedAt: finishedAt
         }
       });
-      updateBatchProcessRegistryStatus(job, status);
+      updateBatchProcessRegistryStatus(job, finalStatus);
       const result = {
-        ok,
+        ok: finalOk,
         cancelled: wasCancelled,
         exitCode: code,
         signal,
@@ -1467,9 +1478,9 @@ async function runQueuedBatchJob(job) {
         manifest,
         outputs: outputPaths,
         progress: [],
-        report,
-        errorCode: ok ? null : (wasCancelled ? 'BATCH_JOB_CANCELLED' : 'BATCH_JOB_FAILED'),
-        message: ok ? null : (wasCancelled ? 'Batch job canceled.' : (finalEvent?.error || fallbackMessage))
+        report: finalReport,
+        errorCode: finalOk ? null : (wasCancelled ? 'BATCH_JOB_CANCELLED' : 'BATCH_JOB_FAILED'),
+        message: finalOk ? null : (wasCancelled ? 'Batch job canceled.' : (finalErrorList[0] || finalEvent?.error || fallbackMessage))
       };
       settleBatchQueueWaiter(job.jobId, result);
       resolve();

@@ -8542,6 +8542,7 @@ const App = (() => {
   let _batchReviewState = null;
   let _batchImportProgressUnsubscribe = null;
   let _batchImportQueueUnsubscribe = null;
+  const _batchQueueAutoImports = new Set();
   let _ankiImportPreview = null;
   let _omeImportPreview = null;
   let _mehlmanImportPreview = null;
@@ -22389,6 +22390,9 @@ const App = (() => {
         const jobs = Array.isArray(payload?.queue?.jobs) ? payload.queue.jobs : [];
         if (_batchImportState) _batchImportState.queue = jobs;
         renderBatchImportQueue(jobs);
+        processQueuedBatchAutoImports(jobs).catch(function(err) {
+          console.error('[batch-import] queued auto-import failed', err);
+        });
       });
     }
   }
@@ -22513,16 +22517,18 @@ const App = (() => {
     const chunk = job?.chunkProgress || job?.progress?.chunk || null;
     if (!chunk || typeof chunk !== 'object') return 'Chunk progress not ready';
     const total = Number(chunk.totalChunks || 0);
-    const index = Number(chunk.chunkIndex || 0);
+    const completed = Number(chunk.completedChunks || 0);
+    const rawIndex = Number(chunk.chunkIndex || 0);
+    const index = String(chunk.currentPhase || '').trim() === 'completed' && total ? (completed || total) : rawIndex;
     const chunkText = total ? `Chunk ${index || '?'} / ${total}` : 'Chunk progress pending';
     const phase = String(chunk.currentPhase || '').trim();
     const elapsed = Number(chunk.elapsedMs || 0);
     const elapsedText = elapsed > 0 ? `${Math.round(elapsed / 1000)}s` : '';
-    const retry = chunk.retryState && Number(chunk.retryState.globalRetryId || 0) > 1
-      ? `Retry ${Number(chunk.retryState.globalRetryId)}${chunk.retryState.retryPhase ? ` · ${chunk.retryState.retryPhase}` : ''}`
+    const repairAttempt = chunk.retryState && String(chunk.retryState.retryPhase || '').trim() === 'repair'
+      ? `Repair ${Number(chunk.retryState.attemptNumber || 1)}/${Number(chunk.retryState.maxRepairAttempts || 1)}`
       : '';
     const heartbeat = chunk.heartbeatLastSeen ? `Heartbeat ${String(chunk.heartbeatLastSeen).replace('T', ' ').replace(/\.\d+Z?$/, 'Z')}` : '';
-    return [chunkText, phase ? `Phase ${phase}` : '', retry, elapsedText ? `Elapsed ${elapsedText}` : '', heartbeat].filter(Boolean).join(' · ');
+    return [chunkText, phase ? `Phase ${phase}` : '', repairAttempt, elapsedText ? `Elapsed ${elapsedText}` : '', heartbeat].filter(Boolean).join(' · ');
   }
 
   function renderBatchImportQueue(jobs) {
@@ -23095,6 +23101,7 @@ Errors: ${escapeHTML(errors)}</div>
   }
 
   function appendBatchImportProgress(event) {
+    if (String(event?.type || '') === 'log') return;
     const log = document.getElementById('bic-progress-log');
     if (!log) return;
     if (log.querySelector('.notes-import-empty')) log.innerHTML = '';
@@ -23115,10 +23122,10 @@ Errors: ${escapeHTML(errors)}</div>
       const chunk = index && total ? `Chunk ${index}/${total}` : String(event?.chunkLabel || 'Chunk');
       const phase = String(event?.phase || '').trim();
       const retryPhase = String(event?.retryPhase || '').trim();
-      const retryId = Number(event?.globalRetryId || 0);
       const parts = [chunk, chunkEvent];
       if (phase) parts.push(phase);
-      if (retryPhase || retryId) parts.push(`retry ${retryId || ''}${retryPhase ? ` ${retryPhase}` : ''}`.trim());
+      if (retryPhase === 'repair') parts.push('repair 1/1');
+      else if (retryPhase && retryPhase !== 'initial') parts.push(retryPhase);
       if (event?.acceptedCount != null || event?.reviewRequiredCount != null) {
         parts.push(`${Number(event?.acceptedCount || 0)} accepted`);
         parts.push(`${Number(event?.reviewRequiredCount || 0)} review`);
@@ -23158,11 +23165,9 @@ Errors: ${escapeHTML(errors)}</div>
       if (_batchImportState) _batchImportState.uogaComplete = true;
       const cancelBtn = document.getElementById('bic-cancel-job-btn');
       const runStatus = document.getElementById('bic-run-status');
-      if (cancelBtn) cancelBtn.disabled = true;
-      if (runStatus) runStatus.textContent = 'Organic generation completed.';
-      updateTestCreateStatus('bic-create-status', { phase: 'Completed', text: message || 'Organic generation completed.', percent: 100, step: 5, totalSteps: 5, percentKnown: true, state: 'success' });
-    } else if (_batchImportState?.uogaComplete && !['job_error', 'stage_failed', 'error', 'job_complete'].includes(type)) {
-      return;
+      if (cancelBtn) cancelBtn.disabled = false;
+      if (runStatus) runStatus.textContent = 'Generation finished. Preparing output.';
+      updateTestCreateStatus('bic-create-status', { phase: 'Finalizing output...', text: 'Generation finished. Waiting for app-ready output and import.', percent: 85, step: 4, totalSteps: 5, percentKnown: false, state: 'active' });
     } else if (type === 'job_start') {
       updateTestCreateStatus('bic-create-status', { phase: 'Job started', text: message || 'Batch job started.', percent: 10, step: 1, totalSteps: 5, percentKnown: false, state: 'active' });
     } else if (type === 'pipeline_progress') {
@@ -23177,6 +23182,67 @@ Errors: ${escapeHTML(errors)}</div>
       updateTestCreateStatus('bic-create-status', { phase: 'Discovering outputs...', text: message || `${Number(event?.count || event?.outputs?.length || 0)} output(s) discovered.`, percent: 65, step: 4, totalSteps: 5, percentKnown: false, state: 'active' });
     } else if (type === 'job_error' || type === 'stage_failed' || type === 'error') {
       updateTestCreateStatus('bic-create-status', { phase: 'Batch import failed', text: message || event?.error || 'The batch job failed.', percent: 45, percentKnown: false, state: 'error' });
+    }
+  }
+
+  async function processQueuedBatchAutoImports(jobs) {
+    const api = window.nbmeDesktop && window.nbmeDesktop.batchImport;
+    if (!api || !api.updateJobReport) return;
+    for (const job of Array.isArray(jobs) ? jobs : []) {
+      const status = String(job?.status || '');
+      const runMode = String(job?.runMode || '').trim();
+      if (runMode !== 'generate-auto-import' && runMode !== 'existing-output-auto-import') continue;
+      if (job.importedTestId) continue;
+      if (!['completed', 'completed_with_review_required'].includes(status)) continue;
+      if (_batchQueueAutoImports.has(job.jobId)) continue;
+      const outputPath = (Array.isArray(job.outputPaths) ? job.outputPaths : []).find(function(path) {
+        return String(path || '').endsWith('_app_ready.json');
+      });
+      if (!outputPath || !job.destinationFolderId) continue;
+      _batchQueueAutoImports.add(job.jobId);
+      try {
+        appendBatchImportProgress({ type: 'stage_start', timestamp: new Date().toISOString(), stageLabel: 'import', message: 'auto-import started' });
+        const importResult = await autoImportBatchOutputJson(outputPath, {
+          folderId: job.destinationFolderId,
+          testName: job.testName || '',
+          statusTarget: 'bic-create-status'
+        });
+        const importedAt = new Date().toISOString();
+        const report = Object.assign({}, job.report || {}, {
+          status: importResult?.ok ? status : 'failed',
+          completedAt: importedAt,
+          importedAt: importResult?.ok ? importedAt : undefined,
+          importedTestId: importResult?.ok ? importResult.testId : null,
+          importedTestName: importResult?.ok ? importResult.testName : null,
+          outputPaths: Array.isArray(job.outputPaths) ? job.outputPaths : [],
+          warnings: Array.isArray(job.warnings) ? job.warnings : [],
+          errors: importResult?.ok ? (Array.isArray(job.errors) ? job.errors : []) : [importResult?.error || 'Auto-import failed.']
+        });
+        await api.updateJobReport({ jobId: job.jobId, report });
+        appendBatchImportProgress({
+          type: importResult?.ok ? 'stage_complete' : 'stage_failed',
+          timestamp: importedAt,
+          stageLabel: 'import',
+          message: importResult?.ok ? `auto-import completed with ${importResult.questionCount || 0} question(s)` : (importResult?.error || 'auto-import failed')
+        });
+        await refreshBatchImportQueue();
+        await refreshBatchImportHistory();
+      } catch (err) {
+        _batchQueueAutoImports.delete(job.jobId);
+        const failedAt = new Date().toISOString();
+        await api.updateJobReport({
+          jobId: job.jobId,
+          report: Object.assign({}, job.report || {}, {
+            status: 'failed',
+            completedAt: failedAt,
+            outputPaths: Array.isArray(job.outputPaths) ? job.outputPaths : [],
+            warnings: Array.isArray(job.warnings) ? job.warnings : [],
+            errors: [err?.message || 'Auto-import failed.']
+          })
+        });
+        appendBatchImportProgress({ type: 'stage_failed', timestamp: failedAt, stageLabel: 'import', message: err?.message || 'auto-import failed' });
+        await refreshBatchImportQueue();
+      }
     }
   }
 

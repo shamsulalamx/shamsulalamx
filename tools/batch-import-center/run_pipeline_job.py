@@ -507,14 +507,11 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
     reader = threading.Thread(target=read_stdout, daemon=True)
     reader.start()
     stream_done = False
-    heartbeat_seconds = float(step.get("heartbeatSeconds") or 3)
-    if heartbeat_seconds < 2:
-        heartbeat_seconds = 2
-    if heartbeat_seconds > 5:
-        heartbeat_seconds = 5
+    heartbeat_seconds = 30.0
     next_heartbeat = time.time() + heartbeat_seconds if heartbeat_seconds > 0 else 0
     last_chunk_event: dict[str, Any] | None = None
     graph_job_complete = False
+    pending_graph_complete: dict[str, Any] | None = None
     while not stream_done:
         if CANCEL_REQUESTED:
             try:
@@ -593,10 +590,13 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
                         f"UOGA chunk telemetry missing executionGraph: sourceType={manifest.get('sourceType')!r} event={progress.get('chunkEvent')!r}"
                     )
                 last_chunk_event = progress
+                if progress.get("chunkEvent") == uoga_event("HEARTBEAT"):
+                    continue
                 if progress.get("chunkEvent") == "JOB_COMPLETE" or progress.get("event") == "JOB_COMPLETE":
                     graph_job_complete = True
-                    heartbeat_seconds = 0
-                    next_heartbeat = 0
+                    pending_graph_complete = progress
+                    next_heartbeat = time.time() + heartbeat_seconds if heartbeat_seconds > 0 else 0
+                    continue
             emit(
                 "pipeline_progress",
                 **{key: value for key, value in progress.items() if key not in {"type", "timestamp", "stage", "stageLabel", "stepIndex"}},
@@ -604,13 +604,23 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
                 stageLabel=progress.get("stageLabel") or stage_label,
                 stepIndex=step_index,
             )
-        emit("log", message=message, stageLabel=stage_label)
+            continue
+        if not organic_route:
+            emit("log", message=message, stageLabel=stage_label)
     code = proc.wait()
     CURRENT_PROC = None
     reader.join(timeout=1)
     duration = round(time.time() - stage_started_at, 2)
     if code == 0:
-        if runner_chunk_events:
+        if pending_graph_complete:
+            emit(
+                "pipeline_progress",
+                **{key: value for key, value in pending_graph_complete.items() if key not in {"type", "timestamp", "stage", "stageLabel", "stepIndex"}},
+                stage=pending_graph_complete.get("stage") or stage,
+                stageLabel=pending_graph_complete.get("stageLabel") or stage_label,
+                stepIndex=step_index,
+            )
+        if runner_chunk_events and not graph_job_complete:
             emit(
                 "pipeline_progress",
                 phase="finalizing",
@@ -750,11 +760,13 @@ def completion_report(
         figure_refs.extend(metrics["figureRefs"])
         warnings.extend(metrics["warnings"])
         errors.extend(metrics["errors"])
+    destination = manifest.get("destination")
+    target_folder = destination.get("folderId") if isinstance(destination, dict) else ""
     report = {
         "schemaVersion": "batch-import-completion-report-v1",
         "jobId": manifest.get("jobId"),
         "sourceType": manifest.get("sourceType"),
-        "targetFolder": (manifest.get("destination") or {}).get("folderId") or "",
+        "targetFolder": target_folder or "",
         "outputRoot": str(job_output_root(manifest) or ""),
         "runtimeSeconds": round(time.time() - run_started_at, 2),
         "questionCount": question_count,
@@ -816,11 +828,13 @@ def command_failure_report(
     exit_code: int,
 ) -> dict[str, Any]:
     error = f"Pipeline step {step_index} exited with code {exit_code}."
+    destination = manifest.get("destination")
+    target_folder = destination.get("folderId") if isinstance(destination, dict) else ""
     report = {
         "schemaVersion": "batch-import-completion-report-v1",
         "jobId": manifest.get("jobId"),
         "sourceType": manifest.get("sourceType"),
-        "targetFolder": (manifest.get("destination") or {}).get("folderId") or "",
+        "targetFolder": target_folder or "",
         "outputRoot": str(job_output_root(manifest) or ""),
         "runtimeSeconds": round(time.time() - run_started_at, 2),
         "questionCount": 0,

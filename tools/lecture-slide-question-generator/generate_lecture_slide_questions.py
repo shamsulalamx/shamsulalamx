@@ -1717,6 +1717,9 @@ def extract_generated_question_items(
             raise PipelineError(f"Generation {chunk_label} question {idx} missing required keys: {', '.join(missing)}")
         if item.get("slideId") not in allowed_slide_ids:
             raise PipelineError(f"Generation {chunk_label} question {idx} references unknown slideId: {item.get('slideId')}")
+        stem_errors = stem_quality_errors(str(item.get("stem") or ""), f"question {idx}")
+        if stem_errors:
+            raise PipelineError(f"Generation {chunk_label} question {idx} has invalid stem: {'; '.join(stem_errors)}")
         choices = item.get("answerChoices")
         if not isinstance(choices, list) or len(choices) != 4:
             raise PipelineError(f"Generation {chunk_label} question {idx} does not have exactly 4 answerChoices.")
@@ -1987,10 +1990,13 @@ You are repairing one NBME-style question generated from one normalized lecture 
 Return valid JSON only in this exact shape:
 {question_schema_required_keys()}
 
-Return exactly 1 question.
-Use the same slideId.
-Use exactly 4 answer choices labeled A, B, C, D.
-Do not include these unsupported terms unless they are present in ALLOWED_MEDICAL_TERMS:
+	Return exactly 1 question.
+	Use the same slideId.
+	Use exactly 4 answer choices labeled A, B, C, D.
+	The stem must end with a clear final one-best-answer question sentence ending in a question mark. No exceptions.
+	Use natural final-question wording that fits the concept. Examples include, but are not limited to, diagnosis, next step, contraindication, prevention, screening, mechanism, and physician-response questions.
+	Do not return a stem that is only a fragment, topic heading, lab value, diagnosis, or incomplete vignette.
+	Do not include these unsupported terms unless they are present in ALLOWED_MEDICAL_TERMS:
 {json.dumps(unsupported_terms, ensure_ascii=False)}
 
 STRICT GROUNDING RULES:
@@ -2856,7 +2862,11 @@ QUESTION_PROMPT_RE = re.compile(
     r"\bwhich of the following\b|"
     r"\bwhat is\b|"
     r"\bwhat are\b|"
+    r"\bwhat should\b|"
+    r"\bhow should\b|"
+    r"\bwhich (?:response|intervention|treatment|therapy|medication|drug|screening|preventive|prevention|counseling|recommendation)\b|"
     r"\bmost likely\b|"
+    r"\bmost appropriate\b|"
     r"\bbest (?:explains|describes|accounts for|represents|confirms|treats|managed)\b|"
     r"\bnext (?:best )?(?:step|test|management|treatment)\b|"
     r"\bdiagnosis\b|"
@@ -2876,17 +2886,44 @@ LAB_ONLY_RE = re.compile(
 )
 
 
+def strip_stem_trailing_artifacts(stem: str) -> str:
+    clean = clean_stem_text(stem)
+    clean = re.sub(r"\n*\s*\[Figure:[^\]]+\]\s*$", "", clean, flags=re.I)
+    return clean.strip()
+
+
+def final_stem_sentence(stem: str) -> str:
+    clean = strip_stem_trailing_artifacts(stem)
+    if not clean:
+        return ""
+    pieces = re.findall(r"[^.!?]+[.!?]?", clean, flags=re.S)
+    for piece in reversed(pieces):
+        sentence = re.sub(r"\s+", " ", piece).strip()
+        if sentence:
+            return sentence
+    return re.sub(r"\s+", " ", clean).strip()
+
+
+def stem_has_explicit_final_question(stem: str) -> bool:
+    final = final_stem_sentence(stem)
+    if not final:
+        return False
+    if not final.endswith("?"):
+        return False
+    return bool(QUESTION_PROMPT_RE.search(final))
+
+
 def stem_quality_errors(stem: str, prefix: str) -> list[str]:
     clean = clean_stem_text(stem)
     words = re.findall(r"\b[A-Za-z0-9][A-Za-z0-9'-]*\b", clean)
     errors: list[str] = []
     if not clean:
         return [f"{prefix}: missing stem."]
-    if not QUESTION_PROMPT_RE.search(clean):
-        errors.append(f"{prefix}: stem is missing an explicit question prompt.")
+    if not stem_has_explicit_final_question(clean):
+        errors.append(f"{prefix}: stem must end with an explicit one-best-answer question sentence.")
     if LAB_ONLY_RE.search(clean):
         has_patient_context = bool(re.search(r"\b(patient|man|woman|boy|girl|infant|newborn|child|adolescent|presents|history|exam|after|during)\b", clean, re.I))
-        has_question_prompt = bool(QUESTION_PROMPT_RE.search(clean))
+        has_question_prompt = stem_has_explicit_final_question(clean)
         if len(words) < 12 or not has_patient_context or not has_question_prompt:
             errors.append(f"{prefix}: stem appears to be a lab-only fragment without clinical context.")
     return errors
@@ -2908,6 +2945,20 @@ def table_notes_to_tables(slide: dict[str, Any]) -> list[dict[str, Any]]:
             "placement": "explanation",
         })
     return tables
+
+
+def append_stem_figure_placeholder(stem: str, placeholder: str) -> str:
+    text = str(stem or "").strip()
+    if not text:
+        return placeholder
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    if sentences and sentences[-1].strip().endswith("?"):
+        body = " ".join(part.strip() for part in sentences[:-1] if part.strip())
+        final_question = sentences[-1].strip()
+        if body:
+            return f"{body}\n\n{placeholder}\n\n{final_question}"
+        return f"{placeholder}\n\n{final_question}"
+    return text.rstrip() + "\n\n" + placeholder
 
 
 def build_media_routes(q: dict[str, Any], slide: dict[str, Any], q_num: int) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[str], list[str]]:
@@ -2935,7 +2986,7 @@ def build_media_routes(q: dict[str, Any], slide: dict[str, Any], q_num: int) -> 
         if placement == "stem":
             stem_images.append(entry)
             if placeholder not in q["stem"]:
-                q["stem"] = q["stem"].rstrip() + "\n\n" + placeholder
+                q["stem"] = append_stem_figure_placeholder(q["stem"], placeholder)
             figure_refs.append({
                 "id": entry["figureId"],
                 "placeholder": placeholder,
@@ -3791,22 +3842,16 @@ STRICT SOURCE RULES:
 - Never invent outside diseases, drugs, tests, mechanisms, procedures, risk factors, epidemiology, or management.
 - If a concept cannot support four grounded answer choices, make the question test a management step, diagnostic finding, contraindication, or differential from the same concept facts. Do not invent.
 
-QUESTION STYLE:
-- Four answer choices exactly, labeled A-D.
-- One best answer.
-- Each question must include questionArchetype equal to the allocation questionArchetype.
-- Use exactly one archetype per question. Align the stem, lead-in, correct answer, and distractors to that archetype.
-- Archetype answer-choice rules:
-  - diagnosis: every answer choice must be a diagnosis or named clinical condition.
-  - next_step: every answer choice must be a concrete next step or action.
-  - mechanism: every answer choice must be a mechanism.
-  - adverse_effect: every answer choice must be a diagnosis/adverse reaction, not an isolated symptom, lab, or imaging finding.
-  - management: every answer choice must be an intervention or management action.
-  - differentiation: every answer choice must be a diagnosis, condition, or clinical category being differentiated.
-  - risk_factor: every answer choice must be a risk factor.
-  - screening: every answer choice must be a screening criterion, screening interval, or screening test.
-  - pharmacology: every answer choice must be a drug or drug class.
-  - complication: every answer choice must be a complication.
+	QUESTION STYLE:
+	- Four answer choices exactly, labeled A-D.
+	- One best answer.
+	- Every stem must end with a clear final question sentence. No exceptions.
+	- The final sentence must ask the learner to choose one best answer and must end with a question mark.
+	- Use natural final-question wording that fits the tested concept. Acceptable examples include, but are not limited to: "Which of the following is the most likely diagnosis?", "Which of the following is the most appropriate next step?", "Which treatment is contraindicated in this patient?", "Which preventive measure is most appropriate?", and "Which physician response is most appropriate?"
+	- Do not return a stem that is only a fragment, topic heading, lab value, diagnosis, or incomplete vignette.
+	- Each question should include questionArchetype equal to the allocation questionArchetype when that archetype fits the question. If the best grounded question needs a more precise archetype, use a concise descriptive value instead of forcing an ill-fitting label.
+	- Use exactly one archetype per question. Align the stem, lead-in, correct answer, and distractors to that archetype.
+	- All answer choices must answer the same final question and stay in the same semantic category. Do not mix diagnoses, symptoms, labs, imaging findings, drugs, procedures, communication responses, prevention strategies, and mechanisms in one answer set.
 - Prefer next best step, management decisions, diagnostic differentiation, contraindications, and screening criteria.
 - Avoid "which of the following is true", "all except", and generic template stems.
 - Do not use stem findings, lab abnormalities, or imaging findings as distractors when the correct answer is a diagnosis.
@@ -4177,7 +4222,13 @@ def generate_fast_facts_chunk_with_retries(
     try:
         items = execute_retry(
             run_step,
-            RetryContext(source_type="fast_facts_pptx", chunk_label=chunk_label, chunk_id=chunk_label, execution_graph=graph),
+            RetryContext(
+                source_type="fast_facts_pptx",
+                chunk_label=chunk_label,
+                chunk_id=chunk_label,
+                execution_graph=graph,
+                retry_plan=(RetryStep(1, "initial"), RetryStep(2, "repair")),
+            ),
             on_retry=on_retry,
         )
         success_step = last_success_step or RetryStep(1, "initial")
@@ -4361,20 +4412,62 @@ def validation_failed_question_indices(errors: list[str], grounding_findings: li
     return indices
 
 
-def repair_fast_facts_questions(normalized_payload: dict[str, Any], questions: list[dict[str, Any]], before_errors: list[str], before_grounding: list[dict[str, Any]], before_diversity: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def question_scoped_validation_messages(
+    question_index: int,
+    errors: list[str],
+    grounding_findings: list[dict[str, Any]] | None = None,
+    diversity_report: dict[str, Any] | None = None,
+    strict_findings: list[dict[str, Any]] | None = None,
+) -> list[str]:
+    scoped: list[str] = []
+    seen: set[str] = set()
+
+    def add(message: Any) -> None:
+        text = str(message or "").strip()
+        if text and text not in seen:
+            seen.add(text)
+            scoped.append(text)
+
+    for error in errors:
+        text = str(error or "")
+        match = re.search(r"\bQ(\d+)\b", text)
+        if match and int(match.group(1)) == question_index:
+            add(text)
+
+    def has_prefixed_error(prefix: str, issue: Any) -> bool:
+        needle = f"{prefix} Q{question_index}: {issue}"
+        return any(str(error or "").startswith(needle) for error in errors)
+
+    for finding in grounding_findings or []:
+        if int(finding.get("questionIndex") or 0) == question_index and finding.get("severity") == "error":
+            if not has_prefixed_error("Semantic grounding", finding.get("issue")):
+                add(f"Semantic grounding Q{question_index}: {finding.get('issue')} {finding.get('detail')}")
+    for finding in (diversity_report or {}).get("findings", []) or []:
+        if int(finding.get("questionIndex") or 0) == question_index and finding.get("severity") == "error":
+            if not has_prefixed_error("Question quality", finding.get("issue")):
+                add(f"Question quality Q{question_index}: {finding.get('issue')} {finding.get('detail')}")
+    for finding in strict_findings or []:
+        if int(finding.get("questionIndex") or 0) == question_index and finding.get("severity") == "error":
+            if not has_prefixed_error("Fast Facts grounding", finding.get("issue")):
+                add(f"Fast Facts grounding Q{question_index}: {finding.get('issue')} {finding.get('detail')}")
+    return scoped
+
+
+def repair_fast_facts_questions(
+    normalized_payload: dict[str, Any],
+    questions: list[dict[str, Any]],
+    before_errors: list[str],
+    before_grounding: list[dict[str, Any]],
+    before_diversity: dict[str, Any],
+    before_strict: list[dict[str, Any]] | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     slide_by_id = {s["slideId"]: s for s in normalized_payload.get("slides") or []}
     failed_indices = validation_failed_question_indices(before_errors, before_grounding, before_diversity)
-    api_key = ""
-    if failed_indices:
-        api_key = os.environ.get("GEMINI_API_KEY", "").strip()
-        if not api_key:
-            raise PipelineError("GEMINI_API_KEY is not set.")
     unsupported_by_index: dict[int, list[str]] = {
         int(f.get("questionIndex")): list(f.get("detail") or [])
         for f in before_grounding
         if f.get("severity") == "error" and f.get("issue") == "unsupported_medical_claim_terms"
     }
-    repaired: dict[int, dict[str, Any]] = {}
     dropped: dict[int, dict[str, Any]] = {}
     repair_log: list[dict[str, Any]] = []
     for idx in sorted(failed_indices):
@@ -4382,49 +4475,36 @@ def repair_fast_facts_questions(normalized_payload: dict[str, Any], questions: l
             continue
         original = questions[idx - 1]
         slide = slide_by_id.get(str(original.get("slideId") or ""))
+        reason = "post_generation_validation_failed"
+        attempt_notes = question_scoped_validation_messages(
+            idx,
+            before_errors,
+            before_grounding,
+            before_diversity,
+            before_strict or [],
+        )
+        if not attempt_notes:
+            attempt_notes = ["Question failed validation after bounded generation attempts."]
         if not slide:
             dropped[idx] = {
                 "questionIndex": idx,
                 "slideId": original.get("slideId"),
                 "reason": "unknown_slide_id",
-                "validationFailures": before_errors,
+                "validationFailures": attempt_notes,
                 "originalQuestion": copy.deepcopy(original),
             }
-            continue
-        candidate = original
-        unsupported = unsupported_by_index.get(idx, [])
-        attempt_notes: list[str] = []
-        accepted = False
-        for attempt in range(1, 3):
-            try:
-                candidate = call_fast_facts_question_repair_once(
-                    api_key=api_key,
-                    source_file=normalized_payload["sourceFile"],
-                    q_index=idx,
-                    original_question=candidate,
-                    slide=slide,
-                    unsupported_terms=unsupported,
-                    attempt=attempt,
-                )
-                candidate = preserve_original_stem_if_repair_degrades(original, candidate)
-                ok, single_errors, next_unsupported = validate_single_fast_facts_repair_candidate(normalized_payload, slide, candidate)
-                if ok:
-                    repaired[idx] = candidate
-                    accepted = True
-                    break
-                unsupported = next_unsupported
-                attempt_notes.append("; ".join(single_errors[:6]))
-            except Exception as exc:
-                attempt_notes.append(str(exc))
-        if not accepted:
+            accepted = False
+        else:
             dropped[idx] = {
                 "questionIndex": idx,
                 "slideId": original.get("slideId"),
-                "reason": "repair_failed_validation",
+                "reason": reason,
                 "attemptNotes": attempt_notes,
-                "validationFailures": before_errors,
+                "validationFailures": attempt_notes,
                 "originalQuestion": copy.deepcopy(original),
+                "unsupportedTerms": unsupported_by_index.get(idx, []),
             }
+            accepted = False
         repair_log.append({
             "questionIndex": idx,
             "slideId": original.get("slideId"),
@@ -4434,18 +4514,15 @@ def repair_fast_facts_questions(normalized_payload: dict[str, Any], questions: l
         })
     final_questions: list[dict[str, Any]] = []
     for idx, question in enumerate(questions, start=1):
-        if idx in repaired:
-            final_questions.append(repaired[idx])
-        elif idx in dropped:
+        if idx in dropped:
             continue
-        else:
-            final_questions.append(question)
+        final_questions.append(question)
     report = {
-        "mode": "fast-facts-targeted-repair",
+        "mode": "fast-facts-review-on-validation-failure",
         "sourceFile": normalized_payload.get("sourceFile"),
         "initialQuestionCount": len(questions),
         "failedQuestionCountBeforeRepair": len(failed_indices),
-        "repairedQuestionCount": len(repaired),
+        "repairedQuestionCount": 0,
         "droppedQuestionCount": len(dropped),
         "finalQuestionCount": len(final_questions),
         "droppedQuestions": list(dropped.values()),
@@ -4468,12 +4545,15 @@ Repair one FAST_FACTS_PROFILE NBME-style question.
 Return valid JSON only in this exact shape:
 {question_schema_required_keys()}
 
-Return exactly 1 question.
-Use the same slideId.
-Use exactly 4 answer choices labeled A, B, C, D.
-Include questionArchetype: {archetype}
+	Return exactly 1 question.
+	Use the same slideId.
+	Use exactly 4 answer choices labeled A, B, C, D.
+	Include questionArchetype: {archetype}
+	The stem must end with a clear final one-best-answer question sentence ending in a question mark. No exceptions.
+	Use natural final-question wording that fits the concept. Examples include, but are not limited to, diagnosis, next step, contraindication, prevention, screening, mechanism, and physician-response questions.
+	Do not return a stem that is only a fragment, topic heading, lab value, diagnosis, or incomplete vignette.
 
-STRICT REPAIR RULES:
+	STRICT REPAIR RULES:
 - Preserve the original stem if it is grounded and clear. If it is awkward, clean grammar only.
 - If the failure is answer-choice ontology or distractor quality, regenerate the answer choices and explanations while keeping the stem aligned to the same source concept.
 - Every clinical claim, answer choice, distractor, threshold, management step, diagnostic criterion, explanation, and educational objective must map to GROUNDING_FACTS or ALLOWED_MEDICAL_TERMS.
@@ -5046,7 +5126,14 @@ def generate_fast_facts_questions_with_cache(
                 diagnostic["preRepairValidationFindings"] = fast_facts_diagnostic_validation(normalized_payload, slide, question)
 
     app_payload_before, before_errors, before_grounding, before_diversity, before_strict = collect_fast_facts_generation_validation(normalized_payload, ordered_questions)
-    repaired_questions, repair_report = repair_fast_facts_questions(normalized_payload, ordered_questions, before_errors, before_grounding, before_diversity)
+    repaired_questions, repair_report = repair_fast_facts_questions(
+        normalized_payload,
+        ordered_questions,
+        before_errors,
+        before_grounding,
+        before_diversity,
+        before_strict,
+    )
     generation_dropped = [item for item in generation_telemetry.get("dropped") or [] if isinstance(item, dict)]
     if generation_dropped:
         repair_report["droppedQuestions"] = list(repair_report.get("droppedQuestions") or []) + generation_dropped
