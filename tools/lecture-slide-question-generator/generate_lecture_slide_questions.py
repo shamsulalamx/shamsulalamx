@@ -3717,6 +3717,19 @@ def process_slide_payload(slide_payload: dict[str, Any], generate: bool, output_
     allocations = allocate_questions(normalized_payload, memory)
     questions = generate_questions(normalized_payload, allocations, memory, generate=generate)
     if not questions:
+        # When the run produced zero questions because the quota-aware retry
+        # stop latched (HTTP 429 / RESOURCE_EXHAUSTED), surface the actionable
+        # cause instead of the generic "no questions" message. The exit is
+        # still fatal because no app-ready output was written, but the error
+        # tells the user it is a billing issue, not a code problem.
+        if generate and quota_exhausted():
+            raise PipelineError(
+                f"No questions generated for {source_label}: Gemini quota was "
+                f"exhausted during the run (HTTP 429 / RESOURCE_EXHAUSTED). "
+                f"Top up prepayment credits at https://ai.studio/projects and "
+                f"re-run. Whatever was generated before the quota hit is in "
+                f"the generated_questions.json file in this job's output dir."
+            )
         raise PipelineError(f"No questions allocated/generated for {source_label}.")
     emit_bic_progress("validating", "Validating generated output")
     final_validation_mode = "organic_lecture"
