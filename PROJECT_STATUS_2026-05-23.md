@@ -1,12 +1,25 @@
 # Project Status 2026-05-23
 
-Current stable tag: `v4.53-uworld-family-review-survivor-stable`
+Current stable tag: `v4.54-uworld-chunk-planning-recovery-stable`
 Current branch: `phase11-fastfacts-stability`
-Last committed HEAD: doc commit landing alongside `8f213d5`.
+Last committed HEAD: doc commit landing alongside `0c3e389`.
 
 Supersedes `docs/archive/PROJECT_STATUS_2026-05-21.md`.
 
 ## What Is New Since 2026-05-21
+
+### v4.54 — UWorld-family chunk-planning recovery + quota-aware retry stop (offline-validated)
+
+Ports the v4.49 lecture-slide chunk-planning fix to the shared UWorld machinery, so the five UWorld-wrapping generators (Anki, OME, Mehlman, Divine, UWorld) now have the same silent-loss protection the lecture-slide generator has had since 2026-05-23.
+
+Single source change in `tools/uworld-notes-question-generator/generate_uworld_questions.py`:
+
+- **Quota-aware retry stop.** New `is_quota_failure(error)` predicate + `is_network_failure(error)` helper + `_QUOTA_EXHAUSTED` module-level latch + `quota_exhausted()` / `mark_quota_exhausted()` / `reset_quota_state()` helpers. Latch checked at every retry boundary in `call_gemini_with_retry`. When the repair call hits quota, waiting questions route to the v4.53 needs-review collector.
+- **Per-chunk shortfall recovery.** New `MAX_RECOVERY_ATTEMPTS_PER_CHUNK = 2`. After the main chunks loop, scan for `generated < requested` and make up to 2 focused follow-up calls per short chunk asking only for the missing questions. Bounded cost: `len(chunks) * 2` extra API calls worst case.
+
+Applies automatically to all five UWorld-wrapping generators. NBME PDF generator has its own normalization path and still needs its own port (item 0b open).
+
+Tag commit: `0c3e389`.
 
 ### v4.53 — UWorld-family review-survivor flow (offline-validated; field validation pending organic failure)
 

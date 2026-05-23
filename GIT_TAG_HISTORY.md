@@ -2,7 +2,7 @@
 
 Last updated: 2026-05-23
 
-This file documents stable v4 tags from v4.0 through the current head tag `v4.53-uworld-family-review-survivor-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+This file documents stable v4 tags from v4.0 through the current head tag `v4.54-uworld-chunk-planning-recovery-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
 
 ## v4.0-images-tables-generator-stable
 
@@ -415,3 +415,33 @@ Not validated by this milestone:
 - The failure path itself. Requires Gemini to fail both initial validation and the repair retry on a live run. The user chose to wait for that to happen organically rather than synthesizing now.
 - Per-wrapper coverage: the implementation lives in the shared UWorld machinery, but each wrapping generator (Anki, OME, Mehlman, Divine, UWorld) hasn't been individually exercised with a partial-failure case.
 - The renderer/Electron side already handled `*_review_draft.json` files generically (via lecture-slide); no renderer changes were needed. If a UWorld-family-specific renderer affordance is desired later (e.g. a distinct badge), that's a separate enhancement.
+
+## v4.54-uworld-chunk-planning-recovery-stable
+
+Commit: `0c3e389` plus the doc commit.
+
+Meaning: Ports the v4.49 chunk-planning quota-aware retry stop + per-chunk shortfall recovery from the lecture-slide generator to the shared UWorld machinery (`tools/uworld-notes-question-generator/generate_uworld_questions.py`). Closes the silent-loss class for all five UWorld-wrapping generators (Anki, OME, Mehlman, Divine, UWorld) in one source change, mirroring the lecture-slide v4.49 design pattern.
+
+Implementation (single source change):
+
+1. **Quota-aware retry stop.** New `is_quota_failure(error)` predicate covers HTTP 429 / `RESOURCE_EXHAUSTED` / 'prepayment credits are depleted' / 'quota exceeded' / 'rate limit' / 'too many requests'. New `is_network_failure(error)` covers urlopen / timeout / DNS errors (the UWorld machinery had no failure-classification helpers before this). Module-level `_QUOTA_EXHAUSTED` latch with `quota_exhausted()`, `mark_quota_exhausted()`, `reset_quota_state()` helpers. Latch checked at every retry boundary inside `call_gemini_with_retry`: at function entry (skip the call entirely if tripped), in the initial `_raw_gemini_call` exception handler, and in the repair `_raw_gemini_call` exception handler. When the repair call hits quota, the questions that were waiting on it are routed to the v4.53 `needs_review_collector` so they surface for human review instead of being silently dropped.
+
+2. **Per-chunk shortfall recovery.** New `MAX_RECOVERY_ATTEMPTS_PER_CHUNK = 2` constant. After the main chunks loop in `process_file` completes, scan `chunk_stats` for any chunk where `generated < requested`. For each short chunk, make up to `MAX_RECOVERY_ATTEMPTS_PER_CHUNK` focused follow-up calls to `call_gemini_with_retry` asking only for the missing questions. Recovered questions flow through the same `validate_question` + repair + v4.53 needs-review-collector pipeline as the main loop. Quota-aware (bails on first 429). Bounded cost: `len(chunks) * MAX_RECOVERY_ATTEMPTS_PER_CHUNK` extra API calls in the worst case.
+
+`process_file` resets the quota latch at the top of the live branch so two runs in the same process stay independent. Dry-run mode never triggers recovery or appends to the collector (live branch only).
+
+Architecture significance: Closes the parity gap between the lecture-slide generator and the UWorld-family generators for chunk-planning silent loss. Both code paths now have the same predicate / latch / bounded-recovery pattern. NBME PDF generator (`tools/nbme-pdf-json-generator/`) still has its own normalization path and would need its own port of this pattern — listed as remaining 0b work in `NEXT_STEPS_PRIORITY.md`.
+
+Validated (offline):
+
+- `is_quota_failure` correctly classifies HTTP 429 / `RESOURCE_EXHAUSTED` / prepayment-depleted / rate-limit text; rejects normal validation errors and network errors.
+- `is_network_failure` correctly classifies urlopen / timeout / DNS.
+- `_QUOTA_EXHAUSTED` latch is idempotent across `mark` / `reset` cycles.
+- `MAX_RECOVERY_ATTEMPTS_PER_CHUNK = 2`.
+- Syntax check passes.
+
+Not validated by this milestone:
+
+- The recovery path itself. Requires Gemini to short-return on a live run, which is probabilistic. User chose to wait for organic occurrence (same posture as v4.53).
+- The quota-aware retry stop. Requires Gemini to actually return HTTP 429 mid-run. Was field-validated for the lecture-slide generator at v4.49 with depleted credits; the UWorld-family port shares the same predicate and latch logic but is unverified end-to-end in production.
+- NBME PDF generator's chunk-planning is still unaudited (see `NEXT_STEPS_PRIORITY.md` item 0b).

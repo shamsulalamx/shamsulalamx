@@ -4,6 +4,40 @@ Last updated: 2026-05-23
 
 Current stable tag: `v4.48-lecture-explanation-tables-stable`.
 
+## UWorld-Family Chunk-Planning Silent Loss Plus Quota-Aware Recovery (RESOLVED 2026-05-23, tagged v4.54)
+
+History:
+
+Before v4.54, the five UWorld-wrapping generators (Anki, OME, Mehlman, Divine, UWorld) silently dropped questions when Gemini returned fewer items than requested for a chunk — the same silent-loss class the v4.49 lecture-slide quota-aware retry stop + targeted recovery closed. The v4.49 fix only landed in `generate_lecture_slide_questions.py`; the shared UWorld machinery (`generate_uworld_questions.py`) had no quota-aware retry stop AND no analog of the per-slide recovery. Listed as item 0b in `NEXT_STEPS_PRIORITY.md` since v4.49.
+
+Resolution (tagged `v4.54-uworld-chunk-planning-recovery-stable`, commit `0c3e389`):
+
+Single source change in `tools/uworld-notes-question-generator/generate_uworld_questions.py`. Two complementary parts:
+
+1. **Quota-aware retry stop.** New `is_quota_failure(error)` predicate (HTTP 429 / `RESOURCE_EXHAUSTED` / prepayment-depleted / quota / rate-limit text). New `is_network_failure(error)` predicate (urlopen / timeout / DNS). Module-level `_QUOTA_EXHAUSTED` latch with `quota_exhausted()`, `mark_quota_exhausted()`, `reset_quota_state()` helpers. Latch checked at every retry boundary in `call_gemini_with_retry` — at the start of the function, in the initial `_raw_gemini_call` exception handler, and in the repair `_raw_gemini_call` exception handler. When the repair call hits quota, any questions waiting on it are routed to the v4.53 `needs_review_collector` so they aren't silently dropped just because budget ran out. `process_file` resets the latch at the top of each file so two runs in the same process stay independent.
+
+2. **Per-chunk shortfall recovery.** New `MAX_RECOVERY_ATTEMPTS_PER_CHUNK = 2` constant. After the main chunks loop in `process_file` completes, scan `chunk_stats` for chunks where `generated < requested`. For each short chunk, make up to `MAX_RECOVERY_ATTEMPTS_PER_CHUNK` focused follow-up calls to `call_gemini_with_retry` asking only for the missing questions. Recovered questions go through the same `validate_question` and v4.53 needs-review-collector flow as the main loop. Quota-aware (bails on first 429). Bounded cost: at most `len(chunks) * MAX_RECOVERY_ATTEMPTS_PER_CHUNK` extra API calls.
+
+End-to-end on a partial-success live run:
+
+- Chunks delivering their full requested count → unchanged behavior, no recovery, no latch trip.
+- Chunks short-returning → recovery loop fires, fills the gap with focused follow-up calls, results go through normal validation + repair + v4.53 review-collector flow.
+- Quota exhausted mid-run → latch trips, all subsequent main chunks and recovery attempts no-op cleanly. Any questions waiting on a quota-killed repair route to the review draft.
+
+Applies automatically to all five UWorld-wrapping generators since they reuse the machinery via `import generate_uworld_questions as _uw`. The lecture-slide generator already had v4.49 since 2026-05-23.
+
+Offline-validated:
+
+- `is_quota_failure` correctly classifies HTTP 429 / RESOURCE_EXHAUSTED / 'prepayment credits are depleted' / 'rate limit exceeded' as quota; rejects normal validation errors and network errors.
+- `is_network_failure` correctly classifies urlopen / timeout / DNS.
+- `_QUOTA_EXHAUSTED` latch is idempotent across mark/reset cycles.
+- `MAX_RECOVERY_ATTEMPTS_PER_CHUNK = 2`.
+- Syntax check passes.
+
+Not field-validated by this milestone: the recovery path itself requires Gemini to short-return on a live run, which is probabilistic. User chose to wait for organic occurrence (same posture as v4.53).
+
+Migration note: forward-only. Pre-v4.54 runs silently dropped short-returned questions; those tests are unaffected.
+
 ## UWorld-Family Review-Survivor Flow (RESOLVED 2026-05-23, tagged v4.53)
 
 History:

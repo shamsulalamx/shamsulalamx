@@ -231,7 +231,7 @@ cp index.html "dist/mac-arm64/NBME Self-Assessment Suite.app/Contents/Resources/
 
 ## Stable Tagged Milestones
 
-Current stable tag: **`v4.53-uworld-family-review-survivor-stable`**.
+Current stable tag: **`v4.54-uworld-chunk-planning-recovery-stable`**.
 
 The full milestone log lives in `GIT_TAG_HISTORY.md`. Highlights:
 
@@ -247,6 +247,7 @@ The full milestone log lives in `GIT_TAG_HISTORY.md`. Highlights:
 | `v4.51-stem-quality-and-ome-live-stable` | Explicit-final-question stem-quality contract across all 6 organic generators (lecture-slide + 5 UWorld-wrapping generators) + enabled OME live generation through BIC. Field-validated on small OME PDF: questions end with proper one-best-answer question sentences, packaged auto-import succeeded. |
 | `v4.52-uworld-chunk-and-token-fix-stable` | Enabled live Anki generation through BIC + fixed two long-standing bugs in the shared UWorld machinery (`split_into_chunks` not honoring its `max_chars` cap; `_raw_gemini_call` `maxOutputTokens` raised 8192 → 16384). Field-validated on 15-card Anki .txt: 15 real questions generated cleanly. Fix applies to OME, Mehlman, Divine, Anki, and UWorld. |
 | `v4.53-uworld-family-review-survivor-stable` | Ports the v4.50 review-survivor flow to the UWorld-family wrappers (Anki, OME, Mehlman, Divine, UWorld). Questions that fail BOTH initial validation AND the repair retry now surface in the BIC review modal for human accept/edit/reject instead of being silently included with `extractionWarnings`. Single source change in the shared UWorld machinery — all 5 wrappers inherit the fix. Offline-validated; failure-path field validation pending an organic partial-failure run. |
+| `v4.54-uworld-chunk-planning-recovery-stable` | Ports the v4.49 chunk-planning quota-aware retry stop + per-chunk shortfall recovery to the shared UWorld machinery. Same predicate / latch / bounded-recovery pattern as v4.49 — all five UWorld-wrapping generators (Anki, OME, Mehlman, Divine, UWorld) now have the same silent-loss protection the lecture-slide generator has had since v4.49. NBME PDF generator still uses its own normalization path and is not covered by this fix. Offline-validated; recovery-path field validation pending an organic short-return run. |
 
 Earlier source-specific tags such as `mehlman-v1-stable`, `divine-v1-stable`, `uworld-gemini-v1-stable`, `ome-v1-stable`, and `anki-v1-stable` remain as historical rollback points for their respective pipelines.
 

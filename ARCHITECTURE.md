@@ -308,6 +308,20 @@ Domain boundaries are enforced by `scripts/uoga_dependency_graph_validator.py`:
 
 `tools/chunk_telemetry.py` is a compatibility shim that re-exports the UOGA telemetry engine for legacy callers.
 
+## UWorld-Family Chunk-Planning Recovery (v4.54, offline-validated 2026-05-23)
+
+Ports the v4.49 lecture-slide chunk-planning quota-aware retry stop + per-chunk shortfall recovery to the shared UWorld machinery (`tools/uworld-notes-question-generator/generate_uworld_questions.py`). All five UWorld-wrapping generators (Anki, OME, Mehlman, Divine, UWorld) inherit the protection via `import generate_uworld_questions as _uw`.
+
+Two complementary parts mirror the v4.49 design:
+
+1. **Quota-aware retry stop.** New `is_quota_failure(error)` predicate covers HTTP 429 / `RESOURCE_EXHAUSTED` / 'prepayment credits are depleted' / quota / rate-limit text. New `is_network_failure(error)` covers urlopen / timeout / DNS. Module-level `_QUOTA_EXHAUSTED` latch with `quota_exhausted()` / `mark_quota_exhausted()` / `reset_quota_state()` helpers. The latch is checked at every retry boundary inside `call_gemini_with_retry` — function entry, initial `_raw_gemini_call` exception handler, repair `_raw_gemini_call` exception handler. When the repair call hits quota, waiting questions route to the v4.53 `needs_review_collector` so they surface for human review instead of being silently dropped.
+
+2. **Per-chunk shortfall recovery.** New `MAX_RECOVERY_ATTEMPTS_PER_CHUNK = 2` constant. After the main chunks loop in `process_file` completes, scan `chunk_stats` for any chunk where `generated < requested`. For each short chunk, make up to `MAX_RECOVERY_ATTEMPTS_PER_CHUNK` focused follow-up calls asking only for the missing questions. Recovered questions flow through the same validate + repair + v4.53 review-collector pipeline. Quota-aware (bails on first 429). Bounded cost: `len(chunks) * MAX_RECOVERY_ATTEMPTS_PER_CHUNK` extra API calls worst case.
+
+`process_file` resets the latch at the top of the live branch so two in-process runs stay independent. Dry-run mode never triggers recovery (live branch only).
+
+This closes the parity gap between the lecture-slide generator and the UWorld-family generators for chunk-planning silent loss. The NBME PDF generator (`tools/nbme-pdf-json-generator/`) still has its own normalization path and would need its own port — tracked as remaining 0b work in `NEXT_STEPS_PRIORITY.md`.
+
 ## UWorld-Family Review-Survivor Flow (v4.53, offline-validated 2026-05-23)
 
 When a question generated through a UWorld-family wrapper (Anki, OME, Mehlman, Divine, UWorld) fails both initial validation and the repair retry, it now surfaces in the BIC review modal for human accept/edit/reject instead of being silently included in the app-ready output with `extractionWarnings`.
