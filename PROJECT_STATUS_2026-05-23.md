@@ -21,7 +21,7 @@ Source changes:
 
 Field-validated on `Test Divine.mp3` (17.2 MB Divine Intervention podcast): 131s end-to-end, 7 valid questions emitted with `schemaVersion: nbme-gemini-json-v3` and `sourceFormat: divine-audio`. `.app` packaged build confirmed to contain all updated assets. User confirmed: "Divine works perfectly!"
 
-Tag commit: TBD (lands with this doc commit).
+Tag commits: `0b671fc` (source) + `faa7637` (doc).
 
 ### v4.54 — UWorld-family chunk-planning recovery + quota-aware retry stop (offline-validated)
 

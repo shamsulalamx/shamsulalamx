@@ -448,7 +448,7 @@ Not validated by this milestone:
 
 ## v4.55-divine-audio-live-stable
 
-Commit: TBD (single source commit + doc commit landing together).
+Commits: `0b671fc` (source) + `faa7637` (doc).
 
 Meaning: Enables live Divine question generation from podcast audio through Batch Import Center. Closes the boundary where the BIC `divine_transcript` source was transcript-first and dry-run only — audio uploads were rejected by the file picker and `liveSteps` intentionally re-ran the same dry-run handoff.
 
