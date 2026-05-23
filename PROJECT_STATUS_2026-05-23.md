@@ -1,12 +1,27 @@
 # Project Status 2026-05-23
 
-Current stable tag: `v4.55-divine-audio-live-stable`
+Current stable tag: `v4.56-images-tables-live-stable`
 Current branch: `phase11-fastfacts-stability`
-Last committed HEAD: doc commit landing alongside the v4.55 source commit.
+Last committed HEAD: doc commit landing alongside the v4.56 source commits.
 
 Supersedes `docs/archive/PROJECT_STATUS_2026-05-21.md`.
 
 ## What Is New Since 2026-05-21
+
+### v4.56 — Live Images & Tables generation through BIC + multi-image merge + duplicate-explanation render fix (field-validated)
+
+Replaces the v4.15 attachment-first Images & Tables BIC path with live per-image Gemini classification + NBME-style question generation, fixes two follow-on bugs surfaced by the first real live runs (multi-file merge across BIC's per-input invocations; double-rendered explanation panel), and tightens the table-placement contract so tables and charts never appear in the question stem. Closes the last BIC source that was wired to a deliberate non-Gemini stub for live mode.
+
+Source changes (3 source files + 1 UI file, landed across 2 source commits + 1 doc commit):
+
+- `tools/batch-import-center/pipeline_registry.json` — `images_tables_source` entry: `requiresGemini: true`, widened `inputExtensions`, `liveSteps` now invokes the runner with `--mode generate --limit 0` (no per-file cap), updated notes.
+- `tools/shared-ingestion/images_tables_profile_runner.py` — `generate` branch now delegates each input image to the real Gemini generator (`generate_images_tables_questions.py`); new `merge_per_image_outputs()` accumulates across BIC's per-input invocations using a stable filename (`images_tables_combined_app_ready.json`) and `_per_image.json` debug suffix that falls outside BIC's discovery glob.
+- `tools/images-tables-question-generator/generate_images_tables_questions.py` — adds `--input-file` for single-image BIC invocations, tightens classifier prompt + post-classification override so tables/charts never land in the stem, redirects asset/log/intermediate dirs when `--output-dir` is set (for packaged-app writeability), drops duplicate plain-text `explanation` field.
+- `index.html` — `buildExplanationHTML` (both copies) now uses `else if (q.explanation)` so `correctBlurb` and `explanation` never both render; backward-compatible defense for any v2-schema source that populates both fields.
+
+Field-validated on a 5-image packaged-app BIC run (Abdominal CT, abetalipoproteinemia biopsy, alcoholic hepatic steatosis, aortic arch derivatives, Barrett's esophagus): 5 questions imported in a single test, no duplicate explanation blocks, correct stem/explanation placement per image type. Dev-Electron 4-image run (dermatology, vesicoureteral process diagram, water-soluble vitamins table, Weber/Rinne tracing) confirmed correct classification across all four placement categories; the table was relegated to the explanation panel as required. User confirmed: "Works flawlessly."
+
+Tag commits: TBD (lands with this doc commit).
 
 ### v4.55 — Live Divine generation from podcast audio through BIC (field-validated)
 
@@ -202,7 +217,7 @@ No open work item from this thread. See `NEXT_STEPS_PRIORITY.md` item 0b for the
 | Emma Holiday | Shared profile + normalized-chunk downstream stable; explanation tables now render (v4.48) | BIC existing-output import validated; live generation has separate semantic blocker risk and chunk-planning silent-loss risk |
 | Mehlman | Shared-ingestion live profile stable | Tagged v4.12 |
 | NBME | BIC orchestration stable | Tagged v4.8; legacy NBME import/image workflows have earlier validation |
-| Images & Tables | Shared-ingestion profile stable | Packaged image/table rendering, FigureStore persistence, score, reload validated |
+| Images & Tables | Shared-ingestion profile stable; v4.15 attachment-first stub superseded by v4.56 live Gemini per-image classification + NBME-style generation | Packaged `.app` 5-image BIC run validated end-to-end (one combined test, no duplicate explanation blocks, tables routed to explanation panel) |
 | Anki | Shared-ingestion dry-run profile validated | Live Gemini generation and semantic quality not validated |
 | OME | Shared-ingestion dry-run profile validated | Live Gemini generation and writable packaged output not validated |
 | Divine (Audio + Transcript) | Shared-ingestion transcript profile validated; live BIC audio → transcribe → questions field-validated at v4.55 on a 17.2 MB MP3 (`Test Divine.mp3`, 131s, 7 valid questions) | Packaged-app live audio run via the v4.55 `.app` and long-episode (> ~90 min) behavior under transcription/cleaning caps still unverified |

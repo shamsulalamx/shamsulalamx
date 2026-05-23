@@ -14,7 +14,7 @@ This file records what is validated, what is not validated, and the risk level f
 | Emma | Shared profile stable | Live generation can fail semantic validation | Validated through v4.14 downstream | Existing-output BIC import validated | BIC existing-output import path validated | Semantic validator rejected unsupported term `dystocia` in live run | Medium-high |
 | Mehlman | Shared profile stable | Tagged live profile stable | Validated in v4.12 | Registered in BIC | Stable tag exists; revalidate packaged path before broad claims | Scaling and source variety not fully characterized | Medium |
 | NBME | BIC orchestration stable | Existing NBME pipeline stable for known workflows | Adapter foundation exists | BIC orchestration tagged stable | Earlier figure/image workflows packaged-validated; recheck for new changes | OCR variability, figure linking, source-specific PDFs | Medium |
-| Images & Tables | Shared image/table profile stable | Attachment-first only, no semantic generator | Validated in v4.15 | BIC generate + auto-import validated | Packaged app validated end to end | Heuristic classification, no deep table parsing | Medium |
+| Images & Tables | Shared image/table profile stable; v4.15 attachment-first cards superseded by v4.56 live Gemini generation | Live Gemini per-image classification + NBME-style question generation field-validated at v4.56 (5-image BIC run, 5 questions imported in one test, mixed diagnostic-stem / explanation-only / table placement) | Normalized image/table chunks validated for dry-run sanity stub | Live BIC auto-import validated end-to-end on the packaged `.app` | Packaged `.app` live multi-image BIC run validated: stable combined output filename + accumulating merge across BIC's per-input invocations + non-duplicate explanation rendering all confirmed | `sourceType` `images_tables_source`; visible source "Images & Tables"; supports `.png .jpg .jpeg .webp .bmp .tif .tiff`; tables/charts are forced to the explanation panel by both prompt + post-classification override | Medium |
 | Anki | Shared profile + live BIC generation stable at v4.52 | Field-validated 2026-05-23 on 15-card .txt → 15 real questions with proper stems / choices / explanations | Normalized text chunks validated | Live BIC auto-import validated end-to-end | Packaged app live BIC generation + auto-import + quiz rendering verified on the same run | Broad Anki export variation (other languages, complex HTML, media references) not stressed | Medium |
 | OME | Shared PDF profile stable | Live Gemini OME generation field-validated at v4.51 on small OME PDF | Normalized text chunks validated | Live BIC auto-import validated end-to-end | Packaged app live BIC generation, auto-import, and quiz rendering validated | Broad OME PDF variety not stressed; writable packaged output for live mode follows v4.51 registry change | Medium |
 | Divine (Audio + Transcript) | Dry-run BIC handoff validated for text inputs | Live BIC audio → transcribe → clean → questions field-validated at v4.55 on a 17.2 MB MP3 (`Test Divine.mp3`, 131s, 7 valid questions, `sourceFormat: divine-audio`) | Normalized transcript chunks validated for text inputs; audio inputs skip the shared chunk pipeline (chunks emerge after transcription) | Live BIC end-to-end validated in dev Electron | Packaged `.txt` and `.md` dry-run auto-import previously validated; packaged live audio run via the same `.app` is the next field check | `sourceType` `divine_transcript`; visible source "Divine (Audio + Transcript)"; supports `.txt .md .mp3 .m4a .wav`; audio dry-run is rejected on purpose so transcription tokens are never wasted | Medium |
@@ -80,7 +80,7 @@ Not claimed:
 
 ## Images & Tables
 
-Validated at v4.15:
+Validated at v4.15 (foundational attachment-first milestone):
 
 - `images_tables_source` descriptor.
 - image/table normalized chunk emission.
@@ -94,11 +94,22 @@ Validated at v4.15:
 - table image rendering after reload.
 - score history persistence after reload.
 
-Not claimed:
+Newly validated at v4.56 (live Gemini generation + multi-image accumulation + render fixes):
 
-- Advanced semantic medical question generation.
+- `liveSteps` in BIC registry now invokes per-image Gemini classification and NBME-style question generation via `tools/images-tables-question-generator/generate_images_tables_questions.py` instead of the attachment-first stub. Live mode requires `GEMINI_API_KEY`. Dry-run still emits the attachment-first stub for sanity checks without API spend.
+- Placement contract enforced by both prompt and post-classification override: diagnostic images that need interpretation land in `q.images[]` (stem); explanation-only images and **all** tables/charts land in `q.explanationImages[]` (explanation panel). Even if Gemini misclassifies a table as `diagnostic_stem_image`, `normalize_classification` re-routes it back to `explanation_only_table`.
+- Multi-image jobs: BIC orchestration invokes the runner once per input file. Each runner invocation appends its fresh per-image output to the job's `*_per_image.json` set, then rewrites a single stable-named `images_tables_combined_app_ready.json` with every question gathered so far. By the time the last input completes, exactly one combined `*_app_ready.json` exists and contains every generated question. BIC's `discover_outputs` picks up only the combined file (per-image files use a non-matching `_per_image.json` suffix), and auto-import loads the full set in one shot.
+- Renderer no longer double-renders explanations when both `correctBlurb` and `explanation` are populated. `correctBlurb` (HTML, used by the images-tables v2 schema) takes precedence; `explanation` (plain text, used by legacy PDF imports) is rendered only when `correctBlurb` is absent. Applies to both the in-quiz `buildExplanationHTML` and the review-mode `window.buildExplanationHTML` copies.
+- Generator no longer emits the duplicate plain-text `explanation` field — only `correctBlurb` and `explanationSections`. Eliminates the duplicate-explanation bug at the source for any future renderers that also previously rendered both.
+- Field-validated on the packaged `.app` with a 5-image multi-file BIC job (Abdominal CT, abetalipoproteinemia biopsy, alcoholic hepatic steatosis, aortic arch derivatives, Barrett's esophagus): 5 questions imported in a single test, no duplicate explanation blocks, correct stem/explanation placement per image type.
+- A separate 4-image dev-Electron run (diagnostic dermatology, vesicoureteral process diagram, water-soluble vitamins table, Weber/Rinne tracing) confirmed correct classifier behavior across all four placement categories; the table was relegated to the explanation panel as required.
+
+Not yet validated:
+
+- Broad real-world Step 2 image variety beyond the validation fixtures.
 - Recursive large-folder ingestion.
-- deep table parsing.
+- Deep table parsing into rows and columns (out of scope — the table is preserved as an image attachment, not parsed).
+- Behavior under Gemini rate-limit / quota exhaustion mid-run (the per-image generator does not yet share the UWorld-family quota-aware retry stop landed at v4.49/v4.54).
 
 ## Anki
 

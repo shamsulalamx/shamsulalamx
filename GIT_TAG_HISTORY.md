@@ -2,7 +2,7 @@
 
 Last updated: 2026-05-23
 
-This file documents stable v4 tags from v4.0 through the current head tag `v4.55-divine-audio-live-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+This file documents stable v4 tags from v4.0 through the current head tag `v4.56-images-tables-live-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
 
 ## v4.0-images-tables-generator-stable
 
@@ -476,3 +476,40 @@ Not validated by this milestone:
 - Long episodes (> ~90 min) that exceed the 120,000-char cleaning cap or the 65,536 transcription token cap — warnings fire but behavior under those warnings is unvalidated.
 - Robustness of the question-generation JSON parse on long Gemini responses for the Divine audio path. On the v4.55 test run, chunk 1 (8 questions requested) failed JSON parse after the generator's 3-stage repair, so 7 of 15 targeted questions made it through. Same JSON-truncation class addressed at v4.52 (token cap raised) and v4.54 (chunk-planning recovery); recovery is expected to compensate on subsequent runs but is unverified end-to-end for Divine audio specifically.
 - NBME PDF generator's chunk-planning still unaudited (carried forward from v4.54; see `NEXT_STEPS_PRIORITY.md` item 0b).
+
+## v4.56-images-tables-live-stable
+
+Commits: TBD (source commit + render-fix commit + doc commit landing together).
+
+Meaning: Replaces the v4.15 attachment-first Images & Tables BIC path with live per-image Gemini classification + NBME-style question generation, fixes two follow-on bugs surfaced by the first real live runs (multi-file merge across BIC's per-input invocations; double-rendered explanation panel), and tightens the table-placement contract so tables and charts never appear in the question stem.
+
+Before this tag, the BIC `images_tables_source` `liveSteps` invoked the attachment-first stub (`tools/shared-ingestion/images_tables_profile_runner.py`) — the same code path as dry-run — even though a complete Gemini-powered per-image generator existed at `tools/images-tables-question-generator/generate_images_tables_questions.py` from earlier work. Every live BIC run produced boilerplate cards ("Review the attached image. Which statement best describes the source asset preserved by this Images & Tables import card?") with hard-coded answer choices. The user surfaced the gap on 2026-05-23 after a 6-image live BIC run produced one boilerplate question.
+
+Implementation (3 source files + 1 UI file across 2 source commits):
+
+Source commit 1 — live wiring + classifier tightening:
+
+- `tools/batch-import-center/pipeline_registry.json` `images_tables_source` entry: `requiresGemini: true`, widens `inputExtensions` to `[".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"]`, points `liveSteps` at `--mode generate --limit 0` with a 30s heartbeat, updates notes to document the live Gemini contract. Dry-run keeps the attachment-first stub (no Gemini, no API spend).
+- `tools/shared-ingestion/images_tables_profile_runner.py`: docstring updated to reflect dry-run-stub + live-Gemini split. New `discover_input_files(input_path)` handles file or directory inputs. New `run_images_tables_generator_live(input_path, output_root)` iterates input files and spawns one `generate_images_tables_questions.py --generate --input-file <image> --output-dir <app_ready_dir>` subprocess per file, emitting `images_tables_downstream_file_{start,complete,failed}` events. The `generate` branch in `main()` now delegates to this function instead of emitting the attachment-first stub.
+- `tools/images-tables-question-generator/generate_images_tables_questions.py`: adds `--input-file` for single-image invocations (used by the BIC runner) alongside the existing `--input-dir` mode. Tightens the classifier prompt — "Tables and charts must NEVER appear in the question stem" with no escape hatch; `normalize_classification` defensively re-routes any `stimulusType in {table, graph, chart}` away from `diagnostic_stem_image` to `explanation_only_image` / `explanation_only_table`. `generate()` now redirects `ASSET_DIR`, `LOG_DIR`, and `INTERMEDIATE_DIR` when `--output-dir` is set so a packaged `.app` run does not try to write into read-only resources. `asset_path_for_metadata()` falls back to absolute paths when the asset lives outside `BASE_DIR`.
+
+Source commit 2 — render + merge bug fixes:
+
+- `tools/shared-ingestion/images_tables_profile_runner.py` `merge_per_image_outputs()`: BIC invokes the runner once per input file, so a multi-file job triggers N invocations. Each invocation now (a) renames its fresh per-image outputs to `_per_image.json` so they fall outside BIC's `*_app_ready.json` discovery glob; (b) scans the directory for ALL `*_per_image.json` files including ones from prior invocations in the same job; (c) rewrites a single stable-named `images_tables_combined_app_ready.json` containing every question accumulated so far. The stable filename means later invocations overwrite earlier combined files, so by the time the last input completes exactly one combined `*_app_ready.json` exists and contains every generated question. BIC auto-import then loads the full set in one shot.
+- `tools/images-tables-question-generator/generate_images_tables_questions.py` `adapt_question()`: drops the duplicate plain-text `"explanation": explanation,` field — only `correctBlurb` (HTML-escaped) and `explanationSections` (structured) ship now.
+- `index.html` `buildExplanationHTML` (both the in-quiz copy and the review-mode `window.buildExplanationHTML` copy): `if (q.correctBlurb) { ... } else if (q.explanation) { ... }` so the two blocks never both render. Backward-compatible: questions with only `correctBlurb` or only `explanation` continue to render exactly as before. Eliminates the duplicate-explanation rendering for any future v2-schema source that populates both fields.
+
+Architecture significance: Closes the last source in the BIC registry that was wired to a deliberate non-Gemini stub for live mode. Every active organic-generation source in BIC now has a live Gemini path validated against the user's real inputs. The accumulating-merge pattern (stable filename + scan-and-merge per invocation) is a new shape that other multi-file BIC sources could reuse if they end up invoked per-input. The renderer guard (`else if`) is a backward-compatible defense that benefits any future source that populates both `correctBlurb` and `explanation`, not just images-tables.
+
+Validated:
+
+- Dev-Electron 4-image test (diagnostic dermatology, vesicoureteral process diagram, water-soluble vitamins table, Weber/Rinne tracing): all 4 classified correctly (1 stem image, 3 explanation), 4 questions emitted in 42s wall-clock, table relegated to explanation panel as required, sample question (water-soluble vitamins) produced a clean pellagra (3 D's: dermatitis, diarrhea, dementia) vignette with niacin/B3 as correct answer.
+- Dev-Electron simulation of BIC's per-input invocation pattern (4 sequential runner subprocesses, one per input file): combined file accumulated 1 → 2 → 3 → 4 questions as each invocation ran; exactly one `*_app_ready.json` (the stable combined name) remained in the app_ready dir at completion.
+- Packaged `.app` 5-image BIC run (Abdominal CT, abetalipoproteinemia biopsy, alcoholic hepatic steatosis, aortic arch derivatives, Barrett's esophagus): 5 questions imported in a single test, no duplicate explanation blocks, correct stem/explanation placement per image type. User confirmed: "Works flawlessly."
+
+Not validated by this milestone:
+
+- Behavior under Gemini quota exhaustion mid-run. The per-image generator does not yet share the UWorld-family quota-aware retry stop + per-chunk shortfall recovery landed at v4.49 / v4.54.
+- Broad real-world Step 2 image variety beyond the validation fixtures (the committed `input_images/` fixtures + the user's "[Medicalstudyzone.com] UW tables and pics" set).
+- Recursive large-folder ingestion and deep table parsing — tables are preserved as image attachments in the explanation panel, not parsed into structured rows.
+- Old tests that imported v2-schema questions with BOTH `correctBlurb` and `explanation` populated (e.g., the user's 1-question batch-mpiz1bb4-ow7dnc test before this fix) still have the duplicate field stored in their persisted form. The renderer guard means they will render correctly going forward, but the underlying stored data still carries the duplicate `explanation` field. No retroactive fix-up was done.

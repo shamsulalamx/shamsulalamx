@@ -264,8 +264,34 @@ Open multimodal gaps:
 - visual grounding beyond OCR/filename heuristics,
 - multi-asset question grounding,
 - confidence calibration,
-- scalable asset cache indexing,
-- semantic question generation from images/tables.
+- scalable asset cache indexing.
+
+Semantic question generation from images and tables was resolved at v4.56 — see the "Images & Tables BIC Was Attachment-First With Boilerplate Stems" section below.
+
+## Images & Tables BIC Was Attachment-First With Boilerplate Stems
+
+Before v4.56, the `images_tables_source` BIC entry intentionally ran the attachment-first stub (`tools/shared-ingestion/images_tables_profile_runner.py`) for both dry-run and live, even though a complete per-image Gemini generator (`tools/images-tables-question-generator/generate_images_tables_questions.py`, 716 lines) existed in the tree from earlier work. The stub produced one question per image with a fixed boilerplate stem ("Review the attached image. Which statement best describes the source asset preserved by this Images & Tables import card?") and four hard-coded "this card preserves the source asset" choices. The user surfaced the gap on 2026-05-23 after a 6-image live BIC run produced one boilerplate question.
+
+Two follow-on bugs surfaced on the first real live runs:
+
+1. **Only the first of N per-image outputs was auto-imported.** BIC's `discover_outputs` (`*_app_ready.json` rglob) discovered every per-image file the runner emitted, then `importValidatedBatchOutputJsonText` took `validations.find(item.ok)` — the first valid output, which contained only one question.
+2. **Explanation panel rendered twice.** The legacy v2-schema generator populated both `q.correctBlurb` (HTML) and `q.explanation` (plain text) with the same content, and both `buildExplanationHTML` branches rendered them as independent `<div>`s, so each question's answer rationales appeared in two stacked blocks.
+
+Resolution (tagged `v4.56-images-tables-live-stable`):
+
+1. **Live generation wired up.** `tools/batch-import-center/pipeline_registry.json` `images_tables_source` entry now sets `requiresGemini: true`, widens `inputExtensions` to include `.bmp .tif .tiff`, and points `liveSteps` at `--mode generate`. The profile runner's `generate` branch now delegates each input image to `tools/images-tables-question-generator/generate_images_tables_questions.py --generate --input-file <image> --output-dir <durable_root>/app_ready` instead of emitting the boilerplate stub. Dry-run mode keeps the stub for offline sanity checks without API spend.
+2. **Stricter placement contract.** The generator prompt now states "Tables and charts must NEVER appear in the question stem" with no escape hatch; `normalize_classification` defensively re-routes any `stimulusType in {table, graph, chart}` away from `diagnostic_stem_image` to `explanation_only_image` / `explanation_only_table`. Diagnostic images that need interpretation still go in `q.images[]`; explanation-only images and all tables go in `q.explanationImages[]`.
+3. **Output-dir redirection.** `generate_images_tables_questions.py`'s `--output-dir` flag now also redirects `ASSET_DIR`, `LOG_DIR`, and `INTERMEDIATE_DIR` so a packaged `.app` run does not try to write into read-only packaged resources. `asset_path_for_metadata` falls back to absolute paths when the asset lives outside `BASE_DIR`.
+4. **Multi-input merge across BIC's per-input invocations.** BIC calls the runner once per input file. Each runner invocation now: (a) renames its fresh per-image outputs to `_per_image.json` so they fall outside BIC's `*_app_ready.json` discovery glob; (b) gathers every `*_per_image.json` file in the directory (this invocation + prior); (c) rewrites a single stable-named `images_tables_combined_app_ready.json` containing every question accumulated so far. The stable filename means later invocations overwrite earlier combined files, so by the time the last input completes exactly one combined `*_app_ready.json` exists in the job dir and contains every generated question. BIC auto-import then loads the full set in one shot.
+5. **Renderer guard against duplicate explanation rendering.** `buildExplanationHTML` (both the in-quiz copy at line ~7230 and the review-mode `window.buildExplanationHTML` copy at line ~7444) now uses `if (q.correctBlurb) { ... } else if (q.explanation) { ... }` so the two blocks never both render. Backward-compatible: questions with only `correctBlurb` or only `explanation` continue to render exactly as before. The generator also stopped emitting the duplicate plain-text `explanation` field — only `correctBlurb` and `explanationSections` ship now.
+
+Field-validated on a 5-image packaged-app BIC run (Abdominal CT, abetalipoproteinemia biopsy, alcoholic hepatic steatosis, aortic arch derivatives, Barrett's esophagus): 5 questions imported in a single test, correct stem/explanation placement per image type, no duplicate explanation blocks. A separate 4-image dev-Electron run (dermatology, vesicoureteral process diagram, water-soluble vitamins table, Weber/Rinne tracing) confirmed correct classification across all four placement categories — the table was relegated to the explanation panel as required.
+
+Still open at v4.56:
+
+- Behavior under Gemini quota exhaustion mid-run is not validated for this generator; it does not yet share the UWorld-family quota-aware retry stop + per-chunk shortfall recovery landed at v4.49 / v4.54.
+- Broad real-world Step 2 image variety beyond the validation fixtures (Step 2 UW tables and pics + the committed input_images fixtures) is not stressed.
+- Recursive large-folder ingestion and deep table parsing remain out of scope — tables are preserved as image attachments in the explanation panel, not parsed into structured rows.
 
 ## Packaged Resource Path Differences
 

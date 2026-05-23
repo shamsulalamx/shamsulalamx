@@ -105,6 +105,20 @@ The active `divine_transcript` registry entry accepts both Divine Intervention p
 - Registry notes shown in the BIC UI document the audio/text dual support and the live-mode-required constraint for audio.
 - Field-validated at v4.55 on a 17.2 MB Divine Intervention podcast MP3 (`Test Divine.mp3`, 131s total: upload → transcribe → clean → chunk → generate → 7 valid questions).
 
+## Images & Tables Registry Boundary
+
+The active `images_tables_source` registry entry runs live per-image Gemini classification and NBME-style question generation. Live BIC generation enabled at v4.56.
+
+- Its visible source label is "Images & Tables".
+- Supported inputs are `.png`, `.jpg`, `.jpeg`, `.webp`, `.bmp`, `.tif`, `.tiff`. `allowDirectories: true`, so the file picker accepts both individual files and folders.
+- `requiresGemini` is `true`. Live mode requires `GEMINI_API_KEY` in the launched environment.
+- `dryRunSteps` keep the v4.15 attachment-first stub (no Gemini, lightweight placeholder cards) as a sanity check that does not spend API tokens.
+- `liveSteps` invoke the profile runner with `--mode generate`. The runner delegates each input image to `tools/images-tables-question-generator/generate_images_tables_questions.py --generate --input-file <image> --output-dir <durable_root>/app_ready`, which classifies the screenshot (`diagnostic_stem_image` / `explanation_only_image` / `explanation_only_table` / `unclear_skip`) and emits one NBME-style question with `q.images[]` for stem placements and `q.explanationImages[]` for explanation-only placements. Tables and charts are forced into the explanation panel by both the prompt and a post-classification override; a table can never appear in the stem.
+- Multi-input handling: BIC iterates inputs and invokes the runner once per file. Each invocation appends its fresh per-image output (`*_per_image.json`) and rewrites a single stable-named `images_tables_combined_app_ready.json` that contains every question accumulated so far. The per-image files use the `_per_image.json` suffix so BIC's `discover_outputs` (`*_app_ready.json` glob) ignores them; only the combined file is auto-imported. By the time the last input completes, the combined file holds every generated question.
+- App-ready output lands at `<jobOutputRoot>/images-tables-question-generator/app_ready/images_tables_combined_app_ready.json` with `schemaVersion: nbme-internal-app-ready-v2` and `sourceFormat: images-tables`. Per-image debug artifacts remain alongside under `_per_image.json`.
+- Renderer support: `q.correctBlurb` (HTML-escaped) is the preferred explanation field; legacy plain-text `q.explanation` is rendered only when `correctBlurb` is absent (the v4.56 renderer guard prevents the duplicate-block bug when both were populated).
+- Field-validated at v4.56 on a 5-image packaged-app BIC run (mixed diagnostic / explanation-only / table inputs from Step 2 fixtures): 5 questions imported in one test, correct stem/explanation placement, no duplicate explanation blocks.
+
 ## Fast Facts Registry Boundary
 
 The active `fast_facts_pptx` registry entry has a narrow stabilization live path.
