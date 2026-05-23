@@ -28,6 +28,7 @@ import urllib.error
 import urllib.request
 import zipfile
 import xml.etree.ElementTree as ET
+from collections import Counter
 from pathlib import Path
 from typing import Any
 import importlib
@@ -95,6 +96,11 @@ AMBOSS_VISUAL_STATE_VERSION = "amboss-visual-state-v3"
 LABELS = ["A", "B", "C", "D"]
 MAX_SLIDES_PER_CHUNK = 3
 MAX_GENERATION_ALLOCS_PER_CHUNK = 8
+# Bound for the post-chunk targeted-recovery loop: max focused per-slide
+# attempts for each slide where Gemini under-delivered during the main chunk
+# pass. Worst-case extra API calls = len(work) * this. Stays small on purpose
+# so a budget runaway cannot happen even on a deck where every slide misses.
+MAX_RECOVERY_ATTEMPTS_PER_SLIDE = 2
 SMALL_NORMALIZATION_CHUNK_SIZE = 2
 ISOLATED_NORMALIZATION_CHUNK_SIZE = 1
 MAX_NORMALIZATION_ESTIMATED_JSON_CHARS = 6500
@@ -879,6 +885,40 @@ def is_network_failure(error: Exception | str) -> bool:
     )
 
 
+def is_quota_failure(error: Exception | str) -> bool:
+    text = str(error).lower()
+    return (
+        "http 429" in text
+        or "resource_exhausted" in text
+        or "prepayment credits are depleted" in text
+        or "quota exceeded" in text
+        or "rate limit" in text
+        or "too many requests" in text
+    )
+
+
+# Module-level latch: once any Gemini call returns a quota/429 error, every
+# subsequent retry path (sub-chunking, repair, targeted recovery) short-circuits
+# to [] instead of burning more of the user's prepayment budget. Reset at the
+# start of each generate_questions() invocation so two runs in the same process
+# stay independent.
+_QUOTA_EXHAUSTED = False
+
+
+def quota_exhausted() -> bool:
+    return _QUOTA_EXHAUSTED
+
+
+def mark_quota_exhausted() -> None:
+    global _QUOTA_EXHAUSTED
+    _QUOTA_EXHAUSTED = True
+
+
+def reset_quota_state() -> None:
+    global _QUOTA_EXHAUSTED
+    _QUOTA_EXHAUSTED = False
+
+
 def raw_gemini_call(api_key: str, prompt: str, temperature: float, max_tokens: int = 8192, timeout_seconds: int = 120) -> str:
     url = f"{GEMINI_API_BASE}/{GEMINI_MODEL}:generateContent?key={api_key}"
     payload = json.dumps({
@@ -1624,11 +1664,20 @@ def generate_questions(normalized_payload: dict[str, Any], allocations: list[dic
         api_key = os.environ.get("GEMINI_API_KEY", "").strip()
         if not api_key:
             raise PipelineError("GEMINI_API_KEY is not set.")
+        # Reset the quota latch so a previous in-process run does not leak
+        # into this one. In normal subprocess use this is a no-op.
+        reset_quota_state()
         template = GENERATE_PROMPT.read_text(encoding="utf-8")
         chunks = chunk_list(work, MAX_GENERATION_ALLOCS_PER_CHUNK)
         generated_so_far = 0
         for chunk_index, chunk in enumerate(chunks, start=1):
             chunk_questions = sum(int(a.get("questionCount") or 0) for a in chunk)
+            if quota_exhausted():
+                warn(
+                    f"Skipping chunk {chunk_index}/{len(chunks)} — Gemini quota exhausted earlier in run."
+                )
+                generated_so_far += chunk_questions
+                continue
             emit_bic_progress(
                 "generating",
                 f"Generating question {generated_so_far + 1}/{total_questions} from chunk {chunk_index}/{len(chunks)}",
@@ -1651,6 +1700,49 @@ def generate_questions(normalized_payload: dict[str, Any], allocations: list[dic
                 questions.append(item)
                 update_memory_from_question(memory, item)
             generated_so_far += chunk_questions
+
+        # Targeted missing-slide recovery: when partial-accept tolerance let
+        # some allocated slides come back empty (or under-delivered), make ONE
+        # focused per-slide call (up to MAX_RECOVERY_ATTEMPTS_PER_SLIDE) for
+        # each missing slide. Bounded cost: at most
+        # (len(work) * MAX_RECOVERY_ATTEMPTS_PER_SLIDE) extra API calls in the
+        # worst case. Quota-aware: stops on the first 429.
+        if not quota_exhausted():
+            generated_per_slide = Counter(
+                q.get("slideId") for q in questions if isinstance(q, dict)
+            )
+            for allocation in work:
+                if quota_exhausted():
+                    warn(
+                        "Targeted recovery: stopping — Gemini quota exhausted."
+                    )
+                    break
+                slide_id = allocation.get("slideId")
+                expected = int(allocation.get("questionCount") or 0)
+                produced = int(generated_per_slide.get(slide_id, 0))
+                deficit = expected - produced
+                if deficit <= 0:
+                    continue
+                emit_bic_progress(
+                    "generating",
+                    f"Recovering {deficit} missing question(s) for slide {slide_id}",
+                    slideId=str(slide_id),
+                    deficit=deficit,
+                )
+                recovered, recovery_warnings = retry_missing_slide_questions(
+                    api_key=api_key,
+                    template=template,
+                    allocation=allocation,
+                    missing_count=deficit,
+                    memory=memory,
+                    source_file=normalized_payload["sourceFile"],
+                    max_attempts=MAX_RECOVERY_ATTEMPTS_PER_SLIDE,
+                )
+                for warning in recovery_warnings:
+                    warn(warning)
+                for item in recovered:
+                    questions.append(item)
+                    update_memory_from_question(memory, item)
     else:
         n = 1
         for allocation in work:
@@ -1881,6 +1973,7 @@ def call_generation_once(
     repair_raw: str | None = None,
     repair_error: str = "",
     count_warnings: list[str] | None = None,
+    require_exact_count: bool = False,
 ) -> list[dict[str, Any]]:
     expected_ids = [a["slideId"] for a in chunk]
     if repair_raw is None:
@@ -1900,13 +1993,93 @@ def call_generation_once(
     raw = raw_gemini_call(api_key, prompt, temperature=0.0 if repair_raw else 0.35, max_tokens=12000)
     write_debug_raw(source_file, "generate", chunk_label, retry_label, raw)
     parsed = load_largest_valid_json(raw)
+    # Default to partial-accept (require_exact_count=False) to preserve the
+    # historical chunk-level tolerance that prevents recursive sub-chunking
+    # from burning the Gemini budget. Callers that ARE scoped to a single
+    # slide (the targeted-recovery path) pass require_exact_count=True so a
+    # short return raises and the recovery loop decides whether to re-try.
     return extract_generated_question_items(
         parsed,
         chunk,
         chunk_label,
-        require_exact_count=False,
+        require_exact_count=require_exact_count,
         count_warnings=count_warnings,
     )
+
+
+def retry_missing_slide_questions(
+    *,
+    api_key: str,
+    template: str,
+    allocation: dict[str, Any],
+    missing_count: int,
+    memory: dict[str, Any],
+    source_file: str,
+    max_attempts: int = 2,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Re-ask Gemini for the questions a slide was under-delivered.
+
+    Called from generate_questions() AFTER the normal chunk loop has finished
+    and partial-accept tolerance has been applied. For each slide where the
+    accepted count is less than the allocated count, we make up to
+    max_attempts focused single-slide calls asking for exactly the missing
+    questions. This is bounded, predictable, and quota-aware: any quota
+    failure latches the global flag and stops further recovery.
+    """
+    warnings: list[str] = []
+    if missing_count <= 0:
+        return [], warnings
+    slide_id = str(allocation.get("slideId") or "(unknown)")
+    if quota_exhausted():
+        warnings.append(
+            f"Recovery for slide {slide_id}: skipped — Gemini quota exhausted earlier in run."
+        )
+        return [], warnings
+    scoped_allocation = dict(allocation)
+    scoped_allocation["questionCount"] = int(missing_count)
+    scoped_chunk = [scoped_allocation]
+    chunk_label = f"recover_{slugify(slide_id)}"
+    for attempt in range(1, max_attempts + 1):
+        if quota_exhausted():
+            warnings.append(
+                f"Recovery for slide {slide_id}: stopping at attempt {attempt} — Gemini quota exhausted."
+            )
+            return [], warnings
+        retry_label = f"missing_attempt{attempt}"
+        try:
+            items = call_generation_once(
+                api_key=api_key,
+                template=template,
+                chunk=scoped_chunk,
+                memory=memory,
+                source_file=source_file,
+                chunk_label=chunk_label,
+                retry_label=retry_label,
+                count_warnings=warnings,
+                require_exact_count=True,
+            )
+            return items, warnings
+        except Exception as exc:
+            err = str(exc)
+            warnings.append(
+                f"Recovery for slide {slide_id} attempt {attempt}/{max_attempts} failed: {err}"
+            )
+            if is_quota_failure(err):
+                mark_quota_exhausted()
+                warnings.append(
+                    f"Recovery for slide {slide_id}: stopped after Gemini quota exhaustion."
+                )
+                return [], warnings
+            if is_network_failure(err):
+                warnings.append(
+                    f"Recovery for slide {slide_id}: stopped after network failure."
+                )
+                return [], warnings
+    warnings.append(
+        f"Recovery for slide {slide_id}: gave up after {max_attempts} attempts; "
+        f"{missing_count} question(s) remain missing."
+    )
+    return [], warnings
 
 
 def generate_question_chunk_with_retries(
@@ -1920,6 +2093,12 @@ def generate_question_chunk_with_retries(
     warnings: list[str] = []
     last_raw = ""
     last_error = ""
+
+    if quota_exhausted():
+        warnings.append(
+            f"Generation {chunk_label}: skipped — Gemini quota already exhausted earlier in this run."
+        )
+        return [], warnings
 
     try:
         return call_generation_once(
@@ -1938,6 +2117,12 @@ def generate_question_chunk_with_retries(
         if raw_path.exists():
             last_raw = raw_path.read_text(encoding="utf-8", errors="replace")
         warnings.append(f"Generation {chunk_label}: attempt0 failed: {last_error}")
+        if is_quota_failure(last_error):
+            mark_quota_exhausted()
+            warnings.append(
+                f"Generation {chunk_label}: stopped retries after Gemini quota exhaustion (HTTP 429 / RESOURCE_EXHAUSTED)."
+            )
+            return [], warnings
 
     if not is_truncation_failure(last_error):
         try:
@@ -1953,15 +2138,32 @@ def generate_question_chunk_with_retries(
         except Exception as exc:
             last_error = str(exc)
             warnings.append(f"Generation {chunk_label}: retry1 repair failed: {last_error}")
+            if is_quota_failure(last_error):
+                mark_quota_exhausted()
+                warnings.append(
+                    f"Generation {chunk_label}: stopped retries after Gemini quota exhaustion (HTTP 429 / RESOURCE_EXHAUSTED)."
+                )
+                return [], warnings
             if is_network_failure(last_error):
                 warnings.append(f"Generation {chunk_label}: stopped retries after network failure.")
                 return [], warnings
     else:
         warnings.append(f"Generation {chunk_label}: truncation detected; splitting chunk without same-size repair.")
 
+    if quota_exhausted():
+        warnings.append(
+            f"Generation {chunk_label}: skipping sub-chunk recursion — Gemini quota exhausted."
+        )
+        return [], warnings
+
     if len(chunk) > 2:
         collected: list[dict[str, Any]] = []
         for sub_index, sub_chunk in enumerate(chunk_list(chunk, max(1, len(chunk) // 2)), start=1):
+            if quota_exhausted():
+                warnings.append(
+                    f"Generation {chunk_label}: skipping remaining sub-chunks — Gemini quota exhausted."
+                )
+                break
             sub_items, sub_warnings = generate_question_chunk_with_retries(
                 api_key, template, sub_chunk, memory, source_file, f"{chunk_label}_retry2_sub{sub_index}"
             )
@@ -1972,6 +2174,11 @@ def generate_question_chunk_with_retries(
     if len(chunk) > 1:
         collected = []
         for sub_index, allocation in enumerate(chunk, start=1):
+            if quota_exhausted():
+                warnings.append(
+                    f"Generation {chunk_label}: skipping remaining single-slide retries — Gemini quota exhausted."
+                )
+                break
             sub_items, sub_warnings = generate_question_chunk_with_retries(
                 api_key, template, [allocation], memory, source_file, f"{chunk_label}_retry3_slide{sub_index}"
             )

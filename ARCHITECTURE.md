@@ -308,6 +308,20 @@ Domain boundaries are enforced by `scripts/uoga_dependency_graph_validator.py`:
 
 `tools/chunk_telemetry.py` is a compatibility shim that re-exports the UOGA telemetry engine for legacy callers.
 
-## Known Lecture-Slide Chunk-Planning Issue
+## Lecture-Slide Chunk-Planning Recovery Layer (2026-05-23, live validation pending)
 
-The lecture-slide generator silently accepts short Gemini returns at the initial-attempt boundary (`call_generation_once` passes `require_exact_count=False`). Live diagnosis on 2026-05-23 confirmed this can cause same-input runs to vary widely (16 questions vs 7 questions). A naive strict-count flip triggers the existing retry/sub-chunking path, but the recursion multiplier is aggressive enough to deplete a Gemini prepayment budget mid-run and end with 0 questions. The naive fix is therefore reverted in HEAD; a quota-aware design is needed before this can be safely changed. See `NEXT_STEPS_PRIORITY.md`.
+The lecture-slide generator now defends against two failure modes that previously caused silent question loss:
+
+**Quota-aware retry stop.** `is_quota_failure(error)` classifies HTTP 429, `RESOURCE_EXHAUSTED`, prepayment-depleted text, and similar quota signals. The first occurrence latches a module-level `_QUOTA_EXHAUSTED` flag. Every retry boundary checks the latch:
+
+- `generate_question_chunk_with_retries` — bails at the start, after attempt0, after retry1_repair, before sub-chunk recursion, and between sub-chunk siblings.
+- `generate_questions` — skips remaining chunks in the main loop and skips the entire recovery loop.
+- `retry_missing_slide_questions` — bails at the start and between attempts.
+
+The latch is reset at the top of each `generate_questions` invocation so multiple runs in the same process stay independent.
+
+**Targeted missing-slide recovery.** The main chunk loop still uses partial-accept (`call_generation_once` default `require_exact_count=False`) so a Gemini short return does NOT cascade into recursive sub-chunking — that cascade was what previously burned the budget. After all chunks complete, `generate_questions` computes per-slide deficit (allocated vs accepted) and calls `retry_missing_slide_questions()` for each under-delivered slide. That function makes up to `MAX_RECOVERY_ATTEMPTS_PER_SLIDE` (=2) focused single-slide calls with `require_exact_count=True`, so a short single-slide return raises and triggers the next attempt rather than being accepted silently.
+
+Worst-case extra API cost: `len(allocations_with_questions) * 2`. Bounded by design.
+
+Status: implementation landed in HEAD, packaged app rebuilt, offline predicate/latch tests pass. Live BIC validation on Test_Emma is pending Gemini credit top-up; will be tagged `v4.49-lecture-chunk-recovery-stable` after the run shows allocated ≈ generated counts.

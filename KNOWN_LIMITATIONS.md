@@ -4,15 +4,29 @@ Last updated: 2026-05-23
 
 Current stable tag: `v4.48-lecture-explanation-tables-stable`.
 
-## Lecture-Slide Chunk-Planning Silent Loss (newly diagnosed 2026-05-23)
+## Lecture-Slide Chunk-Planning Silent Loss (fix landed 2026-05-23, pending live validation)
 
-The lecture-slide generator silently accepts short Gemini returns. In `call_generation_once` (`tools/lecture-slide-question-generator/generate_lecture_slide_questions.py`), the call to `extract_generated_question_items` passes `require_exact_count=False`. When Gemini returns fewer questions than the chunk's allocated count, the partial output is kept with only a `warn()` call to stderr. The lost slides are not retried, not sub-chunked, and not surfaced in `validationWarnings` or `validationErrors` in the run report.
+History:
 
-Observed impact: the same Test_Emma input produced 16 questions in one BIC run and 7 in the next. The drop came entirely from short returns in two generation chunks (chunk1 returned 4 of 8 expected, chunk2 returned 3 of 5 expected).
+The lecture-slide generator originally accepted short Gemini returns silently. In `call_generation_once` (`tools/lecture-slide-question-generator/generate_lecture_slide_questions.py`), `extract_generated_question_items` was called with `require_exact_count=False`. When Gemini returned fewer questions than the chunk's allocated count, the partial output was kept with only a `warn()` call to stderr — no retry, no surfaced error. Diagnosed 2026-05-23: the same Test_Emma input produced 16 questions in one BIC run and 7 in the next (chunk1 returned 4 of 8 expected, chunk2 returned 3 of 5 expected).
 
-A naive fix (flipping the flag to `True`) does engage the existing retry path correctly — repair retry, then sub-chunking into halves, then single-slide attempts — but the recursion multiplier is aggressive enough that it can deplete a Gemini prepayment budget mid-run. A live test on 2026-05-23 hit HTTP 429 partway through, every remaining slide was skipped, and the final outcome was 0 questions for the same input. The naive fix is reverted in HEAD.
+A naive strict-count flip was attempted and reverted: it engaged the existing recursive retry path (repair → halve → single-slide), but the recursion multiplier was aggressive enough to deplete a Gemini prepayment budget mid-run. Live test outcome was 0 questions for the same input.
 
-A safe fix requires quota-aware retry stopping or a non-cascading recovery strategy. See `NEXT_STEPS_PRIORITY.md` for the proposed options.
+Current state (after the 2026-05-23 fix, not yet tagged):
+
+Two complementary changes landed in HEAD:
+
+1. **Quota-aware retry stop** — `is_quota_failure(error)` detects HTTP 429 / `RESOURCE_EXHAUSTED` / prepayment-depleted text. A module-level `_QUOTA_EXHAUSTED` latch is set on first occurrence. Every retry boundary in `generate_question_chunk_with_retries` (initial-attempt failure, repair-retry failure, sub-chunk recursion, single-slide recursion) and the cross-chunk loop in `generate_questions` checks the latch and bails to `[]` instead of making more API calls. This protects whatever was already generated.
+
+2. **Targeted missing-slide recovery** — the chunk loop still uses partial-accept (`require_exact_count=False`) to preserve the historical behavior that prevents unbounded sub-chunking. After all chunks complete, a new loop compares allocated-vs-generated counts per slide and calls `retry_missing_slide_questions()` for each under-delivered slide. That function makes up to `MAX_RECOVERY_ATTEMPTS_PER_SLIDE` (=2) focused single-slide attempts with `require_exact_count=True`. Bounded worst-case extra API calls: `len(work) * 2`. Quota-aware (stops on first 429).
+
+Live validation pending: the live test requires Gemini credits. The user's prepayment was depleted by the prior naive-fix test. Once topped up, the expected outcome on the same Test_Emma input is that allocated and generated counts match (or come very close), and that any quota error during the run terminates cleanly with whatever was already generated preserved.
+
+Offline test coverage already in place:
+
+- `is_quota_failure` correctly classifies HTTP 429 / RESOURCE_EXHAUSTED / "prepayment credits are depleted" as quota failures and rejects normal validation errors and network errors.
+- `mark_quota_exhausted` / `reset_quota_state` flip the latch idempotently.
+- `MAX_RECOVERY_ATTEMPTS_PER_SLIDE` is 2.
 
 ## Fast Facts Validation Limit
 

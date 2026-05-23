@@ -6,23 +6,29 @@ Current stable tag: `v4.48-lecture-explanation-tables-stable`.
 
 This roadmap prioritizes convergence while protecting validated behavior. The new top item is the lecture-slide chunk-planning fix surfaced during the v4.48 validation pass.
 
-## 0. Lecture-Slide Chunk-Planning Quota-Aware Recovery (new, top priority)
+## 0. Lecture-Slide Chunk-Planning Quota-Aware Recovery (fix landed, live validation pending)
 
-Rationale: Live diagnosis on 2026-05-23 confirmed that `generate_lecture_slide_questions.py` silently accepts Gemini short returns in `call_generation_once` (`require_exact_count=False`). A naive flip to `True` engages the existing recursive retry/sub-chunking path, but live testing shows that path can multiply API calls aggressively enough to deplete a Gemini prepayment budget mid-run and finish with 0 questions for the same input that previously produced 7. The naive fix is reverted in HEAD.
+Status: Implementation landed in HEAD on 2026-05-23. Two complementary changes in `tools/lecture-slide-question-generator/generate_lecture_slide_questions.py`:
 
-Risk: High if implemented naively (budget runaway, worse-than-broken outcomes); medium if implemented with explicit guards.
+1. **Quota-aware retry stop.** `is_quota_failure(error)` detects HTTP 429 / `RESOURCE_EXHAUSTED` / prepayment-depleted text. A module-level `_QUOTA_EXHAUSTED` latch is set on first occurrence. Every retry boundary in `generate_question_chunk_with_retries` and the cross-chunk loop in `generate_questions` checks the latch and bails to `[]`. Protects whatever was already generated; no further budget burn.
 
-Architectural impact: Touches `generate_lecture_slide_questions.py`. May need a shared `is_quota_failure(err)` helper alongside the existing `is_truncation_failure` / `is_network_failure` predicates.
+2. **Targeted missing-slide retry.** The chunk loop still uses partial-accept (`require_exact_count=False`) to preserve the historical behavior that prevents unbounded sub-chunking. After all chunks complete, `generate_questions` now computes per-slide deficit and calls `retry_missing_slide_questions()` for each under-delivered slide. That function makes up to `MAX_RECOVERY_ATTEMPTS_PER_SLIDE` (=2) focused single-slide attempts with `require_exact_count=True`. Bounded worst-case extra API calls: `len(work) * 2`. Quota-aware.
 
-Candidate approaches, listed cheapest first:
+Offline tests pass (predicate classification, latch idempotency, constant value). Packaged app rebuilt.
 
-1. **Quota-aware early stop (smallest safe change).** Detect HTTP 429 or `RESOURCE_EXHAUSTED` in the error message and immediately stop ALL further retries for the current run. Write whatever was generated and exit cleanly. Does not improve the short-return problem on its own, but stops the runaway. Strongly recommended regardless of which other path is chosen.
+Live validation pending: requires Gemini credits. Once topped up, run the same Test_Emma fixture through BIC and verify:
 
-2. **Targeted missing-slide retry (correct fix).** Keep the existing partial-accept behavior on the initial chunk attempt. After all chunks complete, compare allocated-vs-generated slide IDs, and make ONE focused per-slide attempt for the missing slides only. Cap at e.g. 2 attempts per missing slide. Predictable cost (≤ slides × cap), recovers most missing questions.
+- allocated count ≈ generated count (parity restored),
+- if a 429 lands mid-run, the run terminates cleanly with all questions generated before the 429 preserved (not 0),
+- the total Gemini call count is bounded by `chunks + len(missing_slides) * 2`,
+- the run report should include warnings naming each recovered or unrecovered slide.
 
-3. **Capped sub-chunking depth.** Keep the strict-count idea but cap recursion at one level (chunk → repair → halves, no further). Avoids the 6× multiplier worst case but is less elegant than option 2.
+Tag candidate once live validation passes: `v4.49-lecture-chunk-recovery-stable`.
 
-Validation requirements for whichever path is chosen: live BIC run on the same Test_Emma fixture, allocated-vs-generated parity check, packaged-app validation, and a confirmed-safe cost ceiling (e.g. "≤ 2× allocated questions worth of API calls in the worst case").
+Risk going forward:
+
+- If Gemini consistently short-returns even at single-slide scope (e.g. a slide whose content fundamentally fails the prompt's constraints), the recovery loop will give up cleanly after 2 attempts with a clear warning. That's the right behavior — better than silent loss and better than runaway retries.
+- The 2-attempt cap can be tuned via `MAX_RECOVERY_ATTEMPTS_PER_SLIDE` if needed. Default deliberately small to keep cost predictable.
 
 ## 1. Controlled Divine Audio Operationalization
 
