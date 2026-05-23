@@ -3,9 +3,10 @@ Local repo path: /Users/shamsulalam/Desktop/shamsulalamx
 GitHub repo: https://github.com/shamsulalamx/shamsulalamx
 
 Current local stable baseline:
-`v4.50-fastfacts-review-merge-stable` at commit `64a8e14` on branch `phase11-fastfacts-stability`.
+`v4.51-stem-quality-and-ome-live-stable` (covers commits `4b2d847` + `cc290d9` + doc commit) on branch `phase11-fastfacts-stability`.
 
 Most recent local stable tags (newest first):
+v4.51-stem-quality-and-ome-live-stable
 v4.50-fastfacts-review-merge-stable
 v4.49-lecture-chunk-recovery-stable
 v4.48-lecture-explanation-tables-stable
@@ -34,6 +35,7 @@ Reading order on first start:
 
 Critical current state:
 
+- v4.51 enforced an explicit-final-question stem-quality contract across all 6 organic generators (lecture-slide + 5 UWorld-wrapping generators) and enabled OME live generation through BIC. Field-validated 2026-05-23 on user's small OME PDF: questions end with proper one-best-answer question sentences, packaged auto-import succeeded.
 - v4.50 fixed two Fast Facts review-survivor bugs: reviewed-accepted questions now merge into the same auto-imported test for the BIC job (instead of creating a parallel duplicate test) and carry the canonical `explanationSections[]` shape (instead of empty placeholders that lost the wrong-answer explanations). Field-validated 2026-05-23 on a small Fast Facts PPTX: 1 validated + 2 reviewed-accepted = one 3-question test with full explanations on all three.
 - v4.49 added quota-aware retry stop + targeted missing-slide recovery to the lecture-slide generator. Field-validated 2026-05-23 on Test_Emma BIC live run (18 allocated → 17 generated, recovery loop fired for 5 slides and recovered 4 of them).
 - v4.48 added structured table rendering in the lecture-slide explanation panel (`renderExplanationTablesInto` in `index.html`; generator no longer emits the `"Table used for explanation only: <tableId>"` placeholder).
@@ -42,8 +44,8 @@ Critical current state:
 
 Open follow-ups (not blockers, see `NEXT_STEPS_PRIORITY.md`):
 
-- The chunk-planning fix lives in `generate_lecture_slide_questions.py` only. Other source-specific generators (OME, Mehlman, NBME, Divine) have separate code paths and have NOT been audited for the same silent-loss class. Worth a quick allocated-vs-generated check on first live run of each.
-- The OME live-generation registry change in the working tree (cowork agent's pre-existing dirty work) is uncommitted. Live validation pending.
+- The v4.49 chunk-planning fix lives in `generate_lecture_slide_questions.py` only. Other source-specific generators (OME, Mehlman, NBME, Divine, UWorld, Anki) have separate code paths and have NOT been audited for the same silent-loss class at the chunk boundary. The v4.51 stem-quality validator is a DIFFERENT concern (catches well-formed questions missing the final question sentence); it does not catch silent under-delivery at the chunk boundary. Worth a quick allocated-vs-generated check on first live run of each remaining source.
+- OME live generation is field-validated on one small user-supplied OME PDF only. Broader OME variety, asset extraction quality, and signed/notarized distribution have not been stressed.
 
 Working tree:
 

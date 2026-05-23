@@ -24,20 +24,34 @@ Earlier field validation of the defensive half (quota-aware retry stop only) on 
 
 If the 2-attempt cap proves insufficient on a specific deck, tune `MAX_RECOVERY_ATTEMPTS_PER_SLIDE` upward. Default is deliberately small to keep worst-case cost predictable.
 
-## 0b. OME (and other generators) — audit for same silent-loss class
+## 0b. OME (and other generators) — chunk-planning silent-loss audit (still open)
 
-Rationale: The chunk-planning fix lives in `generate_lecture_slide_questions.py` (Emma, Fast Facts, AMBOSS share this binary). Other source-specific generators have their own retry paths:
+Rationale: The v4.49 chunk-planning fix lives in `generate_lecture_slide_questions.py` (Emma, Fast Facts, AMBOSS share this binary). Other source-specific generators have their own retry paths:
 
-- `tools/ome-pdf-question-generator/generate_ome_questions.py`
-- `tools/mehlman-pdf-question-generator/generate_mehlman_questions.py`
+- `tools/ome-pdf-question-generator/generate_ome_questions.py` (wraps UWorld machinery)
+- `tools/mehlman-pdf-question-generator/generate_mehlman_questions.py` (wraps UWorld machinery)
 - `tools/nbme-pdf-json-generator/` (uses Gemini through its own normalization stage)
-- `tools/divine-audio-question-generator/generate_divine_questions.py`
+- `tools/divine-audio-question-generator/generate_divine_questions.py` (wraps UWorld machinery)
+- `tools/anki-question-generator/generate_anki_questions.py` (wraps UWorld machinery)
 
-Each should be checked for the same pattern: does the generator silently accept short Gemini returns? If yes, port the same two-part fix.
+Each should be checked for the same pattern: does the generator silently accept short Gemini returns at the chunk boundary? If yes, port the v4.49 quota-aware retry stop + targeted missing-slide recovery pattern.
+
+Note: the v4.51 stem-quality validator catches a DIFFERENT class of bug (well-formed questions whose stem doesn't end with '?') — it does NOT catch chunk-level under-delivery. Both audits are still needed.
 
 Validation: compare `allocated vs generated` from the first live BIC run of each source. Mismatch with no surfaced error → port the fix.
 
-Risk: Medium. Each generator has its own structure; the fix pattern is small but the existing retry code can differ.
+Risk: Medium. The four UWorld-wrapping generators share machinery, so the fix may port cleanly to UWorld's own loop and benefit all four at once. NBME's separate normalization path needs its own audit.
+
+## 0c. OME live-generation broader validation
+
+Rationale: v4.51 validated OME live generation on a single small user-supplied PDF. Before claiming broad OME stability:
+
+- Run a varied set of OME PDFs (different lecture lengths, different chapters, different visual density).
+- Audit figure/table extraction quality on PDFs that have them.
+- Confirm packaged-vs-dev parity on a signed or notarized build if distribution matters.
+- Confirm allocated-vs-generated parity (see 0b).
+
+Risk: Medium. The plumbing is field-validated; semantic and edge-case coverage is not.
 
 ## 1. Controlled Divine Audio Operationalization
 

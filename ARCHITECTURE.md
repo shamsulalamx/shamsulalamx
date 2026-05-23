@@ -308,6 +308,16 @@ Domain boundaries are enforced by `scripts/uoga_dependency_graph_validator.py`:
 
 `tools/chunk_telemetry.py` is a compatibility shim that re-exports the UOGA telemetry engine for legacy callers.
 
+## Stem-Quality Contract Across Organic Generators (v4.51, field-validated 2026-05-23)
+
+All six organic generation paths now enforce the same stem-format contract: every generated question's stem must end with a clear final question sentence that ends in `?`. The contract is enforced in two places:
+
+- **Prompt level.** All six prompt files (`lecture-slide` + `uworld-notes` + `ome` + `mehlman` + `divine` + `anki`) carry a `STEM FORMAT RULES` block with the same wording: "Every stem must end with a clear final question sentence. No exceptions. The final sentence must ask the learner to choose one best answer and must end with a question mark." Acceptable wording examples are provided.
+
+- **Validator level.** The `lecture-slide` generator has its own `stem_quality_errors()` validator. The five UWorld-wrapping generators (`uworld-notes`, `ome`, `mehlman`, `divine`, `anki`) share `validate_question()` in `tools/uworld-notes-question-generator/generate_uworld_questions.py`. That validator now invokes `stem_has_explicit_final_question(stem)` which walks the final sentence, requires it to end in `?`, and requires it to contain a recognizable one-best-answer prompt (`which of the following`, `next step`, `most appropriate`, etc.). Failing questions go through the existing repair-retry path; if repair still fails, the question is kept with `extractionWarnings` rather than silently dropped.
+
+The validator is intentionally a separate concern from the v4.49 chunk-planning recovery layer. v4.49 protects against silent question loss at the chunk boundary; the v4.51 stem-quality contract protects against well-formed questions that lack a proper final question sentence. Both must remain wired for the full safety net.
+
 ## Review-Survivor Canonicalization Layer (v4.50, field-validated 2026-05-23)
 
 When a BIC run produces some questions that pass validation and some that need human review, the validated set is auto-imported into a new library test immediately. The user later opens the review draft, accepts (and optionally edits) the questions that need review, and the renderer asks Electron to produce an "accepted survivor" JSON which is then imported through the normal BIC import path.

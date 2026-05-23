@@ -2,7 +2,7 @@
 
 Last updated: 2026-05-23
 
-This file documents stable v4 tags from v4.0 through the current head tag `v4.50-fastfacts-review-merge-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+This file documents stable v4 tags from v4.0 through the current head tag `v4.51-stem-quality-and-ome-live-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
 
 ## v4.0-images-tables-generator-stable
 
@@ -309,3 +309,40 @@ Not validated by this milestone:
 
 - The migration path for tests already imported via the buggy pre-v4.50 review-survivor path is forward-only. Those orphan tests still have empty `explanationSections[]` and live in their own library entry. Recovery requires either re-running the source through BIC with the new build or running a one-shot recovery script over the existing `accepted_survivors_app_ready.json` files in the affected BIC job dirs.
 - Append behavior was tested with 1 + 2 = 3 questions. Larger appends (10+ reviewed questions into a 20+ question existing test) have not been stressed.
+
+## v4.51-stem-quality-and-ome-live-stable
+
+Commits: `4b2d847` (stem-quality fix) + `cc290d9` (OME live enablement) + doc commit.
+
+Meaning: Two related fixes landed and field-validated in the same session.
+
+**Stem-quality across organic generators.** The user's first live OME BIC run produced 7 questions whose stems all ended mid-narrative without a one-best-answer question — same class of bug Fast Facts hit previously. The previous fix had landed only in the lecture-slide generator (Fast Facts, Emma, AMBOSS); OME, UWorld, Mehlman, Divine, and Anki had neither the prompt rule nor a stem-quality validator. This tag adds:
+
+- `stem_has_explicit_final_question(stem)` plus helpers in `tools/uworld-notes-question-generator/generate_uworld_questions.py`, wired into the shared `validate_question(q)`. Because OME, Mehlman, Divine, and Anki all `import generate_uworld_questions as _uw` and reuse this validator, all 5 generators are fixed in one place. Failing stems route into the existing repair-retry path; if repair still fails, questions are kept with `extractionWarnings` rather than silently dropped.
+- A `STEM FORMAT RULES` block added to all 5 prompt files (`notes_to_questions_prompt.txt`, `ome_to_questions_prompt.txt`, `mehlman_pdf_to_questions_prompt.txt`, `divine_audio_to_questions_prompt.txt`, `anki_notes_to_questions_prompt.txt`). Same wording as the lecture-slide prompt: every stem must end with a clear final question sentence ending in `?`, with acceptable wording examples.
+
+**OME live generation through BIC.** The `ome_pdf` BIC registry entry was previously dry-run only by design. This tag enables live Gemini OME generation:
+
+- `tools/shared-ingestion/ome_profile_runner.py` gained `--mode {dry-run, generate}` following the Emma runner pattern. Old `--emit-app-ready-dry-run` kept as backward-compatible alias. Default `--limit` changed 5 → 0 so live runs process the full PDF. Dry-run and live outputs land in separate subdirs.
+- `tools/batch-import-center/pipeline_registry.json` `ome_pdf` entry: `requiresGemini: true`, `liveSteps` invoking `--mode generate --limit 0` with heartbeat 60s, `outputDirectories` covers both subdirs.
+
+Validated (field, user's OME PDF live BIC run, 2026-05-23):
+
+- OME live generation produced app-ready JSON from a small user-supplied OME PDF.
+- Every generated question's stem ends with an explicit one-best-answer question sentence ending in `?`.
+- Packaged app live BIC auto-import, quiz rendering, and explanation panel all verified in the same run.
+
+Validated (offline):
+
+- `stem_has_explicit_final_question` passes 3 well-formed stems and rejects 4 mid-narrative ones plus a no-question fragment.
+- End-to-end `validate_question(bad_q)` returns the expected stem-quality error string.
+
+Architecture significance: Establishes a single shared stem-quality contract across all 6 organic generation paths (lecture-slide + 5 UWorld-wrapping generators). Removes the OME `dry-run only` boundary that had stood since the OME profile shipped. The OME enablement plumbing was authored in a prior cowork session; today's run was the first end-to-end live validation.
+
+Not validated by this milestone:
+
+- Broad OME PDF coverage (only one small user-supplied PDF tested).
+- Asset extraction quality for OME PDFs with figures/tables.
+- Allocated-vs-generated parity audit for OME (the v4.49 chunk-planning fix has NOT been ported to `generate_ome_questions.py`; see `NEXT_STEPS_PRIORITY.md` item 0b).
+- Signed or notarized distribution behavior of the live OME output paths.
+- Migration of tests already imported via the buggy pre-v4.51 path is forward-only. Re-run the source through BIC with the new build to get the correct shape; the missing final sentence cannot be inferred from what was emitted.

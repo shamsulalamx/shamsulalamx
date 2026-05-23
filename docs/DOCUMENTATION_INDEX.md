@@ -20,7 +20,7 @@ Use this page to decide which project document is current before reading older h
 | `NEXT_STEPS_PRIORITY.md` | Current prioritized work queue (chunk-planning quota-aware recovery is top item) |
 | `GIT_TAG_HISTORY.md` | Stable milestone and rollback tag history through v4.48 |
 
-Current runtime safety baseline: `v4.40-phase10c-survivability-stable`. Current development head: `v4.50-fastfacts-review-merge-stable`. Current docs should describe the Batch Import queue system as the Phase 10C survivability system, reconciliation as filesystem-first plus queue/history merge, runtime safety layer as process registry plus cleanup system, the lecture-slide generator as having quota-aware retry stop + targeted missing-slide recovery (v4.49), and the review-survivor import path as canonicalized + merge-into-existing-test (v4.50).
+Current runtime safety baseline: `v4.40-phase10c-survivability-stable`. Current development head: `v4.51-stem-quality-and-ome-live-stable`. Current docs should describe the Batch Import queue system as the Phase 10C survivability system, reconciliation as filesystem-first plus queue/history merge, runtime safety layer as process registry plus cleanup system, the lecture-slide generator as having quota-aware retry stop + targeted missing-slide recovery (v4.49), the review-survivor import path as canonicalized + merge-into-existing-test (v4.50), all six organic generators as enforcing an explicit-final-question stem-quality contract (v4.51), and OME as having a live BIC generation path (v4.51).
 
 ## Current Supporting Docs
 

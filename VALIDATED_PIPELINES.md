@@ -16,7 +16,7 @@ This file records what is validated, what is not validated, and the risk level f
 | NBME | BIC orchestration stable | Existing NBME pipeline stable for known workflows | Adapter foundation exists | BIC orchestration tagged stable | Earlier figure/image workflows packaged-validated; recheck for new changes | OCR variability, figure linking, source-specific PDFs | Medium |
 | Images & Tables | Shared image/table profile stable | Attachment-first only, no semantic generator | Validated in v4.15 | BIC generate + auto-import validated | Packaged app validated end to end | Heuristic classification, no deep table parsing | Medium |
 | Anki | Shared profile dry-run handoff validated | Not validated; BIC live steps intentionally reuse dry-run handoff | Normalized text chunks validated | Dry-run BIC auto-import validated in dev and packaged app | Packaged dry-run auto-import, quiz rendering, reload persistence, and score history persistence validated | Placeholder questions only; live Gemini generation not enabled or validated | Medium-high |
-| OME | Shared PDF dry-run handoff validated | Not validated; BIC live steps intentionally reuse dry-run handoff | Normalized text chunks validated | Dry-run BIC auto-import validated in dev and packaged app | Clean packaged profile, quiz rendering, reload persistence, and score history persistence validated | Placeholder questions only; real PDF coverage, live Gemini generation, and writable packaged output are unvalidated | Medium-high |
+| OME | Shared PDF profile stable | Live Gemini OME generation field-validated at v4.51 on small OME PDF | Normalized text chunks validated | Live BIC auto-import validated end-to-end | Packaged app live BIC generation, auto-import, and quiz rendering validated | Broad OME PDF variety not stressed; writable packaged output for live mode follows v4.51 registry change | Medium |
 | Divine Transcript | Dry-run BIC handoff validated | Not validated; BIC live steps intentionally reuse dry-run handoff | Normalized transcript chunks validated | Dry-run BIC auto-import validated in dev and packaged app | Packaged `.txt` and `.md` dry-run auto-import and score history persistence validated | `sourceType` `divine_transcript`; visible source `Divine Transcript`; `sourceFormat` remains `divine-audio`; live generation and audio are unvalidated | Medium-high |
 | Fast Facts | Cache foundation plus narrow screening stabilization | Dev Electron live BIC generation validated only through the capped 3-attempt stabilization path | Adapter foundation exists | Dev BIC app-ready discovery and auto-import validated on one small PPTX | Not run for this Fast Facts fix | Broad deck coverage, broad semantic stability, renderer Gemini-alert mismatch | High |
 
@@ -167,21 +167,23 @@ Intentionally not validated:
 
 ## OME
 
-Validated for the dry-run BIC milestone:
+Validated for the dry-run BIC milestone (earlier):
 
 - `ome_pdf` descriptor and normalized `text` chunks from the tracked synthetic fixture.
 - Selected-input OME generator dry-run with controlled output.
-- `ome_profile_runner.py --emit-app-ready-dry-run` handoff and app-ready JSON validation.
 - Active BIC dry-run orchestration, output discovery, registry note display, and visible auto-import in dev Electron and packaged app.
 - Clean packaged temporary profile import, quiz rendering, reload persistence, and score history persistence after reload.
 
-Only dry-run placeholder output is validated. The dry-run app-ready JSON proves orchestration and importer compatibility, not semantic medical question quality.
+Validated at v4.51 (live BIC milestone, 2026-05-23):
 
-Not validated:
+- `ome_profile_runner.py --mode generate` handoff (the old `--emit-app-ready-dry-run` flag is kept as a backward-compatible alias for `--mode dry-run`).
+- BIC `ome_pdf` registry entry now has `requiresGemini: true` and live steps that invoke `--mode generate --limit 0`.
+- Live Gemini OME generation produces app-ready JSON from a small user-supplied OME PDF.
+- Generated questions carry explicit one-best-answer final-question sentences ending in '?' (via the v4.51 stem-quality validator added to the shared UWorld machinery — OME wraps it).
+- Packaged app live BIC auto-import, quiz rendering, and explanation panel verified on the same run.
 
-- Live Gemini OME generation.
-- Any live OME BIC path.
-- Real semantic OME question quality.
-- Broad OME PDF coverage beyond the synthetic fixture.
+Not validated (still):
+
+- Broad OME PDF coverage beyond small user-supplied samples.
 - Controlled asset extraction for OME.
-- Non-writable packaged resource tree behavior.
+- Non-writable packaged resource tree behavior (live OME output paths follow `BIC_JOB_OUTPUT_ROOT` redirection but signed/notarized distribution behavior was not stressed in this validation).

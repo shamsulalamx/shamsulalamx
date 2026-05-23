@@ -1,12 +1,29 @@
 # Project Status 2026-05-23
 
-Current stable tag: `v4.50-fastfacts-review-merge-stable`
+Current stable tag: `v4.51-stem-quality-and-ome-live-stable`
 Current branch: `phase11-fastfacts-stability`
-Last committed HEAD: `64a8e14` (Fix two Fast Facts review-survivor import bugs)
+Last committed HEAD: doc commit landing alongside `4b2d847` + `cc290d9`.
 
 Supersedes `docs/archive/PROJECT_STATUS_2026-05-21.md`.
 
 ## What Is New Since 2026-05-21
+
+### v4.51 — Stem-quality contract across all organic generators + OME live generation enabled (field-validated)
+
+Two related fixes landed and field-validated in the same session after the user's first OME live BIC run surfaced that generated stems weren't ending with question marks (same class of bug Fast Facts hit earlier, but the previous fix only landed in the lecture-slide generator).
+
+Stem-quality contract:
+
+- `stem_has_explicit_final_question(stem)` + helpers added to `tools/uworld-notes-question-generator/generate_uworld_questions.py`, wired into `validate_question(q)`. Since OME, Mehlman, Divine, and Anki all reuse this validator via `import generate_uworld_questions`, the check fires across all 5 wrapping generators. Failing stems route into the existing repair-retry path; if repair still fails, questions are kept with `extractionWarnings` rather than silently dropped.
+- A uniform `STEM FORMAT RULES` block added to all 5 prompt files. Same wording as the lecture-slide prompt: every stem must end with a clear final question sentence ending in `?`.
+
+OME live generation:
+
+- `tools/shared-ingestion/ome_profile_runner.py` gained `--mode {dry-run, generate}` following the Emma runner pattern. The `--emit-app-ready-dry-run` flag is kept as a backward-compatible alias.
+- `tools/batch-import-center/pipeline_registry.json` `ome_pdf` entry now flips `requiresGemini: true` and points `liveSteps` at `--mode generate --limit 0`.
+- Field-validated on user's small OME PDF live BIC run: questions end with proper `Which of the following is the most likely diagnosis?` style sentences, packaged auto-import succeeded, quiz and explanation panels render normally.
+
+Tag commits: `4b2d847` (stem-quality) + `cc290d9` (OME live enablement) + doc commit.
 
 ### v4.50 — Fast Facts review-survivor import merges into the auto-imported test, with full canonical explanations (field-validated)
 

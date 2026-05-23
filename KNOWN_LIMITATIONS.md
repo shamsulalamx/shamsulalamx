@@ -4,6 +4,38 @@ Last updated: 2026-05-23
 
 Current stable tag: `v4.48-lecture-explanation-tables-stable`.
 
+## Organic-Generator Stems Missing Final Question Sentence (RESOLVED 2026-05-23, tagged v4.51)
+
+History:
+
+The user's first live OME BIC run produced 7 questions where none of the stems ended with a question mark — every vignette stopped mid-narrative without a one-best-answer prompt, so the user could not tell what each question was asking. Same class of bug Fast Facts hit previously and was thought to be fixed for all organic generators, but the prior fix only landed in the lecture-slide generator (which serves Fast Facts, Emma, and AMBOSS). OME, UWorld, Mehlman, Divine, and Anki all had neither the prompt rule nor a stem-quality validator.
+
+Resolution (tagged `v4.51-stem-quality-and-ome-live-stable`, commit `4b2d847`):
+
+1. **Stem-quality validator** in `tools/uworld-notes-question-generator/generate_uworld_questions.py`. Adds `stem_has_explicit_final_question(stem)` and supporting helpers. Wired into `validate_question(q)`: a stem that doesn't end with '?' or doesn't contain a recognizable one-best-answer prompt (`which of the following`, `next step`, `most appropriate`, etc.) is rejected. The existing repair-retry path then re-asks Gemini. If repair still fails, the question is kept with `extractionWarnings` rather than silently dropped. Because OME, Mehlman, Divine, and Anki all monkey-patch `_uw.PROMPT_FILE` and reuse this `validate_question()`, the fix takes effect across all 5 wrapping generators.
+
+2. **STEM FORMAT RULES** block added to all 5 prompt files (`notes_to_questions_prompt.txt`, `ome_to_questions_prompt.txt`, `mehlman_pdf_to_questions_prompt.txt`, `divine_audio_to_questions_prompt.txt`, `anki_notes_to_questions_prompt.txt`). Same wording as the lecture-slide prompt: every stem must end with a clear final question sentence ending in '?', with acceptable wording examples.
+
+Field-validated on user's small OME PDF live BIC run: generated questions now end with proper "Which of the following is the most likely diagnosis?" / "What is the most appropriate next step?" style sentences. The lecture-slide generator (Fast Facts, Emma, AMBOSS) already had both halves; all 6 organic generation paths now enforce the same stem-format contract.
+
+Migration note: any test imported via the buggy pre-v4.51 path still has stems without final question sentences. Re-running the source through BIC with the new build produces the correct shape; for one-off recovery without re-running Gemini, the existing data is unsalvageable (the missing final sentence cannot be inferred from what was emitted).
+
+## OME Live Generation Through BIC (NEW capability, validated 2026-05-23, tagged v4.51)
+
+The OME source was previously dry-run only through BIC by design — the `ome_pdf` registry entry pointed `liveSteps` at the same dry-run handoff. v4.51 enables live Gemini OME generation:
+
+- `tools/shared-ingestion/ome_profile_runner.py` gained `--mode {dry-run, generate}` following the Emma runner pattern. The old `--emit-app-ready-dry-run` flag is kept as a backward-compatible alias for `--mode dry-run`. Default `--limit` changed from 5 to 0 so a live run processes the full PDF. Dry-run and live outputs land in separate subdirs (`ome_app_ready_dry_run/` and `ome_app_ready_live/`).
+- `tools/batch-import-center/pipeline_registry.json` `ome_pdf` entry now has `requiresGemini: true`, `liveSteps` that invoke `--mode generate --limit 0` with heartbeat 60s, and `outputDirectories` listing both live and dry-run subdirs so BIC output discovery works for either mode.
+
+Field-validated on user's small OME PDF live BIC run (alongside the stem-quality fix). Implementation work was authored in a prior cowork session; today's run was the first end-to-end live BIC validation.
+
+Not validated yet:
+
+- Broad OME PDF variety. The validated run used a small user-supplied OME PDF.
+- Asset extraction quality for OME (figures and tables present in the source).
+- Signed / notarized distribution behavior of the live OME output paths.
+- Allocated-vs-generated parity check for OME (analogous to the lecture-slide chunk-planning audit at v4.49) — if OME ever short-returns, the same recovery pattern would need porting to `generate_ome_questions.py`. The stem-quality validator and existing UWorld repair path do catch missing final questions, but not silently-lost questions at the chunk boundary.
+
 ## Fast Facts Review-Survivor Import Bugs (RESOLVED 2026-05-23, tagged v4.50)
 
 History:

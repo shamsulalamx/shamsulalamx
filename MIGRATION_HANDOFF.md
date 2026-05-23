@@ -2,7 +2,7 @@
 
 Last updated: 2026-05-23
 
-Current stable tag: `v4.50-fastfacts-review-merge-stable`.
+Current stable tag: `v4.51-stem-quality-and-ome-live-stable`.
 Current branch: `phase11-fastfacts-stability`.
 
 This handoff was originally written when the project migrated to a new ChatGPT + Codex account on 2026-05-22. It is now valid for any subsequent account or agent continuing the project, including the current Claude (Anthropic) agent that took over on 2026-05-23 and produced the v4.48 milestone.
@@ -137,7 +137,8 @@ Do not explain away failures. Capture the exact blocker, preserve the valid part
 
 Current local rollback milestones (newest first):
 
-- `v4.50-fastfacts-review-merge-stable` — current head tag
+- `v4.51-stem-quality-and-ome-live-stable` — current head tag
+- `v4.50-fastfacts-review-merge-stable`
 - `v4.49-lecture-chunk-recovery-stable`
 - `v4.48-lecture-explanation-tables-stable`
 - `v4.47-emma-pdf-batch-import-stable`
