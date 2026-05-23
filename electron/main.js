@@ -934,7 +934,7 @@ ipcMain.handle('nbme:batch-import:write-accepted-review-survivors', async (_even
   try {
     const job = knownBatchQueueJob(payload?.jobId);
     if (!job) return safeError('BATCH_QUEUE_JOB_NOT_FOUND', 'Queued batch job was not found.');
-    if (job.importedTestId) return safeError('BATCH_REVIEW_ALREADY_IMPORTED', 'Accepted survivor questions were already imported for this job.');
+    if (job.acceptedSurvivorsImportedTestId) return safeError('BATCH_REVIEW_ALREADY_IMPORTED', 'Accepted review questions were already imported for this job.');
     const read = readKnownBatchReviewDraft(job);
     if (!read.ok) return read;
     const decisions = sanitizeBatchReviewDecisions(payload?.decisions);
@@ -975,7 +975,7 @@ ipcMain.handle('nbme:batch-import:begin-review-survivor-import', async (_event, 
   try {
     const job = knownBatchQueueJob(payload?.jobId);
     if (!job) return safeError('BATCH_QUEUE_JOB_NOT_FOUND', 'Queued batch job was not found.');
-    if (job.importedTestId) return safeError('BATCH_REVIEW_ALREADY_IMPORTED', 'Accepted survivor questions were already imported for this job.');
+    if (job.acceptedSurvivorsImportedTestId) return safeError('BATCH_REVIEW_ALREADY_IMPORTED', 'Accepted review questions were already imported for this job.');
     const reviewDir = batchReviewDir(job);
     if (!reviewDir) return safeError('BATCH_REVIEW_OUTPUT_REJECTED', 'Review output root is not a known durable queue job.');
     fs.mkdirSync(reviewDir, { recursive: true });
@@ -1073,6 +1073,8 @@ ipcMain.handle('nbme:batch-import:update-job-report', async (_event, payload) =>
       importedTestName: report.importedTestName || null,
       importedAt: report.importedAt || undefined,
       importedAcceptedQuestionCount: Number.isFinite(report.importedAcceptedQuestionCount) ? report.importedAcceptedQuestionCount : undefined,
+      acceptedSurvivorsImportedTestId: report.acceptedSurvivorsImportedTestId || undefined,
+      acceptedSurvivorsImportedAt: report.acceptedSurvivorsImportedAt || undefined,
       decisionsPath: report.decisionsPath || undefined,
       acceptedSurvivorsPath: report.acceptedSurvivorsPath || undefined,
       report
@@ -1086,6 +1088,8 @@ ipcMain.handle('nbme:batch-import:update-job-report', async (_event, payload) =>
       importedTestId: report.importedTestId || undefined,
       importedAt: report.importedAt || undefined,
       importedAcceptedQuestionCount: Number.isFinite(report.importedAcceptedQuestionCount) ? report.importedAcceptedQuestionCount : undefined,
+      acceptedSurvivorsImportedTestId: report.acceptedSurvivorsImportedTestId || undefined,
+      acceptedSurvivorsImportedAt: report.acceptedSurvivorsImportedAt || undefined,
       decisionsPath: report.decisionsPath || undefined,
       acceptedSurvivorsPath: report.acceptedSurvivorsPath || undefined,
       report

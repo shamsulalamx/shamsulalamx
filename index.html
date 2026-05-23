@@ -22821,8 +22821,8 @@ Errors: ${escapeHTML(errors)}</div>
     if (!_batchReviewState || !api || !api.writeAcceptedReviewSurvivors) return;
     const jobs = Array.isArray(_batchImportState?.queue) ? _batchImportState.queue : [];
     const job = jobs.find(function(item) { return item.jobId === _batchReviewState.jobId; }) || {};
-    if (job.importedTestId) {
-      if (status) status.textContent = 'Accepted survivor questions were already imported for this job.';
+    if (job.acceptedSurvivorsImportedTestId) {
+      if (status) status.textContent = 'Accepted review questions were already imported for this job.';
       return;
     }
     const acceptedCount = batchReviewDecisionPayload().filter(function(item) { return item.decision === 'accept'; }).length;
@@ -22888,6 +22888,8 @@ Errors: ${escapeHTML(errors)}</div>
         importedTestId: importResult.testId,
         importedTestName: importResult.testName,
         importedAcceptedQuestionCount: importResult.questionCount,
+        acceptedSurvivorsImportedTestId: importResult.testId,
+        acceptedSurvivorsImportedAt: importedAt,
         decisionsPath: saved.decisionsPath,
         acceptedSurvivorsPath: survivor.survivorPath,
         draftPath: _batchReviewState.draftPath,
