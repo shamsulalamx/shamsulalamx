@@ -86,7 +86,7 @@ function knownBatchJobReviewDraftPath(job) {
   const outputRoot = knownBatchJobOutputRoot(job);
   const draftPath = String(job?.draftPath || '').trim();
   if (!outputRoot || !draftPath || !pathLivesUnder(outputRoot, draftPath)) return '';
-  if (path.basename(draftPath) !== 'lecture_slide_review_draft.json') return '';
+  if (!path.basename(draftPath).endsWith('_review_draft.json')) return '';
   return path.resolve(draftPath);
 }
 
@@ -96,6 +96,20 @@ function knownBatchJobReviewDecisionsPath(job) {
   if (!outputRoot || !decisionsPath || !pathLivesUnder(outputRoot, decisionsPath)) return '';
   if (path.basename(decisionsPath) !== 'review_decisions.json') return '';
   return path.resolve(decisionsPath);
+}
+
+function knownBatchJobReviewEditsPath(job) {
+  const outputRoot = knownBatchJobOutputRoot(job);
+  const editsPath = String(job?.editsPath || '').trim();
+  if (!outputRoot || !editsPath || !pathLivesUnder(outputRoot, editsPath)) return '';
+  if (path.basename(editsPath) !== 'review_edits.json') return '';
+  return path.resolve(editsPath);
+}
+
+function knownBatchJobReviewImportMarkerPath(job) {
+  const outputRoot = knownBatchJobOutputRoot(job);
+  if (!outputRoot) return '';
+  return path.join(outputRoot, 'review', 'survivor_import_in_progress.json');
 }
 
 function batchReviewDir(job) {
@@ -152,6 +166,19 @@ function readKnownBatchReviewDecisions(job) {
     return sanitizeBatchReviewDecisions(JSON.parse(fs.readFileSync(decisionsPath, 'utf8'))?.decisions);
   } catch (_err) {
     return [];
+  }
+}
+
+function readKnownBatchReviewEdits(job) {
+  const editsPath = knownBatchJobReviewEditsPath(job) || path.join(batchReviewDir(job) || '', 'review_edits.json');
+  if (!editsPath || !fs.existsSync(editsPath) || fs.lstatSync(editsPath).isSymbolicLink() || !fs.statSync(editsPath).isFile()) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(fs.readFileSync(editsPath, 'utf8'));
+    return parsed && typeof parsed.editedQuestions === 'object' && !Array.isArray(parsed.editedQuestions) ? parsed.editedQuestions : {};
+  } catch (_err) {
+    return {};
   }
 }
 
@@ -234,7 +261,7 @@ function removeBatchQueueJob(jobId) {
   const queue = readBatchQueue();
   const job = queue.jobs.find(item => item.jobId === jobId);
   if (!job) return null;
-  if (!['completed', 'failed', 'canceled', 'interrupted'].includes(job.status)) return false;
+  if (!['completed', 'completed_with_review_required', 'completed_with_review', 'failed', 'canceled', 'interrupted'].includes(job.status)) return false;
   writeBatchQueue({
     schemaVersion: queue.schemaVersion || BATCH_QUEUE_VERSION,
     jobs: queue.jobs.filter(item => item.jobId !== jobId)
@@ -365,15 +392,29 @@ function batchJobCompletionArtifacts(job) {
 function completedBatchJobPatch(job, artifacts, now) {
   const outputPaths = Array.isArray(job.outputPaths) ? [...job.outputPaths] : [];
   if (artifacts.appReadyPath && !outputPaths.includes(artifacts.appReadyPath)) outputPaths.push(artifacts.appReadyPath);
+  let reportStatus = '';
+  if (artifacts.completionReportPath) {
+    try {
+      const report = JSON.parse(fs.readFileSync(artifacts.completionReportPath, 'utf8'));
+      reportStatus = String(report?.status || '');
+    } catch (_) {}
+  }
+  const completedStatus = reportStatus === 'completed_with_review_required' || reportStatus === 'needs_review'
+    ? 'completed_with_review_required'
+    : 'completed';
   return {
     ...job,
-    status: 'completed',
+    status: completedStatus,
     finishedAt: job.finishedAt || job.completedAt || now,
     completedAt: job.completedAt || job.finishedAt || now,
     updatedAt: now,
     outputPaths,
     reportPath: job.reportPath || artifacts.completionReportPath || null,
-    progress: job.progress || { phase: 'completed', message: 'Batch job completed.', updatedAt: now }
+    progress: job.progress || {
+      phase: completedStatus,
+      message: completedStatus === 'completed_with_review_required' ? 'Batch job completed with review artifacts.' : 'Batch job completed.',
+      updatedAt: now
+    }
   };
 }
 
@@ -817,10 +858,47 @@ ipcMain.handle('nbme:batch-import:read-review-draft', async (_event, payload) =>
       importedTestId: job.importedTestId || null,
       reviewSummary: job.reviewSummary || null,
       decisions: readKnownBatchReviewDecisions(job),
+      editedQuestions: readKnownBatchReviewEdits(job),
       draft: read.draft
     };
   } catch (err) {
     return safeError('BATCH_REVIEW_DRAFT_READ_FAILED', err.message || String(err));
+  }
+});
+
+ipcMain.handle('nbme:batch-import:save-review-edits', async (_event, payload) => {
+  try {
+    const job = knownBatchQueueJob(payload?.jobId);
+    if (!job) return safeError('BATCH_QUEUE_JOB_NOT_FOUND', 'Queued batch job was not found.');
+    const read = readKnownBatchReviewDraft(job);
+    if (!read.ok) return read;
+    const reviewDir = batchReviewDir(job);
+    if (!reviewDir) return safeError('BATCH_REVIEW_OUTPUT_REJECTED', 'Review output root is not a known durable queue job.');
+    const rawEdits = payload?.editedQuestions && typeof payload.editedQuestions === 'object' && !Array.isArray(payload.editedQuestions)
+      ? payload.editedQuestions
+      : {};
+    const candidateCount = Array.isArray(read.draft.candidateQuestions) ? read.draft.candidateQuestions.length : 0;
+    const editedQuestions = {};
+    Object.entries(rawEdits).forEach(([key, value]) => {
+      const index = Number(key);
+      if (Number.isInteger(index) && index > 0 && index <= candidateCount && value && typeof value === 'object' && !Array.isArray(value)) {
+        editedQuestions[String(index)] = value;
+      }
+    });
+    fs.mkdirSync(reviewDir, { recursive: true });
+    const editsPath = path.join(reviewDir, 'review_edits.json');
+    fs.writeFileSync(editsPath, JSON.stringify({
+      editsVersion: 1,
+      jobId: job.jobId,
+      draftPath: read.draftPath,
+      savedAt: new Date().toISOString(),
+      editedQuestions
+    }, null, 2), 'utf8');
+    updateBatchQueueJob(job.jobId, { editsPath });
+    updateBatchJobRecord(job.jobId, { editsPath });
+    return { ok: true, jobId: job.jobId, editsPath, editedQuestions };
+  } catch (err) {
+    return safeError('BATCH_REVIEW_EDITS_SAVE_FAILED', err.message || String(err));
   }
 });
 
@@ -860,8 +938,19 @@ ipcMain.handle('nbme:batch-import:write-accepted-review-survivors', async (_even
     const read = readKnownBatchReviewDraft(job);
     if (!read.ok) return read;
     const decisions = sanitizeBatchReviewDecisions(payload?.decisions);
+    const savedEdits = readKnownBatchReviewEdits(job);
+    const editedQuestions = {
+      ...savedEdits,
+      ...(payload?.editedQuestions && typeof payload.editedQuestions === 'object' && !Array.isArray(payload.editedQuestions) ? payload.editedQuestions : {})
+    };
     const acceptedIndexes = new Set(decisions.filter(item => item.decision === 'accept').map(item => item.questionIndex));
-    const questions = read.draft.candidateQuestions.filter((_question, offset) => acceptedIndexes.has(offset + 1));
+    const questions = read.draft.candidateQuestions
+      .map((question, offset) => {
+        const index = offset + 1;
+        const edited = editedQuestions[String(index)];
+        return edited && typeof edited === 'object' && !Array.isArray(edited) ? edited : question;
+      })
+      .filter((_question, offset) => acceptedIndexes.has(offset + 1));
     if (!questions.length) return safeError('BATCH_REVIEW_NO_ACCEPTED', 'Accept at least one draft question before import.');
     const reviewDir = batchReviewDir(job);
     if (!reviewDir) return safeError('BATCH_REVIEW_OUTPUT_REJECTED', 'Review output root is not a known durable queue job.');
@@ -879,6 +968,60 @@ ipcMain.handle('nbme:batch-import:write-accepted-review-survivors', async (_even
     return { ok: true, jobId: job.jobId, survivorPath, acceptedQuestionCount: questions.length };
   } catch (err) {
     return safeError('BATCH_REVIEW_SURVIVORS_WRITE_FAILED', err.message || String(err));
+  }
+});
+
+ipcMain.handle('nbme:batch-import:begin-review-survivor-import', async (_event, payload) => {
+  try {
+    const job = knownBatchQueueJob(payload?.jobId);
+    if (!job) return safeError('BATCH_QUEUE_JOB_NOT_FOUND', 'Queued batch job was not found.');
+    if (job.importedTestId) return safeError('BATCH_REVIEW_ALREADY_IMPORTED', 'Accepted survivor questions were already imported for this job.');
+    const reviewDir = batchReviewDir(job);
+    if (!reviewDir) return safeError('BATCH_REVIEW_OUTPUT_REJECTED', 'Review output root is not a known durable queue job.');
+    fs.mkdirSync(reviewDir, { recursive: true });
+    const markerPath = knownBatchJobReviewImportMarkerPath(job);
+    if (fs.existsSync(markerPath)) {
+      return safeError('BATCH_REVIEW_IMPORT_IN_PROGRESS', 'Accepted survivor import is already in progress or was interrupted. Open job artifacts before retrying to avoid duplicate insertion.');
+    }
+    fs.writeFileSync(markerPath, JSON.stringify({
+      markerVersion: 1,
+      jobId: job.jobId,
+      survivorPath: String(payload?.survivorPath || ''),
+      startedAt: new Date().toISOString(),
+      status: 'in_progress'
+    }, null, 2), 'utf8');
+    updateBatchQueueJob(job.jobId, { importInProgressPath: markerPath });
+    updateBatchJobRecord(job.jobId, { importInProgressPath: markerPath });
+    return { ok: true, jobId: job.jobId, markerPath };
+  } catch (err) {
+    return safeError('BATCH_REVIEW_IMPORT_GUARD_FAILED', err.message || String(err));
+  }
+});
+
+ipcMain.handle('nbme:batch-import:finish-review-survivor-import', async (_event, payload) => {
+  try {
+    const job = knownBatchQueueJob(payload?.jobId);
+    if (!job) return safeError('BATCH_QUEUE_JOB_NOT_FOUND', 'Queued batch job was not found.');
+    const markerPath = knownBatchJobReviewImportMarkerPath(job);
+    if (!markerPath) return safeError('BATCH_REVIEW_IMPORT_MARKER_REJECTED', 'Review import marker path is not under this durable queue job.');
+    const succeeded = payload?.succeeded === true;
+    if (succeeded) {
+      fs.writeFileSync(markerPath, JSON.stringify({
+        markerVersion: 1,
+        jobId: job.jobId,
+        survivorPath: String(payload?.survivorPath || ''),
+        finishedAt: new Date().toISOString(),
+        importedTestId: String(payload?.importedTestId || ''),
+        status: 'imported'
+      }, null, 2), 'utf8');
+      return { ok: true, jobId: job.jobId, markerPath };
+    }
+    if (fs.existsSync(markerPath) && !fs.lstatSync(markerPath).isSymbolicLink()) fs.unlinkSync(markerPath);
+    updateBatchQueueJob(job.jobId, { importInProgressPath: null });
+    updateBatchJobRecord(job.jobId, { importInProgressPath: null });
+    return { ok: true, jobId: job.jobId, cleared: true };
+  } catch (err) {
+    return safeError('BATCH_REVIEW_IMPORT_MARKER_FINISH_FAILED', err.message || String(err));
   }
 });
 
@@ -996,8 +1139,8 @@ ipcMain.handle('nbme:batch-import:retry-queue-job', async (_event, payload) => {
     const jobId = String(payload?.jobId || '').trim();
     const job = readBatchQueue().jobs.find(item => item.jobId === jobId);
     if (!job) return safeError('BATCH_JOB_NOT_FOUND', 'Queued batch job was not found.');
-    if (!['failed', 'interrupted', 'canceled', 'needs_review'].includes(job.status)) {
-      return safeError('BATCH_JOB_NOT_RETRYABLE', 'Only failed, interrupted, canceled, or needs-review jobs can be retried.');
+    if (!['failed', 'interrupted', 'canceled', 'needs_review', 'completed_with_review_required'].includes(job.status)) {
+      return safeError('BATCH_JOB_NOT_RETRYABLE', 'Only failed, interrupted, canceled, or review-required jobs can be retried.');
     }
     const updated = updateBatchQueueJob(jobId, {
       status: 'pending',
@@ -1227,7 +1370,8 @@ async function runQueuedBatchJob(job) {
       const recoveryOutcome = String(recovery?.outcome || '');
       const reportFatal = recoveryOutcome === 'failed_fatal';
       const finalErrors = wasCancelled ? [] : (errors.length ? errors : (ok && !reportFatal ? reportErrors : (reportErrors.length ? reportErrors : [finalEvent?.error || fallbackMessage])));
-      const status = wasCancelled ? 'canceled' : (ok && !reportFatal ? (report.status === 'needs_review' ? 'needs_review' : 'completed') : 'failed');
+      const reviewRequiredStatus = report.status === 'needs_review' || report.status === 'completed_with_review_required';
+      const status = wasCancelled ? 'canceled' : (ok && !reportFatal ? (reviewRequiredStatus ? 'completed_with_review_required' : (report.status || 'completed')) : 'failed');
       const finalReport = { ...report, status, runtimeSeconds, outputPaths, warnings: finalWarnings, errors: finalErrors };
       const reportPath = writeBatchCompletionReport(job.outputRoot, finalReport);
       const finishedAt = new Date().toISOString();
@@ -1235,7 +1379,7 @@ async function runQueuedBatchJob(job) {
         status,
         completedAt: finishedAt,
         runtimeSeconds,
-        currentStage: status === 'completed' ? 'completed' : report.stage || null,
+        currentStage: status === 'completed' || status === 'completed_with_review_required' ? status : report.stage || null,
         outputPaths,
         draftPath: report.draftPath || '',
         reportPath,
@@ -1254,7 +1398,13 @@ async function runQueuedBatchJob(job) {
         errors: finalErrors,
         recovery,
         report: finalReport,
-        progress: { phase: status, message: status === 'completed' ? 'Batch job completed.' : (finalErrors[0] || status), updatedAt: finishedAt }
+        progress: {
+          phase: status,
+          message: status === 'completed'
+            ? 'Batch job completed.'
+            : (status === 'completed_with_review_required' ? 'Batch job completed with review artifacts.' : (finalErrors[0] || status)),
+          updatedAt: finishedAt
+        }
       });
       updateBatchProcessRegistryStatus(job, status);
       const result = {

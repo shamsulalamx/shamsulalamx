@@ -323,26 +323,35 @@ def discover_review_draft(manifest: dict[str, Any], started_at: float) -> dict[s
     durable_root = job_output_root(manifest)
     if not durable_root:
         return None
-    path = durable_root / "review" / "lecture_slide_review_draft.json"
-    if not path.is_file() or path.stat().st_mtime < started_at - 1:
-        return None
-    try:
-        draft = load_json(path)
-    except Exception as exc:
-        emit("warning", message=f"Review draft could not be read: {exc}", draftPath=str(path))
-        return None
-    candidates = draft.get("candidateQuestions")
-    survivors = draft.get("validQuestionIndexes")
-    if (
-        draft.get("draftVersion") != 1
-        or draft.get("status") != "needs_review"
-        or not isinstance(candidates, list)
-        or not candidates
-        or not isinstance(survivors, list)
-        or not survivors
-    ):
-        return None
-    return {"path": str(path.resolve()), "draft": draft}
+    candidates: list[Path] = []
+    manifest_draft = str(manifest.get("draftPath") or "").strip()
+    if manifest_draft:
+        manifest_path = Path(manifest_draft).expanduser().resolve()
+        if durable_root.resolve() == manifest_path or durable_root.resolve() in manifest_path.parents:
+            candidates.append(manifest_path)
+    review_dir = durable_root / "review"
+    if review_dir.is_dir():
+        candidates.extend(sorted(review_dir.glob("*_review_draft.json")))
+    for path in candidates:
+        if not path.is_file() or path.stat().st_mtime < started_at - 1:
+            continue
+        try:
+            draft = load_json(path)
+        except Exception as exc:
+            emit("warning", message=f"Review draft could not be read: {exc}", draftPath=str(path))
+            continue
+        candidate_questions = draft.get("candidateQuestions")
+        survivors = draft.get("validQuestionIndexes")
+        if (
+            draft.get("draftVersion") != 1
+            or draft.get("status") != "needs_review"
+            or not isinstance(candidate_questions, list)
+            or not candidate_questions
+            or not isinstance(survivors, list)
+        ):
+            continue
+        return {"path": str(path.resolve()), "draft": draft}
+    return None
 
 
 def expand_args(args: list[str], input_file: Path) -> list[str]:
@@ -598,18 +607,22 @@ def completion_report(
     }
     if isinstance(review_draft, dict) and isinstance(review_draft.get("draft"), dict):
         draft = review_draft["draft"]
+        healthy_count = question_count
+        review_count = len(draft.get("candidateQuestions") or [])
         report.update({
-            "status": "needs_review",
-            "stage": "needs_review",
+            "status": "completed_with_review_required",
+            "stage": "completed_with_review_required",
             "draftPath": str(review_draft.get("path") or ""),
-            "questionCount": len(draft.get("candidateQuestions") or []),
+            "questionCount": healthy_count,
+            "reviewRequiredQuestionCount": review_count,
+            "allocatedQuestionCount": healthy_count + review_count,
             "warnings": [str(item) for item in draft.get("validationWarnings") or []][:50],
             "errors": [str(item) for item in draft.get("validationErrors") or []][:50],
         })
         report["recovery"] = recovery_metadata(
             source_type=str(manifest.get("sourceType") or ""),
             outcome="needs_review",
-            candidate_question_count=len(draft.get("candidateQuestions") or []),
+            candidate_question_count=review_count,
             surviving_question_count=len(draft.get("validQuestionIndexes") or []),
             warnings=report["warnings"],
             review_items=draft.get("reviewItems") or [],

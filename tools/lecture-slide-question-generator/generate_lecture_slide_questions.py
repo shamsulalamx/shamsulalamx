@@ -797,7 +797,7 @@ def parse_llm_json(raw: str, debug_name: str) -> Any:
     debug_path = DEBUG_DIR / f"{debug_name}_raw_response.txt"
     debug_path.write_text(raw, encoding="utf-8")
     raise JsonParseFailure(
-        f"Gemini returned invalid JSON ({failure_type}). Raw response saved to {debug_path.relative_to(BASE_DIR)}",
+        f"Gemini returned invalid JSON ({failure_type}). Raw response saved to {display_path(debug_path)}",
         failure_type,
     )
 
@@ -1972,6 +1972,32 @@ def validate_single_repair_candidate(
     return not single_errors, single_errors, unsupported
 
 
+def preserve_original_stem_if_repair_degrades(original: dict[str, Any], candidate: dict[str, Any]) -> dict[str, Any]:
+    original_stem = clean_stem_text(original.get("stem"))
+    candidate_stem = clean_stem_text(candidate.get("stem"))
+    if not original_stem or not isinstance(candidate, dict):
+        return candidate
+    original_errors = stem_quality_errors(original_stem, "original")
+    candidate_errors = stem_quality_errors(candidate_stem, "candidate")
+    if candidate_errors and not original_errors:
+        restored = dict(candidate)
+        restored["stem"] = original_stem
+        metadata = dict(restored.get("metadata") or {})
+        metadata["repairStemRestoredFromOriginal"] = True
+        metadata["discardedRepairStem"] = candidate_stem
+        restored["metadata"] = metadata
+        return restored
+    if candidate_stem and len(candidate_stem.split()) < max(12, int(len(original_stem.split()) * 0.45)) and not original_errors:
+        restored = dict(candidate)
+        restored["stem"] = original_stem
+        metadata = dict(restored.get("metadata") or {})
+        metadata["repairStemRestoredFromOriginal"] = True
+        metadata["discardedRepairStem"] = candidate_stem
+        restored["metadata"] = metadata
+        return restored
+    return candidate
+
+
 def recover_repair_debug_artifacts(
     stem: str,
     normalized_payload: dict[str, Any],
@@ -2017,9 +2043,9 @@ def repair_existing_questions(pdf_path: Path) -> Path:
     normalized_path = NORMALIZED_DIR / f"{stem}_normalized_slides.json"
     generated_path = GENERATED_DIR / f"{stem}_generated_questions.json"
     if not normalized_path.exists():
-        raise PipelineError(f"Missing normalized slides file: {normalized_path.relative_to(BASE_DIR)}")
+        raise PipelineError(f"Missing normalized slides file: {display_path(normalized_path)}")
     if not generated_path.exists():
-        raise PipelineError(f"Missing generated questions file: {generated_path.relative_to(BASE_DIR)}")
+        raise PipelineError(f"Missing generated questions file: {display_path(generated_path)}")
     normalized_payload = read_json(normalized_path)
     generated_payload = read_json(generated_path)
     questions = generated_payload.get("questions") if isinstance(generated_payload, dict) else generated_payload
@@ -2072,6 +2098,7 @@ def repair_existing_questions(pdf_path: Path) -> Path:
         for attempt in range(1, 3):
             try:
                 candidate = call_question_repair_once(api_key, normalized_payload["sourceFile"], idx, candidate, slide, unsupported, attempt)
+                candidate = preserve_original_stem_if_repair_degrades(question, candidate)
                 ok, single_errors, next_unsupported = validate_single_repair_candidate(normalized_payload, slide, candidate)
                 if ok:
                     progress.setdefault("repairedQuestionsByIndex", {})[key] = candidate
@@ -2102,6 +2129,7 @@ def repair_existing_questions(pdf_path: Path) -> Path:
                 "questionIndex": idx,
                 "slideId": question.get("slideId"),
                 "unsupportedTerms": failed_by_index[idx],
+                "validationFailures": failed_by_index[idx],
                 "reason": "repair failed validation after 2 attempts",
                 "attemptNotes": attempt_notes,
             }
@@ -2148,13 +2176,46 @@ def repair_existing_questions(pdf_path: Path) -> Path:
         "questionQualityFindings": diversity_report.get("findings", []),
         "droppedQuestions": list(dropped_map.values()),
         "repairLog": repair_log,
-        "repairProgressPath": str(progress_path.relative_to(BASE_DIR)),
-        "backupGeneratedQuestionsPath": str(backup_path.relative_to(BASE_DIR)),
+        "repairProgressPath": display_path(progress_path),
+        "backupGeneratedQuestionsPath": display_path(backup_path),
     }
-    write_report(report, "lecture_slide_repair_report")
-    if after_errors:
-        raise PipelineError("Targeted repair did not produce passing output:\n" + "\n".join(f"- {err}" for err in after_errors[:80]))
+    report_path = write_report(report, "lecture_slide_repair_report")
     out_path = APP_READY_DIR / f"{stem}_lecture_app_ready.json"
+    review_draft_path = None
+    if dropped_map:
+        failed_questions = []
+        failed_items = []
+        repair_by_index = {
+            int(item.get("questionIndex")): item
+            for item in repair_log
+            if str(item.get("questionIndex") or "").isdigit()
+        }
+        for key, drop in sorted(dropped_map.items(), key=lambda item: int(item[0]) if str(item[0]).isdigit() else 0):
+            idx = int(key)
+            original = questions[idx - 1] if 0 < idx <= len(questions) else {}
+            repair_item = repair_by_index.get(idx, {})
+            failed_items.append(drop)
+            failed_questions.append(review_candidate_from_failed_repair(original, drop, repair_item))
+        review_draft_path = write_failed_repair_review_draft(
+            source_label=pdf_path.name,
+            source_format=SOURCE_FORMAT,
+            source_type=str(os.environ.get("BIC_PROGRESS_SOURCE") or "").strip() or "lecture_slide_pdf",
+            failed_questions=failed_questions,
+            failed_items=failed_items,
+            repair_report=report,
+            app_ready_path=out_path if repaired_questions else None,
+            report_path=report_path,
+        )
+        if review_draft_path:
+            report["status"] = "completed_with_review_required"
+            report["draftPath"] = str(review_draft_path.resolve())
+            write_json(report_path, report)
+    if after_errors and not review_draft_path:
+        raise PipelineError("Targeted repair did not produce passing output:\n" + "\n".join(f"- {err}" for err in after_errors[:80]))
+    if after_errors and review_draft_path and not repaired_questions:
+        return review_draft_path
+    if after_errors:
+        raise PipelineError("Targeted repair left validation errors in healthy output:\n" + "\n".join(f"- {err}" for err in after_errors[:80]))
     write_json(out_path, app_payload)
     json.loads(out_path.read_text(encoding="utf-8"))
     log(f"App-ready -> {display_path(out_path)}")
@@ -2507,7 +2568,7 @@ def sanitize_invalid_explanation_labels(q: dict[str, Any]) -> dict[str, Any]:
 def normalize_amboss_extracted_question(q: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(q, dict):
         raise PipelineError("AMBOSS extracted question is not an object.")
-    stem = re.sub(r"\s+", " ", str(q.get("stem") or "").strip())
+    stem = clean_stem_text(q.get("stem"))
     choices = q.get("answerChoices") or []
     if not isinstance(choices, list):
         choices = []
@@ -2627,7 +2688,7 @@ def build_app_ready_payload(normalized_payload: dict[str, Any], generated_questi
 def normalize_generated_question(q: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(q, dict):
         raise PipelineError("Generated question is not an object.")
-    stem = re.sub(r"\s+", " ", str(q.get("stem") or "").strip())
+    stem = clean_stem_text(q.get("stem"))
     choices = q.get("answerChoices") or q.get("choices") or []
     if not isinstance(choices, list):
         choices = []
@@ -2663,6 +2724,59 @@ def clean_sentence(value: Any) -> str:
     text = re.sub(r"\s+", " ", str(value or "").strip())
     text = re.sub(r"^(clinical pearl|educational objective)\s*:\s*", "", text, flags=re.I)
     return text
+
+
+def clean_stem_text(value: Any) -> str:
+    text = str(value or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not text:
+        return ""
+    paragraphs = [
+        re.sub(r"[ \t]+", " ", paragraph.strip())
+        for paragraph in re.split(r"\n\s*\n", text)
+        if paragraph.strip()
+    ]
+    return "\n\n".join(paragraphs)
+
+
+QUESTION_PROMPT_RE = re.compile(
+    r"(\?|"
+    r"\bwhich of the following\b|"
+    r"\bwhat is\b|"
+    r"\bwhat are\b|"
+    r"\bmost likely\b|"
+    r"\bbest (?:explains|describes|accounts for|represents|confirms|treats|managed)\b|"
+    r"\bnext (?:best )?(?:step|test|management|treatment)\b|"
+    r"\bdiagnosis\b|"
+    r"\bmechanism\b|"
+    r"\bcause\b|"
+    r"\bfinding\b|"
+    r"\btreatment\b|"
+    r"\btherapy\b)",
+    re.I,
+)
+
+LAB_ONLY_RE = re.compile(
+    r"\b(?:hco3|pco2|pao2|po2|ph|hemoglobin|hematocrit|platelets?|wbc|leukocytes?|"
+    r"sodium|potassium|chloride|bicarbonate|creatinine|bun|glucose|calcium|magnesium|"
+    r"mEq\s*/\s*L|mg\s*/\s*dL|mm\s*Hg|g\s*/\s*dL|%|/mm\s*3)\b",
+    re.I,
+)
+
+
+def stem_quality_errors(stem: str, prefix: str) -> list[str]:
+    clean = clean_stem_text(stem)
+    words = re.findall(r"\b[A-Za-z0-9][A-Za-z0-9'-]*\b", clean)
+    errors: list[str] = []
+    if not clean:
+        return [f"{prefix}: missing stem."]
+    if not QUESTION_PROMPT_RE.search(clean):
+        errors.append(f"{prefix}: stem is missing an explicit question prompt.")
+    if LAB_ONLY_RE.search(clean):
+        has_patient_context = bool(re.search(r"\b(patient|man|woman|boy|girl|infant|newborn|child|adolescent|presents|history|exam|after|during)\b", clean, re.I))
+        has_question_prompt = bool(QUESTION_PROMPT_RE.search(clean))
+        if len(words) < 12 or not has_patient_context or not has_question_prompt:
+            errors.append(f"{prefix}: stem appears to be a lab-only fragment without clinical context.")
+    return errors
 
 
 def clean_tag(value: Any) -> str:
@@ -2806,9 +2920,8 @@ def validate_app_ready_payload(
         stem = str(q.get("stem") or "")
         sentence_count = len(re.findall(r"[.!?](?:\s|$)", stem))
         word_count = len(re.findall(r"\b[A-Za-z0-9][A-Za-z0-9'-]*\b", stem))
-        if not stem.strip():
-            errors.append(f"{prefix}: missing stem.")
-        elif sentence_count < 2 or word_count < 35:
+        errors.extend(stem_quality_errors(stem, prefix))
+        if stem.strip() and (sentence_count < 2 or word_count < 35):
             record_app_ready_validation_issue(
                 errors,
                 validation_warnings,
@@ -3092,6 +3205,101 @@ def write_lecture_review_draft(
     write_json(path, draft)
     json.loads(path.read_text(encoding="utf-8"))
     log(f"Review draft -> {path}")
+    return path
+
+
+def review_candidate_from_failed_repair(
+    question: dict[str, Any],
+    drop: dict[str, Any],
+    repair_log: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    candidate = copy.deepcopy(question)
+    metadata = candidate.setdefault("metadata", {})
+    if not isinstance(metadata, dict):
+        metadata = {}
+        candidate["metadata"] = metadata
+    metadata["reviewRequired"] = True
+    metadata["reviewReason"] = str(drop.get("reason") or "repair_failed_validation")
+    metadata["validationFailures"] = list(drop.get("validationFailures") or drop.get("unsupportedTerms") or [])
+    metadata["repairAttemptDetails"] = {
+        "reason": drop.get("reason") or "",
+        "attemptNotes": list(drop.get("attemptNotes") or []),
+        "repairLog": copy.deepcopy(repair_log or {}),
+    }
+    candidate["needsReview"] = True
+    candidate.setdefault("extractionWarnings", [])
+    if isinstance(candidate["extractionWarnings"], list):
+        candidate["extractionWarnings"].extend(
+            str(item)
+            for item in [
+                f"Repair failed: {metadata['reviewReason']}",
+                *metadata["validationFailures"],
+                *metadata["repairAttemptDetails"]["attemptNotes"],
+            ]
+            if item
+        )
+    return candidate
+
+
+def write_failed_repair_review_draft(
+    source_label: str,
+    source_format: str,
+    source_type: str,
+    failed_questions: list[dict[str, Any]],
+    failed_items: list[dict[str, Any]],
+    repair_report: dict[str, Any],
+    app_ready_path: Path | None = None,
+    report_path: Path | None = None,
+) -> Path | None:
+    if not failed_questions:
+        return None
+    review_items: list[dict[str, Any]] = []
+    validation_errors: list[str] = []
+    for offset, item in enumerate(failed_items, start=1):
+        reason = str(item.get("reason") or "repair_failed_validation")
+        failures = [str(v) for v in (item.get("validationFailures") or item.get("unsupportedTerms") or [])]
+        notes = [str(v) for v in (item.get("attemptNotes") or [])]
+        message = "; ".join([reason, *failures, *notes]).strip("; ")
+        validation_errors.append(f"Q{offset}: {message}")
+        review_items.append({
+            "questionIndex": offset,
+            "questionId": str(failed_questions[offset - 1].get("id") or failed_questions[offset - 1].get("questionId") or ""),
+            "slideId": str(item.get("slideId") or failed_questions[offset - 1].get("slideId") or ""),
+            "severity": "error",
+            "category": "repair_failed_validation",
+            "message": message,
+            "recommendedAction": "manual_edit_accept_or_reject",
+        })
+    draft = {
+        "draftVersion": 1,
+        "schemaVersion": OUTPUT_SCHEMA_VERSION,
+        "sourceFormat": source_format,
+        "sourceType": source_type,
+        "jobId": str(os.environ.get("BIC_JOB_ID") or "").strip(),
+        "createdAt": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "status": "needs_review",
+        "candidateQuestions": failed_questions,
+        "validationErrors": validation_errors,
+        "validationWarnings": [],
+        "semanticGroundingFindings": [],
+        "reviewItems": review_items,
+        "fatalRejects": review_items,
+        "validQuestionIndexes": [],
+        "reviewArtifactType": "failed_repair_questions",
+        "repairReport": repair_report,
+        "outputPaths": {
+            "reviewDraftPath": "",
+            "appReadyPath": str(app_ready_path.resolve()) if app_ready_path else "",
+            "reportPath": str(report_path.resolve()) if report_path else "",
+        },
+        "sourceLabel": source_label,
+    }
+    REVIEW_DIR.mkdir(parents=True, exist_ok=True)
+    path = REVIEW_DIR / "lecture_slide_review_draft.json"
+    draft["outputPaths"]["reviewDraftPath"] = str(path.resolve())
+    write_json(path, draft)
+    json.loads(path.read_text(encoding="utf-8"))
+    log(f"Failed-repair review draft -> {path}")
     return path
 
 
@@ -3532,8 +3740,8 @@ def generate_fast_facts_questions(normalized_payload: dict[str, Any], allocation
     write_json(generated_path, {"questions": questions})
     mem_path = MEMORY_DIR / f"{stem}_fast_facts_rolling_memory.json"
     write_json(mem_path, memory)
-    log(f"  Fast Facts generated -> {generated_path.relative_to(BASE_DIR)}")
-    log(f"  Fast Facts memory -> {mem_path.relative_to(BASE_DIR)}")
+    log(f"  Fast Facts generated -> {display_path(generated_path)}")
+    log(f"  Fast Facts memory -> {display_path(mem_path)}")
     return questions
 
 
@@ -3749,7 +3957,13 @@ def repair_fast_facts_questions(normalized_payload: dict[str, Any], questions: l
         original = questions[idx - 1]
         slide = slide_by_id.get(str(original.get("slideId") or ""))
         if not slide:
-            dropped[idx] = {"questionIndex": idx, "reason": "unknown_slide_id"}
+            dropped[idx] = {
+                "questionIndex": idx,
+                "slideId": original.get("slideId"),
+                "reason": "unknown_slide_id",
+                "validationFailures": before_errors,
+                "originalQuestion": copy.deepcopy(original),
+            }
             continue
         candidate = original
         unsupported = unsupported_by_index.get(idx, [])
@@ -3766,6 +3980,7 @@ def repair_fast_facts_questions(normalized_payload: dict[str, Any], questions: l
                     unsupported_terms=unsupported,
                     attempt=attempt,
                 )
+                candidate = preserve_original_stem_if_repair_degrades(original, candidate)
                 ok, single_errors, next_unsupported = validate_single_fast_facts_repair_candidate(normalized_payload, slide, candidate)
                 if ok:
                     repaired[idx] = candidate
@@ -3781,6 +3996,8 @@ def repair_fast_facts_questions(normalized_payload: dict[str, Any], questions: l
                 "slideId": original.get("slideId"),
                 "reason": "repair_failed_validation",
                 "attemptNotes": attempt_notes,
+                "validationFailures": before_errors,
+                "originalQuestion": copy.deepcopy(original),
             }
         repair_log.append({
             "questionIndex": idx,
@@ -3900,7 +4117,7 @@ def fast_facts_cleanup_question(q: dict[str, Any]) -> dict[str, Any]:
     stem = re.sub(r"\bwas prescribed ([A-Za-z0-9+\-]+) several days after medication initiation\b", r"several days after starting \1", stem, flags=re.I)
     stem = re.sub(r"\bSeveral days after starting ([A-Za-z0-9+\-]+) for ([^.]+)\. She now presents\b", r"Several days after starting \1 for \2, she presents", stem)
     stem = re.sub(r"\bnon-pregnant\b", "nonpregnant", stem, flags=re.I)
-    stem = re.sub(r"\s+", " ", stem).strip()
+    stem = clean_stem_text(stem)
     stem = re.sub(r"\b(warm, tender, erythematous rash) with raised, well-demarcated borders\b", r"\1 with raised, well-demarcated borders", stem)
     out["stem"] = stem
     return out
@@ -4481,7 +4698,7 @@ def generate_fast_facts_questions_with_cache(
             update_fast_facts_cache_entry(cache, key, entry)
 
     cache_report = {
-        "cachePath": str(fast_facts_cache_path().relative_to(BASE_DIR)),
+        "cachePath": display_path(fast_facts_cache_path()),
         "seededFromExisting": seed_report,
         "cacheHits": cache_hits,
         "cacheMisses": cache_misses,
@@ -4711,10 +4928,15 @@ def run_fast_facts_generation_milestone(
             "repairOnly": bool(repair_only),
             "entries": cache_report.get("diagnosticEntries") or [],
         })
-    if not repaired_questions:
-        raise PipelineError("Fast Facts constrained generation produced no questions.")
     write_json(generated_path, {"questions": repaired_questions})
-    app_payload, after_errors, after_grounding, after_diversity, after_strict = collect_fast_facts_generation_validation(normalized_payload, repaired_questions)
+    if repaired_questions:
+        app_payload, after_errors, after_grounding, after_diversity, after_strict = collect_fast_facts_generation_validation(normalized_payload, repaired_questions)
+    else:
+        app_payload = app_payload_before
+        after_errors = []
+        after_grounding = []
+        after_diversity = {"findings": []}
+        after_strict = []
     before_errors = list(cache_report.get("beforeErrors") or [])
     before_strict = list(cache_report.get("beforeStrictFindings") or [])
     repair_report = cache_report.get("repairReport") or {}
@@ -4768,10 +4990,10 @@ def run_fast_facts_generation_milestone(
             for a in allocations
         ],
         "skippedConcepts": skipped_concepts,
-        "normalizedGenerationPath": str(normalized_path.relative_to(BASE_DIR)),
-        "generatedIntermediatePath": str(generated_path.relative_to(BASE_DIR)),
-        "repairReportPath": str(repair_report_path.relative_to(BASE_DIR)),
-        "educationalQaAuditReportPath": str(qa_report_path.relative_to(BASE_DIR)),
+        "normalizedGenerationPath": display_path(normalized_path),
+        "generatedIntermediatePath": display_path(generated_path),
+        "repairReportPath": display_path(repair_report_path),
+        "educationalQaAuditReportPath": display_path(qa_report_path),
         "educationalQaSummary": qa_audit.get("summary"),
         "beforeAfterComparison": fast_facts_before_after_comparison(before_generation_snapshot, repaired_questions),
         "cacheReport": cache_report,
@@ -4779,22 +5001,76 @@ def run_fast_facts_generation_milestone(
         "imageRoutingSummary": image_routing_summary(app_payload_before if after_errors else app_payload),
     }
     if diagnostic_report_path:
-        metrics["diagnosticReportPath"] = str(diagnostic_report_path.relative_to(BASE_DIR))
+        metrics["diagnosticReportPath"] = display_path(diagnostic_report_path)
+    out_path = APP_READY_DIR / f"{slugify(pptx_path.stem)}_fast_facts_app_ready.json"
+    dropped_review_items = [
+        item for item in repair_report.get("droppedQuestions") or []
+        if isinstance(item, dict) and isinstance(item.get("originalQuestion"), dict)
+    ]
+    review_draft_path = None
+    if dropped_review_items:
+        failed_questions = [
+            review_candidate_from_failed_repair(
+                item["originalQuestion"],
+                item,
+                next(
+                    (
+                        log_item for log_item in repair_report.get("repairLog") or []
+                        if isinstance(log_item, dict) and log_item.get("questionIndex") == item.get("questionIndex")
+                    ),
+                    {},
+                ),
+            )
+            for item in dropped_review_items
+        ]
+        review_draft_path = write_failed_repair_review_draft(
+            source_label=pptx_path.name,
+            source_format=SOURCE_FORMAT,
+            source_type=str(os.environ.get("BIC_PROGRESS_SOURCE") or "").strip() or "fast_facts_pptx",
+            failed_questions=failed_questions,
+            failed_items=dropped_review_items,
+            repair_report=repair_report,
+            app_ready_path=out_path if repaired_questions and not after_errors else None,
+            report_path=None,
+        )
+        if review_draft_path:
+            metrics["status"] = "completed_with_review_required"
+            metrics["draftPath"] = str(review_draft_path.resolve())
+            metrics["reviewRequiredQuestionCount"] = len(failed_questions)
     if after_errors:
         report_path = write_report(metrics, "fast_facts_generation_validation_report")
-        raise PipelineError(
-            "Fast Facts constrained generation failed validation after repair. "
-            f"Report: {report_path.relative_to(BASE_DIR)}\n"
-            + "\n".join(f"- {err}" for err in after_errors[:80])
-        )
-    out_path = APP_READY_DIR / f"{slugify(pptx_path.stem)}_fast_facts_app_ready.json"
+        if not review_draft_path:
+            raise PipelineError(
+                "Fast Facts constrained generation failed validation after repair. "
+                f"Report: {display_path(report_path)}\n"
+                + "\n".join(f"- {err}" for err in after_errors[:80])
+            )
+        draft = read_json(review_draft_path)
+        if isinstance(draft.get("outputPaths"), dict):
+            draft["outputPaths"]["reportPath"] = str(report_path.resolve())
+            write_json(review_draft_path, draft)
+        return review_draft_path
+    if not repaired_questions:
+        report_path = write_report(metrics, "fast_facts_generation_validation_report")
+        if review_draft_path:
+            draft = read_json(review_draft_path)
+            if isinstance(draft.get("outputPaths"), dict):
+                draft["outputPaths"]["reportPath"] = str(report_path.resolve())
+                write_json(review_draft_path, draft)
+            return review_draft_path
+        raise PipelineError("Fast Facts constrained generation produced no questions and no review draft.")
     write_json(out_path, app_payload)
     json.loads(out_path.read_text(encoding="utf-8"))
-    metrics["appReadyPath"] = str(out_path.relative_to(BASE_DIR))
+    metrics["appReadyPath"] = display_path(out_path)
     metrics["imageRoutingSummary"] = image_routing_summary(app_payload)
     report_path = write_report(metrics, "fast_facts_generation_validation_report")
-    log(f"Fast Facts app-ready -> {out_path.relative_to(BASE_DIR)}")
-    log(f"Fast Facts validation report -> {report_path.relative_to(BASE_DIR)}")
+    if review_draft_path:
+        draft = read_json(review_draft_path)
+        if isinstance(draft.get("outputPaths"), dict):
+            draft["outputPaths"]["reportPath"] = str(report_path.resolve())
+            write_json(review_draft_path, draft)
+    log(f"Fast Facts app-ready -> {display_path(out_path)}")
+    log(f"Fast Facts validation report -> {display_path(report_path)}")
     return out_path
 
 
@@ -4858,7 +5134,7 @@ def amboss_asset_entry(asset_path: Path, page_id: str, image_id: str, kind: str)
     return {
         "imageId": image_id,
         "kind": kind,
-        "assetPath": str(asset_path.relative_to(BASE_DIR)),
+        "assetPath": display_path(asset_path),
         "mimeType": mime_for(asset_path),
         "width": width,
         "height": height,
@@ -4961,7 +5237,7 @@ def decompose_amboss_input(input_path: Path, limit_pages: int = 5) -> dict[str, 
     }
     out_path = SLIDES_DIR / f"{stem}_amboss_pages.json"
     write_json(out_path, payload)
-    log(f"AMBOSS pages -> {out_path.relative_to(BASE_DIR)}")
+    log(f"AMBOSS pages -> {display_path(out_path)}")
     return payload
 
 
@@ -5596,7 +5872,7 @@ def process_amboss_input(input_path: Path, limit_pages: int = 5) -> Path:
         if not validation_errors:
             write_json(app_ready_path, app_payload)
     cache_report = {
-        "cachePath": str(amboss_cache_path().relative_to(BASE_DIR)),
+        "cachePath": display_path(amboss_cache_path()),
         "cacheHits": cache_hits,
         "cacheMisses": cache_misses,
         "reusedQuestions": sum(len(((cache.get("pages") or {}).get(amboss_page_cache_key(source_hash, p)) or {}).get("questions") or []) for p in page_payload.get("pages") or []) if cache_hits else 0,
@@ -5609,7 +5885,7 @@ def process_amboss_input(input_path: Path, limit_pages: int = 5) -> Path:
         "pagesProcessed": len(page_payload.get("pages") or []),
         "questionsExtracted": len(extracted_questions),
         "canonicalQuestions": len(generated_questions),
-        "appReadyPath": str(app_ready_path.relative_to(BASE_DIR)) if app_payload and not validation_errors else "",
+        "appReadyPath": display_path(app_ready_path) if app_payload and not validation_errors else "",
         "validationErrors": validation_errors,
         "cacheReport": cache_report,
         "unresolvedCount": len(unresolved),
@@ -5617,12 +5893,12 @@ def process_amboss_input(input_path: Path, limit_pages: int = 5) -> Path:
     extraction_report_path = write_report(extraction_report, "amboss_extraction_audit_report")
     image_report_path = write_report({"profile": AMBOSS_PROFILE, "sourceFile": input_path.name, "imageAudit": image_audit}, "amboss_image_routing_audit_report")
     unresolved_path = write_report({"profile": AMBOSS_PROFILE, "sourceFile": input_path.name, "unresolved": unresolved}, "amboss_unresolved_extraction_report")
-    log(f"AMBOSS extracted -> {extracted_path.relative_to(BASE_DIR)}")
-    log(f"AMBOSS extraction report -> {extraction_report_path.relative_to(BASE_DIR)}")
-    log(f"AMBOSS image report -> {image_report_path.relative_to(BASE_DIR)}")
-    log(f"AMBOSS unresolved report -> {unresolved_path.relative_to(BASE_DIR)}")
+    log(f"AMBOSS extracted -> {display_path(extracted_path)}")
+    log(f"AMBOSS extraction report -> {display_path(extraction_report_path)}")
+    log(f"AMBOSS image report -> {display_path(image_report_path)}")
+    log(f"AMBOSS unresolved report -> {display_path(unresolved_path)}")
     if app_payload and not validation_errors:
-        log(f"AMBOSS app-ready -> {app_ready_path.relative_to(BASE_DIR)}")
+        log(f"AMBOSS app-ready -> {display_path(app_ready_path)}")
         return app_ready_path
     return extracted_path
 
@@ -5779,7 +6055,7 @@ def pptx_extract_images(
             "sourceRelationshipId": rid,
             "sourcePath": media_path,
             "originalName": original_name,
-            "assetPath": str(asset_path.relative_to(BASE_DIR)),
+            "assetPath": display_path(asset_path),
             "mimeType": mime_for(asset_path),
             "width": 0,
             "height": 0,
@@ -5866,7 +6142,7 @@ def decompose_fast_facts_pptx(pptx_path: Path, limit_slides: int = 0) -> dict[st
         }
     out_path = SLIDES_DIR / f"{slugify(deck_stem)}_fast_facts_slides.json"
     write_json(out_path, payload)
-    log(f"  Fast Facts slides -> {out_path.relative_to(BASE_DIR)}")
+    log(f"  Fast Facts slides -> {display_path(out_path)}")
     return payload
 
 
@@ -6836,7 +7112,7 @@ def process_fast_facts_pptx(
         ],
         "extractionFailures": failures,
         "validationErrors": errors,
-        "checkpointPath": str(fast_facts_checkpoint_path(pptx_path).relative_to(BASE_DIR)),
+        "checkpointPath": display_path(fast_facts_checkpoint_path(pptx_path)),
     }
     report_path = write_report(report, "fast_facts_concept_extraction_report")
     if errors:
@@ -6844,8 +7120,8 @@ def process_fast_facts_pptx(
     out_path = fast_facts_output_path(pptx_path)
     write_json(out_path, graph)
     json.loads(out_path.read_text(encoding="utf-8"))
-    log(f"Fast Facts concept graph -> {out_path.relative_to(BASE_DIR)}")
-    log(f"Fast Facts report -> {report_path.relative_to(BASE_DIR)}")
+    log(f"Fast Facts concept graph -> {display_path(out_path)}")
+    log(f"Fast Facts report -> {display_path(report_path)}")
     if generate:
         return run_fast_facts_generation_milestone(
             pptx_path,
