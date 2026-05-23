@@ -514,7 +514,6 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
         heartbeat_seconds = 5
     next_heartbeat = time.time() + heartbeat_seconds if heartbeat_seconds > 0 else 0
     last_chunk_event: dict[str, Any] | None = None
-    stall_warning_emitted = False
     graph_job_complete = False
     while not stream_done:
         if CANCEL_REQUESTED:
@@ -558,29 +557,6 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
                         stepIndex=step_index,
                         **last_chunk_event,
                     )
-                    if not stall_warning_emitted and time.time() - stage_started_at >= 25:
-                        emit(
-                            "pipeline_progress",
-                            source=manifest.get("sourceType"),
-                            message=f"Chunk {step_index}/{step_total}: no terminal event after 25s",
-                            chunkEvent="STALL_WARNING",
-                            jobId=manifest.get("jobId"),
-                            chunkLabel=chunk_label,
-                            chunkIndex=step_index,
-                            totalChunks=step_total,
-                            phase=stage,
-                            elapsedMs=int((time.time() - stage_started_at) * 1000),
-                            globalRetryId=1,
-                            retryPhase="initial",
-                            lastEvent=last_chunk_event,
-                            chunkState={"chunkLabel": chunk_label, "chunkIndex": step_index, "totalChunks": step_total, "phase": stage},
-                            retryCount=1,
-                            route=route.value,
-                            stage=stage,
-                            stageLabel=stage_label,
-                            stepIndex=step_index,
-                        )
-                        stall_warning_emitted = True
                 else:
                     emit(
                         "pipeline_progress",

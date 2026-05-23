@@ -22621,7 +22621,7 @@ Errors: ${escapeHTML(errors)}</div>
       try { event = JSON.parse(line); } catch (_) {}
       const type = String(event?.type || 'log');
       const when = String(event?.timestamp || '');
-      const text = event?.message || event?.error || event?.failureReason || line;
+      const text = event ? (formatBatchImportProgressMessage(event) || event?.failureReason || '') : line;
       return `<div class="notes-import-block"><div class="notes-import-block-head"><span class="notes-import-type">${escapeHTML(type)}</span><span class="notes-import-path">${escapeHTML(when)}</span></div><div class="notes-import-text">${escapeHTML(String(text || ''))}</div></div>`;
     }).join('');
   }
@@ -23101,10 +23101,35 @@ Errors: ${escapeHTML(errors)}</div>
     const row = document.createElement('div');
     row.className = 'notes-import-block';
     const type = String(event?.type || 'event');
-    const msg = event?.message || event?.error || (event?.outputs ? `${event.outputs.length} output(s)` : '');
+    const msg = formatBatchImportProgressMessage(event);
     row.innerHTML = `<div class="notes-import-block-head"><span class="notes-import-type">${escapeHTML(type)}</span><span class="notes-import-path">${escapeHTML(event?.timestamp || '')}</span></div><div class="notes-import-text">${escapeHTML(msg || JSON.stringify(event))}</div>`;
     log.appendChild(row);
     log.scrollTop = log.scrollHeight;
+  }
+
+  function formatBatchImportProgressMessage(event) {
+    const chunkEvent = String(event?.chunkEvent || event?.event || '').trim();
+    if (chunkEvent) {
+      const index = Number(event?.chunkIndex || 0);
+      const total = Number(event?.totalChunks || 0);
+      const chunk = index && total ? `Chunk ${index}/${total}` : String(event?.chunkLabel || 'Chunk');
+      const phase = String(event?.phase || '').trim();
+      const retryPhase = String(event?.retryPhase || '').trim();
+      const retryId = Number(event?.globalRetryId || 0);
+      const parts = [chunk, chunkEvent];
+      if (phase) parts.push(phase);
+      if (retryPhase || retryId) parts.push(`retry ${retryId || ''}${retryPhase ? ` ${retryPhase}` : ''}`.trim());
+      if (event?.acceptedCount != null || event?.reviewRequiredCount != null) {
+        parts.push(`${Number(event?.acceptedCount || 0)} accepted`);
+        parts.push(`${Number(event?.reviewRequiredCount || 0)} review`);
+      }
+      if (event?.elapsedMs != null) parts.push(`${Math.round(Number(event.elapsedMs || 0) / 1000)}s`);
+      return parts.filter(Boolean).join(' · ');
+    }
+    if (event?.message) return String(event.message);
+    if (event?.error) return String(event.error);
+    if (event?.outputs) return `${event.outputs.length} output(s)`;
+    return '';
   }
 
   function batchImportProgressPhase(event) {

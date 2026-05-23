@@ -166,17 +166,3 @@ class ChunkHeartbeat(AbstractContextManager["ChunkHeartbeat"]):
         while not self._stop.wait(self.interval_seconds):
             payload = self._payload()
             self._last_event = self.emit(ChunkEventType.CHUNK_HEARTBEAT.value, **payload)
-            if not self._stall_emitted and payload["elapsedMs"] >= int(self.stall_seconds * 1000):
-                self.emit(
-                    ChunkEventType.STALL_WARNING.value,
-                    **payload,
-                    lastEvent=self._last_event,
-                    chunkState={
-                        "chunkLabel": self.chunk_label,
-                        "chunkIndex": self.chunk_index,
-                        "totalChunks": self.total_chunks,
-                        "phase": self.phase,
-                    },
-                    retryCount=self.global_retry_id,
-                )
-                self._stall_emitted = True

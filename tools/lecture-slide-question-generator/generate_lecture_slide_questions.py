@@ -3866,7 +3866,8 @@ def fast_facts_chunk_event(event_type: str, **payload: Any) -> dict[str, Any]:
         payload.setdefault("globalRetryId", 1)
         payload.setdefault("retryPhase", "initial")
     event = emit_bic_chunk_event(event_type, source="fast_facts_pptx", **payload)
-    log(f"{event_type} " + " ".join(f"{key}={value}" for key, value in payload.items() if key not in {"rawPayload", "overflowItems", "malformedItems"}))
+    verbose_keys = {"rawPayload", "overflowItems", "malformedItems", "executionGraph", "lastEvent"}
+    log(f"{event_type} " + " ".join(f"{key}={value}" for key, value in payload.items() if key not in verbose_keys))
     return event
 
 
