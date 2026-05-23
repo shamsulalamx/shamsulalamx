@@ -2661,10 +2661,9 @@ def build_explanation_sections(q: dict[str, Any], table_notes: list[str], explan
     if incorrect_lines:
         sections.append({"heading": "Incorrect Answer Explanation", "body": incorrect_lines})
     extras: list[str] = []
-    extras.extend(table_notes)
     extras.extend(explanation_image_placeholders)
     if extras:
-        sections.append({"heading": "Slide Figures and Tables", "body": extras})
+        sections.append({"heading": "Slide Figures", "body": extras})
     edu = str(q.get("educationalObjective") or "").strip()
     if edu:
         sections.append({"heading": "Educational Objective", "body": [edu]})

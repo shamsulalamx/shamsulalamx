@@ -6412,6 +6412,58 @@ function renderExplanationImagesInto(q, container) {
   container.appendChild(block);
 }
 
+function renderExplanationTablesInto(q, container) {
+  let tables = [];
+  if (q && Array.isArray(q.tables) && q.tables.length) {
+    tables = q.tables;
+  } else if (q && q.metadata && Array.isArray(q.metadata.tables) && q.metadata.tables.length) {
+    tables = q.metadata.tables;
+  }
+  if (!container || !tables.length) return;
+  tables.forEach(function(tbl) {
+    const headers = Array.isArray(tbl.headers) ? tbl.headers : [];
+    const rows = Array.isArray(tbl.rows) ? tbl.rows : [];
+    if (!headers.length && !rows.length) return;
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'margin:12px 0;overflow-x:auto;';
+    if (tbl.title && tbl.title !== 'Slide table') {
+      const titleEl = document.createElement('div');
+      titleEl.style.cssText = 'font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:6px;';
+      titleEl.textContent = tbl.title;
+      wrapper.appendChild(titleEl);
+    }
+    const table = document.createElement('table');
+    table.className = 'lab-table';
+    if (headers.length) {
+      const thead = document.createElement('thead');
+      const tr = document.createElement('tr');
+      headers.forEach(function(h) {
+        const th = document.createElement('th');
+        th.textContent = String(h || '');
+        tr.appendChild(th);
+      });
+      thead.appendChild(tr);
+      table.appendChild(thead);
+    }
+    if (rows.length) {
+      const tbody = document.createElement('tbody');
+      rows.forEach(function(row) {
+        const tr = document.createElement('tr');
+        const cells = Array.isArray(row) ? row : Object.values(row || {});
+        cells.forEach(function(cell) {
+          const td = document.createElement('td');
+          td.textContent = String(cell != null ? cell : '');
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+    }
+    wrapper.appendChild(table);
+    container.appendChild(wrapper);
+  });
+}
+
 </script>
 <script>
 /* ============================================================
@@ -7201,6 +7253,9 @@ const Quiz = (() => {
     if (typeof renderExplanationImagesInto === 'function') {
       renderExplanationImagesInto(q, container);
     }
+    if (typeof renderExplanationTablesInto === 'function') {
+      renderExplanationTablesInto(q, container);
+    }
   }
 
   function renderFlagButton() {
@@ -7410,6 +7465,9 @@ window.buildExplanationHTML = function(q, r, container) {
 
   if (typeof renderExplanationImagesInto === 'function') {
     renderExplanationImagesInto(q, container);
+  }
+  if (typeof renderExplanationTablesInto === 'function') {
+    renderExplanationTablesInto(q, container);
   }
 };
 
