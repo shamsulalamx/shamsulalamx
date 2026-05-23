@@ -46,7 +46,7 @@ All three modes share the same `index.html`. Electron-only features (UWorld and 
 | OME | Short high-quality PDF | No (v1) |
 | Anki | Plain-text `.txt` export | No (v1) |
 | Mehlman | Structured text notes | No (v1) |
-| Divine Podcasts | Transcript `.txt` / `.md` | Yes (Electron IPC only) |
+| Divine Podcasts | Audio `.mp3 / .m4a / .wav` (transcribed by Gemini) or transcript `.txt / .md` | Yes (Electron IPC only; live BIC audio → transcribe → questions since v4.55) |
 
 Each source pipeline is isolated. Changes to one pipeline do not affect others.
 
@@ -123,9 +123,23 @@ Full historical technical spec: `docs/archive/NBME_JSON_IMPORT.md` (preserved fo
 
 ## Divine Podcast Support
 
-The Divine pipeline imports podcast transcript text files and converts teaching content into NBME-style question drafts.
+The Divine pipeline has two entry points: the in-app **Divine Transcript Import Preview** modal (cluster-based draft scaffolding for pasted/uploaded transcripts) and the **Batch Import Center** "Divine (Audio + Transcript)" source.
 
-**Pipeline summary:**
+### Batch Import Center (audio + live, since v4.55)
+
+The BIC source accepts Divine Intervention podcast audio or pre-cleaned transcripts and produces canonical app-ready JSON in one job:
+
+1. Pick "Divine (Audio + Transcript)" in the BIC source dropdown.
+2. Choose a `.mp3 / .m4a / .wav` audio file (or a `.txt / .md` transcript).
+3. Set Run Mode to **generate** (audio dry-run is rejected on purpose so transcription tokens are never wasted).
+4. The job uploads the audio to the Gemini File API, transcribes it, cleans the transcript, splits it into chunks, and generates NBME-style questions.
+5. Output: `tools/shared-ingestion/output/divine_app_ready_live/<stem>/app_ready/<stem>_app_ready.json` with `schemaVersion: nbme-gemini-json-v3` and `sourceFormat: divine-audio`. Raw and cleaned transcripts are saved under `<jobOutputRoot>/transcripts/raw/` and `<jobOutputRoot>/transcripts/cleaned/` so re-runs reuse them.
+
+Requires `GEMINI_API_KEY` in the launched environment. Existing UWorld-family safety nets apply: stem-quality validator (v4.51), chunk-size + token-cap fix (v4.52), review-survivor flow for failed questions (v4.53), quota-aware retry stop + per-chunk shortfall recovery (v4.54).
+
+### In-app Divine Transcript Import Preview
+
+The transcript-only modal path is unchanged and remains useful for transcripts you've already cleaned outside the app:
 
 1. Import a transcript (`.txt` or `.md`).
 2. The app cleans the transcript — removing promotional content, filler phrases, and duplicate segments.
@@ -135,7 +149,7 @@ The Divine pipeline imports podcast transcript text files and converts teaching 
 6. Optionally, Gemini refines the draft: it reads the cluster summary, identifies the testable medical fact, and generates a clinical vignette and five answer choices.
 7. You review the draft (scaffold or refined), approve or discard, then save to your library.
 
-Raw transcript text is never sent to Gemini. The cluster summary is the sole medical input. Podcast voice, coaching language, and promotional content are stripped before any AI refinement step.
+In this path, raw transcript text is never sent to Gemini. The cluster summary is the sole medical input. Podcast voice, coaching language, and promotional content are stripped before any AI refinement step.
 
 ---
 
@@ -248,6 +262,7 @@ The full milestone log lives in `GIT_TAG_HISTORY.md`. Highlights:
 | `v4.52-uworld-chunk-and-token-fix-stable` | Enabled live Anki generation through BIC + fixed two long-standing bugs in the shared UWorld machinery (`split_into_chunks` not honoring its `max_chars` cap; `_raw_gemini_call` `maxOutputTokens` raised 8192 → 16384). Field-validated on 15-card Anki .txt: 15 real questions generated cleanly. Fix applies to OME, Mehlman, Divine, Anki, and UWorld. |
 | `v4.53-uworld-family-review-survivor-stable` | Ports the v4.50 review-survivor flow to the UWorld-family wrappers (Anki, OME, Mehlman, Divine, UWorld). Questions that fail BOTH initial validation AND the repair retry now surface in the BIC review modal for human accept/edit/reject instead of being silently included with `extractionWarnings`. Single source change in the shared UWorld machinery — all 5 wrappers inherit the fix. Offline-validated; failure-path field validation pending an organic partial-failure run. |
 | `v4.54-uworld-chunk-planning-recovery-stable` | Ports the v4.49 chunk-planning quota-aware retry stop + per-chunk shortfall recovery to the shared UWorld machinery. Same predicate / latch / bounded-recovery pattern as v4.49 — all five UWorld-wrapping generators (Anki, OME, Mehlman, Divine, UWorld) now have the same silent-loss protection the lecture-slide generator has had since v4.49. NBME PDF generator still uses its own normalization path and is not covered by this fix. Offline-validated; recovery-path field validation pending an organic short-return run. |
+| `v4.55-divine-audio-live-stable` | Enabled live Divine generation from podcast audio through BIC. The `divine_transcript` source now accepts `.mp3 / .m4a / .wav` in addition to `.txt / .md`, relabels as "Divine (Audio + Transcript)", and `liveSteps` runs the full Gemini File API upload → transcribe → clean → chunk → generate pipeline against the user's selected audio. Audio + dry-run is rejected on purpose so transcription tokens are never wasted. Field-validated on a 17.2 MB Divine Intervention MP3: 131s end-to-end, 7 valid questions emitted with `schemaVersion: nbme-gemini-json-v3` and `sourceFormat: divine-audio`. |
 
 Earlier source-specific tags such as `mehlman-v1-stable`, `divine-v1-stable`, `uworld-gemini-v1-stable`, `ome-v1-stable`, and `anki-v1-stable` remain as historical rollback points for their respective pipelines.
 
@@ -262,7 +277,7 @@ Earlier source-specific tags such as `mehlman-v1-stable`, `divine-v1-stable`, `u
 - **OME:** Short, high-quality PDFs only. No OCR fallback in v1.
 - **Anki:** Plain-text `.txt` export only. `.apkg` files are not supported.
 - **Mehlman:** No Gemini refinement in v1.
-- **Divine:** Transcript quality affects clustering. Low-testability clusters are filtered out and not shown for review. Gemini refinement is Electron only.
+- **Divine:** Transcript quality affects clustering. Low-testability clusters are filtered out and not shown for review. Gemini refinement is Electron only. The v4.55 BIC audio path requires `GEMINI_API_KEY` in the launched environment; long episodes (> ~90 min) may exceed the transcript-cleaning prompt's 120,000-char cap or the transcription `maxOutputTokens` (65,536, ~3 hours), in which case a warning fires and the run continues on what fit.
 - **All pipelines:** Pending broader real-world validation beyond local testing.
 - The app is currently personal/private use. Security and distribution assumptions have not been reviewed for public release.
 

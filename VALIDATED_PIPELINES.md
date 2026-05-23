@@ -17,7 +17,7 @@ This file records what is validated, what is not validated, and the risk level f
 | Images & Tables | Shared image/table profile stable | Attachment-first only, no semantic generator | Validated in v4.15 | BIC generate + auto-import validated | Packaged app validated end to end | Heuristic classification, no deep table parsing | Medium |
 | Anki | Shared profile + live BIC generation stable at v4.52 | Field-validated 2026-05-23 on 15-card .txt → 15 real questions with proper stems / choices / explanations | Normalized text chunks validated | Live BIC auto-import validated end-to-end | Packaged app live BIC generation + auto-import + quiz rendering verified on the same run | Broad Anki export variation (other languages, complex HTML, media references) not stressed | Medium |
 | OME | Shared PDF profile stable | Live Gemini OME generation field-validated at v4.51 on small OME PDF | Normalized text chunks validated | Live BIC auto-import validated end-to-end | Packaged app live BIC generation, auto-import, and quiz rendering validated | Broad OME PDF variety not stressed; writable packaged output for live mode follows v4.51 registry change | Medium |
-| Divine Transcript | Dry-run BIC handoff validated | Not validated; BIC live steps intentionally reuse dry-run handoff | Normalized transcript chunks validated | Dry-run BIC auto-import validated in dev and packaged app | Packaged `.txt` and `.md` dry-run auto-import and score history persistence validated | `sourceType` `divine_transcript`; visible source `Divine Transcript`; `sourceFormat` remains `divine-audio`; live generation and audio are unvalidated | Medium-high |
+| Divine (Audio + Transcript) | Dry-run BIC handoff validated for text inputs | Live BIC audio → transcribe → clean → questions field-validated at v4.55 on a 17.2 MB MP3 (`Test Divine.mp3`, 131s, 7 valid questions, `sourceFormat: divine-audio`) | Normalized transcript chunks validated for text inputs; audio inputs skip the shared chunk pipeline (chunks emerge after transcription) | Live BIC end-to-end validated in dev Electron | Packaged `.txt` and `.md` dry-run auto-import previously validated; packaged live audio run via the same `.app` is the next field check | `sourceType` `divine_transcript`; visible source "Divine (Audio + Transcript)"; supports `.txt .md .mp3 .m4a .wav`; audio dry-run is rejected on purpose so transcription tokens are never wasted | Medium |
 | Fast Facts | Cache foundation plus narrow screening stabilization | Dev Electron live BIC generation validated only through the capped 3-attempt stabilization path | Adapter foundation exists | Dev BIC app-ready discovery and auto-import validated on one small PPTX | Not run for this Fast Facts fix | Broad deck coverage, broad semantic stability, renderer Gemini-alert mismatch | High |
 
 ## AMBOSS
@@ -147,28 +147,35 @@ Explicitly not validated:
 
 Treat Fast Facts as high-risk outside the narrow observed screening failure that was stabilized and validated.
 
-## Divine Transcript
+## Divine (Audio + Transcript)
 
-Validated for the dry-run BIC milestone:
+Validated for the dry-run BIC milestone (text inputs):
 
 - `divine_transcript` descriptor for transcript text input.
-- Visible BIC source label `Divine Transcript`.
 - `.txt` and `.md` synthetic transcript fixtures.
 - Transcript normalized chunks with source line-range grounding.
 - Explicit timestamp preservation when transcript lines contain timestamps.
 - Selected-input dry-run handoff through the existing Divine generator.
 - Active BIC dry-run registry execution, output discovery, and visible auto-import in dev Electron.
 - Packaged `.txt` and `.md` dry-run validation with visible auto-import and score history persistence.
-- App-ready dry-run output currently keeps `sourceFormat: divine-audio`.
 
-Intentionally not validated:
+Newly validated at v4.55 (audio + live):
 
-- Live Gemini invocation or semantic question generation.
-- Audio input, `.mp3`, `.wav`, `.m4a`, or transcription.
-- Real Divine podcast audio.
-- Installed or signed app write constraints.
-- Real-world transcript variation.
-- Retrieval, clustering, multimodal grounding, images, or assets.
+- Visible BIC source label "Divine (Audio + Transcript)" with `.txt .md .mp3 .m4a .wav` extensions.
+- Audio input picker accepts `.mp3 / .m4a / .wav` files; dry-run with audio is rejected with a clear error (exit 2) so transcription tokens are never wasted.
+- Live mode (`--emit-app-ready-live`) routes audio inputs straight to `generate_divine_questions.py --generate --input-file <audio> --output-dir <durable>`, skipping the shared chunk pipeline (which needs text).
+- Gemini File API upload, file-state polling, and audio-aware `generateContent` exercised end-to-end on `Test Divine.mp3` (17.2 MB, audio/mpeg).
+- Transcription → cleaning → 2 chunks → 15 questions targeted → 7 questions valid in 131s wall-clock.
+- Raw transcript written to `<jobOutputRoot>/transcripts/raw/<stem>_raw.txt`; cleaned transcript to `<jobOutputRoot>/transcripts/cleaned/<stem>_cleaned.txt` (redirected via `--output-dir`, not the packaged tree).
+- App-ready output at `tools/shared-ingestion/output/divine_app_ready_live/<stem>/app_ready/<stem>_app_ready.json` with `schemaVersion: nbme-gemini-json-v3` and `sourceFormat: divine-audio`. Sample question has 4 answer choices, non-empty `retrievalTag` and `reviewPearl`.
+
+Intentionally not yet validated:
+
+- Packaged `.app` live audio run (the dev-Electron-equivalent live run via the v4.55 build was validated; the user is encouraged to repeat through the new packaged BIC dropdown).
+- Long episodes (> ~90 min): the transcript-cleaning prompt caps at 120,000 chars and the transcription `maxOutputTokens` caps at 65,536 (~3 hours). Warnings fire when caps are hit.
+- Real-world transcript variation beyond the single Divine Intervention test episode.
+- Retrieval, clustering, multimodal grounding, images, or assets — out of scope for this pipeline.
+- Robustness of the question-generation JSON parse on long Gemini responses. On the v4.55 test run, chunk 1 (8 questions requested) failed JSON parse after the generator's 3-stage repair, so 7 of 15 questions made it through; this is the pre-existing UWorld-family JSON-truncation class addressed at v4.52 / v4.54 and the chunk-planning recovery is expected to compensate on subsequent runs.
 
 ## OME
 

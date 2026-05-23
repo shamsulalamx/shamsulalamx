@@ -1,12 +1,27 @@
 # Project Status 2026-05-23
 
-Current stable tag: `v4.54-uworld-chunk-planning-recovery-stable`
+Current stable tag: `v4.55-divine-audio-live-stable`
 Current branch: `phase11-fastfacts-stability`
-Last committed HEAD: doc commit landing alongside `0c3e389`.
+Last committed HEAD: doc commit landing alongside the v4.55 source commit.
 
 Supersedes `docs/archive/PROJECT_STATUS_2026-05-21.md`.
 
 ## What Is New Since 2026-05-21
+
+### v4.55 — Live Divine generation from podcast audio through BIC (field-validated)
+
+Closes the last text-only / dry-run-only boundary in the BIC source registry. The `divine_transcript` source now accepts `.mp3 / .m4a / .wav` in addition to `.txt / .md`, relabels as "Divine (Audio + Transcript)", and `liveSteps` invokes the profile runner with `--emit-app-ready-live`. For audio inputs the profile runner skips the shared chunk pipeline (chunks don't exist until after transcription) and delegates to `tools/divine-audio-question-generator/generate_divine_questions.py --generate --input-file <audio> --output-dir <durable>`, which uploads to the Gemini File API, transcribes, cleans, chunks, and generates questions in one process. Audio + dry-run is rejected with a clear error so transcription tokens are never wasted.
+
+Source changes:
+
+- `tools/batch-import-center/pipeline_registry.json` — `divine_transcript` entry widened (`inputExtensions`, label, `requiresGemini`, `liveSteps`, `outputDirectories`, notes).
+- `tools/shared-ingestion/divine_transcript_profile_runner.py` — text/audio extension sets, `selected_input` + `is_audio_input` helpers, `run_divine_generator(live=)` refactor, `--emit-app-ready-live` flag, audio + dry-run gating, audio path bypasses shared chunk pipeline.
+- `tools/divine-audio-question-generator/generate_divine_questions.py` — `--input-file` widened to accept audio in `--generate` mode; `_apply_output_dir` now also redirects `RAW_DIR` and `CLEANED_DIR` so transcripts land under the durable job root.
+- `index.html` — BIC dropdown `<option>` and `BATCH_IMPORT_SOURCE_LABELS` cache relabeled.
+
+Field-validated on `Test Divine.mp3` (17.2 MB Divine Intervention podcast): 131s end-to-end, 7 valid questions emitted with `schemaVersion: nbme-gemini-json-v3` and `sourceFormat: divine-audio`. `.app` packaged build confirmed to contain all updated assets. User confirmed: "Divine works perfectly!"
+
+Tag commit: TBD (lands with this doc commit).
 
 ### v4.54 — UWorld-family chunk-planning recovery + quota-aware retry stop (offline-validated)
 
@@ -190,7 +205,7 @@ No open work item from this thread. See `NEXT_STEPS_PRIORITY.md` item 0b for the
 | Images & Tables | Shared-ingestion profile stable | Packaged image/table rendering, FigureStore persistence, score, reload validated |
 | Anki | Shared-ingestion dry-run profile validated | Live Gemini generation and semantic quality not validated |
 | OME | Shared-ingestion dry-run profile validated | Live Gemini generation and writable packaged output not validated |
-| Divine Transcript | Shared-ingestion transcript profile validated | Live Gemini, audio, and transcription not validated |
+| Divine (Audio + Transcript) | Shared-ingestion transcript profile validated; live BIC audio → transcribe → questions field-validated at v4.55 on a 17.2 MB MP3 (`Test Divine.mp3`, 131s, 7 valid questions) | Packaged-app live audio run via the v4.55 `.app` and long-episode (> ~90 min) behavior under transcription/cleaning caps still unverified |
 | Fast Facts | Narrow screening validation + Phase 11 stabilization | Broad deck semantic stability not claimed |
 
 ## Validated Runtime Paths
@@ -223,7 +238,7 @@ Carried forward from prior status, with the new chunk-planning entry added:
 - OCR quality depends on local `tesseract` and image quality.
 - Large multimodal folders are not validated.
 - Shared downstream generation is not complete.
-- Live Gemini generation is not validated for Anki / OME / Divine Transcript.
+- Live Gemini generation for Divine (Audio + Transcript) is field-validated as of v4.55 on a single 17.2 MB MP3; broader Divine episode variation and the packaged-app live audio run are unverified.
 - OME packaged output writes under packaged resources; app-data migration is future work.
 
 ## Working Tree Notes At This Snapshot

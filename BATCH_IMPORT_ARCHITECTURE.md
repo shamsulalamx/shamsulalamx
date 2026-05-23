@@ -91,17 +91,19 @@ The active `ome_pdf` registry entry is dry-run only.
 - Registry notes are displayed in the BIC UI, including the dry-run-only OME note.
 - OME note visibility and dry-run auto-import were validated in dev Electron and packaged app.
 
-## Divine Transcript Registry Boundary
+## Divine (Audio + Transcript) Registry Boundary
 
-The active `divine_transcript` registry entry is dry-run only.
+The active `divine_transcript` registry entry accepts both Divine Intervention podcast audio and pre-cleaned transcripts. Live BIC generation enabled at v4.55.
 
-- Its visible source label is Divine Transcript.
-- Supported inputs are `.txt` and `.md`.
-- `requiresGemini` is `false` because the validated BIC path runs the selected-input dry-run handoff.
-- `dryRunSteps` emit transcript normalized chunks and app-ready dry-run output through the Divine Transcript profile runner.
-- `liveSteps` intentionally map to the same dry-run handoff. This does not enable or validate live Divine Gemini generation.
-- Registry notes are shown in the BIC UI, including the dry-run-only and no-audio note.
-- Packaged dry-run auto-import passed for `.txt` and `.md` transcript inputs.
+- Its visible source label is "Divine (Audio + Transcript)".
+- Supported inputs are `.txt`, `.md`, `.mp3`, `.m4a`, and `.wav`.
+- `requiresGemini` is `true` because the live path runs Gemini for transcription, transcript cleaning, and question generation.
+- `dryRunSteps` accept text inputs only and emit transcript normalized chunks plus app-ready dry-run output through the Divine profile runner. Audio inputs in dry-run mode are rejected with a clear error so transcription tokens are never wasted.
+- `liveSteps` invoke the profile runner with `--emit-app-ready-live`. For audio inputs, the profile runner skips the shared chunk pipeline (no text exists yet) and delegates to `tools/divine-audio-question-generator/generate_divine_questions.py --generate --input-file <audio> --output-dir <durable>`, which uploads to the Gemini File API, transcribes, cleans, chunks, and generates questions in one process. For text inputs the live path runs the same generator without the upload/transcribe/clean stages.
+- Raw and cleaned transcripts land under `<jobOutputRoot>/transcripts/raw/` and `<jobOutputRoot>/transcripts/cleaned/` (redirected via `--output-dir`, not into the packaged tree).
+- App-ready output lands at `tools/shared-ingestion/output/divine_app_ready_live/<stem>/app_ready/<stem>_app_ready.json` with `schemaVersion: nbme-gemini-json-v3` and `sourceFormat: divine-audio`.
+- Registry notes shown in the BIC UI document the audio/text dual support and the live-mode-required constraint for audio.
+- Field-validated at v4.55 on a 17.2 MB Divine Intervention podcast MP3 (`Test Divine.mp3`, 131s total: upload → transcribe → clean → chunk → generate → 7 valid questions).
 
 ## Fast Facts Registry Boundary
 

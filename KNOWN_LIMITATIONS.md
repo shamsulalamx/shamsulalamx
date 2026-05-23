@@ -236,18 +236,25 @@ The validated OME BIC path is dry-run only. Its current app-ready questions are 
 - Packaged OME output currently writes under packaged resources. Moving generated output to a writable app-data location is future work.
 - Signed or notarized distribution behavior and non-writable packaged resource tree behavior are not validated.
 
-## Divine Transcript Dry-Run Limitations
+## Divine BIC Audio Support And Live Generation
 
-The validated Divine Transcript BIC path is transcript-first and dry-run only.
+Before v4.55, the `divine_transcript` BIC source was transcript-first and dry-run only — audio uploads were rejected by the file picker and `liveSteps` intentionally re-ran the same dry-run handoff.
 
-- Audio files are not supported yet through the Divine Transcript BIC source, including `.mp3`, `.wav`, and `.m4a`.
-- Live Gemini Divine generation is not enabled through BIC.
-- The current Divine dry-run app-ready output keeps `sourceFormat: divine-audio` even when the selected input is a transcript.
-- Packaged Divine dry-run outputs currently write under packaged resources.
-- Only synthetic `.txt` and `.md` transcript fixtures are validated; real-world transcript variation is unvalidated.
-- Audio ingestion, transcription, Whisper, local speech models, and Gemini audio transcription are not part of this validated path.
-- Transcript chunks preserve structure and provenance but do not prove semantic medical quality.
-- Retrieval, clustering, images, and assets remain out of scope.
+Resolution (tagged `v4.55-divine-audio-live-stable`):
+
+- `tools/batch-import-center/pipeline_registry.json` `divine_transcript` entry now lists `.txt .md .mp3 .m4a .wav` in `inputExtensions`, flips `requiresGemini: true`, relabels the source "Divine (Audio + Transcript)", and points `liveSteps` at `--emit-app-ready-live` (not the dry-run handoff).
+- `tools/shared-ingestion/divine_transcript_profile_runner.py` accepts audio extensions, detects audio at runtime, skips the shared chunk pipeline for audio (chunks don't exist until after transcription), and delegates to `tools/divine-audio-question-generator/generate_divine_questions.py --generate --input-file <audio> --output-dir <durable>`. Audio + dry-run is rejected with a clear error (exit 2) so transcription tokens are never wasted.
+- `tools/divine-audio-question-generator/generate_divine_questions.py` `--input-file` was widened to accept `.mp3 / .m4a / .wav` in `--generate` mode; when given audio it now runs the full upload → transcribe → clean → chunk → generate pipeline inline (the same audio pipeline that previously only ran when audio sat in `input_audio/`). `_apply_output_dir` was extended to also redirect `RAW_DIR` and `CLEANED_DIR` so raw and cleaned transcripts land under the durable job output root, not in the packaged source tree.
+- `index.html` BIC dropdown and `BATCH_IMPORT_SOURCE_LABELS` cache both relabeled "Divine (Audio + Transcript)".
+
+Field-validated on `Test Divine.mp3` (17.2 MB Divine Intervention podcast): 131s end-to-end (upload + transcribe to 21,890 chars + clean to 4,076 chars + 2 chunks + generate). Output: `schemaVersion: nbme-gemini-json-v3`, `sourceFormat: divine-audio`, 7 valid questions with 4 answer choices each and populated `retrievalTag` + `reviewPearl`.
+
+Still open at v4.55:
+
+- Chunk 1 of the test run (8 questions targeted) failed JSON parse after the generator's existing 3-stage repair, so 7 of 15 targeted questions made it through. Same JSON-truncation class addressed at v4.52 / v4.54 for the UWorld-family generators; chunk-planning recovery (v4.54) is expected to compensate on subsequent runs but is unverified end-to-end for the Divine audio path specifically.
+- Long episodes (> ~90 min) may exceed the transcript-cleaning prompt's 120,000-char cap or the transcription `maxOutputTokens` (65,536, ~3 hours). Warnings fire when caps are hit; behavior under those warnings is unvalidated.
+- Packaged-app live audio run via the v4.55 `.app` build is the immediate next field check.
+- Retrieval, clustering, images, and assets remain out of scope for this pipeline.
 
 ## Remaining Multimodal Gaps
 

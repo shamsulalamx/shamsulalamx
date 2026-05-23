@@ -2,7 +2,7 @@
 
 Last updated: 2026-05-23
 
-This file documents stable v4 tags from v4.0 through the current head tag `v4.54-uworld-chunk-planning-recovery-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+This file documents stable v4 tags from v4.0 through the current head tag `v4.55-divine-audio-live-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
 
 ## v4.0-images-tables-generator-stable
 
@@ -445,3 +445,34 @@ Not validated by this milestone:
 - The recovery path itself. Requires Gemini to short-return on a live run, which is probabilistic. User chose to wait for organic occurrence (same posture as v4.53).
 - The quota-aware retry stop. Requires Gemini to actually return HTTP 429 mid-run. Was field-validated for the lecture-slide generator at v4.49 with depleted credits; the UWorld-family port shares the same predicate and latch logic but is unverified end-to-end in production.
 - NBME PDF generator's chunk-planning is still unaudited (see `NEXT_STEPS_PRIORITY.md` item 0b).
+
+## v4.55-divine-audio-live-stable
+
+Commit: TBD (single source commit + doc commit landing together).
+
+Meaning: Enables live Divine question generation from podcast audio through Batch Import Center. Closes the boundary where the BIC `divine_transcript` source was transcript-first and dry-run only — audio uploads were rejected by the file picker and `liveSteps` intentionally re-ran the same dry-run handoff.
+
+Implementation (4 source files + 1 UI file):
+
+- `tools/batch-import-center/pipeline_registry.json` — `divine_transcript` entry: relabels to "Divine (Audio + Transcript)", widens `inputExtensions` to `[".txt", ".md", ".mp3", ".m4a", ".wav"]`, flips `requiresGemini: true`, points `liveSteps` at `--emit-app-ready-live` (not the dry-run handoff), keeps `dryRunSteps` text-only, updates notes shown in the BIC UI.
+- `tools/shared-ingestion/divine_transcript_profile_runner.py` — splits supported extensions into text/audio sets, renames `selected_transcript` to `selected_input`, adds `is_audio_input()`, refactors `run_divine_generator_dry_run` to `run_divine_generator(input_path, live=True/False)` with mode-aware output subdir and command flag, adds `--emit-app-ready-live` CLI flag, gates audio + dry-run with an exit-2 error so transcription tokens are never wasted, skips the shared chunk pipeline for audio inputs (chunks emerge after transcription), and emits a clear `divine_transcript_audio_input` progress event.
+- `tools/divine-audio-question-generator/generate_divine_questions.py` — renames `_resolve_selected_transcript` to `_resolve_selected_input` so `--input-file` now accepts `.txt`, `.md`, `.mp3`, `.m4a`, and `.wav`; adds `_is_audio_input()`; in the `--generate` branch with `selected_input` it now runs the full audio pipeline (Gemini File API upload → poll → transcribe → clean → chunk → generate) when given audio and the text pipeline when given a transcript; `_apply_output_dir` was extended to also redirect `RAW_DIR` and `CLEANED_DIR` so raw and cleaned transcripts land under `<jobOutputRoot>/transcripts/raw|cleaned/` instead of polluting the packaged source tree.
+- `index.html` — BIC source dropdown `<option>` and `BATCH_IMPORT_SOURCE_LABELS` cache both relabeled "Divine (Audio + Transcript)".
+
+Architecture significance: The Divine pipeline was the last BIC source still gated to text-only dry-run handoff after v4.51 (OME) and v4.52 (Anki) flipped their analogs to live. With v4.55, every active organic-generation source in BIC has a live path validated against the user's real inputs. The audio path also exercises the Gemini File API for the first time inside a BIC job — prior File API usage in this generator was CLI-only outside BIC's orchestration.
+
+Validated:
+
+- Negative case: `python3 tools/shared-ingestion/divine_transcript_profile_runner.py --input-file "Test Divine.mp3" --emit-app-ready-dry-run` exits 2 with the expected error message ("Audio inputs require live mode").
+- Live audio path: `python3 tools/shared-ingestion/divine_transcript_profile_runner.py --input-file "/Users/shamsulalam/Desktop/Test Divine.mp3" --emit-app-ready-live` on the user's 17.2 MB Divine Intervention podcast MP3 (`Test Divine.mp3`). Wall-clock 131s. Stages: Gemini File API upload (1.5s) → file ACTIVE → transcription (31s, 21,890 chars raw) → cleaning (31s, 4,076 chars cleaned) → chunking (2 chunks) → generation (chunk 1 8 questions targeted, chunk 2 7 questions targeted, 7 valid questions emitted total).
+- App-ready output shape: `schemaVersion: nbme-gemini-json-v3`, `sourceFormat: divine-audio`, 7 questions, 4 answer choices each, non-empty `retrievalTag` and `reviewPearl` on the sampled question, stem ends with a proper one-best-answer sentence (`stem_has_explicit_final_question` enforced by v4.51).
+- Output paths land in the durable job output root: `tools/shared-ingestion/output/divine_app_ready_live/Test_Divine/app_ready/Test Divine_app_ready.json`. Raw and cleaned transcripts under `tools/shared-ingestion/output/divine_app_ready_live/Test_Divine/transcripts/{raw,cleaned}/`.
+- `.app` packaging confirmed via `npm run electron:build:mac`: `dist/mac-arm64/shamsulalamx.app` (708 MB) contains the updated `index.html` label, `pipeline_registry.json` with `.mp3 .m4a .wav` extensions and `--emit-app-ready-live` in `liveSteps`, and the updated profile runner + generator scripts.
+- User confirmed: "Divine works perfectly!"
+
+Not validated by this milestone:
+
+- Packaged-app live audio run via the v4.55 `.app` (the dev-Electron-equivalent direct invocation was validated; the user is expected to repeat through the new packaged BIC dropdown).
+- Long episodes (> ~90 min) that exceed the 120,000-char cleaning cap or the 65,536 transcription token cap — warnings fire but behavior under those warnings is unvalidated.
+- Robustness of the question-generation JSON parse on long Gemini responses for the Divine audio path. On the v4.55 test run, chunk 1 (8 questions requested) failed JSON parse after the generator's 3-stage repair, so 7 of 15 targeted questions made it through. Same JSON-truncation class addressed at v4.52 (token cap raised) and v4.54 (chunk-planning recovery); recovery is expected to compensate on subsequent runs but is unverified end-to-end for Divine audio specifically.
+- NBME PDF generator's chunk-planning still unaudited (carried forward from v4.54; see `NEXT_STEPS_PRIORITY.md` item 0b).
