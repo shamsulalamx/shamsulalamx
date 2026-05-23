@@ -335,6 +335,69 @@ def check_duplicate_stems(questions: List[Dict]) -> List[str]:
     return warnings
 
 
+# ── Failure classification + quota latch (v4.54) ───────────────────────────────
+# Mirrors the v4.49 quota-aware retry stop from the lecture-slide generator.
+# All five UWorld-wrapping generators (OME, Mehlman, Divine, Anki, UWorld)
+# inherit these helpers via `import generate_uworld_questions as _uw`.
+#
+# The latch protects against runaway API spending: once any Gemini call
+# returns HTTP 429 / RESOURCE_EXHAUSTED, every subsequent retry path
+# (in-band repair, between chunks, the v4.54 per-chunk recovery loop)
+# short-circuits to no-op instead of burning the rest of the user's
+# prepayment budget. Reset at the start of each process_file() invocation
+# so two runs in the same process stay independent.
+
+def is_quota_failure(error) -> bool:
+    text = str(error).lower()
+    return (
+        "http 429" in text
+        or "resource_exhausted" in text
+        or "prepayment credits are depleted" in text
+        or "quota exceeded" in text
+        or "rate limit" in text
+        or "too many requests" in text
+    )
+
+
+def is_network_failure(error) -> bool:
+    text = str(error).lower()
+    return (
+        "urlopen error" in text
+        or "nodename nor servname provided" in text
+        or "name or service not known" in text
+        or "network is unreachable" in text
+        or "temporary failure in name resolution" in text
+        or "gemini request timed out" in text
+    )
+
+
+_QUOTA_EXHAUSTED = False
+
+
+def quota_exhausted() -> bool:
+    return _QUOTA_EXHAUSTED
+
+
+def mark_quota_exhausted() -> None:
+    global _QUOTA_EXHAUSTED
+    _QUOTA_EXHAUSTED = True
+
+
+def reset_quota_state() -> None:
+    global _QUOTA_EXHAUSTED
+    _QUOTA_EXHAUSTED = False
+
+
+# Bound on the per-chunk shortfall recovery loop in process_file(). The main
+# chunk loop produces some output; if a chunk returned fewer questions than
+# requested AND the quota latch isn't tripped, we make up to this many focused
+# follow-up calls per chunk asking Gemini for just the missing questions.
+# Worst-case extra API cost = len(chunks) * this constant. Stays small on
+# purpose so a budget runaway cannot happen even when every chunk under-
+# delivers.
+MAX_RECOVERY_ATTEMPTS_PER_CHUNK = 2
+
+
 # ── Placeholder (dry-run) ──────────────────────────────────────────────────────
 def _placeholder_question(n: int) -> Dict:
     idx = str(n).zfill(3)
@@ -700,8 +763,30 @@ def call_gemini_with_retry(
 
     warnings: List[str] = []
 
+    # ── Quota-aware early exit ────────────────────────────────────────────────
+    # If a prior chunk or recovery attempt in this run tripped the quota
+    # latch, do not burn additional API calls. The latch is set on first
+    # HTTP 429 / RESOURCE_EXHAUSTED. process_file() resets the latch at
+    # the start of each file so subsequent runs in the same process are
+    # independent.
+    if quota_exhausted():
+        msg = f"Chunk {chunk_index}: skipping — Gemini quota already exhausted earlier in this run"
+        warn(msg)
+        warnings.append(msg)
+        return [], warnings
+
     # ── Attempt 1 ─────────────────────────────────────────────────────────────
-    raw_text  = _raw_gemini_call(api_key, prompt)
+    try:
+        raw_text = _raw_gemini_call(api_key, prompt)
+    except Exception as exc:
+        if is_quota_failure(exc):
+            mark_quota_exhausted()
+            msg = f"Chunk {chunk_index}: stopped after Gemini quota exhaustion (HTTP 429 / RESOURCE_EXHAUSTED)"
+            warn(msg)
+            warnings.append(msg)
+            return [], warnings
+        raise
+
     questions = _parse_gemini_json(raw_text, chunk_index)
     if not isinstance(questions, list):
         raise ValueError(f"Gemini returned non-list JSON ({type(questions).__name__})")
@@ -731,8 +816,26 @@ def call_gemini_with_retry(
 
     try:
         repair_prompt = _build_repair_prompt(chunk_text, need_repair, repair_errors)
-        repair_raw    = _raw_gemini_call(api_key, repair_prompt)
-        repaired      = _parse_gemini_json(repair_raw, chunk_index)
+        try:
+            repair_raw = _raw_gemini_call(api_key, repair_prompt)
+        except Exception as exc:
+            if is_quota_failure(exc):
+                mark_quota_exhausted()
+                msg = f"Chunk {chunk_index}: repair stopped after Gemini quota exhaustion (HTTP 429 / RESOURCE_EXHAUSTED)"
+                warn(msg)
+                warnings.append(msg)
+                # Surface the failed questions for human review so they
+                # aren't silently dropped just because budget ran out.
+                if needs_review_collector is not None:
+                    for q, errs in zip(need_repair, repair_errors):
+                        needs_review_collector.append({
+                            "question": q,
+                            "errors": list(errs) + ["quota exhausted during repair"],
+                            "chunkIndex": chunk_index,
+                        })
+                return valid, warnings
+            raise
+        repaired = _parse_gemini_json(repair_raw, chunk_index)
         if not isinstance(repaired, list):
             raise ValueError("Repair response is not a JSON array")
 
@@ -858,6 +961,10 @@ def process_file(
         chunk_stats = [{"chunk": 1, "status": "dry-run", "questions": questions_per_file}]
 
     else:
+        # Reset the v4.54 quota latch so a previous in-process run cannot leak
+        # its "stopped after quota exhaustion" state into this one. In normal
+        # BIC subprocess use this is a no-op (each run is a fresh process).
+        reset_quota_state()
         questions_per_chunk = max(1, questions_per_file // max(len(chunks), 1))
         remainder   = questions_per_file - questions_per_chunk * len(chunks)
         q_offset    = 0
@@ -902,6 +1009,67 @@ def process_file(
                 c_stat["error"]  = str(exc)
 
             chunk_stats.append(c_stat)
+
+        # Per-chunk shortfall recovery (v4.54) — port of the v4.49 lecture-slide
+        # missing-question recovery to the UWorld family. For each chunk that
+        # returned fewer questions than we asked for (a "silent under-delivery"
+        # — Gemini just gave back fewer items, no error), make up to
+        # MAX_RECOVERY_ATTEMPTS_PER_CHUNK focused follow-up calls asking only
+        # for the missing questions. Quota-aware: bails immediately if the
+        # latch is tripped. Bounded cost: at most chunks * cap extra calls.
+        if not quota_exhausted():
+            for ci, c_stat in enumerate(chunk_stats):
+                if c_stat.get("status") != "ok":
+                    continue
+                requested = int(c_stat.get("requested") or 0)
+                generated = int(c_stat.get("generated") or 0)
+                deficit = requested - generated
+                if deficit <= 0:
+                    continue
+                chunk = chunks[ci]
+                recovered_total = 0
+                for attempt in range(1, MAX_RECOVERY_ATTEMPTS_PER_CHUNK + 1):
+                    if quota_exhausted():
+                        msg = f"Chunk {ci+1} recovery: stopping at attempt {attempt} — Gemini quota exhausted"
+                        warn(msg)
+                        file_warnings.append(msg)
+                        break
+                    if deficit <= 0:
+                        break
+                    log(f"  Chunk {ci+1} recovery attempt {attempt}/{MAX_RECOVERY_ATTEMPTS_PER_CHUNK} → requesting {deficit} missing question(s)…")
+                    try:
+                        recovered_qs, recovery_warnings = call_gemini_with_retry(
+                            chunk["chunkText"], deficit, ci + 1, gen_stats,
+                            needs_review_collector=needs_review_entries,
+                        )
+                        file_warnings.extend(recovery_warnings)
+                        recovered_qs = renumber_questions(recovered_qs, q_offset)
+                        raw_generated.extend(recovered_qs)
+                        all_questions.extend(recovered_qs)
+                        q_offset += len(recovered_qs)
+                        recovered_total += len(recovered_qs)
+                        deficit -= len(recovered_qs)
+                        if recovered_qs:
+                            log(f"    ✓ recovered {len(recovered_qs)} question(s); {deficit} still missing")
+                        else:
+                            log(f"    (no questions recovered this attempt)")
+                        time.sleep(1)  # courtesy pause
+                    except json.JSONDecodeError as exc:
+                        msg = f"Chunk {ci+1} recovery attempt {attempt} JSON parse error: {exc}"
+                        warn(msg)
+                        file_warnings.append(msg)
+                    except Exception as exc:
+                        msg = f"Chunk {ci+1} recovery attempt {attempt} failed: {exc}"
+                        warn(msg)
+                        file_warnings.append(msg)
+                        if is_quota_failure(exc):
+                            mark_quota_exhausted()
+                            break
+                        if is_network_failure(exc):
+                            break
+                if recovered_total:
+                    c_stat["recovered"] = recovered_total
+                    c_stat["generated"] = generated + recovered_total
 
         # Duplicate stem check across all collected questions
         dup_warnings = check_duplicate_stems(all_questions)
