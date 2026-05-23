@@ -479,7 +479,7 @@ Not validated by this milestone:
 
 ## v4.56-images-tables-live-stable
 
-Commits: TBD (source commit + render-fix commit + doc commit landing together).
+Commits: `70999ec` (source) + `3a8aaaf` (doc).
 
 Meaning: Replaces the v4.15 attachment-first Images & Tables BIC path with live per-image Gemini classification + NBME-style question generation, fixes two follow-on bugs surfaced by the first real live runs (multi-file merge across BIC's per-input invocations; double-rendered explanation panel), and tightens the table-placement contract so tables and charts never appear in the question stem.
 

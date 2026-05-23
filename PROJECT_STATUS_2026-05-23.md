@@ -21,7 +21,7 @@ Source changes (3 source files + 1 UI file, landed across 2 source commits + 1 d
 
 Field-validated on a 5-image packaged-app BIC run (Abdominal CT, abetalipoproteinemia biopsy, alcoholic hepatic steatosis, aortic arch derivatives, Barrett's esophagus): 5 questions imported in a single test, no duplicate explanation blocks, correct stem/explanation placement per image type. Dev-Electron 4-image run (dermatology, vesicoureteral process diagram, water-soluble vitamins table, Weber/Rinne tracing) confirmed correct classification across all four placement categories; the table was relegated to the explanation panel as required. User confirmed: "Works flawlessly."
 
-Tag commits: TBD (lands with this doc commit).
+Tag commits: `70999ec` (source) + `3a8aaaf` (doc).
 
 ### v4.55 — Live Divine generation from podcast audio through BIC (field-validated)
 
