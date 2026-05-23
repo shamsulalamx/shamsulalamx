@@ -293,10 +293,22 @@ def test_heartbeat_blocking_call() -> dict[str, Any]:
 
     gen.fast_facts_chunk_event = capture
     gen.raw_gemini_call = slow_raw
-    items = gen.call_fast_facts_generation_chunk_once("key", "contract.pptx", allocs, {}, "heartbeat", "global_retry_1_initial", chunk_index=1, chunk_total=1)
+    graph = graph_for(gen, "heartbeat", allocs)
+    items = gen.call_fast_facts_generation_chunk_once(
+        "key",
+        "contract.pptx",
+        allocs,
+        {},
+        "heartbeat",
+        "global_retry_1_initial",
+        chunk_index=1,
+        chunk_total=1,
+        execution_graph=graph,
+    )
     assert len(items) == 1
     heartbeat_events = [event for event in emitted if event.get("event") == event_name("HEARTBEAT")]
     assert heartbeat_events, "blocking call emitted no chunk heartbeat"
+    assert all(event.get("executionGraph") for event in heartbeat_events), "heartbeat missing execution graph"
     assert heartbeat_events[0]["chunkLabel"] == "heartbeat"
     assert heartbeat_events[0]["phase"] == "generating"
     assert int(heartbeat_events[0]["elapsedMs"]) >= 2000

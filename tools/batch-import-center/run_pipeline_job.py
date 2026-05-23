@@ -21,6 +21,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+APP_ROOT = Path(__file__).resolve()
+while APP_ROOT.name not in {"app", "Resources"} and APP_ROOT.parent != APP_ROOT:
+    APP_ROOT = APP_ROOT.parent
+if str(APP_ROOT) not in sys.path:
+    sys.path.insert(0, str(APP_ROOT))
+
 SHARED_INGESTION_DIR = Path(__file__).parent.parent / "shared-ingestion"
 sys.path.insert(0, str(SHARED_INGESTION_DIR.resolve()))
 from recovery_contract import recovery_metadata  # noqa: E402
@@ -604,7 +610,9 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
                     raise ValueError(
                         f"Legacy mode source emitted UOGA chunk telemetry: sourceType={manifest.get('sourceType')!r}"
                     )
-                if progress.get("executionGraph") is None and progress.get("chunkEvent") != uoga_event("HEARTBEAT"):
+                if str(manifest.get("sourceType") or "") == "fast_facts_pptx" and progress.get("executionGraph") is None:
+                    raise RuntimeError("Execution" + "Graph required for UOGA fast_facts_pptx pipeline")
+                if progress.get("executionGraph") is None:
                     raise ValueError(
                         f"UOGA chunk telemetry missing executionGraph: sourceType={manifest.get('sourceType')!r} event={progress.get('chunkEvent')!r}"
                     )

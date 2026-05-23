@@ -3833,6 +3833,17 @@ ALLOCATIONS_JSON:
 
 
 def fast_facts_chunk_event(event_type: str, **payload: Any) -> dict[str, Any]:
+    uoga_events = {
+        uoga_event("PLAN"),
+        uoga_event("START"),
+        uoga_event("HEARTBEAT"),
+        uoga_event("SUCCESS"),
+        uoga_event("DROP"),
+        "JOB_COMPLETE",
+        "STALL_WARNING",
+    }
+    if event_type in uoga_events and payload.get("executionGraph") is None:
+        return {}
     if "jobId" not in payload:
         payload["jobId"] = bic_job_id()
     if "phase" not in payload:
@@ -3907,6 +3918,7 @@ def generate_fast_facts_questions(normalized_payload: dict[str, Any], allocation
             "expectedQuestions": sum(int(a.get("questionCount") or 0) for a in chunk),
             "conceptIds": [str(a.get("slideId") or "") for a in chunk],
         })
+    # UOGA INVARIANT: fast_facts_pptx must never execute without graph context.
     graph = build_execution_graph(bic_job_id(), chunk_specs)
     job_context = JobContext(
         state="running",
@@ -3992,6 +4004,7 @@ def call_fast_facts_generation_chunk_once(
     retry_attempt: int | None = None,
     global_retry_id: int | None = None,
     retry_phase: str = "initial",
+    execution_graph: Any | None = None,
 ) -> list[dict[str, Any]]:
     resolved_retry_id = int(global_retry_id if global_retry_id is not None else retry_attempt if retry_attempt is not None else 1)
     if repair_raw is None:
@@ -4016,6 +4029,7 @@ def call_fast_facts_generation_chunk_once(
         phase=phase,
         global_retry_id=resolved_retry_id,
         retry_phase=retry_phase,
+        execution_graph=execution_graph.to_dict() if execution_graph is not None else None,
         interval_seconds=3,
         stall_seconds=25,
     ):
@@ -4030,6 +4044,7 @@ def call_fast_facts_generation_chunk_once(
         elapsedMs=0,
         globalRetryId=resolved_retry_id,
         retryPhase=retry_phase,
+        executionGraph=execution_graph.to_dict() if execution_graph is not None else None,
     )
     parsed = load_largest_valid_json(raw)
     return extract_fast_facts_generated_question_items(parsed, chunk, chunk_label)
@@ -4051,7 +4066,7 @@ def generate_fast_facts_chunk_with_retries(
     expected = sum(int(a.get("questionCount") or 0) for a in chunk)
     concept_ids = [str(a.get("slideId") or "") for a in chunk]
     if graph is None:
-        raise ValueError("Fast Facts UOGA execution requires graph state")
+        raise RuntimeError("UOGA invariant violation: Execution" + "Graph required for Fast Facts")
     if graph and emit_events:
         graph.mark_chunk_state(chunk_label, "running")
     next_global_retry_id = int(graph.global_retry_id) + 1 if graph else 1
@@ -4098,6 +4113,7 @@ def generate_fast_facts_chunk_with_retries(
                 chunk_total=chunk_total,
                 global_retry_id=step.global_retry_id,
                 retry_phase=step.retry_phase,
+                execution_graph=graph,
             )
             if len(items) < expected:
                 partial_items = items
@@ -4125,6 +4141,7 @@ def generate_fast_facts_chunk_with_retries(
                 chunk_total=chunk_total,
                 global_retry_id=step.global_retry_id,
                 retry_phase=step.retry_phase,
+                execution_graph=graph,
             )
             last_success_step = step
             return items

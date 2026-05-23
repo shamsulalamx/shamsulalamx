@@ -23,6 +23,17 @@ from .job_contracts import (
 )
 
 
+UOGA_TELEMETRY_EVENTS = {
+    ChunkEventType.CHUNK_PLAN.value,
+    ChunkEventType.CHUNK_START.value,
+    ChunkEventType.CHUNK_HEARTBEAT.value,
+    ChunkEventType.CHUNK_SUCCESS.value,
+    ChunkEventType.CHUNK_DROP.value,
+    ChunkEventType.JOB_COMPLETE.value,
+    ChunkEventType.STALL_WARNING.value,
+}
+
+
 def utc_timestamp() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -57,17 +68,11 @@ class TelemetryEmitter:
         source = payload.pop("source", self.source)
         route = classify_pipeline_route(str(source or ""))
         mode = determine_execution_mode(str(source or ""))
-        uoga_event = event_name in {
-            ChunkEventType.CHUNK_PLAN.value,
-            ChunkEventType.CHUNK_START.value,
-            ChunkEventType.CHUNK_HEARTBEAT.value,
-            ChunkEventType.CHUNK_SUCCESS.value,
-            ChunkEventType.CHUNK_DROP.value,
-        }
+        uoga_event = event_name in UOGA_TELEMETRY_EVENTS
         if mode != ExecutionMode.UOGA and uoga_event:
             raise ValueError(f"{event_name} is restricted to organic generation telemetry; sourceType={source!r} route={route.value}")
-        if uoga_event and event_name != ChunkEventType.CHUNK_HEARTBEAT.value and payload.get("executionGraph") is None:
-            raise ValueError(f"{event_name} requires executionGraph in UOGA mode; sourceType={source!r}")
+        if uoga_event and payload.get("executionGraph") is None:
+            return {}
         event = {
             "event": event_name,
             "chunkEvent": event_name,
@@ -111,6 +116,7 @@ class ChunkHeartbeat(AbstractContextManager["ChunkHeartbeat"]):
         retry_attempt: int | None = None,
         global_retry_id: int | None = None,
         retry_phase: str = "initial",
+        execution_graph: dict[str, Any] | None = None,
         interval_seconds: float = 3.0,
         stall_seconds: float = 25.0,
     ) -> None:
@@ -122,6 +128,7 @@ class ChunkHeartbeat(AbstractContextManager["ChunkHeartbeat"]):
         self.phase = phase
         self.global_retry_id = int(global_retry_id if global_retry_id is not None else retry_attempt if retry_attempt is not None else 1)
         self.retry_phase = retry_phase
+        self.execution_graph = execution_graph
         self.interval_seconds = max(0.5, float(interval_seconds or 3.0))
         self.stall_seconds = max(self.interval_seconds, float(stall_seconds or 25.0))
         self.started_at = time.time()
@@ -141,7 +148,7 @@ class ChunkHeartbeat(AbstractContextManager["ChunkHeartbeat"]):
             self._thread.join(timeout=1)
 
     def _payload(self) -> dict[str, Any]:
-        return {
+        payload = {
             "jobId": self.job_id,
             "chunkLabel": self.chunk_label,
             "chunkIndex": self.chunk_index,
@@ -151,6 +158,9 @@ class ChunkHeartbeat(AbstractContextManager["ChunkHeartbeat"]):
             "globalRetryId": self.global_retry_id,
             "retryPhase": self.retry_phase,
         }
+        if self.execution_graph is not None:
+            payload["executionGraph"] = self.execution_graph
+        return payload
 
     def _run(self) -> None:
         while not self._stop.wait(self.interval_seconds):
