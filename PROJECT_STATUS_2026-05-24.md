@@ -1,12 +1,73 @@
 # Project Status 2026-05-24
 
-Current stable tag: `v4.66-bic-redesign-and-widget-stable`
+Current stable tag: `v4.67-drive-sync-hardening-stable`
 Current branch: `phase11-fastfacts-stability`
-Last committed HEAD: source + doc bundled in a single v4.66 commit (v4.65 / v4.64 / v4.63 / v4.62 still exist as prior tags). Note: the v4.65 tag points at the pre-follow-up commit (4b18447) which is missing `electron/main.js`; the missing handlers landed as a separate follow-up commit (02fea12) that's on `phase11-fastfacts-stability` but not tagged — see the v4.65 entry below.
+Last committed HEAD: source + doc bundled in a single v4.67 commit (v4.66 / v4.65 / v4.64 / v4.63 / v4.62 still exist as prior tags). Note: the v4.65 tag still points at the pre-follow-up commit (4b18447) which is missing `electron/main.js`; the missing handlers landed as a separate follow-up commit (02fea12) that's on `phase11-fastfacts-stability` but not tagged — see the v4.65 entry below.
 
 Supersedes `docs/archive/PROJECT_STATUS_2026-05-23.md`.
 
 ## What Is New Since 2026-05-23
+
+### v4.67 — Drive auto-sync hardening (periodic safety net + retry/backoff + visibility trigger + loud failure + last-sync indicator)
+
+Commit D of the planned UI batch. Five coordinated additions to the existing Google Drive backup subsystem, all in `index.html` (no IPC / Python / electron changes). Pre-v4.67 behaviour: `DB.save()` triggered a 1.2s-debounced `saveGoogleDriveNow()`; on failure, a small red "Sync failed" text appeared and that was it — no retry, no periodic backup, no surface change. v4.67 adds the safety nets users expect from any cloud-sync product.
+
+#### Periodic safety-net backup (#D1)
+
+New `setInterval` fires every **5 minutes**. Gates on `_accessToken && _driveDirty && !_busy && !_driveSyncInProgress` — only triggers if there's genuinely pending unsynced data. Catches cases where the debounce timer was cleared mid-flight (e.g. a brief network outage right when the debounce fired), where the user made changes but never closed the modal that would have triggered manual save, or where `scheduleGoogleDriveSave` got swallowed by some other flow. The interval is harmless in the no-changes case (gated out cheaply).
+
+#### Retry + exponential backoff (#D2)
+
+`saveGoogleDriveNow` no longer treats a failure as a terminal state. The error handler now:
+
+1. Increments `_driveConsecutiveFailures`.
+2. Calls new `_scheduleDriveRetry()` which computes a delay of `2000 × 2^(attempt − 1)` ms (so 2s, 4s, 8s, 16s, 32s, capped at 60s) and schedules another `saveGoogleDriveNow()` attempt at that delay.
+3. The status text shows the retry count: `"<error> (retry 2/5)"` so the user sees the system is still trying.
+4. On success, `_driveConsecutiveFailures` resets to 0 and any pending retry timer is cancelled.
+
+`_DRIVE_MAX_RETRIES = 5`. After the 5th consecutive failure, retry stops and loud-failure surfacing takes over.
+
+#### Visibility trigger (#D3)
+
+The existing `visibilitychange` listener at App.init now has a `'visible'` branch that calls new `window.flushDriveBackupIfPending()`. That function internally checks `_accessToken && _driveDirty && !_busy && !_driveSyncInProgress` and only fires a sync if there are genuinely pending changes — crucially, it does **not** call `scheduleGoogleDriveSave` (which would unconditionally set `_driveDirty = true` and trigger a no-op upload on every focus event). Use case: user closes laptop with a backup mid-flight, opens it 3 hours later — instead of waiting for the next 5-min safety-net tick, the missed backup fires immediately when the window regains focus.
+
+#### Loud failure surfacing (#D4)
+
+When `_driveConsecutiveFailures >= 5`, new `_showDriveLoudFailure(error)` runs:
+
+- Sets the status text to `"⚠ Drive backup has failed 5 times in a row — sync is stuck. Reconnect Drive in Settings."` (still red, but with the leading warning emoji and explicit count).
+- Calls the alert banner with severity `'error'` and a more urgent message: `"Drive sync stuck — reconnect required"`.
+- Triggers a `toast(msg)` for very-high-visibility surfacing (the existing toast UI is already used elsewhere for important user feedback).
+- `console.error('[drive loud-failure]', error)` for debug context.
+
+The retry chain stops here; user has to either click "Reconnect Drive" or fix whatever's wrong before sync resumes. Counter resets on the next successful save.
+
+#### Last-sync indicator (#D5)
+
+New `<div id="drive-last-sync">` element inserted directly under the existing `#drive-sync-status` in the Settings → Google Drive Backup panel. Shows `"Last backup: 2 min ago"` (or `"5 hr ago"`, `"3 days ago"`, etc.) — humanized relative time. Hidden when no backup has ever succeeded.
+
+State:
+
+- `_driveLastSyncTimestamp` (module-local) set on every successful save, mirrored to `localStorage['drive_last_sync_ts_v1']` so it survives reload.
+- Restored from localStorage at module-load time so the indicator shows immediately at boot, even before a fresh sync runs.
+- A `setInterval(_updateLastSyncIndicator, 30_000)` refreshes the relative-time label every 30 seconds so "5 min ago" smoothly becomes "6 min ago" without requiring a sync event.
+
+`_formatDriveRelativeTime(ts)` returns `'just now'` (< 60 s), `'N min ago'` (< 1 h), `'N hr ago'` (< 24 h), or `'N day(s) ago'` for longer.
+
+#### Validation
+
+- **`node --check`** clean on every inline `<script>` extracted from `index.html`.
+- **30 v4.67 markers** in source (`_driveConsecutiveFailures`, `_DRIVE_MAX_RETRIES`, `_DRIVE_PERIODIC_INTERVAL_MS`, `_showDriveLoudFailure`, `_updateLastSyncIndicator`, `flushDriveBackupIfPending`, `drive-last-sync` + comment markers).
+- **`.app` rebuilt**: `dist/mac-arm64/shamsulalamx.app` with v4.67 markers verified present in the bundled `index.html`.
+- **Live walkthrough**: pending field validation. The retry + periodic-safety-net + visibility-trigger paths require an actual Drive failure or focus-restoration scenario to fully verify in the live app; source + bundle proof is the bar v4.67 ships at.
+
+#### Why "stable"
+
+Pure renderer-side additive hardening. The existing `saveGoogleDriveNow` happy path is unchanged except for the new success-side bookkeeping (timestamp save, failure-counter reset, retry-timer cancel) — all clearly additive. The failure path now retries + escalates instead of going silent, which is strictly better. Visibility hook is opt-in via the new `flushDriveBackupIfPending` (won't fire if nothing's pending). Periodic timer is rate-limited (5 min) and gated. Worst-case from a misbehaving v4.67 component: indicator shows stale time (`_updateLastSyncIndicator` no-ops on missing element), retry doesn't fire (degrades to v4.66 behaviour), or loud-failure toast doesn't appear (still shows red status). None of these break Drive functionality.
+
+#### Open follow-up
+
+Token-refresh on 401 is still implicit (the sync fails, user has to manually click Reconnect Drive). v4.67's retry loop will hammer the same expired token 5 times and eventually escalate to loud failure with "reconnect required" — which is correct user-facing behaviour, but a more polished version would attempt a silent `requestAccessToken({ prompt: '' })` on the first 401 and retry transparently. Noted for a future iteration.
 
 ### v4.66 — BIC modal redesign + floating jobs widget
 

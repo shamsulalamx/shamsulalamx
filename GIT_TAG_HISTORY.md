@@ -2,7 +2,17 @@
 
 Last updated: 2026-05-24
 
-This file documents stable v4 tags from v4.0 through the current head tag `v4.66-bic-redesign-and-widget-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+This file documents stable v4 tags from v4.0 through the current head tag `v4.67-drive-sync-hardening-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+
+## v4.67-drive-sync-hardening-stable
+
+Commit: bundled source + doc in a single v4.67 commit (see `git log -1 v4.67-drive-sync-hardening-stable`).
+
+Meaning: Commit D of the planned UI batch. Five additive hardening features for the existing Google Drive auto-sync subsystem (all in `index.html`, no IPC / Python / electron changes). (1) **Periodic safety-net backup** via `setInterval` every 5 min, gated on `_accessToken && _driveDirty` so it's a cheap no-op when there's nothing to sync. (2) **Retry + exponential backoff** in the `saveGoogleDriveNow` catch block — new `_scheduleDriveRetry()` schedules the next attempt at `2000 × 2^(n-1)` ms (cap 60s), tracked via `_driveConsecutiveFailures`, max 5 retries. (3) **Visibility-restore trigger** — new `window.flushDriveBackupIfPending()` called from the existing `visibilitychange` listener's new 'visible' branch; fires a sync only if `_driveDirty` is already true (does NOT call `scheduleGoogleDriveSave` which would unconditionally mark state dirty). (4) **Loud failure surfacing** after 5 consecutive failures — new `_showDriveLoudFailure()` escalates from small red text to a prominent banner + `toast()` + `console.error`. (5) **Last-sync indicator** — new `<div id="drive-last-sync">` shows humanized relative time ("Last backup: 5 min ago") via `_formatDriveRelativeTime`; `_driveLastSyncTimestamp` mirrored to `localStorage['drive_last_sync_ts_v1']` so it survives reload; `setInterval(_updateLastSyncIndicator, 30_000)` keeps the relative time fresh.
+
+Validated: `node --check` clean on every inline `<script>` in `index.html`. 30 v4.67 markers in source. `.app` rebuilt with v4.67 markers verified present in bundled HTML. Live walkthrough is the pending field validation — the retry + periodic + visibility paths require actual Drive failures or focus-restoration scenarios to fully exercise.
+
+Architecture significance: Establishes the retry+escalate pattern for IPC-less / single-token external API calls — exponential backoff + max-retry-count + loud-failure escalation is reusable for any future remote sync work. The visibility-trigger pattern (don't call schedule-functions that have implicit state mutations; expose a dedicated "flush-if-pending" function) is the right separation of concerns and could be extended to other event-driven flushes. The localStorage-mirrored `_driveLastSyncTimestamp` pattern is the minimal-cost way to make user-visible state survive page reloads without involving the heavier IndexedDB DB.save() path.
 
 ## v4.66-bic-redesign-and-widget-stable
 

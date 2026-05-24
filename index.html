@@ -3136,6 +3136,7 @@ body.quiz-fullscreen-mode .modal-overlay {
         <button class="btn-modal" onclick="window.nbmeDiagnosticExport()" title="Download a JSON backup of your current local data with diagnostic info">📥 Diagnostic Backup</button>
       </div>
       <div id="drive-sync-status" style="font-size:11px;color:#5a6a7a;margin-top:6px;">Drive not connected.</div>
+      <div id="drive-last-sync" style="font-size:11px;color:#5a6a7a;margin-top:2px;opacity:0.8;display:none;"></div>
     </div>
     <div class="form-group" style="margin-top:12px;">
       <label class="form-label">App PIN Lock</label>
@@ -4029,6 +4030,24 @@ window.MiscDocStore = MiscDocStore;
   let _skipNextSchedule = false;
   let _driveDirty = false, _driveSyncInProgress = false;
 
+  // v4.67: Drive sync hardening — retry+backoff, periodic safety net, loud
+  // failure surfacing, last-sync indicator. All additive to the existing
+  // debounce+upload flow; existing manual buttons unchanged.
+  let _driveRetryTimer = null;
+  let _driveConsecutiveFailures = 0;
+  let _driveLastSyncTimestamp = null;
+  const _DRIVE_MAX_RETRIES = 5;
+  const _DRIVE_PERIODIC_INTERVAL_MS = 5 * 60 * 1000;     // 5-min safety-net backup
+  const _DRIVE_RETRY_BASE_DELAY_MS = 2000;               // 2s, doubles per retry, capped at 60s
+  const _DRIVE_RETRY_MAX_DELAY_MS = 60_000;
+  const _DRIVE_LAST_SYNC_KEY = 'drive_last_sync_ts_v1';
+  // Restore last-sync timestamp from prior session so the indicator shows
+  // useful info right at boot, before any new sync runs.
+  try {
+    const _stored = localStorage.getItem(_DRIVE_LAST_SYNC_KEY);
+    if (_stored) _driveLastSyncTimestamp = Number(_stored) || null;
+  } catch (e) { /* localStorage unavailable */ }
+
   function setDriveNotice(text, state = 'warn') {
     const alert = document.getElementById('drive-alert');
     if (!alert) return;
@@ -4391,11 +4410,30 @@ window.MiscDocStore = MiscDocStore;
       await saveMiscDocsToDrive();
       _driveDirty = false;
       _driveSyncInProgress = false;
+      // v4.67: record success for last-sync indicator + reset failure counter
+      _driveLastSyncTimestamp = Date.now();
+      try { localStorage.setItem(_DRIVE_LAST_SYNC_KEY, String(_driveLastSyncTimestamp)); } catch (e) {}
+      _driveConsecutiveFailures = 0;
+      if (_driveRetryTimer) { clearTimeout(_driveRetryTimer); _driveRetryTimer = null; }
       setDriveStatus('Drive backup complete.', '#27ae60');
       updateDriveIndicator();
+      _updateLastSyncIndicator();
     } catch(e) {
       _driveSyncInProgress = false;
-      setDriveStatus(e.message || 'Drive backup failed.', '#e74c3c', 'Sync failed', 'error');
+      // v4.67: count consecutive failures + escalate to loud surfacing after
+      // _DRIVE_MAX_RETRIES; otherwise schedule an exponential-backoff retry.
+      _driveConsecutiveFailures++;
+      if (_driveConsecutiveFailures >= _DRIVE_MAX_RETRIES) {
+        _showDriveLoudFailure(e);
+      } else {
+        setDriveStatus(
+          (e.message || 'Drive backup failed.') + ' (retry ' + _driveConsecutiveFailures + '/' + _DRIVE_MAX_RETRIES + ')',
+          '#e74c3c',
+          'Sync failed — will retry',
+          'error'
+        );
+      }
+      _scheduleDriveRetry();
     } finally {
       _busy = false;
       _driveSyncInProgress = false;
@@ -4488,6 +4526,86 @@ window.MiscDocStore = MiscDocStore;
     updateDriveIndicator();
     if (_timer) clearTimeout(_timer);
     _timer = setTimeout(() => window.saveGoogleDriveNow(), 1200);
+  };
+
+  // ── v4.67: Drive sync hardening helpers ──────────────────────────────────
+
+  // Exponential-backoff retry after a failed save. Base 2s, doubles per
+  // attempt, capped at 60s. Stops once _DRIVE_MAX_RETRIES is reached
+  // (loud-failure surfacing takes over at that point).
+  function _scheduleDriveRetry() {
+    if (_driveRetryTimer) { clearTimeout(_driveRetryTimer); _driveRetryTimer = null; }
+    if (_driveConsecutiveFailures >= _DRIVE_MAX_RETRIES) return;
+    const delay = Math.min(
+      _DRIVE_RETRY_BASE_DELAY_MS * Math.pow(2, _driveConsecutiveFailures - 1),
+      _DRIVE_RETRY_MAX_DELAY_MS
+    );
+    console.warn('[drive retry] attempt ' + _driveConsecutiveFailures + ' failed; retrying in ' + delay + 'ms');
+    _driveRetryTimer = setTimeout(function() {
+      if (_accessToken && _driveDirty && !_busy) {
+        window.saveGoogleDriveNow();
+      }
+    }, delay);
+  }
+
+  // After N consecutive failures, escalate to a toast + a more prominent
+  // status banner so the user actually notices Drive is broken rather than
+  // staring at a small grey error line.
+  function _showDriveLoudFailure(error) {
+    const msg = '⚠ Drive backup has failed ' + _driveConsecutiveFailures + ' times in a row — sync is stuck. Reconnect Drive in Settings.';
+    setDriveStatus(msg, '#e74c3c', 'Drive sync stuck — reconnect required', 'error');
+    if (typeof toast === 'function') {
+      try { toast(msg); } catch (e) { /* toast unavailable */ }
+    }
+    console.error('[drive loud-failure]', error);
+  }
+
+  // Human-friendly relative time for the last-sync indicator.
+  function _formatDriveRelativeTime(ts) {
+    if (!ts) return 'never';
+    const ago = Date.now() - Number(ts);
+    if (ago < 0) return 'just now';
+    if (ago < 60_000) return 'just now';
+    if (ago < 3600_000) return Math.floor(ago / 60_000) + ' min ago';
+    if (ago < 86400_000) return Math.floor(ago / 3600_000) + ' hr ago';
+    const days = Math.floor(ago / 86400_000);
+    return days + ' day' + (days === 1 ? '' : 's') + ' ago';
+  }
+
+  function _updateLastSyncIndicator() {
+    const el = document.getElementById('drive-last-sync');
+    if (!el) return;
+    if (_driveLastSyncTimestamp) {
+      el.textContent = 'Last backup: ' + _formatDriveRelativeTime(_driveLastSyncTimestamp);
+      el.style.display = '';
+    } else {
+      el.textContent = '';
+      el.style.display = 'none';
+    }
+  }
+
+  // Refresh the relative-time label every 30s so "5 min ago" becomes "6 min ago".
+  setInterval(_updateLastSyncIndicator, 30_000);
+  _updateLastSyncIndicator(); // initial render at module load (DOM may not be ready; safely no-ops)
+
+  // Periodic safety-net backup — every 5 min, fire a sync if there are
+  // pending dirty changes. Catches cases where the debounce timer was
+  // cleared mid-flight or where _driveDirty got set but the trigger was
+  // missed (e.g. brief network outage right when the debounce fired).
+  setInterval(function() {
+    if (!_accessToken || !_driveDirty || _busy || _driveSyncInProgress) return;
+    console.log('[drive periodic] 5-min safety-net firing');
+    window.saveGoogleDriveNow();
+  }, _DRIVE_PERIODIC_INTERVAL_MS);
+
+  // Visibility-trigger hook: when the app regains focus, fire a sync ONLY
+  // if there are already pending dirty changes. Crucially does NOT call
+  // scheduleGoogleDriveSave (which would set _driveDirty=true unconditionally
+  // and force a no-op upload on every focus event).
+  window.flushDriveBackupIfPending = function() {
+    if (!_accessToken || !_driveDirty || _busy || _driveSyncInProgress) return;
+    console.log('[drive visibility] flushing pending backup on focus-restore');
+    window.saveGoogleDriveNow();
   };
 
   window.addEventListener('beforeunload', (e) => {
@@ -8817,6 +8935,18 @@ const App = (() => {
             marks: [...st.marks], totSecs: st.totSecs
           });
         }
+      } else if (document.visibilityState === 'visible') {
+        // v4.67: when the app regains focus, try to flush any pending Drive
+        // backup. Helps when the user closes the laptop mid-sync and reopens
+        // it later — the missed backup fires immediately instead of waiting
+        // for the next 5-min safety-net tick.
+        try {
+          if (typeof window.flushDriveBackupIfPending === 'function') {
+            // Internal gate: only fires if _accessToken + _driveDirty are both
+            // set. Will NOT mark clean state as dirty just by focusing.
+            window.flushDriveBackupIfPending();
+          }
+        } catch (e) { /* silent — visibility hook should never throw */ }
       }
     });
 
