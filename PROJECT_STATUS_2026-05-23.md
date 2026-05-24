@@ -1,12 +1,36 @@
 # Project Status 2026-05-23
 
-Current stable tag: `v4.59-uworld-live-stable`
+Current stable tag: `v4.60-nbme-boundary-and-auto-attach-stable`
 Current branch: `phase11-fastfacts-stability`
-Last committed HEAD: doc commit landing alongside the v4.59 source commit.
+Last committed HEAD: doc commit landing alongside the v4.60 source commit.
 
 Supersedes `docs/archive/PROJECT_STATUS_2026-05-21.md`.
 
 ## What Is New Since 2026-05-21
+
+### v4.60 — NBME boundary regex fix + automatic stem-image attachment (offline-validated)
+
+Two distinct user-facing problems addressed in one milestone — both surfaced from the same first live NBME BIC import attempt on `[Medicalstudyzone.com] Internal Medicine 3 - Answers.pdf`:
+
+1. **Live import failure: "No question boundaries found — cannot chunk."** The chunker's boundary regex required `Item N` at line start. The user's PDF format has `Exam Section : Item 1 of 50 National Board of Medical Examiners` on every question page — `Item 1` is mid-line. Fixed with a two-tier regex strategy: strong `\bItem\s+(\d+)\s+of\s+\d+\b` match anywhere on the line (NBME Self-Assessment header signature), with fallback to legacy line-start patterns plus new OCR-bullet handling (`~`, `*`, `•`, `·` before stem numbers) when the strong tier yields nothing.
+
+2. **Manual cropping tedium.** The user said: "All other pipelines handle images differently, and I love how everything has been doing so far. The only image handling that's unique to NBME is that the stem images are separated, and shown to me during generation, and I have the ability to crop and attach them. This is tedious. (NBME has NO images in the answer explanation, so gemini involvement is none to decided whether images go in the q stem or answer explanation)." New `auto_attach_figures_to_app_ready` writes extracted PNG crops directly into `q.images[]` with inline base64 `dataUrl`, mirroring the v4.58 Mehlman / v4.56 images-tables app-ready contract. All NBME attachments use `placement: stem` (user confirmed explanations have no images). No Gemini multimodal calls.
+
+Source changes:
+
+- `tools/nbme-pdf-json-generator/extract_pdfs.py`: split boundary regex into `_Q_BOUNDARY_STRONG_RE` + `_Q_BOUNDARY_FALLBACK_RE`. `chunk_raw_text` tries strong first, falls back only on empty matches.
+- `tools/nbme-pdf-json-generator/normalized_to_app_json.py`: `convert_normalized_file` accepts both `items` (live) and `questions` (dry-run) keys — fixes a pre-existing dry-run end-to-end bug.
+- `tools/nbme-pdf-json-generator/nbme_extract_figures.py`: new `auto_attach_figures_to_app_ready` function with aspect-ratio guard (`AUTO_ATTACH_MIN_ASPECT=0.30`, `AUTO_ATTACH_MAX_ASPECT=3.00`). Real clinical images cluster 0.5-2.5; text-block false positives cluster 3.5-8.6.
+- `tools/nbme-pdf-json-generator/nbme_batch_wrapper.py`: `run_app_ready` invokes the new auto-attach after the existing `build_suggested_figure_links` (which still emits the review HTML for low-confidence candidates).
+
+Offline-validated end-to-end through the packaged `.app`:
+
+- `Internal Medicine 3 - Questions.pdf` (10 pages): 9 chunks produced (was 0 prior to v4.60), `boundary_source: strong:item-of-M`. Figure extractor produces 14 candidates → aspect-ratio guard correctly rejects 12 text strips and retains 2 likely-real clinical images.
+- `Internal Medicine 3 - Answers.pdf` (5 pages): 4 strong boundary matches, all 5 wide text-strip false positives correctly aspect-filtered except 1 borderline (aspect 2.8) which can be removed manually if wrong.
+
+Live Gemini run on a real NBME PDF is the next field check. The chunking + auto-attach are offline-validated; live Gemini uses the same code path UWorld/Mehlman/OME/Anki use which has been live-validated since v4.51.
+
+Tag commits: `<source-hash>` (source) + `<doc-hash>` (doc).
 
 ### v4.59 — UWorld notes BIC enablement: text-only, high-yield density, foundational generator gets first-class CLI flags (field-validated)
 
