@@ -8,14 +8,14 @@ Supersedes `docs/archive/PROJECT_STATUS_2026-05-21.md`.
 
 ## What Is New Since 2026-05-21
 
-### v4.59 — UWorld notes BIC enablement: text-only, high-yield density, foundational generator gets first-class CLI flags (offline-validated)
+### v4.59 — UWorld notes BIC enablement: text-only, high-yield density, foundational generator gets first-class CLI flags (field-validated)
 
 First BIC integration of the foundational UWorld notes generator. UWorld was the underlying module every other text-heavy source (Anki, OME, Mehlman, Divine wrappers) had been importing for months — through the v4.51 stem-quality validator, v4.53 review-survivor flow, and v4.54 chunk-planning recovery — but it had never been wired through BIC itself. The user had no "UWorld" option in the source dropdown despite having UWorld notes ready to import.
 
 v4.59 closes that gap with the same profile-runner + shared-chunk-emitter integration the four wrappers already used, with three properties tuned to the user's UWorld content:
 
 - **Text-only.** The user confirmed UWorld notes are "absolutely no images, just text," so the profile runner skips all image/table machinery. No deterministic figure attachment (v4.58), no Gemini multimodal call (v4.56), no figure-extraction pass.
-- **High-yield density.** The user said UWorld notes are "extremely high yield" and asked for higher question frequency per content unit. The runner auto-scales `--questions-per-file` to `max(5, chars // 500)` clamped at 80 — roughly 3× Mehlman's 1-question-per-1.5K-chars density. Override via explicit `--questions-per-file N`.
+- **High-yield density.** The user said UWorld notes are "extremely high yield" and asked for higher question frequency per content unit. After a day-1 → field retune (the user pushed back on the original 5-question floor for a 3-page note: "THESE ARE HIGH YIELD MATERIAL, and I would want more rigorous testing"), the runner auto-scales `--questions-per-file` to `max(8, chars // 150)` clamped at 80 — roughly 10× Mehlman's 1-question-per-1.5K-chars density. A 3-page UWorld note lands at 9 questions; a 10 KB note at 66; 12+ KB at the MAX clamp of 80 (cost cap ~$0.16/file). Override via explicit `--questions-per-file N`.
 - **Foundational module gets first-class CLI flags.** The UWorld generator had no `--input-file` or `--output-dir` (fixed `input_notes/` scan only). v4.59 adds both, mirroring the Anki / Mehlman wrapper pattern so BIC can drive UWorld from outside the read-only `.app` bundle source tree.
 
 Source changes:
@@ -27,9 +27,15 @@ Source changes:
 - `tools/shared-ingestion/chunk_pipeline.py`: added `uworld_notes` to `--source-type` allowlist.
 - `tools/batch-import-center/pipeline_registry.json`: new `uworld_notes` registry entry (label `UWorld Notes`, accepts `.txt .md .rtf .docx`, `requiresGemini: true`).
 
-Validated offline end-to-end on a 1.8K `test_cardiology.txt` (5 questions, MIN clamp) and a 4.1K synthetic 5-section UWorld file (8 questions, auto-scaled). Packaged `.app` profile-runner dry-run verified: `chunkCount: 2`, `candidateQuestionCount: 8`, `sourceFormat: uworld-notes`, `schemaVersion: nbme-gemini-json-v3`, `outcome: completed`. Live Gemini run on a real UWorld notes file is the next field check.
+Field-validated through the packaged `.app` on real `/Users/shamsulalam/Desktop/Test uWorld.docx` (3-page UWorld note, 1,365 chars after `.docx` text extraction). User confirmed "everything works perfectly" on the live import. Output: `extractedChars=1365`, `questionsPerFile=9`, `chunkCount=1`, `candidateQuestionCount=9`, `outcome: completed`, no chunk failures.
 
 Tag commits: `08862c9` (source) + `d0c5e35` (doc).
+
+Three follow-up commits landed on top of the original `v4.59-uworld-live-stable` tag (no new tag — tuning + bug fixes only):
+
+- `e14e811` — surfaced "UWorld Notes" in the BIC source-type dropdown. The original source commit wired the backend completely but the dropdown in `index.html` is a hardcoded `<option>` list, not a registry-driven enumeration, so the entry only appears after two parallel index.html edits.
+- `cc8af39` — fixed `.docx` auto-density bug (was using `stat().st_size` which overcounts ~40× because `.docx` is a zipped XML container — a 57 KB file ≈ 1.4 KB of real text) and added a fast-fail path for missing `python-docx` / `striprtf` so the cryptic "did not produce expected app-ready JSON" error no longer hides a missing-dependency root cause. Added repo-root `requirements.txt` documenting the full system-Python dep set.
+- `5495bff` — retuned density constants from MIN=5 / DEFAULT=500 to MIN=8 / DEFAULT=150 after the first live import only yielded 5 questions on the 3-page note. Final density curve: 1.4 KB → 9 q, 4 KB → 27 q, 10 KB → 66 q, 12+ KB → MAX clamp 80.
 
 ### v4.58 — Mehlman tight-focus chunking + deterministic page-proximity image attachment + full-PDF processing (offline-validated)
 
