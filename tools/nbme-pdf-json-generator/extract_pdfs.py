@@ -128,15 +128,37 @@ EXPLANATION_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Question boundary detection
-_Q_BOUNDARY_RE = re.compile(
+# Question boundary detection — v4.60 two-tier strategy.
+#
+# Tier 1 (strong): NBME Self-Assessment PDFs include a "Item N of M" header
+# on every question page (e.g. "Exam Section : Item 1 of 50 National Board
+# of Medical Examiners"). The header may be mid-line, not line-start. This
+# pattern is highly specific — "Item N of M" only appears in the question
+# header, never in answer explanations (which use "Choice A" instead).
+#
+# Tier 2 (fallback): legacy NBME formats and PDFs without the header line.
+# Matches "Question N." / "Item N." at line start, the NBME interface
+# bullet prefix ("* 1. ", commonly OCR'd as "~ 1.", "• 1.", "· 1.", etc.),
+# and bare-number lists. The bullet pattern requires the stem to follow a
+# capital letter so we don't false-match numbered lists inside explanations.
+_Q_BOUNDARY_STRONG_RE = re.compile(
+    r'\bItem\s+(\d+)\s+of\s+\d+\b',
+    re.IGNORECASE,
+)
+
+_Q_BOUNDARY_FALLBACK_RE = re.compile(
     r'^(?:'
     r'(?:Question|Item)\s+(\d+)[.):\s]'
-    r'|\*\s*(\d+)[.)]\s'   # NBME interface prefix: "* 1. "
-    r'|(\d+)[.)]\s'
+    r'|[~*•·●◦‣■►▪]\s*(\d+)[.)]\s(?=[A-Z])'
+    r'|(\d+)[.)]\s(?=[A-Z])'
     r')',
     re.MULTILINE | re.IGNORECASE,
 )
+
+# Backwards-compatible alias — kept because nbme_extract_figures.py and
+# normalized_to_app_json.py may import _Q_BOUNDARY_RE by name. Resolved
+# at call time so future imports get whichever tier produced matches.
+_Q_BOUNDARY_RE = _Q_BOUNDARY_STRONG_RE
 
 # ---------------------------------------------------------------------------
 # Utilities
@@ -367,13 +389,24 @@ def chunk_raw_text(raw_path: Path) -> dict:
             result["warnings"].append(f"Contamination phrase detected in full text: '{phrase}'")
 
     text = _strip_page_markers(raw)
-    matches = list(_Q_BOUNDARY_RE.finditer(text))
+    # v4.60: two-tier boundary detection. Strong "Item N of M" pattern is
+    # unique to one PDF format (NBME Self-Assessment with the question
+    # header banner), so try it first and only fall back when it produces
+    # nothing. This avoids the double-match problem where one question
+    # could be picked up by BOTH the header AND the stem bullet, producing
+    # a degenerate header-only chunk followed by the real question chunk.
+    matches = list(_Q_BOUNDARY_STRONG_RE.finditer(text))
+    boundary_source = "strong:item-of-M"
+    if not matches:
+        matches = list(_Q_BOUNDARY_FALLBACK_RE.finditer(text))
+        boundary_source = "fallback:bullet-or-number"
 
     if not matches:
         result["status"] = "warning"
         result["warnings"].append("No question boundaries found — cannot chunk")
         _write_chunks(stem, raw_path.name, [], result)
         return result
+    result["boundary_source"] = boundary_source
 
     preamble = text[: matches[0].start()].strip()
     if preamble:

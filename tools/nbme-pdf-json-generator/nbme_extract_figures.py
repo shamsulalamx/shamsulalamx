@@ -2056,6 +2056,172 @@ def extract_figures(
     return manifest
 
 
+# v4.60 auto-attach defaults. Tuned to reject text-block false positives
+# (which the rendered-page CV detector occasionally surfaces with
+# `medium` confidence on text-heavy NBME pages) while keeping real
+# clinical images. Aspect ratio of EKGs, X-rays, derm photos, gross
+# pathology, etc. clusters in 0.4-2.5. Paragraph blocks misclassified as
+# figures consistently have aspect ratio > 3.5. The 3.0 ceiling is the
+# clean cutoff.
+AUTO_ATTACH_MIN_ASPECT = 0.30
+AUTO_ATTACH_MAX_ASPECT = 3.00
+
+
+def auto_attach_figures_to_app_ready(
+    pdf_stem: str,
+    manifest_path: Path,
+    app_ready_path: Path,
+    min_confidence: str = "medium",
+    min_aspect: float = AUTO_ATTACH_MIN_ASPECT,
+    max_aspect: float = AUTO_ATTACH_MAX_ASPECT,
+) -> dict[str, Any]:
+    """v4.60: auto-attach extracted figures into question stem `images[]`.
+
+    The user does not want to manually crop. NBME PDFs put stem images on
+    the question page; explanations have no images. So for each figure in
+    the manifest with confidence >= min_confidence AND a matched
+    `suggestedQuestionNumber`, write the cropped PNG into the matching
+    question's `images[]` with `figureKey: null` + an inline base64
+    `dataUrl`. Mirror the v4.58 Mehlman / v4.56 images-tables app-ready
+    contract so the existing renderer + FigureStore handle the rest with
+    zero per-question Gemini calls.
+
+    Aspect-ratio guard rejects text-block false positives (PDFs with no
+    real clinical images sometimes produce wide rectangular candidates
+    that are actually paragraph regions). Real clinical images are
+    roughly square (0.3-3.0); text blocks consistently exceed 3.5.
+
+    Returns a summary dict; modifies app_ready_path in place.
+    """
+    import base64
+
+    summary: dict[str, Any] = {
+        "questionsScanned": 0,
+        "figuresConsidered": 0,
+        "figuresAttached": 0,
+        "questionsModified": 0,
+        "lowConfidenceSkipped": 0,
+        "aspectFilteredSkipped": 0,
+        "missingFileSkipped": 0,
+        "warnings": [],
+    }
+
+    if not manifest_path.exists() or not app_ready_path.exists():
+        summary["warnings"].append(
+            f"auto-attach skipped: manifest={manifest_path.exists()}, app_ready={app_ready_path.exists()}"
+        )
+        return summary
+
+    try:
+        manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        app_ready = json.loads(app_ready_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        summary["warnings"].append(f"auto-attach JSON load failed: {exc}")
+        return summary
+
+    figures = [f for f in (manifest_payload.get("figures") or []) if isinstance(f, dict)]
+    summary["figuresConsidered"] = len(figures)
+
+    # Build a question-number -> figures map, ranked by confidence.
+    confidence_rank = {"high": 3, "medium": 2, "low": 1, "unknown": 0}
+    threshold = confidence_rank.get(min_confidence, 2)
+    figures_by_q: dict[int, list[dict[str, Any]]] = {}
+    for fig in figures:
+        if not fig.get("kept"):
+            continue
+        q_num = fig.get("suggestedQuestionNumber")
+        if not isinstance(q_num, int):
+            continue
+        if confidence_rank.get(str(fig.get("confidence")), 0) < threshold:
+            summary["lowConfidenceSkipped"] += 1
+            continue
+        # Aspect-ratio guard: text blocks consistently misclassify as
+        # wide-rectangle "figures" on text-heavy PDFs. Real clinical
+        # images stay in [0.3, 3.0]. Anything outside that range is
+        # almost certainly not a figure worth attaching to the stem.
+        bbox = fig.get("bbox") or []
+        if len(bbox) == 4:
+            width = bbox[2] - bbox[0]
+            height = bbox[3] - bbox[1]
+            if width > 0 and height > 0:
+                aspect = width / height
+                if aspect < min_aspect or aspect > max_aspect:
+                    summary["aspectFilteredSkipped"] += 1
+                    continue
+        figures_by_q.setdefault(q_num, []).append(fig)
+
+    questions = app_ready.get("questions") or []
+    summary["questionsScanned"] = len(questions)
+
+    def _data_url_for(file_path_str: str, abs_path_str: str) -> tuple[str, str]:
+        for candidate in (Path(abs_path_str or ""), SCRIPT_DIR / (file_path_str or "")):
+            if candidate.exists() and candidate.is_file():
+                mime = "image/png" if candidate.suffix.lower() == ".png" else "image/jpeg"
+                encoded = base64.b64encode(candidate.read_bytes()).decode("ascii")
+                return f"data:{mime};base64,{encoded}", candidate.name
+        return "", ""
+
+    for q in questions:
+        if not isinstance(q, dict):
+            continue
+        q_num = q.get("questionNumber") or q.get("sourceQuestionNumber") or q.get("n")
+        if not isinstance(q_num, int):
+            continue
+        candidates = figures_by_q.get(q_num) or []
+        if not candidates:
+            continue
+        candidates.sort(
+            key=lambda f: (confidence_rank.get(str(f.get("confidence")), 0), f.get("score") or 0),
+            reverse=True,
+        )
+        # NBME: all stem images. User confirmed explanation panel has no images.
+        existing_images = q.setdefault("images", [])
+        existing_refs = q.setdefault("figureRefs", [])
+        attached_for_q = 0
+        for fig in candidates:
+            file_path = str(fig.get("filePath") or "")
+            abs_path = str(fig.get("absoluteFilePath") or "")
+            data_url, fname = _data_url_for(file_path, abs_path)
+            if not data_url:
+                summary["missingFileSkipped"] += 1
+                continue
+            figure_id = str(fig.get("figureId") or f"nbme_q{q_num:03d}_p{fig.get('page', 0):03d}")
+            # Skip duplicates if already attached (e.g. by a prior run).
+            if any((img or {}).get("figureId") == figure_id for img in existing_images):
+                continue
+            entry = {
+                "figureId":         figure_id,
+                "figureKey":        None,
+                "dataUrl":          data_url,
+                "isLabTable":       False,
+                "kind":             "figure",
+                "source":           "nbme-pdf-generator",
+                "originalFileName": fname,
+                "assetPath":        file_path,
+                "placement":        "stem",
+                "pageNum":          fig.get("page"),
+                "confidence":       fig.get("confidence"),
+                "bbox":             fig.get("bbox"),
+            }
+            existing_images.append(entry)
+            existing_refs.append({
+                "id":          figure_id,
+                "placeholder": f"[FIGURE: {figure_id}]",
+                "location":    "stem",
+                "visibleText": [],
+            })
+            attached_for_q += 1
+            summary["figuresAttached"] += 1
+        if attached_for_q:
+            q["hasEmbeddedFigure"] = True
+            summary["questionsModified"] += 1
+
+    app_ready_path.write_text(
+        json.dumps(app_ready, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    return summary
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Extract likely NBME figure/image crop candidates from rendered PDF pages."

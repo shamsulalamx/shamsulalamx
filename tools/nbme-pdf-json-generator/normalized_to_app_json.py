@@ -382,7 +382,12 @@ def convert_normalized_file(norm_path, dry_run=False):
         result["warnings"].append(f"Could not read file: {e}")
         return result
 
-    items = payload.get("items") or []
+    # v4.60: accept both "items" (live Gemini normalization output) and
+    # "questions" (dry-run normalization output). The two normalization
+    # paths in extract_pdfs.py historically wrote different keys, so
+    # converter dry-run sanity checks used to fail with "No items in
+    # normalized file" even when the dry-run had produced 4 questions.
+    items = payload.get("items") or payload.get("questions") or []
     if not items:
         result["status"] = "warning"
         result["warnings"].append("No items in normalized file — nothing to convert")

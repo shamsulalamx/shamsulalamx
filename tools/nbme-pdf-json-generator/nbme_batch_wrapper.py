@@ -188,6 +188,27 @@ def run_app_ready(args: argparse.Namespace) -> int:
             f"{summary.get('figuresKept', 0)} figure candidate(s), "
             f"{summary.get('pagesProcessed', 0)} page(s) reviewed"
         )
+        # v4.60: auto-attach high/medium-confidence stem images so the user
+        # does not have to manually crop every figure through the cropper UI.
+        # NBME PDFs put all images in question stems (user confirmed
+        # explanations have no images), so we attach into q.images[] with
+        # placement=stem and no Gemini routing call. Low-confidence
+        # candidates still surface in the existing review HTML.
+        attach_summary = nbme_extract_figures.auto_attach_figures_to_app_ready(
+            pdf_stem=pdf_path.stem,
+            manifest_path=manifest_path,
+            app_ready_path=app_ready_path,
+            min_confidence="medium",
+        )
+        log(
+            "app-ready conversion: auto-attached "
+            f"{attach_summary.get('figuresAttached', 0)} figure(s) to "
+            f"{attach_summary.get('questionsModified', 0)} question(s); "
+            f"{attach_summary.get('lowConfidenceSkipped', 0)} low-confidence skipped "
+            f"(review HTML still available)"
+        )
+        for warn_msg in attach_summary.get("warnings", []) or []:
+            log(f"WARN: {warn_msg}")
     return 0
 
 
