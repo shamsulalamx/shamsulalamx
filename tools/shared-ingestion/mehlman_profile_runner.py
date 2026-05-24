@@ -61,18 +61,24 @@ def app_ready_question_count(outputs: list[str]) -> int:
 
 def run_existing_mehlman_generator(input_file: Path, mode: str, page_limit: int) -> tuple[int, float, list[str]]:
     started_at = time.time()
+    # v4.58: chunk size retargeted to ~1.5K chars and questions-per-chunk
+    # default lowered to 1 for one-fact-per-question tight focus. The profile
+    # runner used to override to 2 from the pre-v4.58 8-12K chunk era;
+    # the override is dropped so we inherit the generator's default and the
+    # tight-focus contract holds end-to-end. page_limit == 0 means
+    # "process every page" — we omit --max-pages entirely so the generator
+    # runs across the full PDF (previously this wrapper capped at 10 pages
+    # regardless of the actual document size, dropping content silently).
     command = [
         sys.executable,
         "generate_mehlman_questions.py",
         "--generate" if mode == "generate" else "--dry-run",
         "--input-file",
         str(input_file),
-        "--max-pages",
-        str(page_limit),
         "--extract-assets",
-        "--questions-per-chunk",
-        "2",
     ]
+    if page_limit > 0:
+        command.extend(["--max-pages", str(page_limit)])
     if DOWNSTREAM_OUTPUT_ROOT:
         command.extend(["--output-dir", str(DOWNSTREAM_OUTPUT_ROOT)])
     emit("mehlman_downstream_start", command=command, cwd=str(MEHLMAN_DIR))
@@ -97,7 +103,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run Mehlman PDF through shared ingestion before existing generation.")
     parser.add_argument("--input-file", required=True)
     parser.add_argument("--mode", choices=["dry-run", "generate"], default="dry-run")
-    parser.add_argument("--limit", type=int, default=10, help="First-page limit for validation.")
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=0,
+        help="First-page limit. 0 (default, v4.58) = process every page; >0 = cap for validation runs.",
+    )
     parser.add_argument("--chunk-output", default="")
     return parser.parse_args()
 
@@ -105,7 +116,10 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     input_file = Path(args.input_file).expanduser().resolve()
-    page_limit = max(1, int(args.limit or 10))
+    # v4.58: 0 means "no cap" — pass straight through to the shared chunk
+    # pipeline (which treats 0/None as unlimited) and the existing generator
+    # (which drops --max-pages when 0).
+    page_limit = max(0, int(args.limit or 0))
     chunk_output = Path(args.chunk_output).expanduser().resolve() if args.chunk_output else (
         NORMALIZED_OUTPUT_DIR / f"{input_file.stem.replace(' ', '_')}_mehlman_normalized_chunks.json"
     )

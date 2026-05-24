@@ -39,7 +39,7 @@
           "stage": "normalization",
           "stageLabel": "Mehlman shared-ingestion dry-run",
           "heartbeatSeconds": 20,
-          "args": ["tools/shared-ingestion/mehlman_profile_runner.py", "--mode", "dry-run", "--input-file", "{inputFile}", "--limit", "10"]
+          "args": ["tools/shared-ingestion/mehlman_profile_runner.py", "--mode", "dry-run", "--input-file", "{inputFile}"]
         }
       ],
       "liveSteps": [
@@ -47,11 +47,11 @@
           "stage": "normalization",
           "stageLabel": "Mehlman shared-ingestion live generation",
           "heartbeatSeconds": 20,
-          "args": ["tools/shared-ingestion/mehlman_profile_runner.py", "--mode", "generate", "--input-file", "{inputFile}", "--limit", "10"]
+          "args": ["tools/shared-ingestion/mehlman_profile_runner.py", "--mode", "generate", "--input-file", "{inputFile}"]
         }
       ],
       "outputDirectories": ["tools/mehlman-pdf-question-generator/output_json/app_ready"],
-      "notes": "Profile-style text-heavy PDF source: emits shared normalized text chunks, then invokes the existing Mehlman generator unchanged. Initial validation is capped to the first 10 pages."
+      "notes": "Profile-style text-heavy PDF source: emits shared normalized text chunks, then invokes the existing Mehlman generator unchanged. v4.58 removes the prior 10-page validation cap so the full PDF is processed end-to-end; pair with v4.58 tight-focus chunking (1.5K chars / chunk, 1 question / chunk) and deterministic page-proximity image attachment."
     },
     "images_tables_source": {
       "label": "Images & Tables",

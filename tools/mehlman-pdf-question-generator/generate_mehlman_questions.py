@@ -11,12 +11,15 @@ Usage:
   python3 generate_mehlman_questions.py --chunk-only
   python3 generate_mehlman_questions.py --dry-run --extract-assets
   python3 generate_mehlman_questions.py --dry-run --max-chunks 2
-  python3 generate_mehlman_questions.py --generate --questions-per-chunk 5
+  python3 generate_mehlman_questions.py --generate                       # 1 q / 1.5K chunk
+  python3 generate_mehlman_questions.py --generate --questions-per-chunk 3
 """
 
 import argparse
+import base64
 import hashlib
 import json
+import mimetypes
 import os
 import re
 import sys
@@ -76,8 +79,11 @@ def _mehlman_build_app_ready_json(
 _uw.build_app_ready_json = _mehlman_build_app_ready_json
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-_MIN_CHUNK = 8_000
-_MAX_CHUNK = 12_000
+# v4.58: tight-focus chunking targets ~1.5K chars / chunk so each chunk maps
+# to a single discrete Mehlman fact. Paired with --questions-per-chunk 1,
+# this gives ~1 grounded NBME-style question per ~1-2 paragraph fact slice.
+_MIN_CHUNK = 1_200
+_MAX_CHUNK = 1_800
 _MIN_FIG_PX   = 80
 _MAX_ASPECT   = 8.0
 _HIGH_CONF_PX = 200
@@ -364,21 +370,42 @@ def split_pages_into_chunks(
             buf_tbls.extend(tbls)
             buf_warns.extend(warns)
 
-        # Single-page text exceeds max — split at paragraphs within the page
+        # Single-page text exceeds max — split at paragraphs, then sentences.
+        # v4.58: PDF extraction often loses paragraph breaks on Mehlman pages,
+        # so when a "paragraph" still exceeds max_chars, fall back to sentence
+        # splits to actually hit the 1.5K tight-focus target.
         if len(buf_text) > max_chars and buf_start == buf_end == pn:
             paras = [p.strip() for p in re.split(r"\n{2,}", buf_text) if p.strip()]
+            units: List[str] = []
+            for para in paras:
+                if len(para) <= max_chars:
+                    units.append(para)
+                else:
+                    sentences = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9])", para)
+                    cur = ""
+                    for sent in sentences:
+                        if not sent.strip():
+                            continue
+                        if len(cur) + len(sent) + 1 <= max_chars:
+                            cur = (cur + " " + sent).strip() if cur else sent
+                        else:
+                            if cur:
+                                units.append(cur)
+                            cur = sent
+                    if cur:
+                        units.append(cur)
             sub_buf  = ""
             sub_figs: List[Dict] = list(figs)
             sub_tbls: List[Dict] = list(tbls)
-            for para in paras:
-                if len(sub_buf) + len(para) + 2 <= max_chars:
-                    sub_buf = (sub_buf + "\n\n" + para).strip() if sub_buf else para
+            for unit in units:
+                if len(sub_buf) + len(unit) + 2 <= max_chars:
+                    sub_buf = (sub_buf + "\n\n" + unit).strip() if sub_buf else unit
                 else:
                     if sub_buf:
                         _emit_para_chunk(sub_buf, pn, sub_figs, sub_tbls, warns)
                         sub_figs = []
                         sub_tbls = []
-                    sub_buf = para
+                    sub_buf = unit
             buf_text  = sub_buf
             buf_start = pn
             buf_end   = pn
@@ -387,6 +414,100 @@ def split_pages_into_chunks(
 
     _emit()
     return chunks
+
+
+# ── Deterministic page-proximity image attachment (v4.58) ─────────────────────
+# Each chunk already carries the figures detected on the pages it covers.
+# With 1.5K-char chunks + 1 question/chunk, every chunk maps to one question,
+# so attaching the chunk's figures to that question is deterministic page
+# proximity by construction (figure on page N → question whose chunk covers
+# page N). When a chunk produces more than one question (questions_per_chunk>1
+# or Gemini over-delivers), all figures attach to the first question so each
+# figure is referenced exactly once.
+
+def _mime_for(path: Path) -> str:
+    if path.suffix.lower() in {".jpg", ".jpeg"}:
+        return "image/jpeg"
+    if path.suffix.lower() == ".png":
+        return "image/png"
+    return mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+
+
+def _data_url(path: Path) -> str:
+    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+    return f"data:{_mime_for(path)};base64,{encoded}"
+
+
+def _attach_chunk_figures_to_questions(
+    questions: List[Dict],
+    chunk: Dict,
+    source_stem: str,
+) -> None:
+    """Attach all figures from the chunk's pages to the first question in-place.
+
+    Deterministic page-proximity: chunk knows pageStart-pageEnd; figures in
+    `chunk['figures']` were extracted from those pages. No Gemini multimodal
+    call required — pure file-system attachment.
+    """
+    figs = chunk.get("figures") or []
+    if not figs or not questions:
+        return
+
+    target = questions[0]
+    target_q_num = int(target.get("questionNumber") or 0) or 1
+    explanation_images = target.setdefault("explanationImages", [])
+    figure_refs = target.setdefault("figureRefs", [])
+
+    attach_warnings: List[str] = []
+    for i, fig in enumerate(figs, start=1):
+        fig_name = fig.get("filename") or ""
+        fig_path = FIG_DIR / fig_name
+        if not fig_name or not fig_path.exists():
+            continue
+        page_num = chunk.get("pageStart") or 0
+        figure_id = (
+            f"mehlman_q{target_q_num:03d}_p{page_num:03d}_{i:02d}_{fig_name[-12:-4]}"
+        )
+        try:
+            # asset_path is informational only — the binary lives in dataUrl.
+            # v4.58 fix: BIC runs with --output-dir write figures under the
+            # job root, which is NOT under _BASE, so a naive relative_to
+            # raised ValueError and killed every chunk that had figures.
+            try:
+                asset_path = str(fig_path.relative_to(_BASE))
+            except ValueError:
+                asset_path = f"extracted_figures/{fig_name}"
+            data_url_str = _data_url(fig_path)
+        except Exception as exc:
+            attach_warnings.append(
+                f"figure attach failed (chunk {chunk.get('chunkId')}, {fig_name}): {exc}"
+            )
+            continue
+        entry = {
+            "figureId":         figure_id,
+            "figureKey":        None,
+            "dataUrl":          data_url_str,
+            "isLabTable":       False,
+            "kind":             "figure",
+            "source":           "mehlman-pdf-generator",
+            "originalFileName": fig_name,
+            "assetPath":        asset_path,
+            "placement":        "explanation",
+            "pageNum":          page_num,
+            "confidence":       fig.get("confidence", "low"),
+        }
+        explanation_images.append(entry)
+        figure_refs.append({
+            "id":          figure_id,
+            "placeholder": f"[FIGURE: {figure_id}]",
+            "location":    "explanation",
+            "visibleText": [],
+        })
+
+    if explanation_images:
+        target["hasEmbeddedFigure"] = True
+    if attach_warnings:
+        target.setdefault("extractionWarnings", []).extend(attach_warnings)
 
 
 # ── Asset markers ─────────────────────────────────────────────────────────────
@@ -425,6 +546,7 @@ def _empty_stats() -> Dict:
         "tablesDetected":     0,
         "tablesExtracted":    0,
         "questionsGenerated": 0,
+        "figuresAttached":    0,
         "validationFailures": 0,
         "repairsSucceeded":   0,
         "repairFailures":     0,
@@ -577,9 +699,11 @@ def process_pdf(
                 _uw._placeholder_question(len(all_questions) + i + 1)
                 for i in range(questions_per_chunk)
             ]
+            _attach_chunk_figures_to_questions(placeholder_qs, chunk, stem)
             all_questions.extend(placeholder_qs)
             c_stat["status"]             = "dry-run"
             c_stat["questionsGenerated"] = questions_per_chunk
+            c_stat["figuresAttached"]    = len(chunk.get("figures") or [])
         else:
             chunk_text = _inject_asset_markers(chunk)
             try:
@@ -587,10 +711,12 @@ def process_pdf(
                     chunk_text, questions_per_chunk, chunk["chunkId"], gen_stats
                 )
                 qs = _uw.renumber_questions(qs, len(all_questions))
+                _attach_chunk_figures_to_questions(qs, chunk, stem)
                 all_questions.extend(qs)
                 stats["warnings"].extend(chunk_warns)
                 c_stat["status"]             = "ok"
                 c_stat["questionsGenerated"] = len(qs)
+                c_stat["figuresAttached"]    = len(chunk.get("figures") or [])
                 _uw.log(f"    Chunk {chunk['chunkId']}: {len(qs)} question(s) generated")
                 time.sleep(1)
             except json.JSONDecodeError as exc:
@@ -617,6 +743,9 @@ def process_pdf(
     stats["validationFailures"] = gen_stats["validationFailures"]
     stats["repairsSucceeded"]   = gen_stats["repairsSucceeded"]
     stats["repairFailures"]     = gen_stats["repairFailures"]
+    stats["figuresAttached"]    = sum(
+        len(q.get("explanationImages") or []) for q in all_questions
+    )
 
     dup_warns = _uw.check_duplicate_stems(all_questions)
     if dup_warns:
@@ -654,6 +783,7 @@ def process_pdf(
         "tablesDetected":     stats.get("tablesDetected", 0),
         "tablesExtracted":    stats.get("tablesExtracted", 0),
         "questionsGenerated": stats["questionsGenerated"],
+        "figuresAttached":    stats.get("figuresAttached", 0),
         "validationFailures": stats["validationFailures"],
         "repairsSucceeded":   stats["repairsSucceeded"],
         "repairFailures":     stats["repairFailures"],
@@ -709,7 +839,8 @@ def main() -> None:
               python3 generate_mehlman_questions.py --extract-only --extract-assets
               python3 generate_mehlman_questions.py --chunk-only
               python3 generate_mehlman_questions.py --dry-run --extract-assets --max-chunks 2
-              python3 generate_mehlman_questions.py --generate --questions-per-chunk 5
+              python3 generate_mehlman_questions.py --generate                       # 1 q / 1.5K chunk
+              python3 generate_mehlman_questions.py --generate --questions-per-chunk 3
               python3 generate_mehlman_questions.py --dry-run --resume
               python3 generate_mehlman_questions.py --dry-run --force
             """
@@ -770,9 +901,9 @@ def main() -> None:
     parser.add_argument(
         "--questions-per-chunk",
         type=int,
-        default=5,
+        default=1,
         metavar="N",
-        help="Questions to generate per chunk (default: 5).",
+        help="Questions to generate per chunk (default: 1, paired with 1.5K-char chunks for one-fact-per-question focus).",
     )
     parser.add_argument(
         "--resume",
