@@ -23400,6 +23400,58 @@ const App = (() => {
     } catch (e) { return ''; }
   }
 
+  // v4.74: parse counters + action verb out of freeform pipeline log messages.
+  // Most pipelines (Mehlman, NBME, UWorld, OME, Anki, Divine) don't emit
+  // pipeline_progress events with structured page/chunk/question fields —
+  // they emit *_downstream_log events with rich text like "Stage 1:
+  // Extracting pages from X.pdf" or "Chunk 12: 1 question(s) generated".
+  // This regex parser extracts those counters so the floating log + status
+  // text show useful info instead of opaque log lines or "still running".
+  function _extractCountersFromMessage(message) {
+    const result = {};
+    if (!message || typeof message !== 'string') return result;
+    let m;
+    // Page: "page 3 of 39", "page 3/39", "{n} pages detected"
+    if ((m = message.match(/\bpage\s+(\d+)\s*(?:of|\/)\s*(\d+)\b/i))) {
+      result.page = Number(m[1]); result.pageTotal = Number(m[2]);
+    } else if ((m = message.match(/\b(\d+)\s+pages?\s+detected/i))) {
+      result.pageTotal = Number(m[1]);
+    } else if ((m = message.match(/\bpage\s+(\d+)\b/i))) {
+      result.page = Number(m[1]);
+    }
+    // Chunk: "chunk 12 of 76", "Chunk N: X question(s)"
+    if ((m = message.match(/\bchunk\s+(\d+)\s*(?:of|\/)\s*(\d+)\b/i))) {
+      result.chunk = Number(m[1]); result.chunkTotal = Number(m[2]);
+    } else if ((m = message.match(/\bchunk\s+(\d+)\b/i))) {
+      result.chunk = Number(m[1]);
+    }
+    // Question: "question 4 of 120", "q 4/120", "(N questions)"
+    if ((m = message.match(/\bquestions?\s+(\d+)\s*(?:of|\/)\s*(\d+)\b/i))) {
+      result.question = Number(m[1]); result.questionTotal = Number(m[2]);
+    } else if ((m = message.match(/\bq\s+(\d+)\s*\/\s*(\d+)\b/i))) {
+      result.question = Number(m[1]); result.questionTotal = Number(m[2]);
+    } else if ((m = message.match(/\((\d+)\s+questions?\)/i))) {
+      result.questionTotal = Number(m[1]);
+    } else if ((m = message.match(/(\d+)\s+question\(s\)\s+generated/i))) {
+      result.questionsThisChunk = Number(m[1]);
+    }
+    // Image / Figure
+    if ((m = message.match(/\b(?:image|figure|fig)\s+(\d+)\s*(?:of|\/)\s*(\d+)\b/i))) {
+      result.image = Number(m[1]); result.imageTotal = Number(m[2]);
+    }
+    // Action phase — order matters (retry beats generic verbs)
+    if (/\bretry|retrying|retried\b/i.test(message)) result.action = 'retrying';
+    else if (/\bextract|extracting|extraction\b/i.test(message)) result.action = 'extracting';
+    else if (/\bchunk(?:ing)?\b/i.test(message) && result.chunk === undefined) result.action = 'chunking';
+    else if (/\bgenerat(?:e|ing)\b/i.test(message)) result.action = 'generating';
+    else if (/\b(?:gemini|llm|api\s*call)\b/i.test(message)) result.action = 'gemini-call';
+    else if (/\bocr|tesseract\b/i.test(message)) result.action = 'ocr';
+    else if (/\bparse|parsing\b/i.test(message)) result.action = 'parsing';
+    else if (/\bimport|importing|uploaded\b/i.test(message)) result.action = 'importing';
+    else if (/\bwrit(?:e|ing)|saving|app-ready\b/i.test(message)) result.action = 'writing';
+    return result;
+  }
+
   // Pick the user-facing summary text out of any event shape we receive.
   function _floatingLogEventSummary(event) {
     if (!event) return { text: '', detail: '', tone: '' };
@@ -23411,11 +23463,27 @@ const App = (() => {
     if (type === 'job_complete' || type === 'stage_complete') tone = 'ok';
     else if (type === 'job_error' || type === 'stage_failed' || type === 'error') tone = 'err';
     else if (type === 'warning' || event.severity === 'warning') tone = 'warn';
+    // v4.74: when event lacks structured counters, parse them out of the
+    // freeform message so the user sees "page 3/39" / "chunk 12" / etc.
+    const extracted = (!event.page && !event.chunk && !event.question && message)
+      ? _extractCountersFromMessage(message)
+      : {};
+    const ePage = event.page || extracted.page;
+    const ePageTotal = event.pageTotal || extracted.pageTotal;
+    const eChunk = event.chunk || extracted.chunk;
+    const eChunkTotal = event.chunkTotal || extracted.chunkTotal;
+    const eQuestion = event.question || extracted.question;
+    const eQuestionTotal = event.questionTotal || extracted.questionTotal;
+    const eImage = extracted.image;
+    const eImageTotal = extracted.imageTotal;
+    const eAction = phase || extracted.action || '';
     const detailParts = [];
     if (event.file) detailParts.push(String(event.file).split(/[\\/]/).pop());
-    if (event.page)     detailParts.push('page ' + event.page + (event.pageTotal ? '/' + event.pageTotal : ''));
-    if (event.chunk)    detailParts.push('chunk ' + event.chunk + (event.chunkTotal ? '/' + event.chunkTotal : ''));
-    if (event.question) detailParts.push('q ' + event.question + (event.questionTotal ? '/' + event.questionTotal : ''));
+    if (eAction && !phase) detailParts.push(eAction);
+    if (ePage) detailParts.push('page ' + ePage + (ePageTotal ? '/' + ePageTotal : ''));
+    if (eChunk) detailParts.push('chunk ' + eChunk + (eChunkTotal ? '/' + eChunkTotal : ''));
+    if (eQuestion) detailParts.push('q ' + eQuestion + (eQuestionTotal ? '/' + eQuestionTotal : ''));
+    if (eImage) detailParts.push('img ' + eImage + (eImageTotal ? '/' + eImageTotal : ''));
     if (Number.isFinite(event.durationSeconds) && event.durationSeconds > 0) {
       detailParts.push(Math.round(event.durationSeconds) + 's');
     }
@@ -24303,13 +24371,29 @@ Errors: ${escapeHTML(errors)}</div>
   }
 
   function batchImportProgressText(event) {
-    if (event?.message) return String(event.message);
+    // v4.74: don't just return raw event.message — enrich with parsed
+    // counters so "Stage 2: Chunking..." becomes "Stage 2: Chunking… ·
+    // chunk 12/76 · q 4/120". Preserves the source message as primary
+    // text and appends extracted detail in parens.
+    const message = event?.message ? String(event.message) : '';
+    const extracted = (event && !event.page && !event.chunk && !event.question && message)
+      ? _extractCountersFromMessage(message)
+      : {};
     const detail = [];
     const fileName = String(event?.file || '').split(/[\\/]/).pop();
     if (fileName) detail.push(fileName);
-    if (event?.page) detail.push('page ' + event.page + (event?.pageTotal ? '/' + event.pageTotal : ''));
-    if (event?.chunk) detail.push('chunk ' + event.chunk + (event?.chunkTotal ? '/' + event.chunkTotal : ''));
-    if (event?.question) detail.push('question ' + event.question + (event?.questionTotal ? '/' + event.questionTotal : ''));
+    const page = event?.page || extracted.page;
+    const pageTotal = event?.pageTotal || extracted.pageTotal;
+    const chunk = event?.chunk || extracted.chunk;
+    const chunkTotal = event?.chunkTotal || extracted.chunkTotal;
+    const question = event?.question || extracted.question;
+    const questionTotal = event?.questionTotal || extracted.questionTotal;
+    if (page) detail.push('page ' + page + (pageTotal ? '/' + pageTotal : ''));
+    if (chunk) detail.push('chunk ' + chunk + (chunkTotal ? '/' + chunkTotal : ''));
+    if (question) detail.push('question ' + question + (questionTotal ? '/' + questionTotal : ''));
+    if (message) {
+      return detail.length ? message + ' · ' + detail.join(' · ') : message;
+    }
     return detail.join(' · ') || 'Pipeline progress reported.';
   }
 
