@@ -9,9 +9,11 @@ so this runner skips any image/table machinery and goes straight to the
 shared text-chunk emitter + downstream Gemini generation.
 
 High-yield default: UWorld notes are the densest content the user has, so
-questions-per-file is auto-scaled to 1 question per ~500 chars (roughly 3×
-Mehlman's 1 question per 1,500 chars). The auto-scale can be overridden by
-passing --questions-per-file explicitly.
+questions-per-file is auto-scaled to 1 question per ~150 chars with a
+floor of 8 questions. That gives ~9-10 questions on a 3-page UWorld
+note, scaling up to the MAX clamp of 80 on multi-thousand-line notes.
+The auto-scale can be overridden by passing --questions-per-file
+explicitly when the user wants a different density for a specific file.
 
 Supports two modes:
   --mode dry-run   (default) Invoke the existing UWorld generator in
@@ -51,13 +53,23 @@ from recovery_contract import recovery_metadata  # noqa: E402
 
 SOURCE_TYPE = "uworld_notes"
 
-# v4.59 high-yield density. The user explicitly asked for higher question
-# frequency per content unit than other sources because UWorld notes are
-# "extremely high yield." 500 chars per question is roughly 1 question per
-# 1-2 dense bullet points or 2-3 sentences — about 3× Mehlman density and
-# 6× the prior pre-v4.58 5-questions-per-12K-char Mehlman density.
-DEFAULT_CHARS_PER_QUESTION = 500
-MIN_AUTO_QUESTIONS_PER_FILE = 5
+# v4.59 high-yield density, retuned after the user's first live import.
+# The first cut was DEFAULT=500 chars/question + MIN=5: that floor was
+# too conservative on small files, where the MIN clamp dominated. A 3-page
+# 1,365-char UWorld note got 5 questions when the user wanted 8-10 because
+# "THESE ARE HIGH YIELD MATERIAL, and I would want more rigorous testing on these."
+#
+# New target: 1 question per ~150 chars (roughly 1 question per 1-2
+# sentences or 1 dense bullet point) with a MIN floor of 8 so even very
+# short notes get rigorous coverage. ~9-10× Mehlman density at v4.58.
+#
+# Example density table:
+#   1.4 KB note (3 UWorld pages) -> max(8, 9)  = 9   questions
+#   4   KB note                   -> max(8, 27) = 27  questions
+#   10  KB note                   -> max(8, 66) = 66  questions
+#   12+ KB note                   -> MAX clamp  = 80  questions (cost cap)
+DEFAULT_CHARS_PER_QUESTION = 150
+MIN_AUTO_QUESTIONS_PER_FILE = 8
 MAX_AUTO_QUESTIONS_PER_FILE = 80
 
 

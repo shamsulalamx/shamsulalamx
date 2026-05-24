@@ -54,7 +54,7 @@
         "tools/shared-ingestion/output/uworld_app_ready_live",
         "tools/shared-ingestion/output/uworld_app_ready_dry_run"
       ],
-      "notes": "v4.59: text-only UWorld notes (.txt .md .rtf .docx). High-yield density — the runner auto-scales --questions-per-file to ~1 question per 500 chars (roughly 3× Mehlman) because the user's UWorld notes are the densest content in the library. Override by passing --questions-per-file explicitly. Live mode requires GEMINI_API_KEY."
+      "notes": "v4.59: text-only UWorld notes (.txt .md .rtf .docx). High-yield density — the runner auto-scales --questions-per-file to ~1 question per 150 chars with a floor of 8 questions (so a 3-page UWorld note lands at ~9-10 questions and a multi-thousand-line note hits the MAX clamp of 80). The user explicitly asked for more rigorous testing density on UWorld because the notes are high-yield Step 2 material. Override by passing --questions-per-file explicitly. Live mode requires GEMINI_API_KEY."
     },
     "mehlman_pdf": {
       "label": "Mehlman PDF",
