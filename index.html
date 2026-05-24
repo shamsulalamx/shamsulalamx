@@ -22289,6 +22289,54 @@ const App = (() => {
     return savedCount;
   }
 
+  // ── Auto-archive: copy finalized app-ready JSON to <project>/archive/<source>/<subfolder>/<quizname>.json ──
+  // Crash recovery: drop the saved .json back onto the landing-page upload box to restore the quiz
+  // (including images — they are already embedded as base64 dataUrls in the JSON itself).
+  function _resolveArchiveFolderNames(folderId) {
+    try {
+      if (!folderId) return { sourceFolderName: '', subfolderName: '' };
+      const folder = DB.getFolders().find(function(f){ return f && f.id === folderId; });
+      if (!folder) {
+        // folderId might point directly to a source folder (no subfolder)
+        const directSource = DB.getSourceFolder(folderId);
+        if (directSource) return { sourceFolderName: directSource.name || '', subfolderName: '' };
+        return { sourceFolderName: '', subfolderName: '' };
+      }
+      const source = folder.sourceId ? DB.getSourceFolder(folder.sourceId) : null;
+      return {
+        sourceFolderName: source && source.name ? source.name : '',
+        subfolderName: folder.name || ''
+      };
+    } catch (err) {
+      console.warn('[archive] folder resolution failed', err);
+      return { sourceFolderName: '', subfolderName: '' };
+    }
+  }
+
+  async function _archiveImportedQuiz(rawText, folderId, testName) {
+    try {
+      const api = window.nbmeDesktop && window.nbmeDesktop.archive;
+      if (!api || typeof api.writeQuiz !== 'function') return null; // non-Electron context — silently skip
+      if (!rawText || !folderId || !testName) return null;
+      const names = _resolveArchiveFolderNames(folderId);
+      const result = await api.writeQuiz({
+        rawText: rawText,
+        sourceFolderName: names.sourceFolderName,
+        subfolderName: names.subfolderName,
+        testName: testName
+      });
+      if (result && result.ok) {
+        console.log('[archive] wrote', result.relPath);
+      } else if (result && result.error) {
+        console.warn('[archive] write failed:', result.error);
+      }
+      return result;
+    } catch (err) {
+      console.warn('[archive] unexpected error:', err);
+      return null;
+    }
+  }
+
   async function confirmLandingJsonImport() {
     const errEl = document.getElementById('lji-error');
     function showError(msg, phase) {
@@ -22408,6 +22456,7 @@ const App = (() => {
     renderHomeGrid();
     updateTestCreateStatus('lji-create-status', { phase: 'Import complete', text: 'Imported test is saved and visible in the library.', percent: 100, state: 'success' });
     toast('✓ “' + testName + '” imported with ' + questions.length + ' question(s).');
+    _archiveImportedQuiz(rawText, folderId, testName).catch(function(e){ console.warn('[archive] error:', e); });
     } finally {
       setLandingJsonImportBusy(false);
     }
@@ -23475,6 +23524,9 @@ Errors: ${escapeHTML(errors)}</div>
 	          testName: testName || firstValid.testName || '',
             statusTarget: 'bic-create-status'
 	        });
+	        if (importResult && importResult.ok) {
+	          _archiveImportedQuiz(firstValid.rawText, folderId, testName || firstValid.testName || '').catch(function(e){ console.warn('[archive] error:', e); });
+	        }
 	      } else {
 	        importResult = { ok: false, error: 'No valid output was available to auto-import.' };
 	      }

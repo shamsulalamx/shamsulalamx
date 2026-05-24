@@ -1157,6 +1157,47 @@ ipcMain.handle('nbme:batch-import:update-job-report', async (_event, payload) =>
   }
 });
 
+ipcMain.handle('nbme:archive:write-quiz', async (_event, payload) => {
+  try {
+    const rawText = String(payload?.rawText || '');
+    if (!rawText) return { ok: false, error: 'No JSON content to archive.' };
+    function sanitizeSegment(value) {
+      let s = String(value || '').trim();
+      if (!s) return '';
+      // Strip filesystem-unsafe chars and control chars
+      s = s.replace(/[\/\\:*?"<>|\u0000-\u001F]/g, '_');
+      // Collapse whitespace + repeated underscores
+      s = s.replace(/\s+/g, '_').replace(/_+/g, '_');
+      // Trim leading/trailing dots and underscores
+      s = s.replace(/^[._]+|[._]+$/g, '');
+      return s.slice(0, 120);
+    }
+    const sourceName = sanitizeSegment(payload?.sourceFolderName) || 'Unfiled';
+    const subName = sanitizeSegment(payload?.subfolderName);
+    const baseName = sanitizeSegment(payload?.testName) || 'untitled_quiz';
+    const archiveRoot = path.join(app.getAppPath(), 'archive');
+    const targetDir = subName
+      ? path.join(archiveRoot, sourceName, subName)
+      : path.join(archiveRoot, sourceName);
+    fs.mkdirSync(targetDir, { recursive: true });
+    // Collision handling — clean filename by default, suffix only on conflict
+    let candidate = path.join(targetDir, baseName + '.json');
+    let suffix = 2;
+    while (fs.existsSync(candidate)) {
+      candidate = path.join(targetDir, baseName + '_' + suffix + '.json');
+      suffix += 1;
+    }
+    fs.writeFileSync(candidate, rawText, 'utf8');
+    return {
+      ok: true,
+      path: candidate,
+      relPath: path.relative(app.getAppPath(), candidate)
+    };
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
+});
+
 ipcMain.handle('nbme:batch-import:cancel-job', async (_event, payload) => {
   try {
     const jobId = String(payload?.jobId || '').trim();

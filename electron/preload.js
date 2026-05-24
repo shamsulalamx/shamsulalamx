@@ -39,6 +39,9 @@ const desktopInfo = Object.freeze({
       ipcRenderer.on('nbme:batch-import:queue-changed', handler);
       return () => ipcRenderer.removeListener('nbme:batch-import:queue-changed', handler);
     }
+  }),
+  archive: Object.freeze({
+    writeQuiz: payload => ipcRenderer.invoke('nbme:archive:write-quiz', payload)
   })
 });
 

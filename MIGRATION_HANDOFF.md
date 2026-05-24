@@ -1,8 +1,8 @@
 # Migration Handoff
 
-Last updated: 2026-05-23
+Last updated: 2026-05-24
 
-Current stable tag: `v4.54-uworld-chunk-planning-recovery-stable`.
+Current stable tag: `v4.62-quiz-archive-and-icon-stable`.
 Current branch: `phase11-fastfacts-stability`.
 
 This handoff was originally written when the project migrated to a new ChatGPT + Codex account on 2026-05-22. It is now valid for any subsequent account or agent continuing the project, including the current Claude (Anthropic) agent that took over on 2026-05-23 and produced the v4.48 milestone.
@@ -20,7 +20,7 @@ git tag --list 'v4.*' --sort=version:refname
 Read in this order:
 
 1. `PROJECT_CONTEXT.md`
-2. `PROJECT_STATUS_2026-05-21.md`
+2. `PROJECT_STATUS_2026-05-24.md`
 3. `ARCHITECTURE.md`
 4. `VALIDATED_PIPELINES.md`
 5. `KNOWN_LIMITATIONS.md`

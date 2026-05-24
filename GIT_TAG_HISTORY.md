@@ -1,8 +1,18 @@
 # Git Tag History
 
-Last updated: 2026-05-23
+Last updated: 2026-05-24
 
-This file documents stable v4 tags from v4.0 through the current head tag `v4.61-nbme-dual-pdf-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+This file documents stable v4 tags from v4.0 through the current head tag `v4.62-quiz-archive-and-icon-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+
+## v4.62-quiz-archive-and-icon-stable
+
+Commit: bundled source + doc in a single v4.62 commit (see `git log -1 v4.62-quiz-archive-and-icon-stable`).
+
+Meaning: Added a quiz auto-archive system that copies every finalized app-ready JSON to `<project>/archive/<source-folder>/<subfolder>/<quiz-name>.json` at import time, regardless of import path (Batch Import Center auto-import or landing-page manual JSON import). Restored and redesigned the macOS app icon after an accidental Tier-1 cleanup removal. Freed ~1.3 GB by removing regeneratable build artifacts (`node_modules/`, `dist/`, `build/`, all `__pycache__/`, all `.DS_Store` outside `.git/`, and the empty `test-data:/` typo directory).
+
+Validated: `node --check` clean on `electron/main.js`, `electron/preload.js`, and all inline `<script>` tags in `index.html`. `.app` rebuilt successfully (`dist/mac-arm64/shamsulalamx.app`, 758 MB) with the new `.icns` baked in (SHA256 match confirmed between `build/icon.icns` and `Contents/Resources/icon.icns`). Cleanup validated by the successful rebuild — no missing dependencies surfaced. Archive write path is source-level only; first live generate+import will be the field validation. The archive code is purely additive and `console.warn`-only on error, so worst case is "archive empty when expected to contain something", not "import broken".
+
+Architecture significance: Establishes an Electron-side IPC archive layer (`nbme:archive:write-quiz`) exposed via `window.nbmeDesktop.archive.writeQuiz` that captures finalized `*_app_ready.json` raw text (with embedded `dataUrl` images) before `_persistLandingJsonInlineImages` strips dataUrls during import. Crash-recovery contract: drop any archived `.json` onto the landing-page upload box and the existing `handleLandingJsonFileUpload` path restores the full quiz including images, with zero Gemini calls.
 
 ## v4.0-images-tables-generator-stable
 
