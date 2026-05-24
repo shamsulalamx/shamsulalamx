@@ -30,7 +30,7 @@ Offline-validated end-to-end through the packaged `.app`:
 
 Live Gemini run on a real NBME PDF is the next field check. The chunking + auto-attach are offline-validated; live Gemini uses the same code path UWorld/Mehlman/OME/Anki use which has been live-validated since v4.51.
 
-Tag commits: `<source-hash>` (source) + `<doc-hash>` (doc).
+Tag commits: `ef34d54` (source) + `8396940` (doc).
 
 ### v4.59 — UWorld notes BIC enablement: text-only, high-yield density, foundational generator gets first-class CLI flags (field-validated)
 

@@ -635,7 +635,7 @@ Not validated by this milestone:
 
 ## v4.60-nbme-boundary-and-auto-attach-stable
 
-Commits: `<source-hash>` (source) + `<doc-hash>` (doc).
+Commits: `ef34d54` (source) + `8396940` (doc).
 
 Meaning: NBME live BIC import unblocked for NBME Self-Assessment PDFs (the most common user-supplied NBME format), plus automatic stem-image attachment to eliminate the manual cropping workflow the user explicitly flagged as tedious. Two distinct user-facing problems addressed in one milestone because both surfaced from the same first live NBME BIC import attempt on `[Medicalstudyzone.com] Internal Medicine 3 - Answers.pdf`:
 
