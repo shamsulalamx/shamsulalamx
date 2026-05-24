@@ -5,6 +5,49 @@ const fs = require('fs');
 const os = require('os');
 const { spawn } = require('child_process');
 
+// ── v4.76: userData rebrand from "nbme-self-assessment-suite" to "shamsulalamx" ──
+// Electron's default app.getName() reads package.json's `name` field, which
+// gives userData at ~/Library/Application Support/nbme-self-assessment-suite/.
+// The .app filename is "shamsulalamx.app" (from build.productName), so the
+// folder/.app naming mismatch confused the user.
+//
+// One-time atomic-rename migration: if the OLD folder exists and the NEW
+// folder does NOT, rename old → new via fs.renameSync (atomic on same
+// filesystem — no half-state). Then setPath() points Electron's userData
+// at the new location. All tests / marks / scores / queue / Drive sync
+// state / archive / IndexedDB preserved.
+//
+// MUST run before any code that calls app.getPath('userData'), which means
+// at top-of-module before any other initialization. fs.renameSync is sync
+// + fast (a few ms for a directory rename, regardless of size).
+(function migrateUserDataFolderName() {
+  try {
+    const appDataRoot = app.getPath('appData');
+    const OLD_NAME = 'nbme-self-assessment-suite';
+    const NEW_NAME = 'shamsulalamx';
+    const oldPath = path.join(appDataRoot, OLD_NAME);
+    const newPath = path.join(appDataRoot, NEW_NAME);
+    if (fs.existsSync(oldPath) && !fs.existsSync(newPath)) {
+      fs.renameSync(oldPath, newPath);
+      console.log('[userData migration] renamed', oldPath, '→', newPath);
+    } else if (fs.existsSync(oldPath) && fs.existsSync(newPath)) {
+      // Both exist — don't touch. User may have already migrated, or some
+      // other process created the new folder. Log a warning but use the new
+      // one (preserves the migration intent).
+      console.warn('[userData migration] both old and new userData folders exist. Using new path; old path is now orphaned and may need manual cleanup:', oldPath);
+    }
+    // Always point Electron at the new path so subsequent app.getPath('userData')
+    // calls return ~/Library/Application Support/shamsulalamx/ — works even
+    // before the directory exists (Electron creates it on first write).
+    app.setPath('userData', newPath);
+  } catch (err) {
+    // Migration failure is non-fatal — fall back to Electron's default
+    // userData path (the OLD folder). User can still use the app; the
+    // migration can be retried on next launch.
+    console.error('[userData migration] failed (non-fatal):', err && err.message ? err.message : err);
+  }
+})();
+
 const DEFAULT_DEV_URL = 'http://localhost:8888';
 const GEMINI_MODEL = 'gemini-2.5-flash';
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;

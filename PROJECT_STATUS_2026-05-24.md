@@ -1,12 +1,58 @@
 # Project Status 2026-05-24
 
-Current stable tag: `v4.75-output-to-userdata-stable`
+Current stable tag: `v4.76-userdata-rename-shamsulalamx-stable`
 Current branch: `phase11-fastfacts-stability`
 Last committed HEAD: source + doc bundled in a single v4.75 commit (v4.74 / v4.73 / … / v4.62 still exist as prior tags). Note: the v4.65 tag still points at the pre-follow-up commit (4b18447) which is missing `electron/main.js`; the missing handlers landed as a separate follow-up commit (02fea12) that's on `phase11-fastfacts-stability` but not tagged. The v4.74 tag similarly points at the docs-only commit (29fccf8); the actual parser implementation landed as follow-up `35d933d`. Both follow-ups are on origin.
 
 Supersedes `docs/archive/PROJECT_STATUS_2026-05-23.md`.
 
 ## What Is New Since 2026-05-23
+
+### v4.76 — Rename userData folder: nbme-self-assessment-suite → shamsulalamx (atomic-rename migration, no data loss)
+
+User reported confusion: `.app` is named `shamsulalamx.app` but the userData folder under `~/Library/Application Support/` was named `nbme-self-assessment-suite`. Electron's `app.getName()` reads `package.json`'s `name` field (not `build.productName`), so userData defaulted to the inconsistent name.
+
+v4.76 migrates the userData folder name to `shamsulalamx` via a one-time atomic rename on next `.app` launch, without orphaning any existing data.
+
+#### Migration logic (top of `electron/main.js`, before any other init)
+
+```js
+const appDataRoot = app.getPath('appData');
+const oldPath = path.join(appDataRoot, 'nbme-self-assessment-suite');
+const newPath = path.join(appDataRoot, 'shamsulalamx');
+if (fs.existsSync(oldPath) && !fs.existsSync(newPath)) {
+  fs.renameSync(oldPath, newPath);  // atomic on same filesystem
+}
+app.setPath('userData', newPath);
+```
+
+Atomic-rename means no half-state. Fast regardless of directory size (single syscall). Edge case where both exist (user manually pre-created): logs warning, uses new path, old becomes orphaned but no data loss.
+
+#### What's preserved across the migration
+
+- All IndexedDB stores (tests, marks, scores, attempts, history, settings, flashcards, notes, flags, stem highlights)
+- BIC queue state + job history
+- Pipeline job outputs (already in userData per v4.75)
+- Google Drive sync tokens + last-sync timestamps
+- Quiz archive folder
+- Crash reports
+
+After first launch with v4.76:
+- `~/Library/Application Support/shamsulalamx/` ← new home, everything inside
+- `~/Library/Application Support/nbme-self-assessment-suite/` ← gone (renamed, not deleted)
+
+Subsequent launches: the migration block is a no-op (oldPath doesn't exist anymore).
+
+#### Risk profile
+
+Very low. Migration failure is non-fatal — caught + logged, app falls back to default Electron path (degrades to v4.75 behaviour). Worst case: same data, old folder name; no data loss path.
+
+#### Validation
+
+- `node --check` clean on `electron/main.js`.
+- 6 v4.76 markers in source.
+- `.app` rebuilt with migration code verified in bundled `main.js`.
+- Live walkthrough: pending user relaunch of the `.app`.
 
 ### v4.75 — Route pipeline outputs to userData (out of the .app bundle)
 
