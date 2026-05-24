@@ -2,7 +2,7 @@
 
 Last updated: 2026-05-23
 
-This file documents stable v4 tags from v4.0 through the current head tag `v4.60-nbme-boundary-and-auto-attach-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+This file documents stable v4 tags from v4.0 through the current head tag `v4.61-nbme-dual-pdf-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
 
 ## v4.0-images-tables-generator-stable
 
@@ -668,3 +668,48 @@ Not validated by this milestone:
 - Aspect-ratio guard edge cases: wide EKG strips approaching 3:1, narrow text blocks just under 3:1. The 3.0 cap was chosen because real-world data on the user's `Internal Medicine 3` PDFs cluster cleanly above/below it, but a future PDF with wider EKG strips may need a per-question override.
 - Behavior on NBME PDFs that are flattened screenshots (no text layer at all, so `pdfplumber` returns empty and the OCR fallback runs on every page). The user flagged this as a desired case; the existing OCR fallback in `extract_pdfs.py` should handle the text but the figure extractor's CV detector runs on rendered pages regardless of text-layer presence, so the same auto-attach should work — but it has not been field-validated on a screenshot PDF in v4.60.
 - Live BIC import from the packaged `.app` UI dropdown. The boundary regex + auto-attach are wired and the packaged pieces are in place, but the field click-through hasn't been driven yet by the user.
+
+## v4.61-nbme-dual-pdf-stable
+
+Commits: `<source-hash>` (source) + `<doc-hash>` (doc).
+
+Meaning: Full NBME pipeline rewrite into a single dual-PDF orchestrator. The v4.60 four-stage wrapper (OCR / chunking / normalization / app-ready) handled NBME Self-Assessment PDFs that had the answer key inline, but the user's actual NBME workflow is Q-PDF + A-PDF as two separate uploads. v4.61 introduces a single orchestrator that handles three input modes auto-detected from upload (dual / Q-only / combined), runs a five-tier extraction cascade per question, smart-triggers Gemini multimodal figure detection only where it's needed, and ALWAYS runs a canonical-polish Gemini call so every question lands with a real reviewPearl, retrievalTag, and educationalObjective rather than placeholder text.
+
+The user explicitly framed v4.61 as fire-and-forget: "I want upload PDFs, generate + import, tests ready when I'm back." After live-running the first NBME import on `Medicalstudyzone.com Internal Medicine 3`, they flagged six distinct quality issues in one feedback round (empty meta fields, chrome leakage in explanations, q20/q26 12-option matching sets not handled, q30 tabular choices illegible without column headers, q39/q42 "giant blown up images" that turned out to be pixelated header crops, multi-line lab values flattened to a single line by the renderer). v4.61 addresses all six.
+
+Source changes:
+
+- `tools/nbme-pdf-json-generator/nbme_dual_pdf_runner.py` (new — replaces `nbme_batch_wrapper.py` as BIC's NBME entry point): full single-file orchestrator with auto-detection, five-tier extraction cascade, smart-trigger Gemini multimodal figure detection (image-language regex OR significant raster ≥400×400 px / ≥150K px²), fractional bbox + 1200-px page render, A-N letter range, deterministic two-column rescue, gap recovery for OCR-missed boundaries, always-polish canonical call (4096 max_tokens, salvage fallback on JSON parse failure), comprehensive A-PDF chrome cleanup. Idempotent via completion-marker flag so BIC's per-input iteration doesn't double-process.
+- `tools/batch-import-center/pipeline_registry.json` (`nbme_pdf` entry simplified): dryRunSteps + liveSteps each collapsed to one step calling `nbme_dual_pdf_runner.py --input-file {inputFile}`. The prior four-stage cascade is removed.
+- `index.html` (renderer): `#q-stem`, `.shared-group-stem`, `.question-individual-stem`, and `.ngj-exp-section p` now have `white-space: pre-wrap` so the multi-line NBME lab-value blocks render with their original line breaks rather than collapsing to flat prose.
+
+Five-tier extraction cascade per question (after deterministic stem + choices):
+
+1. **Tier 0 — deterministic per-chunk parse**. The standard `_CHOICE_LINE_RE` (handles `0 A) text` NBME-bubble layout) plus `_clean_stem_chrome`. Most questions resolve here without any Gemini call.
+2. **Tier 1 — deterministic two-column rescue** (`deterministic_multi_column_parse`). When the suspicion detector flags multi-column choice leakage or matching-set instructions, find every `[A-N])` marker anywhere in the chunk text and split. Handles matching sets up to 14 options without Gemini.
+3. **Tier 2 — Gemini multimodal page extraction**. When Tier 1 returns <8 choices for a matching-set chunk OR when the tabular signal fires (column headers like "Specific Gravity / WBC / RBC / Casts" preceding short numeric choices), render the page at 1200 px wide and ask Gemini multimodal for stem + choices + format. Tabular format response uses column-prefixed choice text (`A) Specific Gravity 1.003 | Glucose - | Protein 1+ | WBC 30 | RBC 5 | Casts muddy brown | Findings tubular epithelial cells`).
+4. **Tier 3 — gap recovery via multimodal**. After all chunks parse, if a question number is missing between two known neighbours AND the page distance is exactly 2 (one page gap), render that intermediate page and ask Gemini multimodal — unbiased prompt ("extract whatever question is on this page") with strict number-match verification on the response. Recovered q9 cleanly on Internal Medicine 3 where OCR mangled `Item 9 of 50`.
+5. **Tier 4 — Gemini completion fallback**. When the A-PDF block for a question is missing or garbled (no `Correct Answer:` line detected, or OCR damage prevents extraction), generate the canonical fields from the Q-PDF stem + choices. JSON-parse retry x3 with progressively stricter prompts.
+6. **Tier 5 — stub with extractionWarnings**. Last-resort fallback so a question never silently vanishes from the import.
+
+Architecturally distinct: this is the first BIC orchestrator that performs auto-detected mode dispatch entirely from one entry point rather than via per-stage registry steps. The single-step registry pattern also lets the orchestrator handle BIC's per-input iteration internally via the completion-marker flag, removing the need for stateful cross-stage coordination.
+
+Validated:
+
+- Live BIC end-to-end through the packaged `.app` on `Medicalstudyzone.com Internal Medicine 3 - Questions.pdf + - Answers.pdf` (a real user upload): 50/50 questions imported, ~13 min runtime, ~58 Gemini calls (~$0.30 cost). Polish call adds canonical fields to every question.
+- Selective live test on the same PDFs subset for 11 problem questions (q8, q9, q10, q16, q20, q26, q28, q29, q30, q39, q42) covering every extraction tier and edge format: 11/11 produced clean output with proper reviewPearl, retrievalTag, educationalObjective on every question.
+- q20 12-option matching set (A-E + G-L, no F because OCR-empty slot) — deterministic Tier 1 rescue, 11 valid choices after spurious-F filter.
+- q26 12-option matching set (A-L) — deterministic Tier 1 rescue, 12 choices.
+- q28 + q29 10-option matching sets (A-J, shared option block + per-item stem) — deterministic Tier 1 rescue, topic instruction line preserved as stem prefix per the user's duplication preference.
+- q30 tabular urinalysis question — Tier 2 multimodal extraction, column-prefixed choice text format.
+- q39 peripheral blood smear + q42 dermatology skin lesion — Gemini multimodal figure detection returned fractional bbox, crop produced actual clinical content (337×473 px and 492×422 px PNGs visually verified as the real images).
+- Renderer pre-wrap CSS preserves multi-line lab-value blocks in stem and explanation panels.
+- `npm run electron:build:mac` succeeded; packaged generator + registry + renderer all confirmed to carry the v4.61 changes.
+
+Not validated by this milestone:
+
+- Pure screenshot NBME PDFs (no text layer at all on most pages). Screenshot auto-detection runs but downstream extraction quality on heavily-OCR'd screenshot pages hasn't been driven end-to-end.
+- Multi-question-per-page NBME exports — the orchestrator assumes one question per page when inferring page→question mapping for gap recovery and figure attachment.
+- A-PDF blocks delivered in non-sequential order (the user mentioned q13 → q4 → q28 layouts in some NBME PDFs). The orchestrator joins by question number so this should work, but it hasn't been live-stressed against an out-of-order A-PDF.
+- Matching sets beyond 14 options (A-N). The regex range stops at N.
+- Quota-aware retry stop (v4.54 pattern) is NOT wired into this orchestrator's Gemini call sites. A hard ceiling of 500 calls/run guards against runaway cost, but quota-aware mid-run pause is not implemented.

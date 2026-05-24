@@ -1,12 +1,41 @@
 # Project Status 2026-05-23
 
-Current stable tag: `v4.60-nbme-boundary-and-auto-attach-stable`
+Current stable tag: `v4.61-nbme-dual-pdf-stable`
 Current branch: `phase11-fastfacts-stability`
-Last committed HEAD: doc commit landing alongside the v4.60 source commit.
+Last committed HEAD: doc commit landing alongside the v4.61 source commit.
 
 Supersedes `docs/archive/PROJECT_STATUS_2026-05-21.md`.
 
 ## What Is New Since 2026-05-21
+
+### v4.61 — NBME dual-PDF orchestrator: fire-and-forget Q+A import with always-polish canonical fields (field-validated)
+
+Full NBME pipeline rewrite into a single dual-PDF orchestrator at `tools/nbme-pdf-json-generator/nbme_dual_pdf_runner.py`. Replaces the v4.60 four-stage per-stage wrapper. The user's actual NBME workflow is Q-PDF + A-PDF uploaded together; v4.61 makes that the primary path with auto-detection of file roles, screenshot mode, and unusual chunk formats.
+
+Three input modes auto-detected from the upload:
+- **Dual PDF (preferred)**: Q-PDF gives clean stems + choices + figures; A-PDF gives canonical explanations; orchestrator joins by question number (handles out-of-order A-PDFs by construction).
+- **Q-only PDF**: Gemini generates correctAnswer + full explanationSections + reviewPearl + retrievalTag + educationalObjective from stem + choices.
+- **Single combined PDF (legacy)**: v4.60 path retained for inline-answer PDFs.
+
+Five-tier extraction cascade per question:
+1. **Tier 0** — deterministic stem + choices via `_CHOICE_LINE_RE` (handles `0 A) text` NBME bubble layout) + stem chrome cleanup.
+2. **Tier 1** — deterministic two-column rescue (`deterministic_multi_column_parse`) for multi-column matching sets up to A-N. Handles q20, q26, q28, q29 without any Gemini call.
+3. **Tier 2** — Gemini multimodal page extraction for tabular questions (q30 column-prefixed choice text) and ambiguous formats.
+4. **Tier 3** — gap recovery for OCR-missed boundaries (q9 case: only fires on single-page gaps with known neighbours; unbiased prompt + number-match verification).
+5. **Tier 4** — Gemini completion fallback when A-PDF block is garbled. JSON-parse retry × 3.
+6. **Tier 5** — stub-with-warning last-resort.
+
+Smart-trigger Gemini multimodal figure detection — fires only when stem has specific image-language (`peripheral blood smear`, `the photograph`, etc.) OR PyMuPDF reports a ≥400×400 px / ≥150K px² embedded raster. Fractional bbox + 1200-px page render fixes the prior coordinate-system mismatch that produced 3-KB header-text crops; v4.61 now produces real 150-200 KB clinical-image crops (verified on q39 peripheral blood smear, q42 dermatology skin lesion).
+
+Always-polish canonical Gemini call runs per question regardless of which extraction tier produced the explanation, so every question lands with a real `reviewPearl`, `retrievalTag`, and `educationalObjective` rather than the placeholder strings ("Refer to the explanation.", "Apply the tested clinical reasoning.") the v4.60 happy path left behind. `max_tokens=4096` accommodates 10+ choice matching-set incorrect-explanation bodies; salvage Gemini call on polish JSON parse failure asks for only the three meta fields (smaller response, less truncation risk).
+
+Comprehensive A-PDF explanation chrome cleanup strips `Exam Section :`, `National Board of Medical Examiners`, the timer line, all footer UI chrome (`Next / Score Report / Lab Values / Calculator / Help / Pause / Previous / Review`), URL footers, OCR-noise fragments (`r ,,,`, `~ ~`, `" ' ,`, `r--`), and the ■ checkbox glyph.
+
+Renderer fix in `index.html`: `#q-stem`, `.shared-group-stem`, `.question-individual-stem`, and `.ngj-exp-section p` got `white-space: pre-wrap` so the multi-line NBME lab-value blocks render with their original line breaks rather than collapsing to flat prose.
+
+Field-validated live BIC end-to-end through the packaged `.app` on `Medicalstudyzone.com Internal Medicine 3 Questions.pdf + Answers.pdf` (50 questions): **50/50 imported**, q9 gap-recovered, q20 (11 valid A-E + G-L choices), q26 (12 A-L), q28 + q29 (10 A-J matching sets with shared instruction prefix), q30 (tabular column-prefixed), q39 + q42 (real clinical images attached). Runtime ~13 min, ~58 Gemini calls, ~$0.30 cost.
+
+Tag commits: `<source-hash>` (source) + `<doc-hash>` (doc).
 
 ### v4.60 — NBME boundary regex fix + automatic stem-image attachment (offline-validated)
 
