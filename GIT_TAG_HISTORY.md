@@ -596,7 +596,7 @@ Not validated by this milestone:
 
 ## v4.59-uworld-live-stable
 
-Commits: `<source-hash>` (source) + `<doc-hash>` (doc).
+Commits: `08862c9` (source) + `d0c5e35` (doc).
 
 Meaning: First BIC integration of the foundational UWorld notes generator. UWorld was the underlying module every other text-heavy source (Anki, OME, Mehlman, Divine wrappers) had been importing since v4.51, but it had never been wired through BIC itself — the user had no "UWorld" option in the source dropdown despite having UWorld notes ready to import. v4.59 closes that gap by adding the same profile-runner + shared-chunk-emitter integration the four wrappers already used, with three properties tuned to the user's UWorld content:
 

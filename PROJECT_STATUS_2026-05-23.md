@@ -29,7 +29,7 @@ Source changes:
 
 Validated offline end-to-end on a 1.8K `test_cardiology.txt` (5 questions, MIN clamp) and a 4.1K synthetic 5-section UWorld file (8 questions, auto-scaled). Packaged `.app` profile-runner dry-run verified: `chunkCount: 2`, `candidateQuestionCount: 8`, `sourceFormat: uworld-notes`, `schemaVersion: nbme-gemini-json-v3`, `outcome: completed`. Live Gemini run on a real UWorld notes file is the next field check.
 
-Tag commits: `<source-hash>` (source) + `<doc-hash>` (doc).
+Tag commits: `08862c9` (source) + `d0c5e35` (doc).
 
 ### v4.58 — Mehlman tight-focus chunking + deterministic page-proximity image attachment + full-PDF processing (offline-validated)
 
