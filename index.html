@@ -1261,6 +1261,85 @@ body.quiz-fullscreen-mode .modal-overlay {
   z-index: 10000;
 }
 
+/* ── v4.70: Floating Log Panel ──────────────────────────────────────────── */
+/* Bottom-left companion to the bottom-right jobs widget. Persistent live
+   stream of pipeline progress events so the user can see WHAT the pipeline
+   is doing during long runs (Fast Facts ~13 min, Mehlman 1500s+, etc.).
+   Independent of the BIC modal — survives modal close, doesn't get
+   auto-collapsed by re-renders. Auto-shows on first event of an active job;
+   manually dismissible (reappears on next job). */
+#floating-log-widget {
+  position: fixed;
+  bottom: 18px;
+  left: 18px;
+  z-index: 99;  /* slightly below #jobs-widget (100) so neither covers the other */
+  background: #1a1f2e;
+  color: #cfd6e0;
+  border: 1px solid #2d3548;
+  border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  width: 420px;
+  max-width: calc(100vw - 36px);
+  font-size: 11px;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Mono", Menlo, monospace;
+  display: none;
+}
+#floating-log-widget.has-events { display: flex; flex-direction: column; }
+.flw-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #2d3548;
+  background: #232a3d;
+  border-radius: 10px 10px 0 0;
+}
+.flw-icon { color: #f39c12; }
+.flw-title {
+  font-weight: 600;
+  flex: 1;
+  font-size: 10px;
+  opacity: 0.8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.flw-clear, .flw-close {
+  background: none;
+  border: none;
+  color: #95a5a6;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 6px;
+  border-radius: 3px;
+}
+.flw-clear:hover, .flw-close:hover {
+  color: #ecf0f1;
+  background: rgba(255, 255, 255, 0.08);
+}
+.flw-body {
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 6px 10px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.flw-event {
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.flw-event:last-child { border-bottom: none; }
+.flw-event-ts {
+  color: #6b7790;
+  font-size: 10px;
+  margin-right: 6px;
+}
+.flw-event-text { color: #cfd6e0; }
+.flw-event.flw-err .flw-event-text { color: #ec7063; }
+.flw-event.flw-warn .flw-event-text { color: #f4b04a; }
+.flw-event.flw-ok .flw-event-text { color: #7dcea0; }
+.flw-event-detail { color: #95a5a6; font-size: 10px; padding-left: 8px; }
+
 </style>
 </head>
 <body>
@@ -2386,6 +2465,24 @@ body.quiz-fullscreen-mode .modal-overlay {
   <div class="jw-counts" id="jw-counts">No active jobs</div>
   <div class="jw-current" id="jw-current" style="display:none;"></div>
   <div class="jw-hint">Click for details</div>
+</div>
+
+<!-- v4.70: Floating log panel — bottom-left companion to the jobs widget.
+     Live stream of pipeline progress events so the user can see WHAT the
+     pipeline is doing during long runs (Fast Facts ~13 min, Mehlman 1500s+).
+     Independent of the BIC modal; persistent across modal close. Auto-shows
+     on first event of an active job; manually dismissible (reappears on
+     next job). Trash icon clears the log content. -->
+<div id="floating-log-widget">
+  <div class="flw-header">
+    <span class="flw-icon">📋</span>
+    <span class="flw-title" id="flw-title">Pipeline log</span>
+    <button class="flw-clear" id="flw-clear-btn" onclick="App.clearFloatingLog(event)" title="Clear log">🗑</button>
+    <button class="flw-close" id="flw-close-btn" onclick="App.dismissFloatingLog(event)" title="Hide for this job">×</button>
+  </div>
+  <div class="flw-body" id="flw-body">
+    <div class="flw-event"><span class="flw-event-text" style="opacity:0.6;">Waiting for events…</span></div>
+  </div>
 </div>
 
 <!-- ═══ BATCH IMPORT CENTER PLACEHOLDER ═══ -->
@@ -4138,12 +4235,37 @@ window.MiscDocStore = MiscDocStore;
     });
   }
 
+  // v4.70: actionable hints for common Drive API HTTP statuses.
+  // Wired into driveFetch so the user sees WHY their sync is failing
+  // (was just "Drive API 401" — meaningless to a non-developer).
+  function _driveErrorHint(status) {
+    if (status === 401) return 'token expired — click Connect Drive to re-authenticate';
+    if (status === 403) return 'permission denied — check Google account access / re-grant consent';
+    if (status === 404) return 'Drive file or folder missing — the backup may need to be re-created';
+    if (status === 429) return 'rate limited by Google — sync will retry automatically with backoff';
+    if (status >= 500 && status < 600) return 'Google server error — usually transient, retry will happen';
+    if (status === 0) return 'network unreachable — check WiFi / VPN / firewall';
+    return '';
+  }
+
   async function driveFetch(url, options = {}) {
     const token = await ensureDriveAuth('');
     const resp = await fetch(url, Object.assign({}, options, {
       headers: Object.assign({}, options.headers || {}, { Authorization: 'Bearer ' + token })
     }));
-    if (!resp.ok) throw new Error('Drive API ' + resp.status);
+    if (!resp.ok) {
+      // v4.70: include the actual response body (usually a Google error JSON
+      // with `error.message` explaining the failure) AND a human-readable
+      // hint mapped from the HTTP status code. Truncate body to 300 chars
+      // so the loud-failure banner doesn't blow up the modal.
+      let bodyText = '';
+      try { bodyText = await resp.text(); } catch (e) { /* body unreadable */ }
+      const hint = _driveErrorHint(resp.status);
+      const parts = ['Drive API ' + resp.status];
+      if (hint) parts.push('(' + hint + ')');
+      if (bodyText) parts.push('— ' + bodyText.slice(0, 300));
+      throw new Error(parts.join(' '));
+    }
     return resp;
   }
 
@@ -8949,6 +9071,15 @@ const App = (() => {
           // Also re-render the queue list itself if the BIC modal is open
           // (cheap DOM update if elements are present; no-op if not).
           renderBatchImportQueue(jobs);
+        });
+      }
+      // v4.70: persistent global subscription to progress events so the
+      // floating log panel updates LIVE even when the BIC modal is closed
+      // (previously, the inline bic-progress-log was the only sink and it
+      // auto-collapsed on every modal re-render — invisible to the user).
+      if (_bicApi && typeof _bicApi.onProgress === 'function') {
+        _bicApi.onProgress(function(event) {
+          try { _appendFloatingLogEvent(event); } catch (e) { console.warn('[floating-log]', e); }
         });
       }
     } catch (e) { /* widget stays hidden in non-Electron */ }
@@ -23159,6 +23290,123 @@ const App = (() => {
     }
   }
 
+  // ── v4.70: Floating Log Panel ────────────────────────────────────────────
+  // Persistent live progress stream for the user — sibling of the floating
+  // jobs widget. Survives BIC modal close (the inline bic-progress-log
+  // auto-collapsed on every progress event because the modal re-rendered).
+  // Subscribes globally at App.init; events from window.nbmeDesktop.batchImport
+  // .onProgress flow into _appendFloatingLogEvent below.
+  let _floatingLogState = {
+    dismissedJobId: null,   // when set, widget stays hidden for that jobId only
+    activeJobId: null,      // current job whose events are being shown
+    maxEvents: 200,         // hard cap to keep DOM cheap
+    lastMeaningfulText: '', // last non-heartbeat event text — used by smart-heartbeat fallback below
+  };
+
+  function _formatFlwTimestamp(ts) {
+    try {
+      const d = ts ? new Date(ts) : new Date();
+      return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    } catch (e) { return ''; }
+  }
+
+  // Pick the user-facing summary text out of any event shape we receive.
+  function _floatingLogEventSummary(event) {
+    if (!event) return { text: '', detail: '', tone: '' };
+    const type = String(event.type || '');
+    const message = String(event.message || '');
+    const stageLabel = String(event.stageLabel || event.stage || '');
+    const phase = String(event.phase || '');
+    let tone = '';
+    if (type === 'job_complete' || type === 'stage_complete') tone = 'ok';
+    else if (type === 'job_error' || type === 'stage_failed' || type === 'error') tone = 'err';
+    else if (type === 'warning' || event.severity === 'warning') tone = 'warn';
+    const detailParts = [];
+    if (event.file) detailParts.push(String(event.file).split(/[\\/]/).pop());
+    if (event.page)     detailParts.push('page ' + event.page + (event.pageTotal ? '/' + event.pageTotal : ''));
+    if (event.chunk)    detailParts.push('chunk ' + event.chunk + (event.chunkTotal ? '/' + event.chunkTotal : ''));
+    if (event.question) detailParts.push('q ' + event.question + (event.questionTotal ? '/' + event.questionTotal : ''));
+    if (Number.isFinite(event.durationSeconds) && event.durationSeconds > 0) {
+      detailParts.push(Math.round(event.durationSeconds) + 's');
+    }
+    const headlineParts = [];
+    if (phase) headlineParts.push(phase);
+    if (stageLabel && stageLabel !== phase) headlineParts.push(stageLabel);
+    if (type && !phase && !stageLabel) headlineParts.push(type);
+    const headline = headlineParts.join(' · ');
+    const text = message || headline || type || 'progress';
+    return {
+      text: text,
+      detail: detailParts.join(' · '),
+      tone: tone,
+      isHeartbeat: type === 'stage_heartbeat',
+    };
+  }
+
+  function _appendFloatingLogEvent(event) {
+    if (!event) return;
+    const widget = document.getElementById('floating-log-widget');
+    const body = document.getElementById('flw-body');
+    if (!widget || !body) return;
+    const jobId = event.jobId ? String(event.jobId) : null;
+    // If a new job starts, clear the old log + reset dismissed flag so the
+    // widget can re-appear for the new job.
+    if (jobId && jobId !== _floatingLogState.activeJobId) {
+      _floatingLogState.activeJobId = jobId;
+      _floatingLogState.dismissedJobId = null;
+      body.innerHTML = '';
+    }
+    // Respect explicit dismissal for THIS job
+    if (jobId && jobId === _floatingLogState.dismissedJobId) return;
+    const summary = _floatingLogEventSummary(event);
+    // Track last non-heartbeat meaningful text for the smart-heartbeat fallback
+    if (!summary.isHeartbeat && summary.text && summary.text !== 'progress') {
+      _floatingLogState.lastMeaningfulText = (summary.text + (summary.detail ? ' (' + summary.detail + ')' : ''));
+    }
+    // Append the event line
+    const div = document.createElement('div');
+    div.className = 'flw-event' + (summary.tone ? ' flw-' + summary.tone : '');
+    const ts = _formatFlwTimestamp(event.timestamp);
+    div.innerHTML = '<span class="flw-event-ts">' + escapeHTML(ts) + '</span>'
+      + '<span class="flw-event-text">' + escapeHTML(summary.text) + '</span>'
+      + (summary.detail ? '<div class="flw-event-detail">' + escapeHTML(summary.detail) + '</div>' : '');
+    body.appendChild(div);
+    // Cap event count
+    while (body.children.length > _floatingLogState.maxEvents) {
+      body.removeChild(body.firstChild);
+    }
+    body.scrollTop = body.scrollHeight;
+    // Reveal the widget
+    widget.classList.add('has-events');
+    // Update title to include source app name if we have a jobId
+    const titleEl = document.getElementById('flw-title');
+    if (titleEl) {
+      const fileHint = event.file ? String(event.file).split(/[\\/]/).pop() : '';
+      titleEl.textContent = 'Pipeline log' + (fileHint ? ' · ' + fileHint : '');
+    }
+    // Hide on job complete after a 4-second grace so the user can read the final event
+    if (String(event.type || '') === 'job_complete') {
+      setTimeout(function() {
+        if (_floatingLogState.activeJobId === jobId) {
+          widget.classList.remove('has-events');
+        }
+      }, 4000);
+    }
+  }
+
+  function dismissFloatingLog(e) {
+    if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+    _floatingLogState.dismissedJobId = _floatingLogState.activeJobId;
+    const widget = document.getElementById('floating-log-widget');
+    if (widget) widget.classList.remove('has-events');
+  }
+
+  function clearFloatingLog(e) {
+    if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+    const body = document.getElementById('flw-body');
+    if (body) body.innerHTML = '';
+  }
+
   // v4.64: collapsible section toggle for BIC's Generation Queue + Job History.
   // The toggle element shows "▼ Label" when expanded, "▶ Label" when collapsed.
   function toggleBicSection(bodyId, toggleEl) {
@@ -23430,7 +23678,17 @@ Errors: ${escapeHTML(errors)}</div>
     const decisions = {};
     (Array.isArray(result.draft?.candidateQuestions) ? result.draft.candidateQuestions : []).forEach(function(_question, offset) {
       const index = offset + 1;
-      decisions[index] = validIndexes.has(index) && !flaggedIndexes.has(index) ? 'accept' : 'pending';
+      // v4.70: default to 'accept' on structurally-valid questions even when
+      // the validator flagged something. Reverses the prior opt-in-to-accept
+      // model, which produced an unworkable manual-clicking burden when Fast
+      // Facts / Emma Holiday batches over-flagged 50–95% of questions as
+      // false positives (semantic-grounding misses on threshold claims that
+      // were actually present in the source, ontology-class mismatches on
+      // perfectly grounded choices, etc.). The flag indicator stays visible
+      // on each question card so the user can manually reject the small
+      // number of genuinely bad ones — far cheaper than accepting hundreds
+      // of good ones one at a time.
+      decisions[index] = validIndexes.has(index) ? 'accept' : 'pending';
     });
     (Array.isArray(result.decisions) ? result.decisions : []).forEach(function(item) {
       if (decisions[item.questionIndex] && ['accept', 'reject', 'pending'].includes(item.decision)) {
@@ -23929,7 +24187,17 @@ Errors: ${escapeHTML(errors)}</div>
     } else if (type === 'stage_start' && stage.includes('preflight')) {
       updateTestCreateStatus('bic-create-status', { phase: 'Preflight', text: message || 'Checking inputs.', percent: 25, step: 2, totalSteps: 5, percentKnown: false, state: 'active' });
     } else if (type === 'stage_start' || type === 'command_start' || type === 'stage_heartbeat') {
-      updateTestCreateStatus('bic-create-status', { phase: stage.includes('generation') ? 'Generating questions...' : 'Running pipeline...', text: message || event?.stageLabel || 'Pipeline step is running.', percent: 45, step: 3, totalSteps: 5, percentKnown: false, state: 'active' });
+      // v4.70: smart heartbeat — when a heartbeat fires (every ~60s during
+      // long Mehlman / Fast Facts runs), surface the LAST meaningful event
+      // text captured by the floating-log panel instead of the useless
+      // "still running after Xs". Falls back to the original message if no
+      // meaningful event has been seen yet.
+      let _hbText = message || event?.stageLabel || 'Pipeline step is running.';
+      if (type === 'stage_heartbeat' && _floatingLogState && _floatingLogState.lastMeaningfulText) {
+        const _suffix = Number.isFinite(event?.durationSeconds) ? ` (${Math.round(event.durationSeconds)}s elapsed)` : '';
+        _hbText = _floatingLogState.lastMeaningfulText + _suffix;
+      }
+      updateTestCreateStatus('bic-create-status', { phase: stage.includes('generation') ? 'Generating questions...' : 'Running pipeline...', text: _hbText, percent: 45, step: 3, totalSteps: 5, percentKnown: false, state: 'active' });
     } else if (type === 'stage_complete' && !stage.includes('import')) {
       updateTestCreateStatus('bic-create-status', { phase: 'Pipeline stage complete', text: message || 'Waiting for next stage.', percent: 45, step: 3, totalSteps: 5, percentKnown: false, state: 'active' });
     } else if (type === 'outputs_discovered') {
@@ -29074,6 +29342,8 @@ Errors: ${escapeHTML(errors)}</div>
     updateBatchReviewEditedQuestion,
     acceptAllValidBatchReviewQuestions,
     acceptAllBatchReviewQuestions,
+    dismissFloatingLog,
+    clearFloatingLog,
     rejectAllFlaggedBatchReviewQuestions,
     saveBatchReviewDecisions,
     importAcceptedBatchReviewQuestions,

@@ -2,7 +2,17 @@
 
 Last updated: 2026-05-24
 
-This file documents stable v4 tags from v4.0 through the current head tag `v4.69-six-bug-batch-fix-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+This file documents stable v4 tags from v4.0 through the current head tag `v4.70-default-accept-floating-log-drive-decode-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+
+## v4.70-default-accept-floating-log-drive-decode-stable
+
+Commit: bundled source + doc in a single v4.70 commit (see `git log -1 v4.70-default-accept-floating-log-drive-decode-stable`).
+
+Meaning: Four user-frustration fixes from v4.69 live-test feedback. (1) **Review default flipped to accept-on-valid**: the decision-default at `openBatchReviewDraft` changed from `validIndexes.has(i) && !flaggedIndexes.has(i) ? 'accept' : 'pending'` to `validIndexes.has(i) ? 'accept' : 'pending'`. Flagged questions still show flag indicators on cards but default to 'accept' — reverses the unworkable opt-in-to-accept model when pipelines like Fast Facts over-flag at 95% false-positive rate. (2) **Floating log panel**: new `#floating-log-widget` bottom-left, persistent live event stream, independent of BIC modal (sidesteps the v4.65 inline log's auto-collapse on every modal re-render). Auto-shows on first event of a job, dismissible × button, trash to clear, color-codes events by severity, caps at 200 entries. New persistent global `api.onProgress` subscription at App.init. (3) **Drive API error decoding**: `driveFetch` now reads the response body (up to 300 chars) and includes it in thrown errors; new `_driveErrorHint(status)` maps 401/403/404/429/5xx/0 to actionable user-facing hints (e.g. 401 → "token expired — click Connect Drive to re-authenticate"). Loud-failure banner now shows the actual error + hint instead of generic "sync is stuck." (4) **Smart heartbeat**: the floating log captures the last non-heartbeat meaningful event text; the `stage_heartbeat` branch of `updateBatchImportStatusFromEvent` uses that text in place of "still running after Xs" when no per-stage event is available. Fallback for pipelines (Mehlman, NBME, UWorld, OME, Anki, Divine) that don't emit `pipeline_progress` events with counters.
+
+Validated: `node --check` clean on every inline `<script>` in `index.html`. 29 v4.70 markers in source. `.app` rebuilt with v4.70 markers verified present in bundled HTML.
+
+Architecture significance: Establishes the persistent-floating-panel pattern for live event streams (jobs widget bottom-right + log panel bottom-left). Both are independent of modal lifecycle and updated via global IPC subscriptions in App.init. Reusable pattern for any future always-on status surface. The default-accept-on-valid change is a UX inversion (opt-in → opt-out) — should be revisited if validator false-positive rate ever drops; for the current state of the Fast Facts validator, opt-out is correct. The Drive error decoding pattern (HTTP code → human hint) is reusable for any future external API integration. Open follow-up: pipelines other than lecture-slide need hyperspecific progress emissions; Fast Facts/Emma validator needs false-positive rate tuning.
 
 ## v4.69-six-bug-batch-fix-stable
 

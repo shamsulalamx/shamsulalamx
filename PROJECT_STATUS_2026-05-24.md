@@ -1,12 +1,81 @@
 # Project Status 2026-05-24
 
-Current stable tag: `v4.69-six-bug-batch-fix-stable`
+Current stable tag: `v4.70-default-accept-floating-log-drive-decode-stable`
 Current branch: `phase11-fastfacts-stability`
 Last committed HEAD: source + doc bundled in a single v4.69 commit (v4.68 / v4.67 / v4.66 / v4.65 / v4.64 / v4.63 / v4.62 still exist as prior tags). Note: the v4.65 tag still points at the pre-follow-up commit (4b18447) which is missing `electron/main.js`; the missing handlers landed as a separate follow-up commit (02fea12) that's on `phase11-fastfacts-stability` but not tagged — see the v4.65 entry below.
 
 Supersedes `docs/archive/PROJECT_STATUS_2026-05-23.md`.
 
 ## What Is New Since 2026-05-23
+
+### v4.70 — Default-accept on valid + floating log panel + Drive error decoding + smart heartbeat
+
+Live-test pass on v4.69 surfaced four user-frustration issues — three serious (data-loss-risk for Drive sync, unworkable manual-clicking burden for Fast Facts review, no visibility into long pipeline runs) and one substantial UX gap (heartbeat events show useless "still running after Xs" instead of WHAT is running). All addressed.
+
+#### Review default flipped: accept-on-valid (#1, #2)
+
+User experience reported: Fast Facts flagged 197 questions, Emma Holiday flagged ~50% of questions, the user manually scrolled and clicked Accept on each one. The flagging itself is wrong — the user reviewed and found 95% of flags were false positives (semantic-grounding misses on threshold claims that WERE present in the source, "stem has lab values only, no context" complaints on questions that actually had context, ontology-class mismatches on perfectly grounded choices).
+
+Root cause in renderer: the decision-default logic at `openBatchReviewDraft` was `validIndexes.has(index) && !flaggedIndexes.has(index) ? 'accept' : 'pending'`. ANY review item (warning OR error severity) put the question into `flaggedIndexes`, so any flag → default 'pending'. With 197 of 197 flagged, the default was 'pending' for everything, and the user had to manually accept each.
+
+**Fix**: changed the default to `validIndexes.has(index) ? 'accept' : 'pending'`. Structurally-valid questions now default to 'accept' even when the validator flagged them. The flag indicator still appears on every flagged question card (existing `notes-import-summary` block showing severity + message), so the user can scan for the small number of genuinely bad ones and reject those. Inverts the model from opt-in-to-accept (terrible at this false-positive rate) to opt-out-to-reject (matches the user's actual workflow).
+
+#### Floating log panel (#3)
+
+User experience reported: the v4.65 inline `bic-progress-log` (collapsed by default) was hard to see — clicking expand showed events for ~1.5–2 seconds and then auto-collapsed (the modal re-rendered on each progress event and reset the inline `style="display:none"`). For long-running pipelines (Fast Facts ~13 min, Mehlman 1500s+), the user had no visibility into what was happening.
+
+**Fix**: new `#floating-log-widget` anchored bottom-left of the viewport (`position: fixed; z-index: 99` — sits below the bottom-right jobs widget at z-index 100, doesn't overlap). 420px wide, max-height 280px with overflow-scroll. Independent of the BIC modal — survives modal close, doesn't get re-rendered by progress events.
+
+Auto-shows on first progress event of a new job. Auto-hides 4 seconds after `job_complete` (gives the user time to read the final event). Manually dismissible via × button (reappears on next job). Trash icon clears the body content. Header shows the source file name when available.
+
+New `_appendFloatingLogEvent(event)` formatter handles all event shapes — extracts `phase`, `stageLabel`, `type`, plus `page/pageTotal`, `chunk/chunkTotal`, `question/questionTotal` counters as a detail row. Color-codes events by severity: green (ok), red (err), yellow (warn). Caps at 200 events to keep DOM cheap.
+
+New persistent global `api.onProgress` subscription set up in `App.init` (sibling of the v4.66 queue subscription) so the log fills regardless of whether the BIC modal is open.
+
+#### Drive API error decoding (#4)
+
+User experience reported: Drive sync failed 40+ times in a row, banner just said "sync is stuck" with no actionable info. WiFi was fine, the user was signed into the same Drive account in their browser — so the root cause wasn't obvious.
+
+Root cause: the `driveFetch` helper threw `new Error('Drive API ' + resp.status)` — discarding both the response body (which usually has Google's actual error JSON) AND any human-readable interpretation of the HTTP status.
+
+**Fix**: rewrote the error path to:
+1. Read the response body text (up to 300 chars) and include it in the thrown message.
+2. Map common HTTP statuses to actionable hints via new `_driveErrorHint(status)`:
+   - **401**: "token expired — click Connect Drive to re-authenticate"
+   - **403**: "permission denied — check Google account access / re-grant consent"
+   - **404**: "Drive file or folder missing — the backup may need to be re-created"
+   - **429**: "rate limited by Google — sync will retry automatically with backoff"
+   - **500–599**: "Google server error — usually transient, retry will happen"
+   - **0**: "network unreachable — check WiFi / VPN / firewall"
+
+So the loud-failure banner now reads e.g. `"⚠ Drive backup has failed 5 times — automatic retries paused. Last error: Drive API 401 (token expired — click Connect Drive to re-authenticate) — {actual Google error JSON}. Click 'Backup Now' or 'Connect Drive' to retry."` instead of `"sync is stuck"`. The user knows exactly what to do.
+
+In the user's specific 40-failures scenario, the most likely root cause given "WiFi fine, signed into Drive in browser" is **401 (expired refresh token from the 7-day External-Testing-mode rotation limit)**. v4.70 will now surface that explicitly, and the user can click Connect Drive to re-auth.
+
+#### Smart heartbeat (#5 — Mehlman "still running after 1596.44s")
+
+User experience reported: the `stage_heartbeat` event (fired every ~60s by `run_pipeline_job.py`) updated the status to "still running after Xs" — accurate but useless. Pipelines like Mehlman that DON'T emit per-page/chunk/question events (unlike `generate_lecture_slide_questions.py` which does) leave the user with no idea what's actually happening.
+
+**Fix**: the floating log captures the last non-heartbeat meaningful event text in `_floatingLogState.lastMeaningfulText`. The heartbeat branch of `updateBatchImportStatusFromEvent` now uses that text in place of the generic "still running" message, appending the duration: `"<last meaningful event text> (1596s elapsed)"`. So even for pipelines that only emit heartbeats + raw log lines, the user sees the most recent context point.
+
+The proper long-term fix is to update each non-lecture pipeline (Mehlman, NBME, UWorld, OME, Anki, Divine) to emit `pipeline_progress` events with `page/chunk/question` counters at each stage transition. That's a Python-side change touching 6+ files; noted as an **open follow-up** below.
+
+#### Validation
+
+- **`node --check`** clean on every inline `<script>` in `index.html`.
+- **29 v4.70 markers** in source.
+- **`.app` rebuilt** with v4.70 markers verified present in bundled HTML.
+- **Live walkthrough**: pending field validation — the Drive 401 decoding will only surface during an actual failing-token scenario; the floating log will appear on the next pipeline run; the default-accept change takes effect on the next review draft.
+
+#### Why "stable"
+
+All four fixes are renderer-only and additive (no Python pipeline changes, no IPC changes, no data-layer changes). The default-accept flip is the only behavior change; the user has explicitly described the prior behavior as unworkable for their actual use case, and the new behavior is opt-out instead of opt-in. The floating log is a new DOM element that sits outside any existing UI surface — it can't break what's there. The Drive error decoding is strictly more informative than the prior cryptic message. The smart heartbeat is a fallback for the no-counter case; pipelines that already emit `pipeline_progress` (lecture-slide) are unaffected.
+
+#### Open follow-ups (deferred)
+
+1. **Non-lecture pipelines need hyperspecific progress events.** Mehlman, NBME, UWorld, OME, Anki, Divine — each `*_profile_runner.py` (or the downstream generator it shells out to) should emit `pipeline_progress` events with `page`, `chunk`, `question` counters at each stage transition. v4.70 surfaces the last log line via smart heartbeat as a workaround, but the real fix is upstream event richness.
+2. **Fast Facts / Emma validator over-flags.** `fast_facts_strict_findings()` in `tools/lecture-slide-question-generator/generate_lecture_slide_questions.py` (lines 5550-5595) uses exact substring matching for threshold claims and strict ontology-class equality for choices. The user's experience shows the false-positive rate is ~95%. Needs threshold matching loosening (fuzzy / numeric tolerance / synonym expansion) or severity downgrade so they don't surface as flags at all. v4.70 unblocks the user via the default-accept change, but the deeper validator tuning would prevent the noise entirely.
+3. **bic-progress-log inline auto-collapse** — the v4.65 inline log still auto-collapses on every modal re-render. v4.70's floating log sidesteps this entirely (independent DOM element), so the inline log can stay as-is or be removed in a future cleanup commit.
 
 ### v4.69 — Six-bug batch fix (Drive stuck loop, Accept-All review, pending-job cancel, subfolder rename, artifacts removal)
 
