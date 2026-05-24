@@ -671,6 +671,13 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 #q-stem {
   font-size: 16.5px; line-height: 1.72; color: var(--text);
   user-select: text; cursor: text;
+  white-space: pre-wrap; /* preserve newlines from NBME lab-value blocks */
+  word-wrap: break-word;
+}
+.shared-group-stem,
+.question-individual-stem {
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
 /* Highlight */
@@ -1034,7 +1041,7 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 .ngj-exp-section { margin-bottom: 10px; }
 .ngj-exp-section:last-child { margin-bottom: 0; }
 .ngj-exp-section strong { display: block; margin-bottom: 2px; }
-.ngj-exp-section p { margin: 0 0 1px; }
+.ngj-exp-section p { margin: 0 0 1px; white-space: pre-wrap; word-wrap: break-word; }
 .ngj-exp-section p:last-child { margin-bottom: 0; }
 
 /* ── Question images ───────────────────────────────────── */

@@ -251,52 +251,22 @@
       "pythonExecutable": "python3",
       "dryRunSteps": [
         {
-          "stage": "OCR",
-          "stageLabel": "NBME dry-run OCR",
-          "heartbeatSeconds": 15,
-          "args": ["nbme_batch_wrapper.py", "--stage", "ocr", "--input-file", "{inputFile}", "--max-pages", "5"]
-        },
-        {
-          "stage": "chunking",
-          "stageLabel": "NBME dry-run chunking",
-          "heartbeatSeconds": 15,
-          "args": ["nbme_batch_wrapper.py", "--stage", "chunking", "--input-file", "{inputFile}", "--max-pages", "5"]
-        },
-        {
-          "stage": "normalization",
-          "stageLabel": "NBME dry-run normalization",
-          "heartbeatSeconds": 20,
-          "args": ["nbme_batch_wrapper.py", "--stage", "normalization", "--dry-run", "--input-file", "{inputFile}", "--max-pages", "5"]
+          "stage": "generation",
+          "stageLabel": "NBME dual-PDF dry-run",
+          "heartbeatSeconds": 60,
+          "args": ["nbme_dual_pdf_runner.py", "--input-file", "{inputFile}"]
         }
       ],
       "liveSteps": [
         {
-          "stage": "OCR",
-          "stageLabel": "OCR",
-          "heartbeatSeconds": 15,
-          "args": ["nbme_batch_wrapper.py", "--stage", "ocr", "--input-file", "{inputFile}", "--max-pages", "5"]
-        },
-        {
-          "stage": "chunking",
-          "stageLabel": "chunking",
-          "heartbeatSeconds": 15,
-          "args": ["nbme_batch_wrapper.py", "--stage", "chunking", "--input-file", "{inputFile}", "--max-pages", "5"]
-        },
-        {
-          "stage": "normalization",
-          "stageLabel": "normalization",
-          "heartbeatSeconds": 20,
-          "args": ["nbme_batch_wrapper.py", "--stage", "normalization", "--input-file", "{inputFile}", "--max-pages", "5"]
-        },
-        {
-          "stage": "app-ready conversion",
-          "stageLabel": "app-ready conversion",
-          "heartbeatSeconds": 15,
-          "args": ["nbme_batch_wrapper.py", "--stage", "app-ready", "--input-file", "{inputFile}", "--max-pages", "5"]
+          "stage": "generation",
+          "stageLabel": "NBME dual-PDF orchestrator",
+          "heartbeatSeconds": 120,
+          "args": ["nbme_dual_pdf_runner.py", "--input-file", "{inputFile}"]
         }
       ],
-      "outputDirectories": ["output_json/app_ready"],
-      "notes": "Uses a thin Batch Import wrapper around the existing NBME PDF generator stages. Initial validation is capped to the first 5 pages."
+      "outputDirectories": ["app_ready"],
+      "notes": "v4.61 dual-PDF orchestrator. Upload Q-PDF + A-PDF (preferred — cleanest stems + canonical explanations), Q-PDF only (Gemini generates explanations + review pearl + educational objective), or a single combined PDF with inline answers (legacy v4.60 path). Auto-detects file roles by filename + content sniff, auto-detects screenshot PDFs, joins by question number (handles out-of-order A-PDFs). Gemini multimodal figure detection fires only on pages where the stem contains image-language OR PyMuPDF reports embedded raster images — cheap when not needed. Aspect-ratio guard 0.30-3.00 rejects whole-page-as-image false positives."
     }
   },
   "placeholders": {
