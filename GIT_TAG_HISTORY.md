@@ -2,7 +2,17 @@
 
 Last updated: 2026-05-24
 
-This file documents stable v4 tags from v4.0 through the current head tag `v4.63-polish-pro-and-critic-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+This file documents stable v4 tags from v4.0 through the current head tag `v4.64-bic-simplification-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+
+## v4.64-bic-simplification-stable
+
+Commit: bundled source + doc in a single v4.64 commit (see `git log -1 v4.64-bic-simplification-stable`).
+
+Meaning: Commit A of the planned UI batch. Seven coordinated changes in `index.html`: (1) removed the "massive blurb" `<p>` under the BIC modal header and the auto-populated `bic-source-note` div; (2) removed the redundant **Reload Queue** button (queue auto-refreshes via the `onQueueChanged` IPC); (3) simplified the run-mode dropdown from 4 options to 2 (`generate-auto-import` default + `generate`), dropping `dry-run` and `existing-output-auto-import`; (4) added a new `else if (runMode === 'generate')` branch that calls `_archiveImportedQuiz` on the first valid output so generate-only mode also writes to `archive/`; (5) made the Queue and History sections collapsible with ▼/▶ disclosure toggles, History defaults to collapsed, both bodies capped at max-height + overflow-scroll; (6) added inline "+ New folder under <source>" and "+ New top-level source + folder" options to the BIC target-folder dropdown with a new `handleBatchImportFolderChange` handler; (7) rewrote `renderBatchImportQueueSummary` to a compact `● running · ⏸ queued · ✓ done` format with warnings only shown when non-zero. Plus the data-layer addition: new `DB.deleteSourceFolder(id)` that cascade-deletes child subfolders + trashes their tests, exposed via `App.deleteSourceFolder` with a counted confirm dialog, and a new 🗑 Delete button on every source card in `renderSourceLanding()`. Closes the user-flagged gap that top-level source folders had no delete affordance.
+
+Validated: `node --check` clean on every inline `<script>` extracted from `index.html`. `.app` rebuilt successfully (`dist/mac-arm64/shamsulalamx.app`, 763 MB) with 14 v4.64 markers (`handleBatchImportFolderChange`, `toggleBicSection`, `deleteSourceFolder`, `else if (runMode === 'generate')`) in the bundled `index.html`. Live UI walkthrough is the pending post-tag work — source-level + bundle-presence proof only.
+
+Architecture significance: Per-mode archive routing — the BIC's auto-import branch and the new generate-only branch each own their own `_archiveImportedQuiz` call, rather than threading a shared post-step. Pattern reusable for any future run mode that produces a valid app-ready JSON. Source-folder delete uses cascading `deleteFolder` calls so individual tests remain recoverable via the existing Trash view (no new schema or restore path needed). Default source folders are not specially protected — they reappear empty on next launch via the existing `ensureSourceFolders()`, which is documented in the delete-confirm dialog so the behaviour isn't surprising.
 
 ## v4.63-polish-pro-and-critic-stable
 

@@ -2,7 +2,7 @@
 
 Last updated: 2026-05-24
 
-Current stable tag: `v4.63-polish-pro-and-critic-stable`.
+Current stable tag: `v4.64-bic-simplification-stable`.
 Current branch: `phase11-fastfacts-stability`.
 
 This handoff was originally written when the project migrated to a new ChatGPT + Codex account on 2026-05-22. It is now valid for any subsequent account or agent continuing the project, including the current Claude (Anthropic) agent that took over on 2026-05-23 and produced the v4.48 milestone.

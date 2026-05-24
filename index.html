@@ -2342,7 +2342,6 @@ body.quiz-fullscreen-mode .modal-overlay {
 <div id="modal-batch-import-center" class="modal-overlay">
   <div class="modal-box" style="max-width:680px;">
     <h3>Batch Import Center</h3>
-    <p style="font-size:12px;color:#5a6a7a;margin-bottom:12px;">Queue multiple local pipeline jobs for sequential Batch Import execution. Use Run for the current one-job flow and Queue Files for unattended sequential processing.</p>
 
     <div class="notes-import-section-title">Registered Sources</div>
     <div id="bic-registry-status" class="notes-import-summary">Registry not loaded.</div>
@@ -2363,7 +2362,6 @@ body.quiz-fullscreen-mode .modal-overlay {
         <option value="nbme_pdf">NBME PDF</option>
       </select>
     </div>
-    <div id="bic-source-note" class="notes-import-summary" style="display:none;"></div>
     <div class="form-group">
       <label class="form-label">Files</label>
       <button type="button" class="btn-modal" id="bic-select-files-btn" onclick="App.selectBatchImportFiles()">Choose Files</button>
@@ -2371,7 +2369,7 @@ body.quiz-fullscreen-mode .modal-overlay {
     </div>
     <div class="form-group">
       <label class="form-label">Target Folder</label>
-      <select class="form-input" id="bic-target-folder"></select>
+      <select class="form-input" id="bic-target-folder" onchange="App.handleBatchImportFolderChange()"></select>
     </div>
     <div class="form-group">
       <label class="form-label">Test name (optional)</label>
@@ -2380,10 +2378,8 @@ body.quiz-fullscreen-mode .modal-overlay {
     <div class="form-group">
       <label class="form-label">Run Mode</label>
       <select class="form-input" id="bic-run-mode">
-        <option value="dry-run">dry-run</option>
-        <option value="generate">generate</option>
-        <option value="generate-auto-import">generate + auto-import</option>
-        <option value="existing-output-auto-import">existing output + auto-import</option>
+        <option value="generate-auto-import" selected>Generate + Import</option>
+        <option value="generate">Generate (save to archive, don't import)</option>
       </select>
     </div>
     <div id="bic-run-status" class="notes-import-summary">No job run yet.</div>
@@ -2391,19 +2387,22 @@ body.quiz-fullscreen-mode .modal-overlay {
     <div id="bic-progress-log" class="notes-import-preview">
       <div class="notes-import-empty">Progress events will appear here.</div>
     </div>
-    <div class="notes-import-section-title">Generation Queue</div>
-    <div style="display:flex;gap:6px;align-items:center;justify-content:space-between;margin-bottom:6px;">
-      <div id="bic-job-queue-summary" class="notes-import-summary" style="margin:0;">Queue not loaded.</div>
-      <button type="button" class="btn-modal" onclick="App.refreshBatchImportQueue()">Reload Queue</button>
-    </div>
-    <div id="bic-job-queue" class="notes-import-preview">
-      <div class="notes-import-empty">No queued jobs loaded.</div>
+    <div class="notes-import-section-title bic-collapsible-toggle" style="cursor:pointer;user-select:none;" onclick="App.toggleBicSection('bic-queue-body', this)" data-label="Generation Queue">▼ Generation Queue</div>
+    <div id="bic-queue-body">
+      <div style="display:flex;gap:6px;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <div id="bic-job-queue-summary" class="notes-import-summary" style="margin:0;">Queue not loaded.</div>
+      </div>
+      <div id="bic-job-queue" class="notes-import-preview" style="max-height:180px;overflow-y:auto;">
+        <div class="notes-import-empty">No queued jobs loaded.</div>
+      </div>
     </div>
     <div class="notes-import-section-title">Completion Report</div>
     <div id="bic-completion-report" class="notes-import-summary">Completion report placeholder.</div>
-    <div class="notes-import-section-title">Job History</div>
-    <div id="bic-job-history" class="notes-import-preview">
-      <div class="notes-import-empty">No prior jobs loaded.</div>
+    <div class="notes-import-section-title bic-collapsible-toggle" style="cursor:pointer;user-select:none;" onclick="App.toggleBicSection('bic-history-body', this)" data-label="Job History">▶ Job History</div>
+    <div id="bic-history-body" style="display:none;">
+      <div id="bic-job-history" class="notes-import-preview" style="max-height:240px;overflow-y:auto;">
+        <div class="notes-import-empty">No prior jobs loaded.</div>
+      </div>
     </div>
 
     <div class="modal-actions">
@@ -3381,6 +3380,18 @@ const DB = (() => {
     const f = get().sourceFolders.find(f=>f.id===id);
     if(f){f.name=name;save();}
   }
+  // v4.64: cascade-delete a source folder. Removes all child subfolders (each
+  // call trashes its tests). Default source folders re-appear empty on next
+  // app launch via ensureSourceFolders() — that's documented in the UI confirm.
+  function deleteSourceFolder(id) {
+    const db = get();
+    const childFolderIds = db.folders
+      .filter(f => (f.sourceId || DEFAULT_SOURCE_ID) === id)
+      .map(f => f.id);
+    childFolderIds.forEach(fid => deleteFolder(fid));
+    db.sourceFolders = db.sourceFolders.filter(s => s.id !== id);
+    save();
+  }
   function getFolders(sourceId) {
     const folders = get().folders.sort((a,b) => (a.order||0) - (b.order||0));
     return sourceId ? folders.filter(f => (f.sourceId || DEFAULT_SOURCE_ID) === sourceId) : folders;
@@ -3637,7 +3648,7 @@ const DB = (() => {
   }
 
   return { get, save, initAsync, flushAppState, saveAppState, uid,
-    getSourceFolders, getSourceFolder, getDefaultSourceFolderWorkflows, createSourceFolder, renameSourceFolder,
+    getSourceFolders, getSourceFolder, getDefaultSourceFolderWorkflows, createSourceFolder, renameSourceFolder, deleteSourceFolder,
     getFolders, createFolder, renameFolder, deleteFolder,
     getTests, getTest, createTest, updateTest, renameTest, trashTest, restoreTest, emptyTrash, permanentDelete,
     saveAttempt, finishAttempt, getHistory, getFlags, addFlag, removeFlag, isFlagged,
@@ -9217,6 +9228,7 @@ const App = (() => {
         </div>
         <div class="source-card-actions">
           <button class="source-card-rename" onclick="event.stopPropagation();App.renameSourceFolder('${src.id}')">Rename</button>
+          <button class="source-card-rename" style="margin-left:4px;color:#e74c3c;" onclick="event.stopPropagation();App.deleteSourceFolder('${src.id}')" title="Delete this source folder and all its subfolders/tests">🗑 Delete</button>
         </div>
       </div>`;
     });
@@ -21836,6 +21848,41 @@ const App = (() => {
     toast('Renamed.');
   }
 
+  // v4.64: cascade-delete a source folder + all its subfolders + trash all
+  // contained tests. Shows a counted warning before destroying anything. For
+  // default source folders (NBME, UWorld, etc.) the source itself reappears
+  // empty on next app launch via ensureSourceFolders() — that's noted in the
+  // confirm so the user isn't surprised.
+  function deleteSourceFolder(id) {
+    const source = DB.getSourceFolder(id);
+    if (!source) return;
+    const folders = DB.getFolders(id);
+    const totalTests = folders.reduce(function(sum, f) { return sum + DB.getTests(f.id).length; }, 0);
+    const isDefault = DEFAULT_SOURCE_FOLDERS.some(function(d) { return d.id === id; });
+    const lines = [
+      `Delete "${source.name}"?`,
+      '',
+      `This will permanently delete:`,
+      `  • ${folders.length} subfolder${folders.length === 1 ? '' : 's'}`,
+      `  • ${totalTests} test${totalTests === 1 ? '' : 's'} (moved to trash, can restore from Trash view)`
+    ];
+    if (isDefault) {
+      lines.push('');
+      lines.push('NOTE: This is a default source. It will reappear (empty) the next time you launch the app.');
+    }
+    lines.push('');
+    lines.push('This cannot be undone from this dialog. Continue?');
+    if (!confirm(lines.join('\n'))) return;
+    DB.deleteSourceFolder(id);
+    if (_currentSource === id) _currentSource = null;
+    if (_currentFolder && folders.some(function(f) { return f.id === _currentFolder; })) {
+      _currentFolder = null;
+    }
+    renderSidebar();
+    renderHomeGrid();
+    toast(`Deleted source "${source.name}".`);
+  }
+
   function promptNewFolder() {
     if (!_currentSource) {
       toast('Open a library folder first.');
@@ -22523,7 +22570,6 @@ const App = (() => {
     const allFolders = DB.getFolders();
     sourceFolders.forEach(function(src) {
       const folders = allFolders.filter(function(folder) { return (folder.sourceId || 'src-nbme') === src.id; });
-      if (!folders.length) return;
       const group = document.createElement('optgroup');
       group.label = src.name;
       folders.forEach(function(folder) {
@@ -22532,17 +22578,89 @@ const App = (() => {
         opt.textContent = folder.name;
         group.appendChild(opt);
       });
+      // v4.64: inline "+ New folder under <source>" option per source group.
+      const newOpt = document.createElement('option');
+      newOpt.value = 'newsub:' + src.id;
+      newOpt.textContent = '+ New folder under ' + src.name + '…';
+      group.appendChild(newOpt);
       sel.appendChild(group);
     });
+    // v4.64: "+ New top-level source + folder…" at the very end, for spinning
+    // up brand-new source folders (e.g. Biostats / Ethics / Nutrition).
+    const newSourceOpt = document.createElement('option');
+    newSourceOpt.value = '__newmain__';
+    newSourceOpt.textContent = '+ New top-level source + folder…';
+    sel.appendChild(newSourceOpt);
+
     if (_currentFolder && Array.from(sel.options).some(function(opt) { return opt.value === _currentFolder; })) {
       sel.value = _currentFolder;
     }
-    if (!sel.options.length) {
-      const opt = document.createElement('option');
-      opt.value = '';
-      opt.textContent = 'Create a folder first';
-      sel.appendChild(opt);
+    // Track last valid folder selection so cancelled "+ New folder…" prompts can revert.
+    if (sel.value && !sel.value.startsWith('newsub:') && sel.value !== '__newmain__') {
+      sel.dataset.lastValid = sel.value;
     }
+  }
+
+  // v4.64: handle "+ New folder under X" and "+ New top-level source + folder"
+  // selections from the BIC target-folder dropdown. Prompts inline, creates the
+  // folder, repopulates the dropdown, and selects the new folder. Reverts to
+  // the previously-valid selection if the user cancels.
+  function handleBatchImportFolderChange() {
+    const sel = document.getElementById('bic-target-folder');
+    if (!sel) return;
+    const value = String(sel.value || '');
+
+    if (value.startsWith('newsub:')) {
+      const srcId = value.slice('newsub:'.length);
+      const src = DB.getSourceFolder(srcId);
+      const srcName = src ? src.name : 'this source';
+      const name = (prompt('New folder name under "' + srcName + '":') || '').trim();
+      if (!name) {
+        sel.value = sel.dataset.lastValid || '';
+        return;
+      }
+      const created = DB.createFolder(name, srcId);
+      if (!created) {
+        toast('Could not create folder.');
+        sel.value = sel.dataset.lastValid || '';
+        return;
+      }
+      populateBatchImportTargetFolders();
+      sel.value = created.id;
+      sel.dataset.lastValid = created.id;
+      toast('✓ Created “' + name + '” under ' + srcName + '.');
+      renderSidebar();
+      return;
+    }
+
+    if (value === '__newmain__') {
+      const mainName = (prompt('New top-level source name (e.g. "Biostats", "Ethics"):') || '').trim();
+      if (!mainName) {
+        sel.value = sel.dataset.lastValid || '';
+        return;
+      }
+      const subName = (prompt('Initial subfolder name under "' + mainName + '":') || '').trim();
+      if (!subName) {
+        sel.value = sel.dataset.lastValid || '';
+        return;
+      }
+      const newSrc = DB.createSourceFolder(mainName);
+      const created = newSrc ? DB.createFolder(subName, newSrc.id) : null;
+      if (!created) {
+        toast('Could not create source + folder.');
+        sel.value = sel.dataset.lastValid || '';
+        return;
+      }
+      populateBatchImportTargetFolders();
+      sel.value = created.id;
+      sel.dataset.lastValid = created.id;
+      toast('✓ Created “' + mainName + ' / ' + subName + '”.');
+      renderSidebar();
+      return;
+    }
+
+    // Regular folder selection — just remember it for future reverts.
+    sel.dataset.lastValid = value;
   }
 
   function renderBatchImportSelectedFiles() {
@@ -22614,7 +22732,33 @@ const App = (() => {
         counts[status] += 1;
       }
     });
-    target.textContent = `Pending ${counts.pending} · Running ${counts.running} · Completed ${counts.completed} · Failed ${counts.failed} · Needs review ${counts.needs_review} · Interrupted/canceled ${counts.interrupted_or_canceled}`;
+    // v4.64: compact summary — running / queued / done as the headline,
+    // failures + needs-review + interrupted shown only when non-zero so
+    // a healthy queue stays uncluttered.
+    const parts = [];
+    parts.push(`● ${counts.running} running`);
+    parts.push(`⏸ ${counts.pending} queued`);
+    parts.push(`✓ ${counts.completed} done`);
+    if (counts.failed > 0) parts.push(`✗ ${counts.failed} failed`);
+    if (counts.needs_review > 0) parts.push(`⚠ ${counts.needs_review} need review`);
+    if (counts.interrupted_or_canceled > 0) parts.push(`⊘ ${counts.interrupted_or_canceled} interrupted`);
+    target.textContent = parts.join(' · ');
+  }
+
+  // v4.64: collapsible section toggle for BIC's Generation Queue + Job History.
+  // The toggle element shows "▼ Label" when expanded, "▶ Label" when collapsed.
+  function toggleBicSection(bodyId, toggleEl) {
+    const body = document.getElementById(bodyId);
+    if (!body || !toggleEl) return;
+    const label = toggleEl.getAttribute('data-label') || toggleEl.textContent.replace(/^[▶▼]\s*/, '');
+    const isHidden = body.style.display === 'none';
+    if (isHidden) {
+      body.style.display = '';
+      toggleEl.textContent = '▼ ' + label;
+    } else {
+      body.style.display = 'none';
+      toggleEl.textContent = '▶ ' + label;
+    }
   }
 
   function batchImportQueuePathText(paths) {
@@ -23105,23 +23249,15 @@ Errors: ${escapeHTML(errors)}</div>
   function onBatchImportSourceChange() {
     if (_batchImportState) _batchImportState.files = [];
     renderBatchImportSelectedFiles();
-    renderBatchImportSourceNote();
-  }
-
-  function renderBatchImportSourceNote() {
-    const target = document.getElementById('bic-source-note');
-    if (!target) return;
-    const sourceType = (document.getElementById('bic-source-type')?.value || '').trim();
-    const note = String(_batchImportState?.registry?.sources?.[sourceType]?.notes || '').trim();
-    target.textContent = note;
-    target.style.display = note ? 'block' : 'none';
+    // v4.64: removed bic-source-note rendering — the "massive blurb" was
+    // pulling source.notes from the registry and cluttering the modal.
   }
 
   async function selectBatchImportFiles() {
     const api = window.nbmeDesktop && window.nbmeDesktop.batchImport;
     const runStatus = document.getElementById('bic-run-status');
     const sourceType = (document.getElementById('bic-source-type')?.value || '').trim();
-    const runMode = (document.getElementById('bic-run-mode')?.value || 'dry-run').trim();
+    const runMode = (document.getElementById('bic-run-mode')?.value || 'generate-auto-import').trim();
     const existingOutputValidation = runMode === 'existing-output-auto-import';
     if (!api) {
       if (runStatus) runStatus.textContent = 'Native file selection is available only in the Electron app.';
@@ -23161,7 +23297,7 @@ Errors: ${escapeHTML(errors)}</div>
     const api = window.nbmeDesktop && window.nbmeDesktop.batchImport;
     const runStatus = document.getElementById('bic-run-status');
     const sourceType = (document.getElementById('bic-source-type')?.value || '').trim();
-    const runMode = (document.getElementById('bic-run-mode')?.value || 'dry-run').trim();
+    const runMode = (document.getElementById('bic-run-mode')?.value || 'generate-auto-import').trim();
     const folderId = (document.getElementById('bic-target-folder')?.value || '').trim();
     const testName = (document.getElementById('bic-test-name')?.value || '').trim();
     const inputPaths = Array.isArray(_batchImportState?.files) ? _batchImportState.files.slice() : [];
@@ -23389,7 +23525,7 @@ Errors: ${escapeHTML(errors)}</div>
     const runStatus = document.getElementById('bic-run-status');
     const report = document.getElementById('bic-completion-report');
     const sourceType = (document.getElementById('bic-source-type')?.value || '').trim();
-    const runMode = (document.getElementById('bic-run-mode')?.value || 'dry-run').trim();
+    const runMode = (document.getElementById('bic-run-mode')?.value || 'generate-auto-import').trim();
     const folderId = (document.getElementById('bic-target-folder')?.value || '').trim();
     const testName = (document.getElementById('bic-test-name')?.value || '').trim();
     const inputPaths = Array.isArray(_batchImportState?.files) ? _batchImportState.files.slice() : [];
@@ -23529,6 +23665,19 @@ Errors: ${escapeHTML(errors)}</div>
 	        }
 	      } else {
 	        importResult = { ok: false, error: 'No valid output was available to auto-import.' };
+	      }
+	    } else if (runMode === 'generate') {
+	      // v4.64: generate-only mode — archive the first valid output even though
+	      // we don't import it. Gives crash-recovery parity with the auto-import
+	      // branch: user can later drag the .json back onto the landing-page upload
+	      // box to materialize the quiz with zero Gemini calls.
+	      const firstValid = validations.find(function(item) { return item.ok; });
+	      if (firstValid) {
+	        _archiveImportedQuiz(
+	          firstValid.rawText,
+	          folderId,
+	          testName || firstValid.testName || 'generated-quiz'
+	        ).catch(function(e){ console.warn('[archive] error:', e); });
 	      }
 	    }
 	    appendBatchImportProgress({
@@ -28322,6 +28471,7 @@ Errors: ${escapeHTML(errors)}</div>
     reviewMarkedQuestion,
     promptNewSourceFolder,
     renameSourceFolder,
+    deleteSourceFolder,
     promptNewFolder,
     createFolder,
     showSubfolderCardMenu,
@@ -28379,6 +28529,8 @@ Errors: ${escapeHTML(errors)}</div>
     retryBatchImportQueueJob,
     refreshBatchImportQueue,
     toggleBatchImportQueueDetails,
+    toggleBicSection,
+    handleBatchImportFolderChange,
     openBatchReviewDraft,
     closeBatchReviewDraft,
     setBatchReviewDecision,
