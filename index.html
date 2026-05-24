@@ -888,10 +888,58 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 }
 #jobs-widget:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(0,0,0,.18); }
 #jobs-widget.has-jobs { display: block; }
-.jw-title { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+.jw-title { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; padding-right: 18px; /* v4.78: room for jw-min button */ }
 .jw-counts { font-weight: 600; color: var(--navy); }
 .jw-current { font-size: 11px; color: var(--muted); margin-top: 4px; padding-top: 4px; border-top: 1px dashed var(--border); }
 .jw-hint { font-size: 10px; color: var(--muted); margin-top: 4px; opacity: .7; }
+/* v4.78: Minimize button + pill state for #jobs-widget (mirrors floating-log-pill). */
+.jw-min {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+.jw-min:hover { color: var(--navy); background: rgba(0,0,0,.05); }
+#jobs-widget-pill {
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  z-index: 100;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 18px;
+  background: white;
+  color: var(--navy);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  user-select: none;
+  transition: transform .12s, box-shadow .12s;
+}
+#jobs-widget-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+}
+#jobs-widget-pill.active { display: flex; }
+.jwp-count {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 500;
+}
 
 /* Form fields in modals */
 .form-group { margin-bottom: 12px; }
@@ -1340,6 +1388,56 @@ body.quiz-fullscreen-mode .modal-overlay {
 .flw-event.flw-ok .flw-event-text { color: #7dcea0; }
 .flw-event-detail { color: #95a5a6; font-size: 10px; padding-left: 8px; }
 
+/* v4.78: Persistent-minimize pills for the floating log + jobs widgets.
+   When the user clicks the minimize button on either widget, the widget
+   hides and a tiny pill takes its place — events keep accumulating in the
+   background but never auto-restore the full panel. Click the pill to
+   restore. Persistent across jobs and across reloads (via localStorage). */
+.flw-min {
+  background: none;
+  border: none;
+  color: #95a5a6;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 6px;
+  border-radius: 3px;
+}
+.flw-min:hover {
+  color: #ecf0f1;
+  background: rgba(255, 255, 255, 0.08);
+}
+#floating-log-pill {
+  position: fixed;
+  bottom: 18px;
+  left: 18px;
+  z-index: 99;
+  width: 36px;
+  height: 36px;
+  border-radius: 18px;
+  background: #1a1f2e;
+  color: #f39c12;
+  border: 1px solid #2d3548;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 16px;
+  user-select: none;
+  transition: transform .12s, box-shadow .12s;
+}
+#floating-log-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+}
+#floating-log-pill.active { display: flex; }
+#floating-log-pill.pulse { animation: flwPulse 1.2s ease-out 1; }
+@keyframes flwPulse {
+  0%   { box-shadow: 0 0 0 0 rgba(243, 156, 18, 0.55), 0 4px 14px rgba(0, 0, 0, 0.3); }
+  100% { box-shadow: 0 0 0 10px rgba(243, 156, 18, 0), 0 4px 14px rgba(0, 0, 0, 0.3); }
+}
+
 </style>
 </head>
 <body>
@@ -1397,12 +1495,19 @@ body.quiz-fullscreen-mode .modal-overlay {
   <!-- v4.66: floating "active jobs" widget — fixed bottom-right, click opens BIC.
        Hidden by default (CSS display:none); revealed by renderJobsWidget() via
        the .has-jobs class when running+queued > 0. Updates live from the global
-       onQueueChanged subscription wired in App.init(). -->
+       onQueueChanged subscription wired in App.init().
+       v4.78: minimize button + companion #jobs-widget-pill for low-footprint
+       presence during quiz sessions. Click pill to restore full widget. -->
   <div id="jobs-widget" onclick="App.openBatchImportCenter()" title="Click to open Batch Import Center">
+    <button class="jw-min" onclick="App.minimizeJobsWidget(event)" title="Minimize">−</button>
     <div class="jw-title">⚡ Generation Queue</div>
     <div id="jw-counts" class="jw-counts"></div>
     <div id="jw-current" class="jw-current" style="display:none;"></div>
     <div class="jw-hint">Click for details</div>
+  </div>
+  <div id="jobs-widget-pill" onclick="App.restoreJobsWidget(event)" title="Restore Generation Queue">
+    <span class="jwp-icon">⚡</span>
+    <span class="jwp-count" id="jwp-count"></span>
   </div>
 
   <!-- ═══ MAIN ═══ -->
@@ -2478,12 +2583,17 @@ body.quiz-fullscreen-mode .modal-overlay {
     <span class="flw-icon">📋</span>
     <span class="flw-title" id="flw-title">Pipeline log</span>
     <button class="flw-clear" id="flw-clear-btn" onclick="App.clearFloatingLog(event)" title="Clear log">🗑</button>
+    <!-- v4.78: persistent minimize — collapses to #floating-log-pill, does NOT
+         re-open when new pipeline events arrive. -->
+    <button class="flw-min" id="flw-min-btn" onclick="App.minimizeFloatingLog(event)" title="Minimize">−</button>
     <button class="flw-close" id="flw-close-btn" onclick="App.dismissFloatingLog(event)" title="Hide for this job">×</button>
   </div>
   <div class="flw-body" id="flw-body">
     <div class="flw-event"><span class="flw-event-text" style="opacity:0.6;">Waiting for events…</span></div>
   </div>
 </div>
+<!-- v4.78: minimized state of #floating-log-widget. Tiny click-to-restore pill. -->
+<div id="floating-log-pill" onclick="App.restoreFloatingLog(event)" title="Restore pipeline log">📋</div>
 
 <!-- ═══ BATCH IMPORT CENTER PLACEHOLDER ═══ -->
 <div id="modal-batch-import-center" class="modal-overlay">
@@ -23332,10 +23442,14 @@ const App = (() => {
   // v4.66: floating jobs widget renderer. Auto-shows/hides #jobs-widget based on
   // whether there are running or queued jobs. Compact counts in jw-counts;
   // optional currently-running job name in jw-current.
+  // v4.78: respects _jobsWidgetState.userMinimized — when minimized, the full
+  // widget stays hidden and the #jobs-widget-pill shows the count instead.
   function renderJobsWidget(jobs) {
     const widget = document.getElementById('jobs-widget');
     const countsEl = document.getElementById('jw-counts');
     const currentEl = document.getElementById('jw-current');
+    const pill = document.getElementById('jobs-widget-pill');
+    const pillCount = document.getElementById('jwp-count');
     if (!widget || !countsEl) return;
 
     const list = Array.isArray(jobs) ? jobs : [];
@@ -23350,13 +23464,29 @@ const App = (() => {
       else if (status === 'needs_review') needsReview += 1;
     });
 
-    // Widget visibility: show only if there's something active or queued.
-    if (running + queued === 0) {
+    const activeCount = running + queued;
+
+    // Nothing active: hide both widget and pill.
+    if (activeCount === 0) {
       widget.classList.remove('has-jobs');
+      if (pill) pill.classList.remove('active');
       if (currentEl) { currentEl.textContent = ''; currentEl.style.display = 'none'; }
       return;
     }
+
+    // v4.78: user minimized — keep tracking state, show only the pill.
+    if (_jobsWidgetState && _jobsWidgetState.userMinimized) {
+      widget.classList.remove('has-jobs');
+      if (pill) {
+        pill.classList.add('active');
+        if (pillCount) pillCount.textContent = String(activeCount);
+      }
+      return;
+    }
+
+    // Default path: show full widget, hide pill.
     widget.classList.add('has-jobs');
+    if (pill) pill.classList.remove('active');
 
     const parts = [];
     parts.push(`● ${running} running`);
@@ -23380,6 +23510,35 @@ const App = (() => {
     }
   }
 
+  // v4.78: Persistent-minimize state for #jobs-widget. Survives jobs and reloads
+  // (localStorage). Pill at bottom-right keeps a tiny "⚡ N" indicator visible.
+  const _jobsWidgetState = {
+    userMinimized: (function() {
+      try { return localStorage.getItem('jwUserMinimized') === '1'; } catch (e) { return false; }
+    })(),
+  };
+
+  function _persistJobsWidgetMinimized(val) {
+    try { localStorage.setItem('jwUserMinimized', val ? '1' : '0'); } catch (e) { /* private mode */ }
+  }
+
+  function minimizeJobsWidget(e) {
+    if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+    _jobsWidgetState.userMinimized = true;
+    _persistJobsWidgetMinimized(true);
+    // Re-render with whatever jobs the queue currently holds.
+    const jobs = (_batchImportState && Array.isArray(_batchImportState.queue)) ? _batchImportState.queue : [];
+    renderJobsWidget(jobs);
+  }
+
+  function restoreJobsWidget(e) {
+    if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+    _jobsWidgetState.userMinimized = false;
+    _persistJobsWidgetMinimized(false);
+    const jobs = (_batchImportState && Array.isArray(_batchImportState.queue)) ? _batchImportState.queue : [];
+    renderJobsWidget(jobs);
+  }
+
   // ── v4.70: Floating Log Panel ────────────────────────────────────────────
   // Persistent live progress stream for the user — sibling of the floating
   // jobs widget. Survives BIC modal close (the inline bic-progress-log
@@ -23387,11 +23546,21 @@ const App = (() => {
   // Subscribes globally at App.init; events from window.nbmeDesktop.batchImport
   // .onProgress flow into _appendFloatingLogEvent below.
   let _floatingLogState = {
-    dismissedJobId: null,   // when set, widget stays hidden for that jobId only
+    dismissedJobId: null,   // when set, widget stays hidden for that jobId only (× button — per job)
     activeJobId: null,      // current job whose events are being shown
     maxEvents: 200,         // hard cap to keep DOM cheap
     lastMeaningfulText: '', // last non-heartbeat event text — used by smart-heartbeat fallback below
+    // v4.78: persistent across jobs and reloads. When true, the full widget
+    // stays hidden — only #floating-log-pill shows. New pipeline events keep
+    // appending to the DOM body silently; clicking the pill restores the panel.
+    userMinimized: (function() {
+      try { return localStorage.getItem('flwUserMinimized') === '1'; } catch (e) { return false; }
+    })(),
   };
+
+  function _persistFloatingLogMinimized(val) {
+    try { localStorage.setItem('flwUserMinimized', val ? '1' : '0'); } catch (e) { /* private mode */ }
+  }
 
   function _formatFlwTimestamp(ts) {
     try {
@@ -23534,19 +23703,41 @@ const App = (() => {
       body.removeChild(body.firstChild);
     }
     body.scrollTop = body.scrollHeight;
-    // Reveal the widget
-    widget.classList.add('has-events');
     // Update title to include source app name if we have a jobId
     const titleEl = document.getElementById('flw-title');
     if (titleEl) {
       const fileHint = event.file ? String(event.file).split(/[\\/]/).pop() : '';
       titleEl.textContent = 'Pipeline log' + (fileHint ? ' · ' + fileHint : '');
     }
+    // v4.78: if user has persistently minimized the widget, keep the full panel
+    // hidden and pulse the pill for a moment so they know activity is happening.
+    // The DOM body is still up to date for when they restore.
+    if (_floatingLogState.userMinimized) {
+      const pill = document.getElementById('floating-log-pill');
+      if (pill) {
+        pill.classList.add('active');
+        pill.classList.remove('pulse');
+        // Force a reflow so the animation restarts on every event.
+        // eslint-disable-next-line no-unused-expressions
+        void pill.offsetWidth;
+        pill.classList.add('pulse');
+      }
+    } else {
+      // Reveal the full widget
+      widget.classList.add('has-events');
+    }
     // Hide on job complete after a 4-second grace so the user can read the final event
     if (String(event.type || '') === 'job_complete') {
       setTimeout(function() {
         if (_floatingLogState.activeJobId === jobId) {
           widget.classList.remove('has-events');
+          const pill = document.getElementById('floating-log-pill');
+          // v4.78: also hide the pill on job complete IF the user hadn't
+          // explicitly minimized. If they minimized, leave the pill so they
+          // can still review the final events.
+          if (pill && !_floatingLogState.userMinimized) {
+            pill.classList.remove('active');
+          }
         }
       }, 4000);
     }
@@ -23563,6 +23754,34 @@ const App = (() => {
     if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
     const body = document.getElementById('flw-body');
     if (body) body.innerHTML = '';
+  }
+
+  // v4.78: persistent-minimize — collapses the full panel to #floating-log-pill
+  // and keeps it that way even when a new pipeline starts emitting events.
+  function minimizeFloatingLog(e) {
+    if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+    _floatingLogState.userMinimized = true;
+    _persistFloatingLogMinimized(true);
+    const widget = document.getElementById('floating-log-widget');
+    if (widget) widget.classList.remove('has-events');
+    const pill = document.getElementById('floating-log-pill');
+    if (pill) pill.classList.add('active');
+  }
+
+  function restoreFloatingLog(e) {
+    if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+    _floatingLogState.userMinimized = false;
+    _persistFloatingLogMinimized(false);
+    const pill = document.getElementById('floating-log-pill');
+    if (pill) { pill.classList.remove('active'); pill.classList.remove('pulse'); }
+    const widget = document.getElementById('floating-log-widget');
+    const body = document.getElementById('flw-body');
+    // Only show the full panel if there's something to show (events present
+    // OR there's an active job that may still be emitting).
+    const hasContent = body && body.children && body.children.length > 0;
+    if (widget && (hasContent || _floatingLogState.activeJobId)) {
+      widget.classList.add('has-events');
+    }
   }
 
   // v4.64: collapsible section toggle for BIC's Generation Queue + Job History.
@@ -29628,6 +29847,11 @@ Errors: ${escapeHTML(errors)}</div>
     acceptAllBatchReviewQuestions,
     dismissFloatingLog,
     clearFloatingLog,
+    // v4.78: persistent-minimize controls for the floating log + jobs widgets.
+    minimizeFloatingLog,
+    restoreFloatingLog,
+    minimizeJobsWidget,
+    restoreJobsWidget,
     rejectAllFlaggedBatchReviewQuestions,
     saveBatchReviewDecisions,
     importAcceptedBatchReviewQuestions,

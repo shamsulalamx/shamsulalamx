@@ -442,20 +442,40 @@ function completedBatchJobPatch(job, artifacts, now) {
       reportStatus = String(report?.status || '');
     } catch (_) {}
   }
-  const completedStatus = reportStatus === 'completed_with_review_required' || reportStatus === 'needs_review'
-    ? 'completed_with_review_required'
-    : 'completed';
+  // v4.78: PRESERVE failed/canceled/interrupted statuses from the saved report
+  // rather than forcing every reconciled job to 'completed'. Pre-v4.78 this
+  // function ignored the real status — any job with a completion-report.json on
+  // disk became 'completed' on the next app launch, even if it had been cancelled
+  // or had failed. That's how a cancelled Mehlman job showed up as Status:
+  // completed with Errors: [Job cancelled.] in the queue details.
+  const normalizedReportStatus = reportStatus === 'cancelled' ? 'canceled' : reportStatus;
+  const finalStatus = (normalizedReportStatus === 'failed'
+    || normalizedReportStatus === 'canceled'
+    || normalizedReportStatus === 'interrupted')
+    ? normalizedReportStatus
+    : (normalizedReportStatus === 'completed_with_review_required' || normalizedReportStatus === 'needs_review'
+        ? 'completed_with_review_required'
+        : 'completed');
+  const progressMessage = finalStatus === 'completed_with_review_required'
+    ? 'Batch job completed with review artifacts.'
+    : (finalStatus === 'canceled'
+        ? 'Batch job canceled by user.'
+        : (finalStatus === 'failed'
+            ? 'Batch job failed.'
+            : (finalStatus === 'interrupted'
+                ? 'Batch job interrupted before completion.'
+                : 'Batch job completed.')));
   return {
     ...job,
-    status: completedStatus,
+    status: finalStatus,
     finishedAt: job.finishedAt || job.completedAt || now,
     completedAt: job.completedAt || job.finishedAt || now,
     updatedAt: now,
     outputPaths,
     reportPath: job.reportPath || artifacts.completionReportPath || null,
     progress: job.progress || {
-      phase: completedStatus,
-      message: completedStatus === 'completed_with_review_required' ? 'Batch job completed with review artifacts.' : 'Batch job completed.',
+      phase: finalStatus,
+      message: progressMessage,
       updatedAt: now
     }
   };
@@ -1249,13 +1269,22 @@ ipcMain.handle('nbme:batch-import:cancel-job', async (_event, payload) => {
     if (!active) {
       return safeError('BATCH_JOB_NOT_RUNNING', 'No running batch job was found for that id.');
     }
+    // v4.78: idempotent cancel — pre-v4.78 each cancel click sent a fresh
+    // SIGTERM, which showed up as 3x JOB_CANCELLED log lines for one user
+    // action and burned CPU on signal handling.
+    if (active.cancelled) {
+      return { ok: true, jobId, status: 'canceled', alreadyCancelled: true };
+    }
     active.cancelled = true;
     active.cancelledAt = new Date().toISOString();
+    // v4.78: 'canceled' (one L) everywhere — pre-v4.78 this record used
+    // 'cancelled' (two L's) while the queue + close-handler used 'canceled',
+    // which left the record + queue out of sync.
     updateBatchJobRecord(jobId, {
-      status: 'cancelled',
+      status: 'canceled',
       completedAt: active.cancelledAt,
       errors: [],
-      warnings: [...(active.warnings || []), 'Job cancelled by user.']
+      warnings: [...(active.warnings || []), 'Job canceled by user.']
     });
     updateBatchQueueJob(jobId, {
       status: 'canceled',
@@ -1614,7 +1643,12 @@ async function runQueuedBatchJob(job) {
       const active = activeBatchJobs.get(manifest.jobId);
       if (active?.killTimer) clearTimeout(active.killTimer);
       activeBatchJobs.delete(manifest.jobId);
-      const wasCancelled = !!active?.cancelled;
+      // v4.78: also trust the Python runner's emitted `cancelled` flag — the
+      // in-memory active.cancelled can miss races (e.g. external SIGTERM, OS-level
+      // kill, or cancel handler that returned NOT_RUNNING right when proc died).
+      // Symptom pre-v4.78: completion-report.json saved with status='failed' and
+      // errors=['Job cancelled.'] instead of status='canceled' with no errors.
+      const wasCancelled = !!active?.cancelled || (finalEvent && finalEvent.cancelled === true);
       const runtimeSeconds = Math.round((Date.now() - launchedAt) / 100) / 10;
       const ok = !wasCancelled && code === 0 && (!finalEvent || finalEvent.ok !== false);
       const report = finalEvent?.report && typeof finalEvent.report === 'object' ? finalEvent.report : {};
