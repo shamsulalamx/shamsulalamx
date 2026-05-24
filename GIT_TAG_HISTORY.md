@@ -516,7 +516,7 @@ Not validated by this milestone:
 
 ## v4.57-amboss-deterministic-hybrid-stable
 
-Commits: TBD (source commit + doc commit landing together).
+Commits: `9ad47c9` (source) + `0482322` (doc).
 
 Meaning: Full rewrite of the AMBOSS PDF BIC extractor as a **deterministic-first, Gemini-assisted pipeline**. Replaces the prior architecture where every PDF page got its own Gemini call (1 call × 39 pages × ~$0.013 ≈ $0.50 per import, ~9 min wall clock) — a cost the user surfaced as "the current Gemini extraction is unnecessary; the only thing we actually need vision for is the blown-up clinical-image pages."
 

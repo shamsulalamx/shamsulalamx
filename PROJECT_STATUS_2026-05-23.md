@@ -22,7 +22,7 @@ New pipeline in `tools/lecture-slide-question-generator/generate_lecture_slide_q
 
 Field-validated on `Test Amboss.pdf` (8 QBank questions across 39 pages of browser screenshots + click-to-enlarge clinical images): all 8 questions extracted with clean choices, correct answers, educational objectives, retrieval tags, review pearls, and clinical images attached to the correct explanation panels. Runtime ~2.5 min, cost ~$0.11 per import (down from ~9 min / ~$0.50).
 
-Tag commit: TBD (lands with this doc commit).
+Tag commits: `9ad47c9` (source) + `0482322` (doc).
 
 ### v4.56 — Live Images & Tables generation through BIC + multi-image merge + duplicate-explanation render fix (field-validated)
 
