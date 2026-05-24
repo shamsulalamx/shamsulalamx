@@ -951,7 +951,15 @@ def raw_gemini_call(api_key: str, prompt: str, temperature: float, max_tokens: i
     return str(parts[0].get("text") or "")
 
 
-def raw_gemini_image_call(api_key: str, prompt: str, image_paths: list[Path], temperature: float, max_tokens: int = 8192, timeout_seconds: int = 90) -> str:
+def raw_gemini_image_call(
+    api_key: str,
+    prompt: str,
+    image_paths: list[Path],
+    temperature: float,
+    max_tokens: int = 8192,
+    timeout_seconds: int = 90,
+    response_mime_type: str | None = None,
+) -> str:
     parts: list[dict[str, Any]] = [{"text": prompt}]
     for image_path in image_paths:
         parts.append({
@@ -961,12 +969,17 @@ def raw_gemini_image_call(api_key: str, prompt: str, image_paths: list[Path], te
             }
         })
     url = f"{GEMINI_API_BASE}/{GEMINI_MODEL}:generateContent?key={api_key}"
+    generation_config: dict[str, Any] = {
+        "temperature": temperature,
+        "maxOutputTokens": max_tokens,
+    }
+    if response_mime_type:
+        # Forcing application/json prevents Gemini from emitting prose / markdown
+        # fences instead of valid JSON, dramatically improving JSON parse success.
+        generation_config["responseMimeType"] = response_mime_type
     payload = json.dumps({
         "contents": [{"role": "user", "parts": parts}],
-        "generationConfig": {
-            "temperature": temperature,
-            "maxOutputTokens": max_tokens,
-        },
+        "generationConfig": generation_config,
     }).encode("utf-8")
     req = urllib.request.Request(
         url,
@@ -5927,7 +5940,8 @@ def decompose_amboss_input(input_path: Path, limit_pages: int = 5) -> dict[str, 
     pages: list[dict[str, Any]] = []
     failures: list[dict[str, Any]] = []
     suffix = input_path.suffix.lower()
-    limit_pages = max(1, int(limit_pages or 5))
+    # limit_pages == 0 (or None) → no cap (process every page). Positive value is a hard cap.
+    limit_pages_int = int(limit_pages or 0)
     if suffix == ".pdf":
         fitz = optional_import_fitz()
         pdfplumber = optional_import_pdfplumber()
@@ -5940,7 +5954,8 @@ def decompose_amboss_input(input_path: Path, limit_pages: int = 5) -> dict[str, 
                 pdf_doc = fitz.open(str(input_path))
             if pdfplumber:
                 plumber_pdf = pdfplumber.open(str(input_path))
-            page_count = min(limit_pages, len(pdf_doc) if pdf_doc else len(plumber_pdf.pages))
+            total_pages = len(pdf_doc) if pdf_doc else len(plumber_pdf.pages)
+            page_count = total_pages if limit_pages_int <= 0 else min(limit_pages_int, total_pages)
             for page_index in range(page_count):
                 page_num = page_index + 1
                 page_id = f"{stem}_p{page_num:04d}_{source_hash[:8]}"
@@ -6510,7 +6525,1274 @@ def amboss_audit_page_images(page: dict[str, Any], question: dict[str, Any] | No
         })
 
 
-def process_amboss_input(input_path: Path, limit_pages: int = 5) -> Path:
+# ── Deterministic AMBOSS extractor (v4.57) ─────────────────────────────────────
+# AMBOSS QBank PDFs are flattened browser screenshots — every page is one image
+# with no text layer. The previous Gemini-per-page extractor was 9 min / $0.50
+# per import; this deterministic OCR-based pipeline runs in seconds for free.
+# Architecture:
+#   1. Render each PDF page to PNG (decompose_amboss_input already does this).
+#   2. tesseract OCR per page → clean text.
+#   3. Classify each page as `qbank_screenshot` or `blown_up_image` from
+#      (word count, presence of choice markers, presence of nav pill).
+#   4. Group screenshot pages by AMBOSS nav pill `< N / M >`.
+#   5. Per group, extract stem, choices A–H, per-choice explanations.
+#   6. Detect correct answer by text-pattern signature ("is the most likely…").
+#   7. Attach blown-up image pages to the most-recent question's explanationImages.
+
+_AMBOSS_NAV_PILL = re.compile(r"<\s*(\d+)\s*/\s*(\d+)\s*>")
+_AMBOSS_NAV_FALLBACK = re.compile(r"\b(\d+)\s*/\s*(\d+)\b")
+_AMBOSS_CHOICE_HEADER = re.compile(
+    r"^[\s'`\"‘’“”]*\(?([A-H])\)\s*[\|:]?\s*(.{3,200}?)\s*$",
+    re.MULTILINE,
+)
+_AMBOSS_VIGNETTE_OPENER = re.compile(
+    # Canonical clinical vignette opener: "A NN-year-old", "An 18-month-old", etc.
+    # OCR variants we've seen and need to match:
+    #   "A 13-month-old"  (clean)
+    #   "An 18-year-old"  (clean)
+    #   "A.13-month-old"  (OCR replaces space with period)
+    #   "A,13 month old"  (OCR replaces space with comma)
+    #   "A 13 month old"  (OCR drops hyphens)
+    #   "A 13month-old"   (OCR joins digit + word)
+    r"\bA[n]?[\s.,;:]+\d+[\s.,\-]*(?:year|month|day|week)[\s.,\-]*old\b",
+    re.IGNORECASE,
+)
+_AMBOSS_POSITIVE_SIGNAL = re.compile(
+    r"\b(?:is the most likely|is the appropriate|was the appropriate|are the appropriate|"
+    r"is the best (?:initial )?(?:treatment|management|step|next step)|"
+    r"is the (?:correct|preferred) (?:diagnosis|treatment|management|answer)|"
+    r"this patient (?:most likely has|has|likely has))\b",
+    re.IGNORECASE,
+)
+_AMBOSS_NEGATIVE_SIGNAL = re.compile(
+    r"\b(?:is not consistent|would be (?:very )?unusual|does not (?:typically|usually|commonly)|"
+    r"is inconsistent with|are not typical|is not (?:the|a) (?:typical|common|likely)|"
+    r"this patient is instead presenting|is unlikely to|is incorrect because|are very rare)\b",
+    re.IGNORECASE,
+)
+
+
+def parse_amboss_nav_pill(ocr_text: str, expected_total: int | None = None) -> tuple[int, int] | None:
+    """Return (current, total) for the AMBOSS QBank navigation pill `< N / M >`.
+
+    If `expected_total` is provided (i.e. the majority M observed across the PDF),
+    candidate matches are validated against it — this throws out OCR misreads like
+    "24/8" → which can arise when tesseract misreads "2/8" by joining the "2" with
+    an adjacent character. Returns None when no plausible pill is found.
+    """
+    if not ocr_text:
+        return None
+    candidates: list[tuple[int, int]] = []
+    for m in _AMBOSS_NAV_PILL.finditer(ocr_text):
+        candidates.append((int(m.group(1)), int(m.group(2))))
+    for m in _AMBOSS_NAV_FALLBACK.finditer(ocr_text):
+        n, total = int(m.group(1)), int(m.group(2))
+        # Reject vital-signs / lab-value patterns like "120/min", "80/mm"
+        end = m.end()
+        tail = ocr_text[end:end + 6].lower()
+        if tail.startswith(("min", "hour", "dl", "ml", "kg", "mm", "mg", "mmh")):
+            continue
+        if 1 <= n <= total <= 200:
+            candidates.append((n, total))
+    for n, total in candidates:
+        if expected_total is not None and total != expected_total:
+            continue
+        if 1 <= n <= total <= 200:
+            return (n, total)
+    return None
+
+
+def classify_amboss_page(ocr_text: str) -> str:
+    """Classify a page as `qbank_screenshot` (text + choices) or `blown_up_image` (mostly image, caption only)."""
+    text = ocr_text or ""
+    words = len(text.split())
+    choice_headers = len(_AMBOSS_CHOICE_HEADER.findall(text))
+    if words < 130 and choice_headers < 3 and not _AMBOSS_NAV_PILL.search(text):
+        return "blown_up_image"
+    return "qbank_screenshot"
+
+
+def amboss_stem_fingerprint(text: str) -> str:
+    """Return a short fingerprint of the clinical vignette stem, used to group
+    pages of the same AMBOSS question together. Returns an empty string when no
+    vignette is detectable (the page is a blown-up image or cover sheet).
+
+    Anchors on the position of the canonical vignette opener (e.g., "A 13-month-old
+    girl is brought…" → matches `A 13-month-old`). This makes the fingerprint
+    insensitive to OCR'd UI chrome that precedes the real stem on some pages
+    (e.g., the OCR sometimes prepends "OA " or "me " from the AMBOSS sidebar icons)."""
+    if not text:
+        return ""
+    m = _AMBOSS_VIGNETTE_OPENER.search(text)
+    if not m:
+        return ""
+    snippet = text[m.start(): m.start() + 110]
+    normalized = re.sub(r"[^a-z0-9 ]", " ", snippet.lower())
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    if len(normalized) < 30:
+        return ""
+    return normalized[:70]
+
+
+def _AMBOSS_choice_anchor_words(label_text: str, n: int = 3) -> list[str]:
+    """First `n` significant words of a choice label, stripping stopwords. Used to
+    locate the choice's explanation paragraph (AMBOSS explanations restate the
+    choice text but often vary articles, e.g., "Replication of the attenuated
+    vaccine strain" → "Replication of an attenuated viral strain…")."""
+    stopwords = {"a", "an", "the", "of", "is", "are", "was", "were", "with", "to",
+                 "in", "on", "for", "by", "and", "or", "as", "at", "from"}
+    words = re.findall(r"[a-z]+", (label_text or "").lower())
+    significant = [w for w in words if w not in stopwords]
+    return significant[:n]
+
+
+def amboss_find_all_choice_bars(asset_path: Path) -> list[dict[str, Any]]:
+    """Detect horizontal AMBOSS choice header bars on a rendered page and
+    classify each as 'green' (correct answer) or 'pink' (wrong answer).
+
+    AMBOSS draws the correct-answer choice header in green vs pink/red for the
+    wrong answers on the explanation-reveal pages. Returns a list of bars sorted
+    top-to-bottom; each entry has {'y_center', 'color'} where color is one of
+    'green', 'pink', or 'unknown'. The caller maps the green bar's INDEX to the
+    choice label (A, B, C, …) since OCR of AMBOSS's styled choice circles is
+    too unreliable to read directly."""
+    fitz = optional_import_fitz()
+    if not fitz or not asset_path or not asset_path.exists():
+        return []
+    try:
+        pix = fitz.Pixmap(str(asset_path))
+        if pix.colorspace.name != "DeviceRGB":
+            pix = fitz.Pixmap(fitz.csRGB, pix)
+        w, h, n = pix.width, pix.height, pix.n
+        samples = pix.samples
+    except Exception:
+        return []
+    # Sample three x-coordinates across the choice-bar region (left of the page
+    # content, where the bar background colors are most distinct).
+    sample_xs = [int(w * 0.25), int(w * 0.30), int(w * 0.35)]
+
+    def classify_row(y: int) -> str:
+        green_votes = 0
+        pink_votes = 0
+        for x in sample_xs:
+            if x >= w:
+                continue
+            off = (y * w + x) * n
+            r, g, b = samples[off], samples[off + 1], samples[off + 2]
+            # Pale green: G > 200 and notably above R and B
+            if g > 200 and g > r + 5 and g > b + 5 and r < 240 and b < 240:
+                green_votes += 1
+            # Pale pink: R > 230 and notably above G and B
+            elif r > 230 and r > g + 5 and r > b + 5 and g < 240 and b < 240:
+                pink_votes += 1
+        if green_votes >= 2:
+            return "green"
+        if pink_votes >= 2:
+            return "pink"
+        return "other"
+
+    # Collect contiguous runs of green / pink rows.
+    runs: list[dict[str, Any]] = []
+    cur: list[tuple[int, str]] = []
+    last_color = None
+    for y in range(h):
+        c = classify_row(y)
+        if c in ("green", "pink"):
+            if last_color is not None and c != last_color:
+                if len(cur) >= 8:
+                    ys = [item[0] for item in cur]
+                    runs.append({"y_center": (ys[0] + ys[-1]) // 2, "color": last_color})
+                cur = []
+            cur.append((y, c))
+            last_color = c
+        else:
+            if len(cur) >= 8 and last_color is not None:
+                ys = [item[0] for item in cur]
+                runs.append({"y_center": (ys[0] + ys[-1]) // 2, "color": last_color})
+            cur = []
+            last_color = None
+    if len(cur) >= 8 and last_color is not None:
+        ys = [item[0] for item in cur]
+        runs.append({"y_center": (ys[0] + ys[-1]) // 2, "color": last_color})
+    return runs
+
+
+def amboss_ocr_choice_letter_at_y(asset_path: Path, y_center: int, strip_height: int = 50) -> str | None:
+    """OCR a narrow horizontal strip centered at `y_center` and return the choice
+    letter (A–H) if detected. Used to identify which choice the green correct-answer
+    bar belongs to."""
+    if not asset_path or not asset_path.exists() or not shutil.which("tesseract"):
+        return None
+    fitz = optional_import_fitz()
+    if not fitz:
+        return None
+    try:
+        pix = fitz.Pixmap(str(asset_path))
+        w, h = pix.width, pix.height
+        y_start = max(0, y_center - strip_height // 2)
+        y_end = min(h, y_center + strip_height // 2)
+        clip = fitz.IRect(0, y_start, w, y_end)
+        crop = fitz.Pixmap(pix, pix.clip if hasattr(pix, "clip") else None)
+        # Easier path: render via PIL-like cropping using fitz Pixmap.set_rect or just
+        # write the full image and let tesseract scan the strip via --psm 7. The
+        # simpler approach: write a region-cropped PNG.
+        # fitz Pixmap doesn't trivially crop; use PIL instead.
+        from PIL import Image
+        full = Image.open(str(asset_path))
+        crop_img = full.crop((0, y_start, w, y_end))
+        import tempfile as _tf
+        with _tf.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            crop_img.save(f.name)
+            tmp = f.name
+        proc = subprocess.run(["tesseract", tmp, "-", "--psm", "7"],
+                              capture_output=True, text=True, timeout=15)
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        if proc.returncode != 0:
+            return None
+        line = proc.stdout.strip()
+        # Look for a single capital letter A-H as a token at the start (after %)
+        m = re.search(r"(?:^|[^A-Za-z])([A-H])(?:[^A-Za-z]|$)", line)
+        if m:
+            return m.group(1)
+    except Exception:
+        return None
+    return None
+
+
+
+
+
+def extract_amboss_stem(text: str) -> str:
+    """Extract the clinical vignette from OCR text. Starts at the first vignette
+    opener match position, ends at the first choice marker or the trailing `?` of
+    the lead-in. Trims OCR'd leading chrome (punctuation, sidebar fragments) by
+    cutting BEFORE the matched opener position."""
+    if not text:
+        return ""
+    m = _AMBOSS_VIGNETTE_OPENER.search(text)
+    if not m:
+        return ""
+    # Start cleanly at the matched opener position (drops OCR noise like "- " or
+    # "; " that sometimes prefixes the stem).
+    remainder = text[m.start():]
+    lines = remainder.split("\n")
+    stem_lines: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if re.match(r"[\s'`\"‘’“”]*\(?[A-H]\)\s+\S", stripped):
+            break
+        if stripped:
+            stem_lines.append(stripped)
+        if stripped.endswith("?"):
+            break
+    return re.sub(r"\s+", " ", " ".join(stem_lines)).strip()
+
+
+def extract_amboss_choices(text: str) -> list[dict[str, str]]:
+    """Extract short answer choice labels (A–H). AMBOSS renders the choice letter
+    inside a styled circle which tesseract often misreads as `@)|`, `©l`, `©)`,
+    `(©)`, etc. Pure label-based regex misses most of these, so we use a TWO-PASS
+    strategy:
+
+    1. PRIMARY = positional inference. Find the stem's lead-in question (line
+       ending in `?`) and treat the next 2–8 short, choice-shaped lines as the
+       answer choices in document order, assigning A, B, C, … to each.
+    2. FALLBACK = label-based regex. When positional inference fails (e.g., the
+       lead-in question wasn't OCR'd cleanly), fall back to the prior approach.
+
+    When the same choice text is encountered in multiple page views (stem-only +
+    explanation-reveal), prefer the SHORTER occurrence (which is the label, not
+    the explanation paragraph)."""
+    if not text:
+        return []
+    # PRIMARY — positional inference.
+    positional = _extract_amboss_choices_positional(text)
+    if 4 <= len(positional) <= 9:
+        return positional
+    # FALLBACK — label-based regex.
+    seen: dict[str, str] = {}
+    for m in _AMBOSS_CHOICE_HEADER.finditer(text):
+        label = m.group(1)
+        candidate = m.group(2).strip()
+        candidate = re.sub(r"\s+(?:bd|sa|»\s*Feedback|»|sss|nn).*$", "", candidate, flags=re.IGNORECASE)
+        candidate = candidate.rstrip(" .|:")
+        if not candidate:
+            continue
+        existing = seen.get(label)
+        if existing is None or len(candidate) < len(existing):
+            seen[label] = candidate
+    return [{"label": label, "text": seen[label]} for label in sorted(seen.keys())]
+
+
+# Per-line patterns used by positional choice inference.
+_AMBOSS_LEAD_IN_QUESTION = re.compile(
+    r"\b(?:which of the following|what is the (?:most likely|best initial|next best|most appropriate)|"
+    r"what should|the most likely diagnosis|which one of the following)\b.{0,200}\?",
+    re.IGNORECASE | re.DOTALL,
+)
+_AMBOSS_CHOICE_SHAPED_LINE = re.compile(
+    # A choice line: optional OCR-noise marker prefix (anything before the first letter),
+    # then 3–180 chars of choice text. Reject lines that are too short or chrome-like.
+    r"^[\s\W_]{0,8}([A-Za-z][A-Za-z0-9\-, ()'\":/+%]{2,180})\s*$"
+)
+
+
+def _extract_amboss_choices_positional(text: str) -> list[dict[str, str]]:
+    """Find the lead-in question's terminating `?`, then collect the next 2–8
+    short lines that look like real choice candidates and label them A, B, C, …
+    in document order. Robust against OCR misreads of AMBOSS's styled choice
+    letters (which often come back as `@`, `©`, `©l`, `©)`, etc.) but rejects
+    sidebar chrome and explanation-page stem repetitions."""
+    if not text:
+        return []
+    m = _AMBOSS_LEAD_IN_QUESTION.search(text)
+    if not m:
+        return []
+    cursor = m.end()
+    lines = text[cursor:].split("\n")
+    sidebar_re = re.compile(
+        r"^(?:overview|library|qbank|analysis|shop|account|menu|feedback|search"
+        r"|show\s+answer|caption|snc|snape|ape|hide\s+answer|next|previous"
+        r"|terms\s+(?:and|of)|privacy|legal|support|contact|ideas)\b",
+        re.IGNORECASE,
+    )
+    # OCR'd sidebar icons + labels often appear as 2–4-char garbage at the start
+    # of a line: "OA", "ZY", "DO i", "ea F", "Shop i", "Account j", "ame Th-",
+    # "es a", "Si a", etc. Require choice lines to start with a sequence of
+    # letters that look like the beginning of a clinical noun phrase: 3+ chars
+    # of alpha (allowing an initial capital like "Cerebral", "Intravenous",
+    # "Esophagogastroduodenoscopy").
+    looks_like_real_choice = re.compile(r"^[A-Z][a-z]{2,}")
+    looks_like_amboss_stem = re.compile(
+        r"\bA[n]?\s+\d+[\s\-]*(?:year|month|day|week)[\s\-]*old\b",
+        re.IGNORECASE,
+    )
+    raw_candidates: list[str] = []
+    misses_in_row = 0
+    for raw in lines:
+        line = raw.strip()
+        if not line:
+            continue
+        if sidebar_re.match(line):
+            continue
+        # Stop if a stem opener appears — that's the explanation-page stem
+        # repetition, we've left the choice block.
+        if looks_like_amboss_stem.search(line):
+            break
+        # Stop if a line is very long (paragraph content from the explanation panel).
+        if len(line) > 180:
+            break
+        # Stop if a new lead-in question shows up (next question's stem).
+        if line.endswith("?") and len(line.split()) > 5:
+            break
+        m2 = _AMBOSS_CHOICE_SHAPED_LINE.match(line)
+        if not m2:
+            misses_in_row += 1
+            if misses_in_row >= 5 and raw_candidates:
+                break
+            continue
+        candidate = m2.group(1).strip().rstrip(" .|:")
+        # Reject short garbage and lines that don't start with a real choice word.
+        if len(candidate) < 6 or not looks_like_real_choice.match(candidate):
+            misses_in_row += 1
+            if misses_in_row >= 5 and raw_candidates:
+                break
+            continue
+        misses_in_row = 0
+        raw_candidates.append(candidate)
+        if len(raw_candidates) >= 9:
+            break
+    # Dedupe (preserving order) and cap at 8 (AMBOSS max choices).
+    seen_norm: set[str] = set()
+    deduped: list[str] = []
+    for c in raw_candidates:
+        norm = re.sub(r"\W+", "", c.lower())[:40]
+        if norm in seen_norm:
+            continue
+        seen_norm.add(norm)
+        deduped.append(c)
+        if len(deduped) >= 8:
+            break
+    if not (2 <= len(deduped) <= 8):
+        return []
+    return [{"label": LABELS_AH[i], "text": deduped[i]} for i in range(len(deduped))]
+
+
+# Labels A–H used by positional inference (LABELS in this file is the global
+# A–D constant for non-AMBOSS sources, so we declare a local 8-letter list).
+LABELS_AH = ["A", "B", "C", "D", "E", "F", "G", "H"]
+
+
+def extract_amboss_choice_explanations(text: str, choices: list[dict[str, str]]) -> dict[str, str]:
+    """For each choice, find the per-choice explanation paragraph. AMBOSS explanations
+    restate the choice text but often vary articles and synonyms — e.g., the choice
+    "Replication of the attenuated vaccine strain" is restated as "Replication of an
+    attenuated viral strain is the most likely explanation…". To match across that
+    drift, we anchor on the first 3 SIGNIFICANT words of the label (skipping `a`,
+    `an`, `the`, `of`, `is`, etc.) connected by `.{0,30}` wildcards."""
+    out: dict[str, str] = {}
+    if not text:
+        return out
+    for choice in choices:
+        label = choice["label"]
+        # n=2 (just the first 2 significant words) is lenient enough to handle
+        # AMBOSS's article/synonym substitutions across views — e.g., the choice
+        # "Replication of the attenuated vaccine strain" is restated in the
+        # explanation as "Replication of an attenuated viral strain…" (the third
+        # significant word changes "vaccine" → "viral").
+        anchor_words = _AMBOSS_choice_anchor_words(choice["text"], n=2)
+        if len(anchor_words) < 2:
+            continue
+        anchor_re = r"\b" + r"\b.{0,30}\b".join(re.escape(w) for w in anchor_words) + r"\b"
+        # Prefer matches where the anchor is followed by an explanatory verb
+        # within ~50 chars — that's the canonical "Choice X is/are/describes…"
+        # shape of an AMBOSS explanation paragraph. Without this preference the
+        # anchor would attach to the bare choice label on the stem-only view
+        # (which appears before the explanation-reveal page in combined_text).
+        explanation_pattern = re.compile(
+            rf"(?P<body>{anchor_re}[^\n]{{0,50}}\b(?:is|are|was|were|describes|"
+            rf"may|can|would|leads|causes|occurs|presents|results|refers|"
+            rf"affects|requires|prevents|reduces|increases|develops|"
+            rf"includes|involves|represents)\b.{{40,}}?)"
+            r"(?=\n\s*\n|\n[\s'`\"‘’“”]*\(?[A-H]\)\s+\S|\Z)",
+            re.DOTALL | re.IGNORECASE,
+        )
+        best = ""
+        for m in explanation_pattern.finditer(text):
+            body = re.sub(r"\s+", " ", m.group("body")).strip()
+            if len(body) > len(best):
+                best = body
+        # Fallback to the original looser pattern if the verb-anchored search
+        # turned up nothing (some explanations use atypical phrasing).
+        if not best:
+            fallback_pattern = re.compile(
+                rf"(?P<body>{anchor_re}.{{40,}}?)(?=\n\s*\n|\n[\s'`\"‘’“”]*\(?[A-H]\)\s+\S|\Z)",
+                re.DOTALL | re.IGNORECASE,
+            )
+            for m in fallback_pattern.finditer(text):
+                body = re.sub(r"\s+", " ", m.group("body")).strip()
+                if len(body) > len(best):
+                    best = body
+        if len(best) > 80:
+            out[label] = best
+    return out
+
+
+def detect_amboss_correct_answer(explanations: dict[str, str], default_label: str) -> str:
+    """Score per-choice explanations: positive signals (`is the most likely`) +5,
+    negative signals (`is not consistent with`) -2. Highest score wins. If no
+    explanation has a positive signal, fall back to default_label and the caller
+    surfaces a warning."""
+    scored: list[tuple[int, str]] = []
+    for label, exp in explanations.items():
+        score = 0
+        if _AMBOSS_POSITIVE_SIGNAL.search(exp):
+            score += 5
+        if _AMBOSS_NEGATIVE_SIGNAL.search(exp):
+            score -= 2
+        scored.append((score, label))
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    if scored and scored[0][0] > 0:
+        return scored[0][1]
+    return default_label
+
+
+def derive_amboss_educational_objective(correct_explanation: str, stem: str = "") -> str:
+    """First-sentence summary of the correct-answer explanation, capped at 200
+    chars. When the explanation couldn't be extracted (empty), fall back to a
+    stem-derived summary so each question gets a UNIQUE objective string — the
+    app-ready validator rejects the entire export when two questions share an
+    identical educational objective."""
+    if correct_explanation:
+        first_period = correct_explanation.find(".")
+        if 30 < first_period < 240:
+            return correct_explanation[: first_period + 1].strip()
+        return correct_explanation[:200].strip()
+    if stem:
+        stem_summary = re.sub(r"\s+", " ", stem).strip()[:160]
+        return f"Review the AMBOSS clinical scenario: {stem_summary}"
+    return "Review the AMBOSS-extracted explanation."
+
+
+def _amboss_collect_screenshot_asset_paths(screenshots: list[dict[str, Any]], limit: int = 4) -> list[Path]:
+    """Return up to `limit` rendered page PNG paths for the question's screenshot
+    pages. Used to send page images to Gemini for the hybrid clean-up call."""
+    out: list[Path] = []
+    for entry in screenshots[:limit]:
+        image_assets = entry["page"].get("images") or []
+        if not image_assets:
+            continue
+        asset_str = str(image_assets[0].get("assetPath") or "")
+        if not asset_str:
+            continue
+        asset_path = Path(asset_str)
+        if not asset_path.is_absolute():
+            asset_path = BASE_DIR / asset_path
+        if asset_path.exists():
+            out.append(asset_path)
+    return out
+
+
+def amboss_gemini_extract_question(
+    screenshots: list[dict[str, Any]],
+    stem: str,
+    api_key: str,
+) -> dict[str, Any] | None:
+    """Make ONE Gemini call per AMBOSS question to extract everything that the
+    deterministic OCR pipeline can't get cleanly: answer choices, correct
+    answer, per-choice explanations, educational objective, retrieval tag, and
+    review pearl.
+
+    AMBOSS QBank PDFs are flattened browser screenshots — the styled choice
+    letter circles, the green correct-answer bar, and the wrong-answer rationale
+    paragraphs are all surrounded by sidebar / browser-chrome OCR noise that
+    can't be filtered out reliably. Letting Gemini READ the rendered page
+    images directly is the only way to get clean structured output without
+    paying for one call per page.
+
+    Returns the structured question dict on success, or None on failure."""
+    image_paths = _amboss_collect_screenshot_asset_paths(screenshots, limit=4)
+    if not image_paths:
+        return None
+    prompt = (
+        "You are extracting a structured medical exam question from screenshots of "
+        "an AMBOSS QBank PDF. The clinical vignette stem has already been extracted "
+        "from OCR (provided below). From the attached page images (which show the "
+        "same question across multiple views — stem-only, expanded layout, and the "
+        "explanation-reveal view where each choice's expanded rationale is visible), "
+        "extract the structured question.\n"
+        "\n"
+        "Strict rules:\n"
+        "  - The CORRECT answer choice is the one whose header is rendered with a "
+        "GREEN background on the explanation-reveal page. Wrong answer headers are "
+        "PINK/RED.\n"
+        "  - Answer choices are short noun phrases (typically 3-15 words). Do NOT "
+        "include explanation text in the choice 'text' field.\n"
+        "  - Per-choice explanations are the multi-sentence paragraphs under each "
+        "choice on the explanation-reveal page. Capture them as clean prose — "
+        "strip out AMBOSS sidebar chrome (Overview, Library, Qbank, Analysis, "
+        "Shop, Account), percentage badges ('48%'), navigation pill text "
+        "('< 1 / 8 >'), the doctor-avatar hint icon, footer text, taskbar, and "
+        "any other UI artifacts. Each explanation should read like a textbook "
+        "paragraph, not OCR noise.\n"
+        "  - educationalObjective: ONE concise sentence (under 200 chars) "
+        "describing the key teaching point of the correct answer.\n"
+        "  - retrievalTag: 3-8 words capturing the testable concept (e.g., "
+        "'Pellagra — niacin deficiency', 'Acute pancreatitis: Cullen sign').\n"
+        "  - reviewPearl: ONE concise sentence (under 250 chars) — the single "
+        "highest-yield take-away from this question.\n"
+        "\n"
+        "Return strict JSON only — no markdown fences, no commentary outside JSON. "
+        "Schema:\n"
+        "{\n"
+        '  "answerChoices": [{"label": "A", "text": "…"}, …],\n'
+        '  "correctAnswer": "F",\n'
+        '  "correctExplanation": "1-3 sentence prose explanation of why the correct answer is correct",\n'
+        '  "incorrectExplanations": [\n'
+        '    {"label": "A", "explanation": "1-3 sentence prose explanation of why this is wrong"},\n'
+        "    …\n"
+        "  ],\n"
+        '  "educationalObjective": "…",\n'
+        '  "retrievalTag": "…",\n'
+        '  "reviewPearl": "…"\n'
+        "}\n"
+        "\n"
+        f"Stem (already extracted via OCR — use as reference; you do not need to repeat it): {stem[:600]}"
+    )
+    try:
+        raw = raw_gemini_image_call(
+            api_key=api_key,
+            prompt=prompt,
+            image_paths=image_paths,
+            temperature=0.05,
+            max_tokens=8192,
+            timeout_seconds=120,
+            response_mime_type="application/json",
+        )
+    except Exception as exc:
+        warn(f"AMBOSS hybrid Gemini call failed: {exc}")
+        return None
+    text = raw.strip()
+    text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s*```\s*$", "", text)
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError as exc:
+        warn(f"AMBOSS hybrid Gemini returned non-JSON: {exc}; payload starts: {text[:120]!r}")
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    choices_raw = parsed.get("answerChoices")
+    correct_raw = parsed.get("correctAnswer")
+    if not isinstance(choices_raw, list) or not choices_raw:
+        return None
+    normalized: list[dict[str, str]] = []
+    for idx, item in enumerate(choices_raw[:8]):
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("label") or "").strip().upper()
+        choice_text = str(item.get("text") or "").strip()
+        if not label or len(label) != 1 or label not in LABELS_AH:
+            label = LABELS_AH[idx]
+        if not choice_text or len(choice_text) < 3:
+            continue
+        normalized.append({"label": label, "text": choice_text})
+    if not (2 <= len(normalized) <= 8):
+        return None
+    if [c["label"] for c in normalized] != LABELS_AH[: len(normalized)]:
+        normalized = [{"label": LABELS_AH[i], "text": normalized[i]["text"]} for i in range(len(normalized))]
+    valid_labels = {c["label"] for c in normalized}
+    correct = str(correct_raw or "").strip().upper()
+    if correct not in valid_labels:
+        correct = normalized[0]["label"]
+    # Normalize the per-choice explanations into a dict keyed by label.
+    incorrect_raw = parsed.get("incorrectExplanations")
+    incorrect_explanations: list[dict[str, str]] = []
+    if isinstance(incorrect_raw, list):
+        for item in incorrect_raw:
+            if not isinstance(item, dict):
+                continue
+            lbl = str(item.get("label") or "").strip().upper()
+            exp = str(item.get("explanation") or "").strip()
+            if lbl in valid_labels and lbl != correct and len(exp) > 20:
+                incorrect_explanations.append({"label": lbl, "explanation": exp})
+    return {
+        "answerChoices": normalized,
+        "correctAnswer": correct,
+        "correctExplanation": str(parsed.get("correctExplanation") or "").strip(),
+        "incorrectExplanations": incorrect_explanations,
+        "educationalObjective": str(parsed.get("educationalObjective") or "").strip(),
+        "retrievalTag": str(parsed.get("retrievalTag") or "").strip(),
+        "reviewPearl": str(parsed.get("reviewPearl") or "").strip(),
+    }
+
+
+def amboss_gemini_recover_unresolved(
+    pages_in_group: list[dict[str, Any]],
+    image_audit: list[dict[str, Any]],
+    api_key: str,
+) -> dict[str, Any] | None:
+    """Vision-only Gemini fallback for question groups where deterministic
+    extraction returned None (all pages misclassified as blown-up images due to
+    OCR failure). Sends up to 4 page screenshots to Gemini with the prompt:
+    "is there an AMBOSS QBank question here? if yes, extract it from scratch
+    (stem + choices + correct + per-choice explanations + edu objective +
+    retrieval tag + review pearl)."
+
+    Returns the same structured question shape that
+    extract_amboss_question_deterministic returns on success, or None when
+    Gemini sees no question in the images."""
+    image_paths = _amboss_collect_screenshot_asset_paths(pages_in_group, limit=4)
+    if not image_paths:
+        return None
+    prompt = (
+        "You are inspecting screenshots from an AMBOSS QBank PDF. The deterministic "
+        "extractor failed on this page group (OCR couldn't read the stem cleanly). "
+        "Look at the attached page images and determine: do these pages show a "
+        "single AMBOSS clinical exam question?\n"
+        "\n"
+        "If NO (the pages are e.g. blown-up clinical images, cover sheets, blank "
+        "pages, or unintelligible), return:\n"
+        '  {"status": "no_question"}\n'
+        "\n"
+        "If YES, extract the question in this exact JSON shape (no markdown fences, "
+        "no extra commentary):\n"
+        "{\n"
+        '  "status": "ok",\n'
+        '  "stem": "full clinical vignette text ending in the lead-in question",\n'
+        '  "answerChoices": [{"label": "A", "text": "…"}, …],\n'
+        '  "correctAnswer": "X",\n'
+        '  "correctExplanation": "1-3 sentence explanation of why the correct answer is correct",\n'
+        '  "incorrectExplanations": [{"label": "A", "explanation": "1-3 sentence rationale for why wrong"}, …],\n'
+        '  "educationalObjective": "1-sentence teaching point",\n'
+        '  "retrievalTag": "3-8 word topic tag",\n'
+        '  "reviewPearl": "1-sentence high-yield take-away"\n'
+        "}\n"
+        "\n"
+        "Rules:\n"
+        "  - The CORRECT answer has a GREEN choice header background on the "
+        "explanation-reveal page; wrong answers are PINK/RED.\n"
+        "  - AMBOSS questions have 4-8 answer choices, labeled A through H in order.\n"
+        "  - Strip AMBOSS UI chrome (Overview, Library, Qbank, Analysis, Shop, "
+        "Account sidebar; percentage badges; navigation pill; doctor-avatar hint; "
+        "page footer / taskbar) from all extracted text.\n"
+        "  - If you're unsure whether a question is present, return no_question "
+        "rather than guessing.\n"
+    )
+    try:
+        raw = raw_gemini_image_call(
+            api_key=api_key,
+            prompt=prompt,
+            image_paths=image_paths,
+            temperature=0.05,
+            max_tokens=8192,
+            timeout_seconds=120,
+            response_mime_type="application/json",
+        )
+    except Exception as exc:
+        warn(f"AMBOSS Gemini recovery call failed: {exc}")
+        return None
+    text = raw.strip()
+    text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s*```\s*$", "", text)
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError as exc:
+        warn(f"AMBOSS recovery Gemini returned non-JSON: {exc}; payload starts: {text[:120]!r}")
+        return None
+    if not isinstance(parsed, dict) or str(parsed.get("status") or "").lower() != "ok":
+        return None
+    stem = str(parsed.get("stem") or "").strip()
+    choices_raw = parsed.get("answerChoices")
+    if not stem or not isinstance(choices_raw, list):
+        return None
+    normalized: list[dict[str, str]] = []
+    for idx, item in enumerate(choices_raw[:8]):
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("label") or "").strip().upper()
+        ct = str(item.get("text") or "").strip()
+        if not label or len(label) != 1 or label not in LABELS_AH:
+            label = LABELS_AH[idx]
+        if not ct or len(ct) < 3:
+            continue
+        normalized.append({"label": label, "text": ct})
+    if not (2 <= len(normalized) <= 8):
+        return None
+    if [c["label"] for c in normalized] != LABELS_AH[: len(normalized)]:
+        normalized = [{"label": LABELS_AH[i], "text": normalized[i]["text"]} for i in range(len(normalized))]
+    valid_labels = {c["label"] for c in normalized}
+    correct = str(parsed.get("correctAnswer") or "").strip().upper()
+    if correct not in valid_labels:
+        correct = normalized[0]["label"]
+    correct_explanation = str(parsed.get("correctExplanation") or "").strip()
+    incorrect_raw = parsed.get("incorrectExplanations")
+    incorrect: list[dict[str, str]] = []
+    if isinstance(incorrect_raw, list):
+        for item in incorrect_raw:
+            if not isinstance(item, dict):
+                continue
+            lbl = str(item.get("label") or "").strip().upper()
+            exp = str(item.get("explanation") or "").strip()
+            if lbl in valid_labels and lbl != correct and len(exp) > 20:
+                incorrect.append({"label": lbl, "explanation": exp})
+    # Route any blown-up image pages in the group to the explanation.
+    image_routing: list[dict[str, Any]] = []
+    for entry in pages_in_group:
+        if entry["kind"] != "blown_up_image":
+            continue
+        for img in (entry["page"].get("images") or []):
+            if img.get("imageId"):
+                image_routing.append({
+                    "imageId": img["imageId"],
+                    "placement": "explanation",
+                    "imageConfidence": 1.0,
+                })
+                image_audit.append({
+                    **img,
+                    "routedLocation": "explanation",
+                    "imageConfidence": 1.0,
+                    "duplicateOf": None,
+                    "dedupeAction": "kept",
+                    "recoveryPath": "gemini_unresolved_fallback",
+                })
+    return {
+        "stem": stem,
+        "answerChoices": normalized,
+        "correctAnswer": correct,
+        "correctExplanation": correct_explanation,
+        "incorrectExplanations": incorrect,
+        "educationalObjective": str(parsed.get("educationalObjective") or "").strip(),
+        "retrievalTag": str(parsed.get("retrievalTag") or "").strip(),
+        "reviewPearl": str(parsed.get("reviewPearl") or "").strip(),
+        "imageRouting": image_routing,
+        "sourcePageId": pages_in_group[0]["page"]["pageId"],
+        "visualSourcePageIds": [p["page"]["pageId"] for p in pages_in_group],
+        "extractionConfidence": 0.9,
+        "extractionWarnings": ["recovered_via_gemini_fallback"],
+    }
+
+
+def extract_amboss_question_deterministic(
+    pages_in_group: list[dict[str, Any]],
+    image_audit: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Given all PDF pages belonging to one AMBOSS QBank question (the stem-only
+    view + the explanation-reveal view + any blown-up image pages), extract the
+    structured question. Returns None when the group has no usable screenshot."""
+    screenshots = [p for p in pages_in_group if p["kind"] == "qbank_screenshot"]
+    image_pages = [p for p in pages_in_group if p["kind"] == "blown_up_image"]
+    if not screenshots:
+        return None
+    combined_text = "\n\n".join(p["text"] for p in screenshots)
+    stem = extract_amboss_stem(combined_text)
+    if not stem:
+        return None
+    choices = extract_amboss_choices(combined_text)
+
+    # HYBRID GEMINI PASS (v4.57). AMBOSS QBank PDFs are flattened browser
+    # screenshots and tesseract can't read the styled choice letter circles, the
+    # green-bar correct-answer UI, or the per-choice explanation paragraphs
+    # cleanly (sidebar / browser chrome leaks into everything). So after
+    # deterministic stem extraction + page-grouping succeeds, we make ONE
+    # Gemini call per question (~8 calls for a typical 8-question PDF) to
+    # extract clean structured data: choices, correct answer, per-choice
+    # explanations, educational objective, retrieval tag, and review pearl.
+    gemini_data: dict[str, Any] | None = None
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if api_key:
+        gemini_data = amboss_gemini_extract_question(screenshots, stem, api_key)
+        if gemini_data:
+            choices = gemini_data["answerChoices"]
+    if len(choices) < 2:
+        return None
+    # Build the explanations dict from Gemini's output (clean prose) when
+    # available; otherwise fall back to deterministic OCR-text anchor matching
+    # (imperfect, often contains sidebar chrome).
+    if gemini_data:
+        explanations = {gemini_data["correctAnswer"]: gemini_data.get("correctExplanation", "")}
+        for entry in gemini_data.get("incorrectExplanations", []):
+            explanations[entry["label"]] = entry["explanation"]
+    else:
+        explanations = extract_amboss_choice_explanations(combined_text, choices)
+    gemini_correct_override = gemini_data["correctAnswer"] if gemini_data else None
+    # Correct-answer detection: PRIMARY = green choice-bar color detection on the
+    # rendered PDF page. AMBOSS draws the correct-answer choice header in green
+    # vs pink/red for wrong answers; this is language-independent and works even
+    # when text-pattern detection is ambiguous. FALLBACK = positive/negative
+    # signal scoring on the per-choice explanations ("is the most likely…").
+    correct: str | None = None
+    valid_labels = [c["label"] for c in choices]
+    valid_label_set = set(valid_labels)
+    # If the hybrid Gemini pass returned a correct answer, prefer it — it's the
+    # most reliable signal (vision-based, language-independent).
+    if gemini_correct_override and gemini_correct_override in valid_label_set:
+        correct = gemini_correct_override
+    # PRIMARY (no-Gemini fallback) = color-bar detection. Only used when the
+    # hybrid Gemini pass didn't run or returned an unusable result. AMBOSS's
+    # correct-answer choice header is rendered with a GREEN background; wrong
+    # answers are pink/red. The green-bar's index in the per-page bar list maps
+    # to the choice letter when the page shows all choices in one view.
+    if not correct:
+        for screenshot in screenshots:
+            image_assets = screenshot["page"].get("images") or []
+            if not image_assets:
+                continue
+            asset_str = str(image_assets[0].get("assetPath") or "")
+            if not asset_str:
+                continue
+            asset_path = Path(asset_str)
+            if not asset_path.is_absolute():
+                asset_path = BASE_DIR / asset_path
+            if not asset_path.exists():
+                continue
+            bars = amboss_find_all_choice_bars(asset_path)
+            green_indices = [i for i, b in enumerate(bars) if b["color"] == "green"]
+            if not green_indices or len(bars) < 2:
+                continue
+            if len(bars) == len(choices):
+                green_index = green_indices[0]
+                if 0 <= green_index < len(valid_labels):
+                    correct = valid_labels[green_index]
+                    break
+    if not correct:
+        # SECONDARY: accumulate bars across all screenshots (the explanation
+        # reveal often spans 2–3 pages with subsets of the choices visible on
+        # each).
+        accumulated: list[dict[str, Any]] = []
+        for screenshot in screenshots:
+            image_assets = screenshot["page"].get("images") or []
+            if not image_assets:
+                continue
+            asset_str = str(image_assets[0].get("assetPath") or "")
+            asset_path = Path(asset_str) if asset_str else None
+            if asset_path and not asset_path.is_absolute():
+                asset_path = BASE_DIR / asset_path
+            if not asset_path or not asset_path.exists():
+                continue
+            accumulated.extend(amboss_find_all_choice_bars(asset_path))
+        # Filter to plausible choice bars (sorted by source order which we
+        # preserved via screenshot iteration order).
+        if accumulated and len(accumulated) >= len(choices):
+            # Take the first len(choices) bars and find the green one's index.
+            relevant = accumulated[: len(choices)]
+            green_idx = next((i for i, b in enumerate(relevant) if b["color"] == "green"), None)
+            if green_idx is not None and 0 <= green_idx < len(valid_labels):
+                correct = valid_labels[green_idx]
+    if not correct:
+        # FALLBACK = text-pattern signal scoring.
+        correct = detect_amboss_correct_answer(explanations, default_label=choices[0]["label"])
+    correct_explanation = explanations.get(correct, "")
+    incorrect = [
+        {"label": label, "explanation": exp}
+        for label, exp in explanations.items()
+        if label != correct and exp
+    ]
+    # Prefer Gemini-derived metadata (clean prose, no OCR chrome). Fall back to
+    # stem-derived placeholders only when Gemini didn't supply a value.
+    if gemini_data and gemini_data.get("educationalObjective"):
+        educational = gemini_data["educationalObjective"]
+    else:
+        educational = derive_amboss_educational_objective(correct_explanation, stem=stem)
+    gemini_retrieval_tag = (gemini_data or {}).get("retrievalTag") or ""
+    gemini_review_pearl = (gemini_data or {}).get("reviewPearl") or ""
+    image_routing: list[dict[str, Any]] = []
+    for image_page in image_pages:
+        for img in (image_page["page"].get("images") or []):
+            if img.get("imageId"):
+                image_routing.append({
+                    "imageId": img["imageId"],
+                    "placement": "explanation",
+                    "imageConfidence": 1.0,
+                })
+                image_audit.append({
+                    **img,
+                    "routedLocation": "explanation",
+                    "imageConfidence": 1.0,
+                    "duplicateOf": None,
+                    "dedupeAction": "kept",
+                })
+    retrieval_tag = gemini_retrieval_tag or (educational[:80] if educational else "")
+    review_pearl = gemini_review_pearl or correct_explanation or educational
+    return {
+        "stem": stem,
+        "answerChoices": choices,
+        "correctAnswer": correct,
+        "correctExplanation": correct_explanation,
+        "incorrectExplanations": incorrect,
+        "educationalObjective": educational,
+        "retrievalTag": retrieval_tag,
+        "reviewPearl": review_pearl,
+        "imageRouting": image_routing,
+        "sourcePageId": screenshots[0]["page"]["pageId"],
+        "visualSourcePageIds": [p["page"]["pageId"] for p in pages_in_group],
+        "extractionConfidence": 0.95,
+        "extractionWarnings": [],
+    }
+
+
+def process_amboss_input(input_path: Path, limit_pages: int = 0) -> Path:
+    """Deterministic AMBOSS extractor (v4.57). Replaces the per-page Gemini path.
+
+    Runs in seconds rather than minutes, costs nothing in API spend, and routes
+    full-page "click to enlarge" image pages directly to the preceding question's
+    explanation images (per the user's rule: blown-up image pages ALWAYS go to
+    explanations, never to stems). In-stem images on text-layer AMBOSS PDFs are
+    a Phase 2 follow-up — they need the NBME-style cropper UI integration.
+    """
+    started = time.time()
+    page_payload = decompose_amboss_input(input_path, limit_pages=limit_pages)
+    source_hash = page_payload["sourceHash"]
+    pages = page_payload.get("pages") or []
+    extracted_questions: list[dict[str, Any]] = []
+    normalized_slides: list[dict[str, Any]] = []
+    generated_questions: list[dict[str, Any]] = []
+    image_audit: list[dict[str, Any]] = []
+    unresolved: list[dict[str, Any]] = []
+
+    # Stage 1a — OCR every page.
+    page_analysis: list[dict[str, Any]] = []
+    for page in pages:
+        image_assets = page.get("images") or []
+        ocr_text = ""
+        if image_assets:
+            asset_str = str(image_assets[0].get("assetPath") or "")
+            if asset_str:
+                asset_path = Path(asset_str)
+                if not asset_path.is_absolute():
+                    asset_path = BASE_DIR / asset_path
+                if asset_path.exists():
+                    ocr_text = amboss_ocr_image(asset_path)
+        if not ocr_text:
+            ocr_text = page.get("text") or ""
+        kind = classify_amboss_page(ocr_text)
+        # Only fingerprint qbank_screenshot pages — captions on blown-up image
+        # pages sometimes contain phrases that match the vignette opener (e.g.,
+        # "Skin lesion in a 80-year-old patient…") and would otherwise create
+        # spurious question groups.
+        fp = amboss_stem_fingerprint(ocr_text) if kind == "qbank_screenshot" else ""
+        page_analysis.append({
+            "page": page,
+            "text": ocr_text,
+            "kind": kind,
+            "stem_fingerprint": fp,
+            "nav_question": None,  # filled in stage 1b after majority M is known
+        })
+
+    # Stage 1b — vote on the AMBOSS QBank total-question count `M`. The styled
+    # navigation pill `< N / M >` is small and OCR sometimes misreads it (e.g.
+    # `2/8` → `24/8`); a majority vote on M across every page filters the noise.
+    total_votes: dict[int, int] = {}
+    for entry in page_analysis:
+        if entry["kind"] != "qbank_screenshot":
+            continue
+        for m in _AMBOSS_NAV_PILL.finditer(entry["text"]):
+            n, total = int(m.group(1)), int(m.group(2))
+            if 1 <= n <= total <= 200:
+                total_votes[total] = total_votes.get(total, 0) + 1
+    expected_total = max(total_votes.items(), key=lambda kv: (kv[1], -kv[0]))[0] if total_votes else None
+    # Stage 1c — parse the validated nav pill per page (rejecting N > M misreads).
+    for entry in page_analysis:
+        if entry["kind"] != "qbank_screenshot":
+            continue
+        nav_match = parse_amboss_nav_pill(entry["text"], expected_total=expected_total)
+        entry["nav_question"] = nav_match[0] if nav_match else None
+
+    # Stage 2 — group pages into questions. AMBOSS QBank screenshots have TWO
+    # independent signals identifying which question a page belongs to:
+    #   1. The clinical-vignette stem fingerprint (large, OCR-friendly text)
+    #   2. The navigation pill `< N / M >` (small, OCR-noisy, validated against
+    #      the majority M)
+    # Either signal alone is imperfect: stem text is sometimes missing on
+    # explanation-continuation pages, and the nav pill OCR sometimes drops
+    # entirely. Using both via union-find (pages connect if they share a nav
+    # number OR a stem fingerprint, transitively) catches all pages of each
+    # question even when one signal is OCR-unreadable on some pages.
+    parent: list[int] = list(range(len(page_analysis)))
+    def _find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+    def _union(a: int, b: int) -> None:
+        ra, rb = _find(a), _find(b)
+        if ra != rb:
+            parent[ra] = rb
+    nav_first: dict[int, int] = {}
+    fp_first: dict[str, int] = {}
+    for idx, entry in enumerate(page_analysis):
+        nav = entry["nav_question"]
+        fp = entry["stem_fingerprint"]
+        if nav is not None:
+            if nav in nav_first:
+                _union(idx, nav_first[nav])
+            else:
+                nav_first[nav] = idx
+        if fp:
+            if fp in fp_first:
+                _union(idx, fp_first[fp])
+            else:
+                fp_first[fp] = idx
+    # Adjacency rule for pages with NEITHER signal: attach to the previous
+    # qbank_screenshot page (handles blown-up images between questions).
+    previous_screenshot_idx: int | None = None
+    for idx, entry in enumerate(page_analysis):
+        if entry["nav_question"] is not None or entry["stem_fingerprint"]:
+            if entry["kind"] == "qbank_screenshot":
+                previous_screenshot_idx = idx
+            continue
+        if previous_screenshot_idx is not None:
+            _union(idx, previous_screenshot_idx)
+        if entry["kind"] == "qbank_screenshot":
+            previous_screenshot_idx = idx
+    # Adjacent-component merge: AMBOSS question pages are ALWAYS consecutive,
+    # so two components with consecutive page indices should be merged ONLY when
+    # they share the same nav-pill question number. We DON'T merge nav-less
+    # components into nav-carrying components — that risks pulling the next
+    # question's leading pages backwards into the prior question.
+    component_to_pages: dict[int, list[int]] = {}
+    for idx in range(len(page_analysis)):
+        root = _find(idx)
+        component_to_pages.setdefault(root, []).append(idx)
+    ordered_roots = sorted(component_to_pages.keys(), key=lambda r: min(component_to_pages[r]))
+
+    def _component_navs(root: int) -> set[int]:
+        return {page_analysis[i]["nav_question"] for i in component_to_pages[root]
+                if page_analysis[i]["nav_question"] is not None}
+
+    changed = True
+    while changed:
+        changed = False
+        ordered_roots = sorted(component_to_pages.keys(), key=lambda r: min(component_to_pages[r]))
+        for a_root, b_root in zip(ordered_roots, ordered_roots[1:]):
+            a_pages = component_to_pages[a_root]
+            b_pages = component_to_pages[b_root]
+            if max(a_pages) + 1 != min(b_pages):
+                continue  # not adjacent in document order
+            a_navs = _component_navs(a_root)
+            b_navs = _component_navs(b_root)
+            # Only merge when both carry the SAME nav number (a strong positive
+            # identifier that they belong to the same question).
+            if not a_navs or not b_navs or a_navs.isdisjoint(b_navs):
+                continue
+            # Refresh union-find + component map after merge.
+            _union(a_pages[0], b_pages[0])
+            merged_root = _find(a_pages[0])
+            other_root = b_root if merged_root == a_root else a_root
+            component_to_pages[merged_root] = sorted(component_to_pages.get(a_root, []) + component_to_pages.get(b_root, []))
+            if other_root in component_to_pages and other_root != merged_root:
+                del component_to_pages[other_root]
+            changed = True
+            break
+
+    ordered_roots = sorted(component_to_pages.keys(), key=lambda r: min(component_to_pages[r]))
+    groups_by_q: dict[int, list[dict[str, Any]]] = {}
+    for q_num, root in enumerate(ordered_roots, start=1):
+        groups_by_q[q_num] = [page_analysis[i] for i in component_to_pages[root]]
+    # Audit pages whose component contains NO qbank_screenshot (pre-stem cover).
+    drop_q_nums: list[int] = []
+    for q_num, group in groups_by_q.items():
+        if not any(e["kind"] == "qbank_screenshot" for e in group):
+            for entry in group:
+                for img in (entry["page"].get("images") or []):
+                    image_audit.append({
+                        **img,
+                        "routedLocation": "ignored",
+                        "imageConfidence": 0.0,
+                        "duplicateOf": None,
+                        "dedupeAction": "kept",
+                        "reason": "page_with_no_question_in_component",
+                    })
+            drop_q_nums.append(q_num)
+    for q_num in drop_q_nums:
+        del groups_by_q[q_num]
+    # Renumber after dropping degenerate groups.
+    groups_by_q = {i + 1: groups_by_q[k] for i, k in enumerate(sorted(groups_by_q.keys()))}
+
+    # Stage 3 — extract each question deterministically (with hybrid Gemini call
+    # for choices + correct + explanations + tags). When the deterministic path
+    # returns None (no usable stem on any page of the group due to OCR failure),
+    # fall back to a vision-only Gemini pass on the page images: "is there an
+    # AMBOSS question here? extract it." This recovers questions whose stems
+    # were OCR'd badly enough that we couldn't classify or fingerprint them.
+    api_key_for_fallback = os.environ.get("GEMINI_API_KEY", "").strip()
+    for q_index, q_num in enumerate(sorted(groups_by_q.keys()), start=1):
+        group = groups_by_q[q_num]
+        try:
+            extracted = extract_amboss_question_deterministic(group, image_audit)
+        except Exception as exc:
+            unresolved.append({
+                "questionIndex": q_index,
+                "navQuestionNumber": q_num,
+                "pageIds": [p["page"]["pageId"] for p in group],
+                "reason": f"deterministic extraction error: {exc}",
+            })
+            continue
+        if extracted is None and api_key_for_fallback:
+            extracted = amboss_gemini_recover_unresolved(group, image_audit, api_key_for_fallback)
+        if extracted is None:
+            unresolved.append({
+                "questionIndex": q_index,
+                "navQuestionNumber": q_num,
+                "pageIds": [p["page"]["pageId"] for p in group],
+                "reason": "no usable QBank screenshot in group (all pages were blown-up images?)",
+            })
+            continue
+        ok, warnings = validate_amboss_extraction(extracted)
+        canonical_blockers = amboss_canonical_blockers(extracted)
+        extracted["extractionWarnings"] = dedupe_preserve_order(
+            list(extracted.get("extractionWarnings") or []) + warnings + canonical_blockers
+        )
+        extracted["extractionStatus"] = "canonical_ready" if ok and not canonical_blockers else "partial_review"
+        extracted_questions.append(extracted)
+        if not ok or canonical_blockers:
+            unresolved.append({
+                "questionIndex": q_index,
+                "navQuestionNumber": q_num,
+                "pageIds": [p["page"]["pageId"] for p in group],
+                "reason": "; ".join(extracted["extractionWarnings"]),
+            })
+            continue
+        base_page = group[0]["page"]
+        support_pages = [entry["page"] for entry in group[1:]]
+        slide = amboss_normalized_slide_for_question(base_page, extracted, q_index, image_audit, support_pages=support_pages)
+        gen_q = amboss_generated_question(extracted, slide["slideId"])
+        if not gen_q:
+            unresolved.append({
+                "questionIndex": q_index,
+                "navQuestionNumber": q_num,
+                "reason": "could not convert to canonical generated question",
+            })
+            continue
+        normalized_slides.append(slide)
+        generated_questions.append(gen_q)
+
+    # Stage 3b — post-extraction dedupe. OCR variance occasionally fragments a
+    # single question into two components (e.g., page 28 OCR'd "A 27-year-old"
+    # and page 29 OCR'd "A.27-year-old" — same question, different fingerprint
+    # because of one OCR character). After all extraction completes, collapse
+    # questions whose normalized stems agree on the first 40 chars. generated_questions
+    # and normalized_slides stay in lockstep (appended together above) so we
+    # apply the same surviving indices to both.
+    if len(generated_questions) > 1 and len(generated_questions) == len(normalized_slides):
+        kept_indices: list[int] = []
+        kept_by_fp: dict[str, int] = {}
+        for idx, gen_q in enumerate(generated_questions):
+            stem_norm = re.sub(r"[^a-z0-9 ]", " ", str(gen_q.get("stem") or "").lower())
+            stem_norm = re.sub(r"\s+", " ", stem_norm).strip()[:40]
+            if not stem_norm:
+                kept_indices.append(idx)
+                continue
+            if stem_norm in kept_by_fp:
+                # Already saw this normalized stem. Prefer the entry with more
+                # answer choices (Gemini extraction) or a longer stem.
+                prior_idx = kept_by_fp[stem_norm]
+                prior_q = generated_questions[prior_idx]
+                if (len(gen_q.get("answerChoices") or []) > len(prior_q.get("answerChoices") or [])
+                        or len(str(gen_q.get("stem") or "")) > len(str(prior_q.get("stem") or ""))):
+                    # Replace prior with current.
+                    kept_indices = [idx if i == prior_idx else i for i in kept_indices]
+                    kept_by_fp[stem_norm] = idx
+                continue
+            kept_by_fp[stem_norm] = idx
+            kept_indices.append(idx)
+        if len(kept_indices) < len(generated_questions):
+            log(f"AMBOSS dedupe: {len(generated_questions)} → {len(kept_indices)} questions after near-duplicate stem collapse.")
+            generated_questions = [generated_questions[i] for i in kept_indices]
+            normalized_slides = [normalized_slides[i] for i in kept_indices]
+            # Renumber slideId / questionNumber sequentially after dedupe.
+            for new_idx, gen_q in enumerate(generated_questions, start=1):
+                if isinstance(gen_q, dict):
+                    gen_q["slideId"] = re.sub(r"q\d{3}", f"q{new_idx:03d}", gen_q.get("slideId", ""))
+
+    # Stage 4 — write outputs (same shape as the prior Gemini-based pipeline).
+    stem = slugify(input_path.stem)
+    extracted_path = GENERATED_DIR / f"{stem}_amboss_extracted_questions.json"
+    write_json(extracted_path, {"profile": AMBOSS_PROFILE, "questions": extracted_questions})
+    normalized_payload = {
+        "schemaVersion": "amboss-normalized-v1",
+        "profile": AMBOSS_PROFILE,
+        "sourceFile": input_path.name,
+        "pdfSha256": source_hash,
+        "normalizationWarnings": [],
+        "slides": normalized_slides,
+    }
+    app_payload = build_app_ready_payload(normalized_payload, generated_questions) if generated_questions else None
+    app_ready_path = APP_READY_DIR / f"{stem}_amboss_app_ready.json"
+    validation_errors: list[str] = []
+    if app_payload:
+        validation_errors = validate_app_ready_payload(app_payload)
+        if not validation_errors:
+            write_json(app_ready_path, app_payload)
+    extraction_report = {
+        "profile": AMBOSS_PROFILE,
+        "sourceFile": input_path.name,
+        "extractionMode": "deterministic_ocr",
+        "pagesProcessed": len(pages),
+        "questionsExtracted": len(extracted_questions),
+        "canonicalQuestions": len(generated_questions),
+        "appReadyPath": display_path(app_ready_path) if app_payload and not validation_errors else "",
+        "validationErrors": validation_errors,
+        "unresolvedCount": len(unresolved),
+        "runtimeSeconds": round(time.time() - started, 2),
+    }
+    extraction_report_path = write_report(extraction_report, "amboss_extraction_audit_report")
+    image_report_path = write_report({"profile": AMBOSS_PROFILE, "sourceFile": input_path.name, "imageAudit": image_audit}, "amboss_image_routing_audit_report")
+    unresolved_path = write_report({"profile": AMBOSS_PROFILE, "sourceFile": input_path.name, "unresolved": unresolved}, "amboss_unresolved_extraction_report")
+    log(f"AMBOSS extracted (deterministic) -> {display_path(extracted_path)}")
+    log(f"AMBOSS extraction report -> {display_path(extraction_report_path)}")
+    log(f"AMBOSS image report -> {display_path(image_report_path)}")
+    log(f"AMBOSS unresolved report -> {display_path(unresolved_path)}")
+    if app_payload and not validation_errors:
+        log(f"AMBOSS app-ready -> {display_path(app_ready_path)}")
+        return app_ready_path
+    return extracted_path
+
+
+def _LEGACY_GEMINI_process_amboss_input(input_path: Path, limit_pages: int = 5) -> Path:
     started = time.time()
     page_payload = decompose_amboss_input(input_path, limit_pages=limit_pages)
     source_hash = page_payload["sourceHash"]
@@ -7998,7 +9280,8 @@ def main() -> int:
                 amboss_inputs = supported_amboss_inputs(input_dir)
             if not amboss_inputs:
                 raise PipelineError("No PDF/image files found for AMBOSS_PROFILE.")
-            outputs = [process_amboss_input(path, limit_pages=args.limit or 5) for path in amboss_inputs[:1]]
+            # --limit 0 means no page cap; positive int caps at that many pages.
+            outputs = [process_amboss_input(path, limit_pages=int(args.limit or 0)) for path in amboss_inputs[:1]]
             print("Generated AMBOSS files:")
             for output in outputs:
                 print(f"  {output}")

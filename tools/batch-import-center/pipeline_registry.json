@@ -197,7 +197,7 @@
       "dryRunSteps": [
         {
           "stage": "extraction",
-          "stageLabel": "AMBOSS dry-run",
+          "stageLabel": "AMBOSS dry-run (first 5 pages, sanity check)",
           "heartbeatSeconds": 20,
           "args": ["generate_lecture_slide_questions.py", "--amboss-profile", "--input-file", "{inputFile}", "--limit", "5"]
         }
@@ -205,13 +205,13 @@
       "liveSteps": [
         {
           "stage": "extraction",
-          "stageLabel": "AMBOSS live extraction",
+          "stageLabel": "AMBOSS live extraction (all pages)",
           "heartbeatSeconds": 20,
-          "args": ["generate_lecture_slide_questions.py", "--amboss-profile", "--input-file", "{inputFile}", "--limit", "5"]
+          "args": ["generate_lecture_slide_questions.py", "--amboss-profile", "--input-file", "{inputFile}", "--limit", "0"]
         }
       ],
       "outputDirectories": ["output_json/app_ready"],
-      "notes": "Uses the existing AMBOSS_PROFILE deterministic extraction path."
+      "notes": "AMBOSS QBank PDF (browser screenshot export). Tesseract OCR groups pages into questions and routes click-to-enlarge image pages to explanations; one Gemini call per question extracts clean choices, correct answer, explanations, and review pearl. ~8 calls / ~$0.10 per typical PDF."
     },
     "nbme_pdf": {
       "label": "NBME PDF",
