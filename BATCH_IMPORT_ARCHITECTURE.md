@@ -119,6 +119,35 @@ The active `images_tables_source` registry entry runs live per-image Gemini clas
 - Renderer support: `q.correctBlurb` (HTML-escaped) is the preferred explanation field; legacy plain-text `q.explanation` is rendered only when `correctBlurb` is absent (the v4.56 renderer guard prevents the duplicate-block bug when both were populated).
 - Field-validated at v4.56 on a 5-image packaged-app BIC run (mixed diagnostic / explanation-only / table inputs from Step 2 fixtures): 5 questions imported in one test, correct stem/explanation placement, no duplicate explanation blocks.
 
+## AMBOSS PDF Registry Boundary
+
+The active `amboss_pdf` registry entry runs a **deterministic-first, Gemini-assisted** pipeline for AMBOSS QBank screenshot PDFs. Rebuilt from scratch at v4.57; replaces the prior per-page Gemini extractor (1 call per page → ~9 min and ~$0.50 per PDF) with a hybrid that uses Gemini only where it's actually needed (~8 calls per PDF, ~$0.11 per import).
+
+- Visible source label: "AMBOSS PDF".
+- Input extensions: `.pdf`.
+- `requiresGemini`: `true` — used only for per-question structured extraction; OCR + page classification + image routing run without Gemini.
+
+**Stage 1 — deterministic, no Gemini.** For each PDF page:
+- PyMuPDF renders the page as a PNG.
+- Tesseract OCR (`--psm 6`) extracts the page text. AMBOSS QBank PDFs are flattened browser screenshots with no text layer, so OCR is the only signal.
+- The page is classified as `qbank_screenshot` or `blown_up_image` based on word count + presence of nav pill / choice-shaped lines.
+- A clinical-vignette stem fingerprint is computed (first ~70 chars of the OCR'd opener phrase, normalized) for `qbank_screenshot` pages.
+- The `< N / M >` AMBOSS navigation pill is parsed, validated against the majority M across all pages (rejects OCR misreads like "24/8").
+
+**Stage 2 — grouping (union-find).** Pages are grouped into questions by union-find: two pages connect if they share the same nav-pill question number OR the same stem fingerprint. Adjacent components with matching nav numbers are merged. Blown-up image pages with no signal attach to the most recent qbank_screenshot page in document order, which routes them to the correct question's `explanationImages[]`.
+
+**Stage 3a — one Gemini call per question (hybrid).** Each question group ships up to 4 page screenshots to Gemini for structured extraction: answer choices A–H (AMBOSS's styled choice circles are unreadable to OCR), correct-answer letter (identified by the GREEN choice header bar on the explanation-reveal page), per-choice explanations, educational objective, retrieval tag, review pearl. The Gemini call uses `responseMimeType: application/json` + `maxOutputTokens: 8192` to eliminate truncated-string and prose-instead-of-JSON failure modes that surfaced in early testing.
+
+**Stage 3b — Gemini recovery fallback.** When a group's deterministic extraction returns None (every page misclassified as blown_up_image due to OCR failure), one extra Gemini call asks "is there an AMBOSS question in these screenshots? if yes, extract it; if no, return no_question". Recovers questions whose stem OCR catastrophically failed. Adds 0–2 calls per PDF.
+
+**Stage 3c — post-extraction dedupe.** OCR variance occasionally fragments a single question into two components (e.g., page 28 OCR'd "A 27-year-old" and page 29 OCR'd "A.27-year-old" produce different fingerprints despite being the same question). After all extraction completes, questions whose normalized stems agree on the first 40 chars are collapsed; the variant with more answer choices wins.
+
+**Image routing**: full-page blown-up clinical images (AMBOSS's "click to enlarge" view of a thumbnail in an explanation row) are always routed to the preceding question's `explanationImages[]` deterministically. In-stem clinical images on PDFs with embedded figures remain Phase 2 — they would need integration with the NBME-style cropper UI.
+
+**Cost / runtime profile**: ~$0.11 per typical 8-question / 39-page PDF (8 hybrid calls + 0–2 recovery calls), ~2.5 minutes wall clock. When `GEMINI_API_KEY` is unset, the extractor falls back to deterministic-only choices (imperfect due to OCR limits on the styled letter circles); useful as a dry-run sanity check.
+
+Field-validated at v4.57 on `Test Amboss.pdf` (8 QBank questions across 39 pages of browser screenshots + click-to-enlarge clinical images): all 8 questions extracted with clean choices, correct answers (varicella vaccine F, indinavir urolithiasis G, etc.), educational objectives, retrieval tags, review pearls, and blown-up clinical images attached to the correct explanation panels.
+
 ## Fast Facts Registry Boundary
 
 The active `fast_facts_pptx` registry entry has a narrow stabilization live path.

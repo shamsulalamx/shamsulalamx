@@ -2,7 +2,7 @@
 
 Last updated: 2026-05-23
 
-This file documents stable v4 tags from v4.0 through the current head tag `v4.56-images-tables-live-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+This file documents stable v4 tags from v4.0 through the current head tag `v4.57-amboss-deterministic-hybrid-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
 
 ## v4.0-images-tables-generator-stable
 
@@ -513,3 +513,47 @@ Not validated by this milestone:
 - Broad real-world Step 2 image variety beyond the validation fixtures (the committed `input_images/` fixtures + the user's "[Medicalstudyzone.com] UW tables and pics" set).
 - Recursive large-folder ingestion and deep table parsing — tables are preserved as image attachments in the explanation panel, not parsed into structured rows.
 - Old tests that imported v2-schema questions with BOTH `correctBlurb` and `explanation` populated (e.g., the user's 1-question batch-mpiz1bb4-ow7dnc test before this fix) still have the duplicate field stored in their persisted form. The renderer guard means they will render correctly going forward, but the underlying stored data still carries the duplicate `explanation` field. No retroactive fix-up was done.
+
+## v4.57-amboss-deterministic-hybrid-stable
+
+Commits: TBD (source commit + doc commit landing together).
+
+Meaning: Full rewrite of the AMBOSS PDF BIC extractor as a **deterministic-first, Gemini-assisted pipeline**. Replaces the prior architecture where every PDF page got its own Gemini call (1 call × 39 pages × ~$0.013 ≈ $0.50 per import, ~9 min wall clock) — a cost the user surfaced as "the current Gemini extraction is unnecessary; the only thing we actually need vision for is the blown-up clinical-image pages."
+
+The investigation showed those AMBOSS QBank PDFs are flattened browser screenshots (no text layer at all — PyMuPDF returns 0 words for every page). Pure deterministic text extraction can't work without an OCR layer. Tesseract OCR on the rendered page PNGs DOES work for the clinical vignette text (`A 13-month-old girl is brought to the physician…`), but it CANNOT read AMBOSS's styled choice letter circles (the "(A)" markers render in a custom font tesseract OCR'd as `@)|`, `©l`, `©)`, `(©)`, etc.). And tesseract definitely cannot identify the GREEN-vs-PINK choice header bars that mark the correct answer on the explanation-reveal page.
+
+So the v4.57 hybrid splits work along OCR's actual capabilities:
+
+**Stage 1 — deterministic, no Gemini.** PyMuPDF page render → tesseract OCR → page classification (`qbank_screenshot` vs `blown_up_image` based on word count + nav pill / choice-shape presence) → stem fingerprinting (first ~70 chars of the OCR'd opener phrase, normalized) → nav-pill `< N / M >` detection with majority-M validation (rejects OCR misreads like "24/8" that arise when tesseract joins adjacent characters).
+
+**Stage 2 — deterministic grouping (union-find).** Two pages connect if they share the same nav-pill question number OR the same stem fingerprint. Adjacent components with matching nav numbers merge. Blown-up image pages with no signal attach to the most recent qbank_screenshot via document-order adjacency — that's how full-page "click to enlarge" clinical images land on the right question's `explanationImages[]`.
+
+**Stage 3a — one Gemini call per question (hybrid).** Each question group ships up to 4 page screenshots to Gemini with a JSON-structured prompt asking for: answer choices A–H, correct-answer letter (identified by GREEN choice header bar), per-choice explanations, educational objective, retrieval tag, review pearl. The Gemini call uses `responseMimeType: application/json` + `maxOutputTokens: 8192` — the user's first live test surfaced two failure modes (Gemini truncating JSON strings at 4096 tokens, and Gemini returning prose like "The provided screenshots show…" instead of JSON); both fixed by the JSON mode + token cap raise.
+
+**Stage 3b — Gemini recovery fallback.** When a group's deterministic extraction returns None (every page misclassified as `blown_up_image` due to OCR failure), one extra Gemini call asks "is there an AMBOSS question in these images? if yes, extract it; if no, return `{status: no_question}`". Recovers questions whose stem OCR catastrophically failed.
+
+**Stage 3c — post-extraction stem dedupe.** OCR variance occasionally fragments a single question into two components (e.g., page 28 OCR'd "A 27-year-old" and page 29 OCR'd "A.27-year-old" produce different fingerprints despite being the same question — the period vs space defeats the stem fingerprint match). After all extraction completes, questions whose normalized stems agree on the first 40 chars are collapsed; the variant with more answer choices wins.
+
+Source changes (single file): `tools/lecture-slide-question-generator/generate_lecture_slide_questions.py`.
+- New helpers: `amboss_stem_fingerprint`, `amboss_find_all_choice_bars`, `extract_amboss_stem`, `extract_amboss_choices` (with positional inference fallback for OCR-defeated choice circles), `extract_amboss_choice_explanations`, `detect_amboss_correct_answer`, `derive_amboss_educational_objective`, `_extract_amboss_choices_positional`, `_AMBOSS_choice_anchor_words`, `amboss_gemini_extract_question` (hybrid per-question call), `amboss_gemini_recover_unresolved` (recovery fallback), `extract_amboss_question_deterministic`.
+- Renamed: prior Gemini-per-page entry point preserved as `_LEGACY_GEMINI_process_amboss_input` (unused in BIC).
+- Rewritten: `process_amboss_input` now runs the deterministic + hybrid pipeline above.
+- Extended: `raw_gemini_image_call` accepts optional `response_mime_type` parameter; `decompose_amboss_input` honors `--limit 0` as "no cap" (general-purpose bug fix carried forward from the Phase 1 work).
+- Registry (`tools/batch-import-center/pipeline_registry.json`): `amboss_pdf` live step uses `--limit 0`, notes trimmed to a one-line UI-friendly description.
+
+Architecture significance: The first BIC source where the live extraction architecture differs significantly from "one big Gemini call per logical unit." AMBOSS uses tesseract for everything OCR can handle (page classification, grouping, image routing) and Gemini only for the things vision uniquely solves (choice letters defeated by styling, correct-answer color bar, clean per-choice explanations free of sidebar OCR chrome). Other sources where vision is needed for similar reasons (NBME PDFs with embedded figures? UWorld DOCX with inline images?) can reuse this template.
+
+Validated:
+
+- Negative case: `python3 generate_lecture_slide_questions.py --amboss-profile --input-file "Test Amboss.pdf"` without `GEMINI_API_KEY` runs the deterministic stage cleanly and falls back to imperfect deterministic choices (no Gemini calls made).
+- Live audio path equivalent: full 39-page Test Amboss.pdf processed end-to-end with `GEMINI_API_KEY` set. 8 question groups identified by union-find. 8 hybrid Gemini calls made (one per question). 0–1 recovery calls depending on run. Post-extraction dedupe collapses any OCR-induced duplicates. Result: 8/8 questions (in good runs) or 7/8 (in worst-case OCR runs where the recovery fallback also misses one — user has accepted this).
+- App-ready output: `schemaVersion: nbme-gemini-json-v3`, `sourceFormat: mixed` (AMBOSS uses the lecture-slide canonical adapter), per-question fields include clean stems, A–H choice labels with no OCR chrome, GREEN-bar-derived correct answers (varicella vaccine F, indinavir urolithiasis G, etc.), Gemini-derived educationalObjective + retrievalTag + reviewPearl + per-choice explanations, full-page clinical images attached to the correct explanation panels.
+- `.app` packaging confirmed via `npm run electron:build:mac` after the JSON-mode + token-cap fix.
+- User confirmed earlier in the session: "everything looks good" after the per-choice/objective/tag/pearl extraction came back clean.
+
+Not validated by this milestone:
+
+- AMBOSS PDFs whose question stems include EMBEDDED clinical images (not just full-page "click to enlarge"). These need NBME-style cropper UI integration — Phase 2 work.
+- Broad real-world AMBOSS QBank export variation beyond the single 8-question Test PDF.
+- Long QBank exports (50+ questions). The pipeline scales linearly; cost scales linearly at ~$0.01 per question. No upper bound tested.
+- Bit-for-bit reproducibility — OCR variance means consecutive runs may extract 7 or 8 questions. Post-extraction dedupe + Gemini recovery bring most runs to 8/8 but a worst-case OCR failure on multiple pages of one question may still land 7/8.

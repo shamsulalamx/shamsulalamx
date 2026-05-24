@@ -10,7 +10,7 @@ This file records what is validated, what is not validated, and the risk level f
 
 | Source | Ingestion status | Live generation status | Normalized chunk support | Auto-import status | Packaged validation | Known blockers | Risk |
 |---|---|---|---|---|---|---|---|
-| AMBOSS | Registered in BIC | Validated through v4.6 live path | Adapter foundation exists | Validated for BIC live import path | Stable tag exists; exact packaged details should be rechecked before new claims | Source-specific extraction assumptions | Medium |
+| AMBOSS PDF | Deterministic OCR-first pipeline rebuilt at v4.57 | Hybrid deterministic + per-question Gemini field-validated at v4.57 on a 39-page / 8-question QBank PDF: all 8 questions extracted with clean choices, correct answers, explanations, retrieval tags, review pearls | Stem fingerprinting + nav-pill union-find grouping + adjacent-merge | Live BIC end-to-end with packaged app | Packaged `.app` 8-question live BIC run validated (~$0.11 cost, ~2.5min runtime) | OCR variance can occasionally fragment 1 question into a duplicate (resolved post-extraction via stem dedupe) or land 1 question in the recovery fallback (resolved via 1 extra Gemini call); in-stem clinical images need NBME cropper UI integration (Phase 2) | Medium |
 | Emma | Shared profile stable | Live generation can fail semantic validation | Validated through v4.14 downstream | Existing-output BIC import validated | BIC existing-output import path validated | Semantic validator rejected unsupported term `dystocia` in live run | Medium-high |
 | Mehlman | Shared profile stable | Tagged live profile stable | Validated in v4.12 | Registered in BIC | Stable tag exists; revalidate packaged path before broad claims | Scaling and source variety not fully characterized | Medium |
 | NBME | BIC orchestration stable | Existing NBME pipeline stable for known workflows | Adapter foundation exists | BIC orchestration tagged stable | Earlier figure/image workflows packaged-validated; recheck for new changes | OCR variability, figure linking, source-specific PDFs | Medium |
@@ -20,18 +20,36 @@ This file records what is validated, what is not validated, and the risk level f
 | Divine (Audio + Transcript) | Dry-run BIC handoff validated for text inputs | Live BIC audio → transcribe → clean → questions field-validated at v4.55 on a 17.2 MB MP3 (`Test Divine.mp3`, 131s, 7 valid questions, `sourceFormat: divine-audio`) | Normalized transcript chunks validated for text inputs; audio inputs skip the shared chunk pipeline (chunks emerge after transcription) | Live BIC end-to-end validated in dev Electron | Packaged `.txt` and `.md` dry-run auto-import previously validated; packaged live audio run via the same `.app` is the next field check | `sourceType` `divine_transcript`; visible source "Divine (Audio + Transcript)"; supports `.txt .md .mp3 .m4a .wav`; audio dry-run is rejected on purpose so transcription tokens are never wasted | Medium |
 | Fast Facts | Cache foundation plus narrow screening stabilization | Dev Electron live BIC generation validated only through the capped 3-attempt stabilization path | Adapter foundation exists | Dev BIC app-ready discovery and auto-import validated on one small PPTX | Not run for this Fast Facts fix | Broad deck coverage, broad semantic stability, renderer Gemini-alert mismatch | High |
 
-## AMBOSS
+## AMBOSS PDF
 
-Validated:
+Foundational validations (still in place):
 
 - Variable-choice support tagged at v4.5.
 - BIC live import path tagged at v4.6.
 - Gemini environment propagation applies through v4.7.
 
+Newly validated at v4.57 (deterministic OCR-first rebuild + per-question Gemini hybrid):
+
+- `amboss_pdf` BIC source rewritten from per-page Gemini extraction (~$0.50 / ~9 min per PDF) to a deterministic-first pipeline with one Gemini call per question (~$0.11 / ~2.5 min per PDF).
+- Stage 1 (deterministic, no Gemini): PyMuPDF page render → tesseract OCR → page classification (`qbank_screenshot` vs `blown_up_image`) → stem fingerprinting → nav-pill detection with majority-M validation.
+- Stage 2 (deterministic grouping): union-find connects pages that share a nav-pill question number OR a stem fingerprint. Adjacent-component merge for pages whose nav numbers agree. Blown-up image pages route to the preceding question's `explanationImages[]` via adjacency.
+- Stage 3a (hybrid Gemini): one multimodal call per question group (up to 4 page screenshots) extracts answer choices A–H (AMBOSS's styled choice circles defeat OCR), correct answer (identified by the green choice header bar on the explanation-reveal page), per-choice explanations, educational objective, retrieval tag, review pearl. Uses `responseMimeType: application/json` + `maxOutputTokens: 8192` to eliminate truncated-string and prose-instead-of-JSON failure modes.
+- Stage 3b (Gemini recovery fallback): when a group's deterministic extraction returns None (every page misclassified due to OCR failure), one extra Gemini call asks "is there an AMBOSS question here? if yes, extract it; if no, return no_question". Recovers questions whose stem OCR catastrophically failed.
+- Stage 3c (post-extraction dedupe): collapses questions whose normalized stems agree on the first 40 chars — handles OCR variance that fragments a single question into two components.
+- Image routing: full-page blown-up clinical images (AMBOSS's "click to enlarge" view) routed to the preceding question's `explanationImages[]` deterministically.
+- Field-validated on `Test Amboss.pdf` (8 QBank questions across 39 pages of browser screenshots + click-to-enlarge clinical images): all 8 questions extracted with clean choices, correct answers (varicella vaccine F, indinavir urolithiasis G, etc.), educational objectives, retrieval tags, review pearls. Clinical images attached to the correct explanation panels (shingles photo with Q1, esophagus endoscopy with Q2, etc.).
+
+Intentionally not yet validated:
+
+- In-stem clinical images on AMBOSS PDFs whose stems include embedded figures. These need NBME-style cropper UI integration — Phase 2.
+- Broad real-world AMBOSS QBank export variation beyond the single 8-question Test PDF.
+- AMBOSS PDFs with non-flattened text layers (rare — most exports are browser screenshots).
+- Long QBank exports (50+ questions). The deterministic page-grouping pipeline scales linearly; Gemini cost scales linearly at ~$0.01 per question. No upper bound tested.
+
 Not claimed:
 
-- Universal AMBOSS source robustness.
-- Shared normalized-chunk downstream convergence.
+- Universal AMBOSS source robustness across all QBank export variants.
+- Shared normalized-chunk downstream convergence (AMBOSS uses its own page-classification + grouping pipeline, not the shared chunk infrastructure used by Emma / Mehlman / Anki / OME / Divine).
 
 ## Emma Holiday
 

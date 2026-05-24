@@ -2,7 +2,35 @@
 
 Last updated: 2026-05-23
 
-Current stable tag: `v4.48-lecture-explanation-tables-stable`.
+Current stable tag: `v4.57-amboss-deterministic-hybrid-stable`.
+
+## AMBOSS PDF Per-Page Gemini Cost And Unreliable Extraction (RESOLVED 2026-05-23, tagged v4.57)
+
+Before v4.57, the AMBOSS PDF BIC source ran one Gemini call per PDF page to extract structured questions. A typical 8-question AMBOSS QBank export spans ~39 pages of browser screenshots (each question shown across multiple views — stem-only, expanded layout, explanation-reveal — plus separate full-page "click to enlarge" clinical images). That meant ~39 Gemini calls per import, ~$0.50 cost, ~9 minutes wall clock — and the extraction failed on the first live BIC run with "No valid output was available to auto-import" because the validator rejected duplicate-question fingerprints from the multiple page views.
+
+Resolution (tagged `v4.57-amboss-deterministic-hybrid-stable`):
+
+Full rewrite of `process_amboss_input` as a **deterministic-first, Gemini-assisted pipeline** in `tools/lecture-slide-question-generator/generate_lecture_slide_questions.py`. Stages:
+
+1. **Stage 1 (deterministic, no Gemini)**: PyMuPDF page render → tesseract OCR → page classification (`qbank_screenshot` vs `blown_up_image`) → stem fingerprinting → nav-pill detection with majority-M validation. Handles page-grouping signals that don't need vision.
+2. **Stage 2 (deterministic grouping)**: union-find on per-page nav-pill and stem-fingerprint signals connects pages of the same question. Adjacent-component merge for nav-matching neighbors. Blown-up image pages route to preceding question via adjacency.
+3. **Stage 3a (hybrid Gemini, 1 call per question)**: each question group ships up to 4 page screenshots to Gemini for structured extraction — answer choices A–H (AMBOSS's styled choice circles are unreadable to tesseract), correct-answer letter (identified by GREEN choice header bar), per-choice explanations, educational objective, retrieval tag, review pearl. Uses `responseMimeType: application/json` + `maxOutputTokens: 8192` to eliminate truncated-string and prose-instead-of-JSON failure modes that surfaced on the first live tests.
+4. **Stage 3b (Gemini recovery fallback)**: when a group's deterministic extraction returns None (all pages misclassified due to OCR failure), one extra Gemini call asks "is there an AMBOSS question here? if yes, extract it; if no, return no_question". Recovers questions with catastrophic OCR failure on their stem pages.
+5. **Stage 3c (post-extraction dedupe)**: collapses questions whose normalized stems agree on the first 40 chars. Handles OCR variance that occasionally fragments a single question into two components (e.g., page 28 OCR'd "A 27-year-old" and page 29 OCR'd "A.27-year-old" — same question, different fingerprint because of one OCR character).
+
+Field-validated on `Test Amboss.pdf` (8 QBank questions across 39 pages, flattened browser screenshots + click-to-enlarge clinical images):
+
+- All 8 questions extracted with clean choices, correct answers (varicella vaccine F, indinavir urolithiasis G, etc.), educational objectives, retrieval tags, review pearls.
+- Clinical images attached to the correct explanation panels (shingles photo with Q1, esophagus endoscopy with Q2, etc.).
+- Runtime: ~2.5 minutes. Cost: ~$0.11 per import (8 hybrid calls + 0–2 recovery calls). vs original ~9 min / ~$0.50.
+- The duplicate Q5/Q6 case (same stem, different OCR characters) is caught by post-extraction dedupe.
+
+Still open at v4.57:
+
+- AMBOSS PDFs whose question stems include EMBEDDED clinical images (not just full-page "click to enlarge" images) need NBME-style cropper UI integration to let the user manually crop the embedded image and attach to the question stem. Phase 2 work.
+- OCR variance means runs are not bit-for-bit reproducible; the same PDF may extract 7 or 8 questions on consecutive runs. The post-extraction dedupe + Gemini recovery fallback bring most runs to 8/8 but a worst-case OCR failure may still land 7/8. User has accepted this — the 7 extracted are clean.
+- Broad real-world AMBOSS QBank export variation beyond the single 8-question Test PDF.
+- Long QBank exports (50+ questions). The pipeline scales linearly; cost scales linearly at ~$0.01 per question. No upper bound tested.
 
 ## UWorld-Family Chunk-Planning Silent Loss Plus Quota-Aware Recovery (RESOLVED 2026-05-23, tagged v4.54)
 

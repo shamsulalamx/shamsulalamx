@@ -1,12 +1,28 @@
 # Project Status 2026-05-23
 
-Current stable tag: `v4.56-images-tables-live-stable`
+Current stable tag: `v4.57-amboss-deterministic-hybrid-stable`
 Current branch: `phase11-fastfacts-stability`
-Last committed HEAD: doc commit landing alongside the v4.56 source commits.
+Last committed HEAD: doc commit landing alongside the v4.57 source commit.
 
 Supersedes `docs/archive/PROJECT_STATUS_2026-05-21.md`.
 
 ## What Is New Since 2026-05-21
+
+### v4.57 — AMBOSS PDF deterministic-first + Gemini-assisted extractor (field-validated)
+
+Full rewrite of the AMBOSS PDF BIC extractor. The prior architecture ran one Gemini call per PDF page (~39 calls / ~$0.50 / ~9 min for a typical 8-question QBank export) and failed the first live BIC run with "No valid output was available to auto-import" because the duplicate-question validator rejected the multiple page views of each question. The user explicitly asked to minimize Gemini and route blown-up clinical images deterministically to explanations.
+
+New pipeline in `tools/lecture-slide-question-generator/generate_lecture_slide_questions.py`:
+
+1. **Stage 1 (deterministic, no Gemini)**: PyMuPDF render → tesseract OCR → page classification (`qbank_screenshot` vs `blown_up_image`) → stem fingerprinting → nav-pill detection with majority-M validation.
+2. **Stage 2 (deterministic grouping)**: union-find on per-page nav-pill and stem-fingerprint signals + adjacent-component merge for nav-matching neighbors. Blown-up image pages attach to preceding question via adjacency.
+3. **Stage 3a (hybrid Gemini, 1 call per question)**: each group ships up to 4 page screenshots to Gemini for structured extraction — answer choices A–H (defeated by AMBOSS's styled letter circles), correct-answer letter (GREEN choice header bar), per-choice explanations, educational objective, retrieval tag, review pearl. Uses `responseMimeType: application/json` + `maxOutputTokens: 8192` (truncated-JSON and prose-instead-of-JSON failure modes surfaced in early tests; both fixed).
+4. **Stage 3b (Gemini recovery fallback)**: when a group's deterministic extraction returns None (every page misclassified due to OCR failure), one extra Gemini call asks "is there an AMBOSS question here? if yes, extract it; if no, return no_question".
+5. **Stage 3c (post-extraction dedupe)**: collapses questions whose normalized stems agree on the first 40 chars (handles the OCR variance that fragments "A 27-year-old" and "A.27-year-old" into two components).
+
+Field-validated on `Test Amboss.pdf` (8 QBank questions across 39 pages of browser screenshots + click-to-enlarge clinical images): all 8 questions extracted with clean choices, correct answers, educational objectives, retrieval tags, review pearls, and clinical images attached to the correct explanation panels. Runtime ~2.5 min, cost ~$0.11 per import (down from ~9 min / ~$0.50).
+
+Tag commit: TBD (lands with this doc commit).
 
 ### v4.56 — Live Images & Tables generation through BIC + multi-image merge + duplicate-explanation render fix (field-validated)
 
@@ -213,7 +229,7 @@ No open work item from this thread. See `NEXT_STEPS_PRIORITY.md` item 0b for the
 
 | Source | Current status | Validation level |
 |---|---|---|
-| AMBOSS | BIC live path stable | Variable-choice support and live import path tagged stable |
+| AMBOSS PDF | Deterministic-first + Gemini-assisted pipeline rewritten at v4.57; 8/8 questions extracted from `Test Amboss.pdf` (39 pages of flattened browser screenshots + click-to-enlarge clinical images) in ~2.5 min for ~$0.11 | Variable-choice support and live import path tagged stable; v4.57 hybrid validated end-to-end including blown-up image routing to explanations |
 | Emma Holiday | Shared profile + normalized-chunk downstream stable; explanation tables now render (v4.48) | BIC existing-output import validated; live generation has separate semantic blocker risk and chunk-planning silent-loss risk |
 | Mehlman | Shared-ingestion live profile stable | Tagged v4.12 |
 | NBME | BIC orchestration stable | Tagged v4.8; legacy NBME import/image workflows have earlier validation |
