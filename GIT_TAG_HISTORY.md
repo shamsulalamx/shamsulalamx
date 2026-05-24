@@ -2,7 +2,17 @@
 
 Last updated: 2026-05-24
 
-This file documents stable v4 tags from v4.0 through the current head tag `v4.72-imported-job-state-fix-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+This file documents stable v4 tags from v4.0 through the current head tag `v4.73-folder-routing-fix-and-move-button-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+
+## v4.73-folder-routing-fix-and-move-button-stable
+
+Commit: bundled source + doc in a single v4.73 commit (see `git log -1 v4.73-folder-routing-fix-and-move-button-stable`).
+
+Meaning: Two related folder-routing bugs in BIC auto-import paths + discoverability fix for the move-to-folder feature. (1) `processQueuedBatchAutoImports()` was silently skipping jobs when `job.destinationFolderId` was empty — Mehlman jobs completed but never imported, output JSONs orphaned on disk. (2) `importAcceptedBatchReviewQuestions()` had a `job.destinationFolderId || liveDropdownValue` fallback that routed reviewed Fast Facts survivors to whatever folder happened to be selected in the BIC dropdown at the moment of clicking Import — user reported a Fast Facts quiz landing in NBME → Psychiatry. Fix: new `_getEffectiveJobFolderId(job)` helper that resolves destination from ALL documented field locations (top-level, `destination.folderId`, `report.destinationFolderId`, `manifest.destination.folderId`). Both import paths now use it. Auto-import emits a console.warn + toast instead of silently skipping when no folder is found. Review-import errors out (no live-dropdown fallback). (3) New visible 📂 Move button on every test card in `renderHomeGrid`, between ✏️ rename and 🗑 trash — surfaces the existing `App.moveTestToFolder(testId)` function that was previously hidden behind right-click context menu.
+
+Validated: `node --check` clean. 9 v4.73 markers in source. `.app` rebuilt with v4.73 markers verified present in bundled HTML. 4 scenarios traced manually before shipping. Live UI walkthrough pending.
+
+Architecture significance: Establishes the "resolve from any of N documented locations" defensive pattern for job-state lookups — should be applied to any other field that might land in multiple places due to IPC propagation gaps (job.status from v4.72 is a candidate). Loud-warning-instead-of-silent-skip is the right default for any data-loss-adjacent code path: silent skip + state inconsistency is far worse than a noisy error the user can act on. Open follow-ups: multi-output auto-import (Mehlman 6 outputs, 5 orphaned), surface empty-destinationFolderId at queue-time, root-cause IPC propagation gaps.
 
 ## v4.72-imported-job-state-fix-stable
 

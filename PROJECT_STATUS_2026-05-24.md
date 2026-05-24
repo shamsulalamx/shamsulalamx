@@ -1,12 +1,97 @@
 # Project Status 2026-05-24
 
-Current stable tag: `v4.72-imported-job-state-fix-stable`
+Current stable tag: `v4.73-folder-routing-fix-and-move-button-stable`
 Current branch: `phase11-fastfacts-stability`
 Last committed HEAD: source + doc bundled in a single v4.69 commit (v4.68 / v4.67 / v4.66 / v4.65 / v4.64 / v4.63 / v4.62 still exist as prior tags). Note: the v4.65 tag still points at the pre-follow-up commit (4b18447) which is missing `electron/main.js`; the missing handlers landed as a separate follow-up commit (02fea12) that's on `phase11-fastfacts-stability` but not tagged — see the v4.65 entry below.
 
 Supersedes `docs/archive/PROJECT_STATUS_2026-05-23.md`.
 
 ## What Is New Since 2026-05-23
+
+### v4.73 — Folder-routing fix (Mehlman silent-no-import + Fast Facts wrong-folder) + visible Move button
+
+Two related data-routing bugs in BIC auto-import, plus a discoverability fix for the existing move-to-folder feature.
+
+#### Bug A: Mehlman job completed but no test was imported (silent skip)
+
+User: *"COMPLETED. Mehlman Internal Medicine.pdf. Batch job completed. It's completed, but not imported? The log says 259 questions accepted, but the output says 6. Where is the test?"*
+
+Root cause: `processQueuedBatchAutoImports()` (the loop that auto-imports newly-completed queue jobs) gated on `job.destinationFolderId`:
+
+```js
+if (!outputPath || !job.destinationFolderId) continue;
+```
+
+When `destinationFolderId` was empty/missing, the auto-import silently skipped the job. The output JSON was generated and sat on disk, but the user had no idea — the queue row said "completed" with no follow-up.
+
+#### Bug B: Fast Facts quiz "IM FF" ended up in NBME → Psychiatry
+
+User: *"I am 100% certain that I chose the Fast Facts quiz generated, labeled IM FF in the Fast Facts folder. I was looking for it EVERYWHERE. Guess where I found it? Inside NBME -> psychiatry."*
+
+Root cause: `importAcceptedBatchReviewQuestions()` had this fallback at line 23992:
+
+```js
+folderId: job.destinationFolderId || String(document.getElementById('bic-target-folder')?.value || '').trim(),
+```
+
+If `job.destinationFolderId` was missing (or even briefly cleared), the import code fell back to **whatever folder the user happened to have selected in the BIC dropdown at the moment of clicking "Import Accepted Questions."** If the user had switched the dropdown to Psychiatry for an unrelated reason between queuing the Fast Facts job and reviewing+importing it, the survivors got routed to Psychiatry instead of the original Fast Facts folder.
+
+Both bugs share a "trust the job-record field, fall back wrongly if absent" pattern.
+
+#### Fix in v4.73
+
+New `_getEffectiveJobFolderId(job)` helper that resolves the destination folder ID from EVERY documented location it might have landed in:
+
+```js
+job.destinationFolderId
+|| job.destination?.folderId
+|| job.report?.destinationFolderId
+|| job.manifest?.destination?.folderId
+|| ''
+```
+
+Both import paths now use this helper:
+
+- **`processQueuedBatchAutoImports()`** — uses helper; if it returns empty, instead of silently `continue`-ing, surfaces a console.warn + toast: *"⚠ Job <jobId> completed but cannot auto-import — no destination folder was recorded. Drag the .json onto the landing-page uploader to import manually."* User now knows something needs manual attention.
+- **`importAcceptedBatchReviewQuestions()`** — uses helper; if BOTH the helper AND the live dropdown are empty, refuses to import and shows an error. No more silent misrouting to whatever folder happens to be selected.
+
+#### Bonus: visible 📂 Move button on test cards
+
+User: *"How do I move its location to the correct folder? There's no option to do that even."*
+
+The `App.moveTestToFolder()` function already existed (line 25026) and `showTestContextMenu()` exposed it via right-click. But right-click on test cards isn't discoverable, and the test-card action row had only ✏️ (rename) and 🗑 (trash) visible.
+
+v4.73 adds a third visible button: **📂** between rename and trash. Click → opens the existing `modal-move-test` folder picker → user picks new folder → test moves cleanly. No new logic needed; just surfaces the existing function.
+
+**Concrete recovery for the user's misrouted Fast Facts quiz**: launch the rebuilt `.app`, navigate to NBME → Psychiatry, find the IM FF quiz, click the 📂 button on its card, pick Fast Facts → IM FF as the destination, done.
+
+#### Validation
+
+- **`node --check`** clean.
+- **9 v4.73 markers** in source.
+- **`.app` rebuilt** with v4.73 markers verified present in bundled HTML.
+- **4 scenarios traced manually before shipping**:
+  - Mehlman queued with proper folder → auto-imports correctly via helper
+  - Mehlman queued with no folder → loud warning + skip (no silent drop)
+  - Fast Facts review-imported after dropdown changed → uses original folder via helper (not live dropdown)
+  - User moves misrouted test → 📂 button opens existing modal-move-test
+- **Live UI walkthrough**: pending — user needs to relaunch .app to see all three fixes.
+
+#### Why the Mehlman 259 vs 6 specifically
+
+Likely scenario: Mehlman's downstream generator produced 6 separate `*_app_ready.json` output files totaling 259 questions across them. The auto-import only takes the FIRST one (line 24375 `find(...).endsWith('_app_ready.json')`) — so if it had imported, only one chunk of questions would have landed. But because `destinationFolderId` was empty, even that didn't happen. The other 5 output files are orphaned on disk under `~/Library/Application Support/shamsulalamx/batch-import-center/jobs/<jobId>/output/`.
+
+#### Recovery for the user's Mehlman job specifically
+
+Open the queue row's "Job details and recent logs" section in BIC. The "Output paths" line will list all 6 JSON file paths. Drag any of them onto the landing-page upload box to import that chunk of questions. (Or all 6 sequentially to import everything.)
+
+#### Open follow-ups
+
+- **Multi-output auto-import**: the auto-import loop only takes the first `*_app_ready.json`. For pipelines like Mehlman that produce multiple output files, we should loop through all of them and merge into a single test (or import each as separate tests). Today the 5 other outputs are orphaned.
+- **Why was `destinationFolderId` empty in the first place?** Possibilities: user selected "+ New folder…" and cancelled the prompt (dropdown reverts to last-valid which might be empty), user opened BIC with no folder pre-selected, or a UI race. Worth instrumenting the queue path to surface this at queue-time instead of waiting for the silent post-completion skip.
+- **IPC job.status propagation** (still open from v4.72).
+- **Fast Facts validator over-flagging** (still open).
+- **Non-lecture pipelines need hyperspecific progress events** (still open).
 
 ### v4.72 — Imported jobs show "✓ IMPORTED" + hide stale review/retry buttons
 

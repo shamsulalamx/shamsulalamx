@@ -9676,8 +9676,9 @@ const App = (() => {
             : `<button class="btn-card" onclick="App.viewHistory('${test.id}')">📊</button>`}
           <button class="btn-card" onclick="App.redoTest('${test.id}')" title="Create a fresh attempt">↺ Redo</button>
           ${test.status==='completed' ? `<button class="btn-card" onclick="App.createIncorrectsTestFromTest('${test.id}')" title="New test from incorrect answers">✗ Incorrects</button>` : ''}
-          <button class="btn-card" onclick="App.startRenameTest('${test.id}')">✏️</button>
-          <button class="btn-card danger" onclick="App.trashTest('${test.id}')">🗑</button>
+          <button class="btn-card" onclick="App.startRenameTest('${test.id}')" title="Rename test">✏️</button>
+          <button class="btn-card" onclick="App.moveTestToFolder('${test.id}')" title="Move test to a different folder">📂</button>
+          <button class="btn-card danger" onclick="App.trashTest('${test.id}')" title="Move test to Trash">🗑</button>
         </div>
       </div>`;
     });
@@ -23986,10 +23987,24 @@ Errors: ${escapeHTML(errors)}</div>
       || (job.report && job.report.acceptedSurvivorsImportedTestId)
       || ''
     ).trim();
+    // v4.73: use the defensive helper instead of falling back to the LIVE
+    // dropdown value. The previous fallback to document.getElementById(
+    // 'bic-target-folder').value caused the reviewed-survivor import to use
+    // whatever folder the user happened to have selected at the moment of
+    // clicking Import — which was the wrong folder if they'd switched the
+    // dropdown for an unrelated reason between queuing and reviewing. The
+    // user reported Fast Facts quizzes landing in NBME → Psychiatry because
+    // of this. The job's ORIGINAL destination folder is now honored.
+    const reviewImportFolderId = _getEffectiveJobFolderId(job)
+      || String(document.getElementById('bic-target-folder')?.value || '').trim();
+    if (!reviewImportFolderId) {
+      if (status) status.textContent = '⚠ Cannot import — no destination folder recorded on this job AND none selected in the dropdown.';
+      return;
+    }
     let importResult;
     try {
       importResult = await autoImportBatchOutputJson(survivor.survivorPath, {
-        folderId: job.destinationFolderId || String(document.getElementById('bic-target-folder')?.value || '').trim(),
+        folderId: reviewImportFolderId,
         testName,
         appendToTestId: existingTestIdForJob,
         statusTarget: 'bic-create-status'
@@ -24362,6 +24377,24 @@ Errors: ${escapeHTML(errors)}</div>
     }
   }
 
+  // v4.73: defensive folder-id lookup. The queue-job manifest writer in
+  // electron/main.js:772 stores destinationFolderId on the top-level job
+  // record from manifest.destination?.folderId. If the renderer ever
+  // queues a job with destination.folderId set differently (e.g. nested
+  // structure), this helper finds it in any of the documented locations.
+  // Returns '' (empty string) if truly nowhere — auto-import then surfaces
+  // a warning instead of silently dropping the job.
+  function _getEffectiveJobFolderId(job) {
+    if (!job) return '';
+    return String(
+      job.destinationFolderId
+      || (job.destination && job.destination.folderId)
+      || (job.report && job.report.destinationFolderId)
+      || (job.manifest && job.manifest.destination && job.manifest.destination.folderId)
+      || ''
+    ).trim();
+  }
+
   async function processQueuedBatchAutoImports(jobs) {
     const api = window.nbmeDesktop && window.nbmeDesktop.batchImport;
     if (!api || !api.updateJobReport) return;
@@ -24375,12 +24408,24 @@ Errors: ${escapeHTML(errors)}</div>
       const outputPath = (Array.isArray(job.outputPaths) ? job.outputPaths : []).find(function(path) {
         return String(path || '').endsWith('_app_ready.json');
       });
-      if (!outputPath || !job.destinationFolderId) continue;
+      // v4.73: use the defensive helper instead of just job.destinationFolderId
+      // — fixes the silent-skip bug where Mehlman completed but never imported
+      // because the folder ID was stored in a sibling location.
+      const folderId = _getEffectiveJobFolderId(job);
+      if (!outputPath) continue;
+      if (!folderId) {
+        // Surface the misrouted job loudly instead of silently dropping it.
+        console.warn('[auto-import] skipped job', job.jobId, '— no destination folder. Output sits at:', outputPath);
+        if (typeof toast === 'function') {
+          try { toast('⚠ Job ' + job.jobId + ' completed but cannot auto-import — no destination folder was recorded. Drag the .json onto the landing-page uploader to import manually.'); } catch (e) {}
+        }
+        continue;
+      }
       _batchQueueAutoImports.add(job.jobId);
       try {
         appendBatchImportProgress({ type: 'stage_start', timestamp: new Date().toISOString(), stageLabel: 'import', message: 'auto-import started' });
         const importResult = await autoImportBatchOutputJson(outputPath, {
-          folderId: job.destinationFolderId,
+          folderId: folderId,  // v4.73: use the helper-resolved folderId, not the raw field
           testName: job.testName || '',
           statusTarget: 'bic-create-status'
         });
