@@ -3231,10 +3231,12 @@ body.quiz-fullscreen-mode .modal-overlay {
         <button class="btn-modal" onclick="window.unstickGoogleDriveSync && window.unstickGoogleDriveSync(); connectGoogleDrive()">Connect Drive</button>
         <button class="btn-modal" onclick="window.unstickGoogleDriveSync && window.unstickGoogleDriveSync(); saveGoogleDriveNow()">Backup Now</button>
         <button class="btn-modal" onclick="restoreGoogleDriveNow()">Restore Drive</button>
+        <button class="btn-modal" onclick="window.runDriveDiagnostics && window.runDriveDiagnostics()" title="Runs a self-test that shows EXACTLY what's failing — token state, folder IDs, last error, and a live test API call. Use this when sync keeps failing and you don't know why.">🔍 Drive Debug</button>
         <button class="btn-modal" onclick="window.nbmeDiagnosticExport()" title="Download a JSON backup of your current local data with diagnostic info">📥 Diagnostic Backup</button>
       </div>
       <div id="drive-sync-status" style="font-size:11px;color:#5a6a7a;margin-top:6px;">Drive not connected.</div>
       <div id="drive-last-sync" style="font-size:11px;color:#5a6a7a;margin-top:2px;opacity:0.8;display:none;"></div>
+      <pre id="drive-debug-output" style="display:none;margin-top:8px;padding:8px;background:#1a1f2e;color:#cfd6e0;border-radius:6px;font-size:11px;font-family:'SF Mono',Menlo,monospace;max-height:280px;overflow:auto;white-space:pre-wrap;word-break:break-word;"></pre>
     </div>
     <div class="form-group" style="margin-top:12px;">
       <label class="form-label">App PIN Lock</label>
@@ -4773,6 +4775,93 @@ window.MiscDocStore = MiscDocStore;
     _driveStuck = false;
     _driveConsecutiveFailures = 0;
     if (_driveRetryTimer) { clearTimeout(_driveRetryTimer); _driveRetryTimer = null; }
+  };
+
+  // v4.71: Drive self-diagnostic. Runs a live test that shows EXACTLY what
+  // state the sync subsystem is in and which API call (if any) is failing.
+  // Use when sync keeps failing after Connect Drive succeeds — proves it's
+  // not an auth issue and points at the real root cause (stale file ID,
+  // quota, permission, etc.).
+  window.runDriveDiagnostics = async function() {
+    const outEl = document.getElementById('drive-debug-output');
+    if (!outEl) return;
+    outEl.style.display = '';
+    const lines = [];
+    const write = function(s) { lines.push(s); outEl.textContent = lines.join('\n'); };
+
+    write('═══ Drive Self-Diagnostic ═══');
+    write('');
+    write('Local state:');
+    write('  _accessToken           : ' + (_accessToken ? 'present (length ' + _accessToken.length + ')' : 'MISSING — click Connect Drive'));
+    write('  _folderId              : ' + (_folderId || '(not set yet — will be created on first sync)'));
+    write('  _manifestFileId        : ' + (_manifestFileId || '(not set yet — will be created on first sync)'));
+    write('  _miscDocsFileId        : ' + (_miscDocsFileId || '(not set yet)'));
+    write('  _driveDirty            : ' + _driveDirty);
+    write('  _driveSyncInProgress   : ' + _driveSyncInProgress);
+    write('  _driveStuck            : ' + _driveStuck);
+    write('  _driveConsecutiveFailures: ' + _driveConsecutiveFailures);
+    write('  _driveLastError        : ' + (_driveLastError || '(none)'));
+    write('  _driveLastSyncTimestamp: ' + (_driveLastSyncTimestamp ? new Date(_driveLastSyncTimestamp).toLocaleString() : '(never)'));
+    write('  localStorage drive-enabled flag: ' + (localStorage.getItem(DRIVE_ENABLED_KEY) || '(not set)'));
+    write('');
+
+    if (!_accessToken) {
+      write('━━━ No token — cannot run live tests. Click Connect Drive first. ━━━');
+      return;
+    }
+
+    // Live test 1: /drive/v3/about — simplest endpoint, confirms token is valid + user identity
+    write('Live test 1: GET /drive/v3/about?fields=user');
+    try {
+      const r1 = await fetch('https://www.googleapis.com/drive/v3/about?fields=user', {
+        headers: { Authorization: 'Bearer ' + _accessToken }
+      });
+      const body1 = await r1.text();
+      write('  HTTP ' + r1.status + ' ' + r1.statusText);
+      write('  body: ' + body1.slice(0, 400));
+    } catch (e) {
+      write('  EXCEPTION: ' + (e && e.message ? e.message : String(e)));
+    }
+    write('');
+
+    // Live test 2: try to fetch the stored manifest file ID (if present)
+    if (_manifestFileId) {
+      write('Live test 2: GET /drive/v3/files/' + _manifestFileId + ' (verify manifest file still exists)');
+      try {
+        const r2 = await fetch('https://www.googleapis.com/drive/v3/files/' + _manifestFileId + '?fields=id,name,trashed,parents,size,mimeType', {
+          headers: { Authorization: 'Bearer ' + _accessToken }
+        });
+        const body2 = await r2.text();
+        write('  HTTP ' + r2.status + ' ' + r2.statusText);
+        write('  body: ' + body2.slice(0, 400));
+        if (r2.status === 404) {
+          write('  ⚠ DIAGNOSIS: the manifest file ID stored locally points to a file that no longer exists on Drive.');
+          write('  ⚠ FIX: the next backup attempt should recreate it. If it doesn\'t, the auto-recovery in ensureManifestFile may be broken.');
+        }
+      } catch (e) {
+        write('  EXCEPTION: ' + (e && e.message ? e.message : String(e)));
+      }
+    } else {
+      write('Live test 2 SKIPPED: no _manifestFileId stored locally (this is normal for a fresh connect).');
+    }
+    write('');
+
+    // Live test 3: search for the app folder by name
+    write('Live test 3: GET /drive/v3/files?q=name=\'' + DRIVE_FOLDER_NAME + '\' (find Drive folder)');
+    try {
+      const q = encodeURIComponent(`name='${DRIVE_FOLDER_NAME.replace(/'/g, "\\'")}' and trashed=false and mimeType='application/vnd.google-apps.folder'`);
+      const r3 = await fetch('https://www.googleapis.com/drive/v3/files?q=' + q + '&fields=files(id,name,createdTime)', {
+        headers: { Authorization: 'Bearer ' + _accessToken }
+      });
+      const body3 = await r3.text();
+      write('  HTTP ' + r3.status + ' ' + r3.statusText);
+      write('  body: ' + body3.slice(0, 400));
+    } catch (e) {
+      write('  EXCEPTION: ' + (e && e.message ? e.message : String(e)));
+    }
+    write('');
+
+    write('━━━ Diagnostic complete. Copy this entire block + paste it back in chat for triage. ━━━');
   };
 
   window.addEventListener('beforeunload', (e) => {
@@ -23656,6 +23745,47 @@ Errors: ${escapeHTML(errors)}</div>
     }).join('');
   }
 
+  // v4.71: renderer-side quality check for the default-accept gate.
+  // Structural validation (validIndexes membership) only confirms a question
+  // has stem + choices + correct answer in the right shape; it doesn't catch
+  // questions where those fields are present but TRIVIAL or PLACEHOLDER —
+  // e.g. the user-reported Fast Facts Q195-197 had valid schema but useless
+  // stems and generic "Option A" / "Option B" choices. Returns true if we
+  // should NOT auto-accept (i.e. mark 'pending' for manual review).
+  function _hasObviousQualityIssue(question) {
+    if (!question || typeof question !== 'object') return true;
+    const stem = String(question.stem || '').trim();
+    // Stems shorter than 40 chars are almost never legitimate medical questions
+    if (!stem || stem.length < 40) return true;
+    // Placeholder phrases that the canonical-polish step emits when Gemini
+    // fails to produce real content (also caught by the v4.63 NBME critic)
+    const PLACEHOLDER_PHRASES = [
+      'refer to the explanation',
+      'apply the tested clinical reasoning',
+      'see the explanation',
+      'identify the correct answer',
+      'demonstrate clinical reasoning',
+    ];
+    const pearl = String(question.reviewPearl || question.clinicalPearl || question.pearl || '').trim().toLowerCase();
+    const obj = String(question.educationalObjective || '').trim().toLowerCase();
+    if (pearl && PLACEHOLDER_PHRASES.some(function(p) { return pearl.indexOf(p) !== -1; })) return true;
+    if (obj && PLACEHOLDER_PHRASES.some(function(p) { return obj.indexOf(p) !== -1; })) return true;
+    // n/a, tbd, todo as single tokens are placeholders
+    if (/^(n\/?a|tbd|todo|\?\?+)$/i.test(pearl)) return true;
+    if (/^(n\/?a|tbd|todo|\?\?+)$/i.test(obj)) return true;
+    // Inspect answer choices for generic / empty text
+    const choices = Array.isArray(question.answerChoices) ? question.answerChoices : [];
+    if (choices.length < 2) return true;  // need at least 2 real choices to be a usable question
+    for (let i = 0; i < choices.length; i++) {
+      const text = String(choices[i]?.text || '').trim();
+      if (!text || text.length < 3) return true;  // empty or single-token choice
+      // Generic placeholder choice text — exact patterns the LLM emits when it fails
+      if (/^(option\s*[a-e]|choice\s*[a-e]|answer\s*[a-e]|[a-e]\.?)$/i.test(text)) return true;
+    }
+    // Survived all checks — looks usable, auto-accept is safe
+    return false;
+  }
+
   async function openBatchReviewDraft(jobId) {
     const api = window.nbmeDesktop && window.nbmeDesktop.batchImport;
     const status = document.getElementById('bic-review-draft-status');
@@ -23676,19 +23806,20 @@ Errors: ${escapeHTML(errors)}</div>
       return Number(item?.questionIndex || 0);
     }).filter(Boolean));
     const decisions = {};
-    (Array.isArray(result.draft?.candidateQuestions) ? result.draft.candidateQuestions : []).forEach(function(_question, offset) {
+    const candidateQuestions = Array.isArray(result.draft?.candidateQuestions) ? result.draft.candidateQuestions : [];
+    candidateQuestions.forEach(function(question, offset) {
       const index = offset + 1;
-      // v4.70: default to 'accept' on structurally-valid questions even when
-      // the validator flagged something. Reverses the prior opt-in-to-accept
-      // model, which produced an unworkable manual-clicking burden when Fast
-      // Facts / Emma Holiday batches over-flagged 50–95% of questions as
-      // false positives (semantic-grounding misses on threshold claims that
-      // were actually present in the source, ontology-class mismatches on
-      // perfectly grounded choices, etc.). The flag indicator stays visible
-      // on each question card so the user can manually reject the small
-      // number of genuinely bad ones — far cheaper than accepting hundreds
-      // of good ones one at a time.
-      decisions[index] = validIndexes.has(index) ? 'accept' : 'pending';
+      // v4.70 + v4.71: default to 'accept' on structurally-valid questions even
+      // when the validator flagged them, BUT also run a renderer-side quality
+      // check that catches obvious garbage which structural validation alone
+      // doesn't (placeholder pearls, empty/trivial stems, generic "Option A"
+      // choices, etc.). Examples from live testing: Fast Facts Q195-197 had
+      // valid schema (stem + 4 choices) but the stem was useless and the
+      // choices were generic — would have silently imported under pure v4.70
+      // logic. v4.71's _hasObviousQualityIssue catches these.
+      const valid = validIndexes.has(index);
+      const garbage = _hasObviousQualityIssue(question);
+      decisions[index] = (valid && !garbage) ? 'accept' : 'pending';
     });
     (Array.isArray(result.decisions) ? result.decisions : []).forEach(function(item) {
       if (decisions[item.questionIndex] && ['accept', 'reject', 'pending'].includes(item.decision)) {

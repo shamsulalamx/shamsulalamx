@@ -2,7 +2,17 @@
 
 Last updated: 2026-05-24
 
-This file documents stable v4 tags from v4.0 through the current head tag `v4.70-default-accept-floating-log-drive-decode-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+This file documents stable v4 tags from v4.0 through the current head tag `v4.71-quality-gate-and-drive-diagnostics-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+
+## v4.71-quality-gate-and-drive-diagnostics-stable
+
+Commit: bundled source + doc in a single v4.71 commit (see `git log -1 v4.71-quality-gate-and-drive-diagnostics-stable`).
+
+Meaning: Two follow-up fixes after the user pushed back on v4.70 gaps. (1) **Quality-gated default-accept**: v4.70's `validIndexes.has(i) ? 'accept' : 'pending'` only checked structural validation — missed questions like Fast Facts Q195-197 that had valid schema but trivial stem + generic "Option A" choices. v4.71 adds new `_hasObviousQualityIssue(question)` renderer-side check that catches placeholder pearls/objectives (refer-to-the-explanation, apply-the-tested-clinical-reasoning, etc.), stems under 40 chars, generic choice text (matches `/^(option|choice|answer)\s*[a-e]$/i`), and other classes of garbage. Default decision now `(valid && !garbage) ? 'accept' : 'pending'`. (2) **Drive self-diagnostic panel**: new 🔍 Drive Debug button + `window.runDriveDiagnostics()` function that dumps local state (token, folder/file IDs, dirty/stuck/last-error/timestamp) AND runs 3 live API tests (about endpoint for auth verification; manifest file fetch for the stale-ID scenario where local cache points at a file deleted on Drive; folder search by name). Output in a monospace `<pre>` block in Settings. Converts the user's "Drive sync mysteriously fails 40 times" from guess-and-check to one-click root cause identification.
+
+Validated: `node --check` clean on every inline `<script>`. 10 v4.71 markers in source. `.app` rebuilt with v4.71 markers verified in bundled HTML. Quality-check behavioural test pending real Fast Facts samples; diagnostic panel needs a live failing scenario to fully exercise.
+
+Architecture significance: The quality-gate pattern (`_hasObviousQualityIssue`) is reusable for any future renderer-side validation layer — separate from server-side structural validation, catches a different class of garbage that schema validation misses. The Drive diagnostic panel pattern (dump-state + live-test + inline output) is reusable for any future external-API integration that fails opaquely; same approach could be wrapped around Gemini API, the BIC pipeline runner, etc.
 
 ## v4.70-default-accept-floating-log-drive-decode-stable
 

@@ -1,12 +1,63 @@
 # Project Status 2026-05-24
 
-Current stable tag: `v4.70-default-accept-floating-log-drive-decode-stable`
+Current stable tag: `v4.71-quality-gate-and-drive-diagnostics-stable`
 Current branch: `phase11-fastfacts-stability`
 Last committed HEAD: source + doc bundled in a single v4.69 commit (v4.68 / v4.67 / v4.66 / v4.65 / v4.64 / v4.63 / v4.62 still exist as prior tags). Note: the v4.65 tag still points at the pre-follow-up commit (4b18447) which is missing `electron/main.js`; the missing handlers landed as a separate follow-up commit (02fea12) that's on `phase11-fastfacts-stability` but not tagged — see the v4.65 entry below.
 
 Supersedes `docs/archive/PROJECT_STATUS_2026-05-23.md`.
 
 ## What Is New Since 2026-05-23
+
+### v4.71 — Quality-gated default-accept + Drive self-diagnostic panel
+
+Two follow-up fixes after the user pushed back on v4.70's gaps.
+
+#### Quality-gated default-accept (closes a hole in v4.70's "default to accept on valid")
+
+User feedback: *"Q. 195, 196, 197 did not produce any usable question stem, however, they were still presented in a structurally valid manner. Answer choices were generic wording. So when you say default to 'accept' if structurally valid, doesn't it risk importing those broken questions?"*
+
+Correct. v4.70's `validIndexes.has(index) ? 'accept' : 'pending'` only checked structural validation (stem + choices + correct answer in right shape). It didn't catch questions where those fields were PRESENT but TRIVIAL or PLACEHOLDER.
+
+v4.71 adds new `_hasObviousQualityIssue(question)` renderer-side check that catches:
+
+- **Empty or trivial stem**: `stem.length < 40` chars
+- **Placeholder pearl**: `reviewPearl` contains `"refer to the explanation"`, `"apply the tested clinical reasoning"`, `"see the explanation"`, etc. — the exact phrases the v4.63 NBME critic also targets
+- **Placeholder educational objective**: same blacklist applied to `educationalObjective`
+- **Placeholder single-token fields**: `n/a`, `tbd`, `todo`, `???`
+- **Too-few choices**: `choices.length < 2`
+- **Empty / single-char choice text**: `text.length < 3`
+- **Generic choice text**: matches `/^(option\s*[a-e]|choice\s*[a-e]|answer\s*[a-e]|[a-e]\.?)$/i` — catches "Option A", "Choice B", "A.", etc.
+
+Default decision now: `(valid && !garbage) ? 'accept' : 'pending'`. Q195-197-style structurally-valid-but-useless questions land as 'pending' so the user manually reviews them; legitimate questions still auto-accept.
+
+#### Drive self-diagnostic panel (closes Drive failure visibility gap)
+
+User feedback: *"I have clicked on connect drive just about 20 times, it connects. But backup drive keeps giving me sync error. So its not a connection issue, its a syncing issue."*
+
+Correct. Connect Drive succeeding + Backup Drive failing proves the issue is post-auth. Likely culprits: stale `_manifestFileId` cached locally pointing at a file the user deleted from Drive (results in 404 on every backup attempt), folder permission issue, or quota.
+
+v4.71 adds new **🔍 Drive Debug** button in Settings → Google Drive Backup. Clicking it runs `window.runDriveDiagnostics()` which:
+
+1. **Dumps local state**: `_accessToken` presence + length, `_folderId`, `_manifestFileId`, `_miscDocsFileId`, `_driveDirty`, `_driveSyncInProgress`, `_driveStuck`, `_driveConsecutiveFailures`, `_driveLastError`, `_driveLastSyncTimestamp`, drive-enabled localStorage flag.
+2. **Live test 1**: `GET /drive/v3/about?fields=user` — simplest possible Drive API call; confirms the access token is valid and Google knows who the user is.
+3. **Live test 2** (if `_manifestFileId` is set): `GET /drive/v3/files/<id>` — checks whether the manifest file the local code thinks exists actually exists on Drive. **404 here is the smoking gun for the "stale ID" scenario** — diagnostic message tells the user explicitly: *"DIAGNOSIS: the manifest file ID stored locally points to a file that no longer exists on Drive. FIX: the next backup attempt should recreate it."*
+4. **Live test 3**: `GET /drive/v3/files?q=name='NBME Self-Assessment Suite' and trashed=false and mimeType='application/vnd.google-apps.folder'` — finds the Drive folder by name; reveals whether the app-data folder exists.
+
+Output displayed inline in a monospace `<pre>` block in the Settings modal, with full HTTP status + body for each call. User can copy-paste the full output for triage if needed.
+
+This converts "Drive sync mysteriously fails" from a guess-and-check exercise into a one-click root cause identification.
+
+#### Validation
+
+- **`node --check`** clean on every inline `<script>`.
+- **10 v4.71 markers** in source.
+- **`.app` rebuilt** with v4.71 markers verified present in bundled HTML.
+- **Quality-check logic**: behavioural test pending — needs the user's actual Q195-197 questions or representative samples to verify catch rate.
+- **Diagnostic panel**: depends on user running it during a real failing-sync scenario; output should immediately point at the root cause.
+
+#### Why "stable"
+
+Both changes are purely additive renderer-side improvements. The quality check makes the default-accept logic strictly safer (catches a class of garbage that v4.70 missed). The Drive diagnostic panel is a new button that only runs when explicitly invoked — adds no automatic behavior. Worst-case from misbehaving v4.71 component: quality check is too aggressive (some legitimate questions land as 'pending' instead of 'accept' — user manually accepts, no data loss).
 
 ### v4.70 — Default-accept on valid + floating log panel + Drive error decoding + smart heartbeat
 
