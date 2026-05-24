@@ -1235,6 +1235,49 @@ ipcMain.handle('nbme:batch-import:cancel-job', async (_event, payload) => {
   }
 });
 
+// v4.65: pause/resume an active batch job via POSIX SIGSTOP / SIGCONT signals.
+// The child is spawned with detached:true (process-group leader), so signaling
+// -pid hits every grandchild (Gemini subprocesses, OCR helpers, etc.).
+// SIGSTOP halts immediately — any in-flight Gemini HTTP call will complete at
+// the OS socket layer but the Python event loop won't process it until SIGCONT.
+ipcMain.handle('nbme:batch-import:pause-job', async (_event, payload) => {
+  try {
+    const jobId = String(payload?.jobId || '').trim();
+    if (!jobId) return safeError('BATCH_JOB_ID_REQUIRED', 'jobId is required.');
+    const active = activeBatchJobs.get(jobId);
+    if (!active) return safeError('BATCH_JOB_NOT_RUNNING', 'No running batch job was found for that id.');
+    if (active.paused) return { ok: true, jobId, status: 'paused', message: 'Already paused.' };
+    if (!active.proc?.pid) return safeError('BATCH_JOB_NO_PID', 'No process pid to pause.');
+    const sent = safeKillProcessGroup(active.proc, 'SIGSTOP', `pause ${jobId}`)
+      || safeKillProcess(active.proc, 'SIGSTOP', `pause ${jobId}`);
+    if (!sent) return safeError('BATCH_PAUSE_FAILED', 'Could not deliver SIGSTOP to the job process.');
+    active.paused = true;
+    active.pausedAt = new Date().toISOString();
+    return { ok: true, jobId, status: 'paused', pausedAt: active.pausedAt };
+  } catch (err) {
+    return safeError('BATCH_PAUSE_FAILED', err.message || String(err));
+  }
+});
+
+ipcMain.handle('nbme:batch-import:resume-job', async (_event, payload) => {
+  try {
+    const jobId = String(payload?.jobId || '').trim();
+    if (!jobId) return safeError('BATCH_JOB_ID_REQUIRED', 'jobId is required.');
+    const active = activeBatchJobs.get(jobId);
+    if (!active) return safeError('BATCH_JOB_NOT_RUNNING', 'No running batch job was found for that id.');
+    if (!active.paused) return { ok: true, jobId, status: 'running', message: 'Not paused.' };
+    if (!active.proc?.pid) return safeError('BATCH_JOB_NO_PID', 'No process pid to resume.');
+    const sent = safeKillProcessGroup(active.proc, 'SIGCONT', `resume ${jobId}`)
+      || safeKillProcess(active.proc, 'SIGCONT', `resume ${jobId}`);
+    if (!sent) return safeError('BATCH_RESUME_FAILED', 'Could not deliver SIGCONT to the job process.');
+    active.paused = false;
+    active.resumedAt = new Date().toISOString();
+    return { ok: true, jobId, status: 'running', resumedAt: active.resumedAt };
+  } catch (err) {
+    return safeError('BATCH_RESUME_FAILED', err.message || String(err));
+  }
+});
+
 ipcMain.handle('nbme:batch-import:retry-queue-job', async (_event, payload) => {
   try {
     const jobId = String(payload?.jobId || '').trim();
