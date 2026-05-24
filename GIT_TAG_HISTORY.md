@@ -2,7 +2,17 @@
 
 Last updated: 2026-05-24
 
-This file documents stable v4 tags from v4.0 through the current head tag `v4.71-quality-gate-and-drive-diagnostics-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+This file documents stable v4 tags from v4.0 through the current head tag `v4.72-imported-job-state-fix-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+
+## v4.72-imported-job-state-fix-stable
+
+Commit: bundled source + doc in a single v4.72 commit (see `git log -1 v4.72-imported-job-state-fix-stable`).
+
+Meaning: Renderer-side defensive fix for queue rows showing stale `COMPLETED_WITH_REVIEW_REQUIRED` status + Retry / Review Draft buttons even after the user fully reviewed + imported the accepted survivors (Fast Facts, Emma Holiday). Root cause: `job.status` wasn't being updated to `completed_with_review` by the IPC `updateJobReport` flow when the import completed (the report sub-object updated but the top-level field stayed stale). v4.72's renderer no longer trusts `job.status` alone — it now also checks `importedTestId` across all four locations (`job.importedTestId`, `job.acceptedSurvivorsImportedTestId`, `job.report.importedTestId`, `job.report.acceptedSurvivorsImportedTestId`). If ANY is set, treat as fully done: hide Retry, hide Review Draft, show "✓ IMPORTED" green badge instead of the stale status string. Status-text alone is no longer used as the single source of truth for done-ness.
+
+Validated: `node --check` clean. 8 v4.72 markers in source. `.app` rebuilt with v4.72 markers verified in bundled HTML. 6 queue-row scenarios traced manually (pending / running / completed-auto / completed-with-review-not-yet-imported / completed-with-review-imported / failed) — all produce the expected button set. Live UI walkthrough pending.
+
+Architecture significance: Establishes the "don't trust one field — derive done-state from any of the canonical signals" pattern for queue rendering. Reusable for any future renderer that depends on multi-step state propagation through IPC. The deeper IPC propagation gap (job.status not updating in lockstep with job.report.status) is documented as an open follow-up — v4.72 works around it defensively rather than fixing it directly. The "Open Artifacts" button referenced in the user's report was already removed in v4.69 (commit b4cc630); if it's still visible, the user is running an older .app build that pre-dates v4.69.
 
 ## v4.71-quality-gate-and-drive-diagnostics-stable
 

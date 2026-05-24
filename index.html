@@ -23568,7 +23568,23 @@ const App = (() => {
       const sourceLabel = job.sourceLabel || BATCH_IMPORT_SOURCE_LABELS[job.sourceType] || job.sourceType || 'Unknown source';
       const filePath = String(job.inputFiles?.[0]?.path || '');
       const fileName = filePath.split(/[\\/]/).pop() || filePath || 'No file';
-      const retryable = ['failed', 'interrupted', 'canceled', 'needs_review', 'completed_with_review_required'].includes(job.status);
+      // v4.72: defensive done-check. Don't trust job.status alone — the IPC
+      // updateJobReport that's supposed to flip status from
+      // 'completed_with_review_required' to 'completed_with_review' after
+      // import sometimes doesn't propagate to the top-level job object (the
+      // report sub-object has the new status but job.status stays stale).
+      // ALSO check the imported-test-id flags on both job.* and job.report.*
+      // — if anything got imported, the work is done regardless of what
+      // status string says.
+      const importedTestId =
+        job.importedTestId
+        || job.acceptedSurvivorsImportedTestId
+        || (job.report && job.report.importedTestId)
+        || (job.report && job.report.acceptedSurvivorsImportedTestId)
+        || '';
+      const isFullyDone = !!importedTestId;
+
+      const retryable = !isFullyDone && ['failed', 'interrupted', 'canceled', 'needs_review', 'completed_with_review_required'].includes(job.status);
       const cancelable = job.status === 'running';
       // v4.69: allow removing 'pending' (waiting-in-queue) jobs too — previously
       // users could accidentally enqueue a job and had no way to cancel it
@@ -23584,14 +23600,22 @@ const App = (() => {
       const outputRoot = String(job.outputRoot || '').trim() || 'None';
       const warnings = Array.isArray(job.warnings) && job.warnings.length ? job.warnings.join('\n') : 'None';
       const errors = Array.isArray(job.errors) && job.errors.length ? job.errors.join('\n') : 'None';
-      const canReviewDraft = ['needs_review', 'completed_with_review_required', 'completed_with_review'].includes(job.status) && draftPath !== 'None';
+      const canReviewDraft = !isFullyDone && ['needs_review', 'completed_with_review_required', 'completed_with_review'].includes(job.status) && draftPath !== 'None';
       const interruptedMessage = job.status === 'interrupted'
         ? '<div class="notes-import-text" style="color:#9b3d24;">Interrupted during previous app session. Retry to run again.</div>'
+        : '';
+      // v4.72: clearer "done" label for imported jobs — replaces the
+      // user-visible "COMPLETED_WITH_REVIEW_REQUIRED" string (which is
+      // technically the original pipeline outcome but no longer reflects
+      // current state) with a green ✓ IMPORTED badge.
+      const displayStatus = isFullyDone ? '✓ IMPORTED' : (job.status || 'unknown');
+      const statusBadgeStyle = isFullyDone
+        ? 'background:#27ae60;color:white;padding:2px 8px;border-radius:3px;font-weight:600;'
         : '';
       return `
         <div class="notes-import-block">
           <div class="notes-import-block-head">
-            <span class="notes-import-type">${escapeHTML(job.status || 'unknown')}</span>
+            <span class="notes-import-type" style="${statusBadgeStyle}">${escapeHTML(displayStatus)}</span>
             <span class="notes-import-path">${escapeHTML(job.createdAt || '')}</span>
           </div>
           <div class="notes-import-text">${escapeHTML(sourceLabel)} · ${escapeHTML(fileName)}</div>
