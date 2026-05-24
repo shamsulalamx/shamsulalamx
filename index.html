@@ -2384,8 +2384,11 @@ body.quiz-fullscreen-mode .modal-overlay {
     </div>
     <div id="bic-run-status" class="notes-import-summary">No job run yet.</div>
     <div id="bic-create-status" class="test-create-status" aria-live="polite"></div>
-    <div id="bic-progress-log" class="notes-import-preview">
-      <div class="notes-import-empty">Progress events will appear here.</div>
+    <div class="notes-import-section-title bic-collapsible-toggle" style="cursor:pointer;user-select:none;font-size:11px;color:#7a8a9a;" onclick="App.toggleBicSection('bic-progress-log-body', this)" data-label="Progress log (verbose)">▶ Progress log (verbose)</div>
+    <div id="bic-progress-log-body" style="display:none;">
+      <div id="bic-progress-log" class="notes-import-preview" style="max-height:200px;overflow-y:auto;">
+        <div class="notes-import-empty">Progress events will appear here.</div>
+      </div>
     </div>
     <div class="notes-import-section-title bic-collapsible-toggle" style="cursor:pointer;user-select:none;" onclick="App.toggleBicSection('bic-queue-body', this)" data-label="Generation Queue">▼ Generation Queue</div>
     <div id="bic-queue-body">
@@ -2408,6 +2411,7 @@ body.quiz-fullscreen-mode .modal-overlay {
     <div class="modal-actions">
       <button class="btn-modal primary" id="bic-run-btn" onclick="App.launchBatchImportJob()">Run</button>
       <button class="btn-modal" id="bic-queue-btn" onclick="App.queueBatchImportJobs()">Queue Files</button>
+      <button class="btn-modal" id="bic-pause-job-btn" onclick="App.togglePauseBatchImportJob()" disabled>⏸ Pause</button>
       <button class="btn-modal" id="bic-cancel-job-btn" onclick="App.cancelBatchImportJob()" disabled>Cancel Job</button>
       <button class="btn-modal" onclick="App.closeBatchImportCenter()">Close</button>
     </div>
@@ -22543,7 +22547,8 @@ const App = (() => {
       if (registryStatus) registryStatus.textContent = active.length
         ? 'Active: ' + active.join(', ')
         : 'No active sources registered.';
-      renderBatchImportSourceNote();
+      // v4.64: removed renderBatchImportSourceNote — the source-note div was
+      // deleted from the modal (the "massive blurb" the user objected to).
     }).catch(function(err) {
       if (registryStatus) registryStatus.textContent = err?.message || 'Registry could not be loaded.';
     });
@@ -22663,6 +22668,59 @@ const App = (() => {
     sel.dataset.lastValid = value;
   }
 
+  // v4.65: NBME Q+A pair detection. Returns { pairs: [[qPath, aPath], …],
+  // standalone: [path, …] }. A pair is two files that share a normalized
+  // base name but have opposite role markers (Questions/Stems vs Answers/
+  // Key/Explanations, or _Q vs _A suffix). Mixed groups (e.g. 2 Q-files
+  // and 1 A-file with the same base) are kept as standalone to avoid
+  // surprising the user.
+  function detectNbmePairs(filePaths) {
+    const Q_RE = /(?:\b(?:questions?|stems?)\b|(?:^|[_\s\-])Q(?=[._\s\-]|$))/i;
+    const A_RE = /(?:\b(?:answers?|key|explanations?)\b|(?:^|[_\s\-])A(?=[._\s\-]|$))/i;
+
+    const cleanBase = function(p) {
+      const name = String(p || '').split(/[\\/]/).pop() || '';
+      return name.replace(/\.[^.]+$/, '');
+    };
+    const stripRole = function(base) {
+      return String(base || '')
+        .replace(Q_RE, ' ')
+        .replace(A_RE, ' ')
+        .replace(/[\s_\-]+/g, ' ')
+        .trim()
+        .toLowerCase();
+    };
+
+    const annotated = (Array.isArray(filePaths) ? filePaths : []).map(function(p) {
+      const base = cleanBase(p);
+      const isQ = Q_RE.test(base);
+      const isA = A_RE.test(base);
+      const role = (isQ && !isA) ? 'Q' : ((isA && !isQ) ? 'A' : null);
+      return { path: p, base: base, role: role, stem: stripRole(base) };
+    });
+
+    const groups = {};
+    annotated.forEach(function(f) {
+      if (!groups[f.stem]) groups[f.stem] = [];
+      groups[f.stem].push(f);
+    });
+
+    const pairs = [];
+    const standalone = [];
+    Object.keys(groups).forEach(function(stem) {
+      const group = groups[stem];
+      const qFiles = group.filter(function(f) { return f.role === 'Q'; });
+      const aFiles = group.filter(function(f) { return f.role === 'A'; });
+      if (qFiles.length === 1 && aFiles.length === 1 && group.length === 2) {
+        pairs.push([qFiles[0].path, aFiles[0].path]);
+      } else {
+        group.forEach(function(f) { standalone.push(f.path); });
+      }
+    });
+
+    return { pairs: pairs, standalone: standalone };
+  }
+
   function renderBatchImportSelectedFiles() {
     const target = document.getElementById('bic-selected-files');
     if (!target) return;
@@ -22671,6 +22729,34 @@ const App = (() => {
       target.textContent = 'No files selected.';
       return;
     }
+
+    const sourceType = (document.getElementById('bic-source-type')?.value || '').trim();
+    const detection = (sourceType === 'nbme_pdf' && files.length > 1)
+      ? detectNbmePairs(files)
+      : null;
+
+    if (detection && (detection.pairs.length > 0 || detection.standalone.length > 0)) {
+      // v4.65: NBME pair-detected preview. Each pair will become ONE Queue job;
+      // each standalone file becomes its own job. Auto-detected, no user click.
+      const totalJobs = detection.pairs.length + detection.standalone.length;
+      let html = `<div style="margin-bottom:6px;font-size:12px;color:#5a8a5a;">Detected ${detection.pairs.length} NBME pair${detection.pairs.length === 1 ? '' : 's'}${detection.standalone.length ? ' + ' + detection.standalone.length + ' standalone' : ''}. Queue Files will enqueue ${totalJobs} job${totalJobs === 1 ? '' : 's'}.</div>`;
+      detection.pairs.forEach(function(pair, i) {
+        html += `<div style="border-left:3px solid #5a8a5a;padding:2px 0 2px 8px;margin-bottom:4px;">`;
+        html += `<div style="font-size:11px;color:#5a8a5a;font-weight:600;">Pair ${i + 1} → one quiz</div>`;
+        pair.forEach(function(p) {
+          const name = String(p).split(/[\\/]/).pop();
+          html += `<div>${escapeHTML(name)}</div>`;
+        });
+        html += `</div>`;
+      });
+      detection.standalone.forEach(function(p) {
+        const name = String(p).split(/[\\/]/).pop();
+        html += `<div style="opacity:0.75;">${escapeHTML(name)} <span style="font-size:10px;color:#7a8a9a;">(standalone — its own job)</span></div>`;
+      });
+      target.innerHTML = html;
+      return;
+    }
+
     target.innerHTML = files.map(function(filePath) {
       const name = String(filePath || '').split(/[\\/]/).pop() || filePath;
       return `<div>${escapeHTML(name)}</div>`;
@@ -23311,17 +23397,29 @@ Errors: ${escapeHTML(errors)}</div>
       if (runStatus) runStatus.textContent = 'Choose at least one file before queueing.';
       return;
     }
-    const jobs = inputPaths.map(function(inputPath) {
+    // v4.65: NBME pair detection — when multiple NBME PDFs are selected, group
+    // each detected Q+A pair into ONE job (single quiz) and leave standalone
+    // files as their own jobs. Other source types: one job per file as before.
+    const buildJob = function(paths) {
       return {
         sourceType,
-        inputPaths: [inputPath],
+        inputPaths: paths,
         dryRun: isDryRun,
         executePipeline: !existingOutputValidation,
         existingOutputValidation,
         runMode,
         destination: { folderId, testName }
       };
-    });
+    };
+    let jobs;
+    if (sourceType === 'nbme_pdf' && inputPaths.length > 1) {
+      const detection = detectNbmePairs(inputPaths);
+      jobs = [];
+      detection.pairs.forEach(function(pair) { jobs.push(buildJob(pair)); });
+      detection.standalone.forEach(function(p) { jobs.push(buildJob([p])); });
+    } else {
+      jobs = inputPaths.map(function(inputPath) { return buildJob([inputPath]); });
+    }
     const result = await api.enqueueJobs({ jobs });
     if (!result || !result.ok) {
       if (runStatus) runStatus.textContent = result?.message || 'Queueing failed.';
@@ -23438,14 +23536,39 @@ Errors: ${escapeHTML(errors)}</div>
     if (chunkEvent === 'JOB_COMPLETE') {
       if (_batchImportState) _batchImportState.uogaComplete = true;
       const cancelBtn = document.getElementById('bic-cancel-job-btn');
+      const pauseBtn = document.getElementById('bic-pause-job-btn');
       const runStatus = document.getElementById('bic-run-status');
       if (cancelBtn) cancelBtn.disabled = false;
+      if (pauseBtn) pauseBtn.disabled = false;
       if (runStatus) runStatus.textContent = 'Generation finished. Preparing output.';
       updateTestCreateStatus('bic-create-status', { phase: 'Finalizing output...', text: 'Generation finished. Waiting for app-ready output and import.', percent: 85, step: 4, totalSteps: 5, percentKnown: false, state: 'active' });
     } else if (type === 'job_start') {
       updateTestCreateStatus('bic-create-status', { phase: 'Job started', text: message || 'Batch job started.', percent: 10, step: 1, totalSteps: 5, percentKnown: false, state: 'active' });
     } else if (type === 'pipeline_progress') {
-      updateTestCreateStatus('bic-create-status', { phase: batchImportProgressPhase(event), text: batchImportProgressText(event), percent: 45, step: 3, totalSteps: 5, percentKnown: false, state: 'active' });
+      // v4.65: dynamic percent driven by page / chunk / question counters so the
+      // progress bar actually MOVES as the pipeline runs. Three phases mapped to
+      // the existing 5-step pipeline shape: extracting (25→40%), chunking
+      // (40→50%), generating (50→85%). Falls back to a static 45% when no
+      // counters are present (preserves prior behavior).
+      let _percent = 45;
+      let _percentKnown = false;
+      const _q = Number(event?.question || 0);
+      const _qT = Number(event?.questionTotal || 0);
+      const _c = Number(event?.chunk || 0);
+      const _cT = Number(event?.chunkTotal || 0);
+      const _p = Number(event?.page || 0);
+      const _pT = Number(event?.pageTotal || 0);
+      if (_q > 0 && _qT > 0) {
+        _percent = Math.round(50 + 35 * Math.min(1, _q / _qT));
+        _percentKnown = true;
+      } else if (_c > 0 && _cT > 0) {
+        _percent = Math.round(40 + 10 * Math.min(1, _c / _cT));
+        _percentKnown = true;
+      } else if (_p > 0 && _pT > 0) {
+        _percent = Math.round(25 + 15 * Math.min(1, _p / _pT));
+        _percentKnown = true;
+      }
+      updateTestCreateStatus('bic-create-status', { phase: batchImportProgressPhase(event), text: batchImportProgressText(event), percent: _percent, step: 3, totalSteps: 5, percentKnown: _percentKnown, state: 'active' });
     } else if (type === 'stage_start' && stage.includes('preflight')) {
       updateTestCreateStatus('bic-create-status', { phase: 'Preflight', text: message || 'Checking inputs.', percent: 25, step: 2, totalSteps: 5, percentKnown: false, state: 'active' });
     } else if (type === 'stage_start' || type === 'command_start' || type === 'stage_heartbeat') {
@@ -23549,7 +23672,14 @@ Errors: ${escapeHTML(errors)}</div>
     if (_batchImportState) _batchImportState.activeJobId = null;
     if (_batchImportState) _batchImportState.uogaComplete = false;
     const cancelBtn = document.getElementById('bic-cancel-job-btn');
+    const pauseBtn = document.getElementById('bic-pause-job-btn');
     if (cancelBtn) cancelBtn.disabled = true;
+    if (pauseBtn) {
+      pauseBtn.disabled = true;
+      // Reset to "Pause" state — a fresh job is by definition running, not paused.
+      pauseBtn.textContent = '⏸ Pause';
+      pauseBtn.dataset.paused = 'false';
+    }
     const log = document.getElementById('bic-progress-log');
     if (log) log.innerHTML = '<div class="notes-import-empty">Progress events will appear here.</div>';
     updateTestCreateStatus('bic-create-status', { phase: 'Job starting', text: 'Stage progress begins when the runner reports its first event.', percent: 10, step: 1, totalSteps: 5, percentKnown: false, state: 'active' });
@@ -23558,8 +23688,16 @@ Errors: ${escapeHTML(errors)}</div>
       if (event?.jobId && _batchImportState) {
         _batchImportState.activeJobId = event.jobId;
         if (cancelBtn) cancelBtn.disabled = false;
+        if (pauseBtn) pauseBtn.disabled = false;
       }
-      if (event?.type === 'job_complete' && cancelBtn) cancelBtn.disabled = true;
+      if (event?.type === 'job_complete') {
+        if (cancelBtn) cancelBtn.disabled = true;
+        if (pauseBtn) {
+          pauseBtn.disabled = true;
+          pauseBtn.textContent = '⏸ Pause';
+          pauseBtn.dataset.paused = 'false';
+        }
+      }
       updateBatchImportStatusFromEvent(event);
       appendBatchImportProgress(event);
     });
@@ -23734,15 +23872,56 @@ Errors: ${escapeHTML(errors)}</div>
       return;
     }
     const cancelBtn = document.getElementById('bic-cancel-job-btn');
+    const pauseBtn = document.getElementById('bic-pause-job-btn');
     if (cancelBtn) cancelBtn.disabled = true;
+    if (pauseBtn) pauseBtn.disabled = true;
     if (runStatus) runStatus.textContent = 'Cancelling batch job...';
     const result = await api.cancelJob({ jobId });
     if (!result || !result.ok) {
       if (runStatus) runStatus.textContent = result?.message || 'Cancel request failed.';
       if (cancelBtn) cancelBtn.disabled = false;
+      if (pauseBtn) pauseBtn.disabled = false;
       return;
     }
     appendBatchImportProgress({ type: 'job_cancelled', timestamp: new Date().toISOString(), jobId, message: 'Cancel request sent.' });
+  }
+
+  // v4.65: toggle SIGSTOP/SIGCONT on the active batch job via IPC. The button
+  // tracks its paused/running state via dataset.paused; label flips between
+  // "⏸ Pause" and "▶ Resume". A failed pause/resume leaves the previous state
+  // intact and surfaces the error to the progress log.
+  async function togglePauseBatchImportJob() {
+    const api = window.nbmeDesktop && window.nbmeDesktop.batchImport;
+    const jobId = _batchImportState?.activeJobId;
+    const btn = document.getElementById('bic-pause-job-btn');
+    if (!api || !jobId || !btn) return;
+    const isPaused = btn.dataset.paused === 'true';
+    btn.disabled = true;  // gate against double-click while IPC is in flight
+    try {
+      if (isPaused) {
+        if (!api.resumeJob) { btn.disabled = false; return; }
+        const result = await api.resumeJob({ jobId });
+        if (result?.ok) {
+          btn.textContent = '⏸ Pause';
+          btn.dataset.paused = 'false';
+          appendBatchImportProgress({ type: 'job_resumed', timestamp: new Date().toISOString(), jobId, message: 'Job resumed.' });
+        } else {
+          appendBatchImportProgress({ type: 'job_resume_failed', timestamp: new Date().toISOString(), jobId, message: result?.message || 'Resume request failed.' });
+        }
+      } else {
+        if (!api.pauseJob) { btn.disabled = false; return; }
+        const result = await api.pauseJob({ jobId });
+        if (result?.ok) {
+          btn.textContent = '▶ Resume';
+          btn.dataset.paused = 'true';
+          appendBatchImportProgress({ type: 'job_paused', timestamp: new Date().toISOString(), jobId, message: 'Job paused — any in-flight Gemini call will complete first, then the Python loop halts at the next instruction.' });
+        } else {
+          appendBatchImportProgress({ type: 'job_pause_failed', timestamp: new Date().toISOString(), jobId, message: result?.message || 'Pause request failed.' });
+        }
+      }
+    } finally {
+      btn.disabled = false;
+    }
   }
 
   function buildBatchImportCompletionReport(options) {
@@ -28525,6 +28704,7 @@ Errors: ${escapeHTML(errors)}</div>
     queueBatchImportJobs,
     launchBatchImportJob,
     cancelBatchImportJob,
+    togglePauseBatchImportJob,
     cancelBatchImportQueueJob,
     retryBatchImportQueueJob,
     refreshBatchImportQueue,

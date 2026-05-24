@@ -1,12 +1,84 @@
 # Project Status 2026-05-24
 
-Current stable tag: `v4.64-bic-simplification-stable`
+Current stable tag: `v4.65-pause-progress-pairing-stable`
 Current branch: `phase11-fastfacts-stability`
-Last committed HEAD: source + doc bundled in a single v4.64 commit (v4.63 and v4.62 still exist as prior tags).
+Last committed HEAD: source + doc bundled in a single v4.65 commit (v4.64/v4.63/v4.62 still exist as prior tags).
 
 Supersedes `docs/archive/PROJECT_STATUS_2026-05-23.md`.
 
 ## What Is New Since 2026-05-23
+
+### v4.65 — Pause/resume UI + dynamic progress percent + collapsible log + NBME Q+A pair detection
+
+Commit B of the planned UI batch. Three coordinated UX improvements to the Batch Import Center, all renderer-only (no Python pipeline changes). The IPC layer for pause/resume was already in place in `electron/main.js` (handlers `nbme:batch-import:pause-job` / `:resume-job` at line 1243-1279) and the preload bridge was updated externally to expose `pauseJob` / `resumeJob`; v4.65 finishes the loop with the UI wiring + adds the NBME Q+A pair detector to the renderer.
+
+#### Pause / resume UI (#8)
+
+- New **⏸ Pause** button in the BIC modal-actions row, between "Queue Files" and "Cancel Job".
+- Toggles between "⏸ Pause" and "▶ Resume" via `dataset.paused` state on the button element.
+- Disabled when no active job; enabled on first progress event with a `jobId`; disabled again on `job_complete`.
+- Disabled during the IPC round-trip to prevent double-clicks.
+- New `App.togglePauseBatchImportJob()` calls `api.pauseJob({ jobId })` or `api.resumeJob({ jobId })` based on current state, and writes a small progress-log entry (`job_paused` / `job_resumed`) so the timestamp + reason is captured.
+- Cancel handler also disables the pause button during cancellation (prevents the race where pause arrives while cancel is in flight).
+- Launch handler resets the pause button to its initial state on every new job, so a stale "▶ Resume" label never persists across jobs.
+
+**Important behavioural note:** SIGSTOP halts the Python event loop immediately, but any **in-flight Gemini HTTP call** completes at the OS socket layer before the loop processes it on resume. So "pause" means "pause at the next instruction after the current Gemini call finishes" — usually within a few seconds. The pause-log entry surfaces this so the user isn't surprised.
+
+#### Dynamic progress percent (#5b)
+
+`updateBatchImportStatusFromEvent()` for `pipeline_progress` events used to hardcode `percent: 45`. v4.65 computes the percent dynamically from page / chunk / question counters when present:
+
+- `question / questionTotal` present → percent = 50 + 35 × (q / qT), `percentKnown: true`
+- else `chunk / chunkTotal` → percent = 40 + 10 × (c / cT)
+- else `page / pageTotal` → percent = 25 + 15 × (p / pT)
+- else → static 45, `percentKnown: false` (unchanged from v4.64 behavior)
+
+Pipelines that already emit counters get a smoothly moving progress bar (`generate_lecture_slide_questions.py` emits all three levels per the explorer's audit). Pipelines that don't yet emit counters fall back to the prior static behavior — no regression.
+
+#### Collapsible progress log (#5a)
+
+The verbose `bic-progress-log` is now wrapped in a collapsible section (same ▼/▶ pattern as Generation Queue + Job History in v4.64). Defaults to **collapsed** since the high-level `bic-create-status` bar carries the phase + percent + descriptive text already. Power users can expand "▶ Progress log (verbose)" to see every event with timestamps. Body capped at `max-height: 200px` with overflow scroll.
+
+#### NBME Q+A pair detection (#9)
+
+New `detectNbmePairs(filePaths)` function — given an array of file paths, returns `{ pairs: [[qPath, aPath], …], standalone: [path, …] }`. Detection heuristics:
+
+- Q-marker regex matches `Questions`, `Stems`, or `_Q` / ` Q` / `-Q` suffix (case-insensitive).
+- A-marker regex matches `Answers`, `Key`, `Explanations`, or `_A` / ` A` / `-A` suffix.
+- Files are normalized by stripping role markers + collapsing whitespace/underscores, then grouped by the resulting stem.
+- A group becomes a pair only if it contains exactly one Q + one A (group size 2). Mixed groups (e.g. 2 Q-files + 1 A-file with the same stem) all become standalone — safer than guessing.
+
+**Behavioural test results** (case → result):
+
+| Input | Detected |
+|---|---|
+| `Internal Medicine 3 - Questions.pdf` + `Internal Medicine 3 - Answers.pdf` | 1 pair |
+| `Block 1 Q.pdf` + `Block 1 A.pdf` + `Block 2 Q.pdf` + `Block 2 A.pdf` | 2 pairs |
+| `Cardio_Q.pdf` + `Cardio_A.pdf` | 1 pair |
+| `Neuro Questions.pdf` + `Neuro Answers.pdf` + `Random.pdf` | 1 pair + 1 standalone |
+| `foo.pdf` + `bar.pdf` (no markers) | 0 pairs + 2 standalone |
+| 2 Q-files + 1 A-file same stem | all standalone |
+
+**UI integration**:
+
+- `renderBatchImportSelectedFiles()` runs the detector when `sourceType === 'nbme_pdf'` and ≥2 files selected. Shows a banner with detected pair count + standalone count, plus per-pair colored boxes with the constituent filenames so the user can visually confirm before queueing.
+- `queueBatchImportJobs()` uses the same detection result: each pair becomes ONE job with `inputPaths: [qPath, aPath]` (the NBME dual-PDF orchestrator from v4.61 already handles Q+A pairs natively); each standalone becomes its own one-file job.
+- Other source types: unchanged — still one job per selected file.
+
+#### Bonus: latent runtime bug fix
+
+v4.64's blurb-removal left a dangling `renderBatchImportSourceNote()` call at line 22550 inside `openBatchImportCenter` — the function was deleted but its caller wasn't updated. Would have thrown `ReferenceError` the first time the user opened the BIC modal post-v4.64. v4.65 removes the stale call with a comment explaining the v4.64 removal.
+
+#### Validation
+
+- **`node --check`** clean on every inline `<script>` extracted from `index.html`.
+- **Pair detector behavioural test**: all 6 cases (single pair, dual pair, _Q/_A suffix, pair+standalone mix, no-marker fallback, ambiguous-group fallback) pass with expected pair + standalone counts.
+- **`.app` rebuilt**: `dist/mac-arm64/shamsulalamx.app` with **12 v4.65 markers** in the bundled `index.html`.
+- **Live UI walkthrough**: not yet done. Source-level + bundle-presence + behavioural-test proof only. First real BIC session is the field validation.
+
+#### Why "stable"
+
+All changes are renderer-only and additive. The pause/resume IPC was already shipped (just not user-facing); v4.65 surfaces it. The progress-percent change is a pure visual improvement — falls back to prior behavior when counters are absent. The pair detector is opt-in via source-type check (only fires on `nbme_pdf` with ≥2 files). The latent `renderBatchImportSourceNote` ReferenceError fix is strictly safer than v4.64. Worst-case from a misbehaving v4.65 component: degrades to v4.64 behavior.
 
 ### v4.64 — BIC modal simplification + source-folder delete + archive on generate-only
 

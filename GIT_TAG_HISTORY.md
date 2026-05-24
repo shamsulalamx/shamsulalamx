@@ -2,7 +2,17 @@
 
 Last updated: 2026-05-24
 
-This file documents stable v4 tags from v4.0 through the current head tag `v4.64-bic-simplification-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+This file documents stable v4 tags from v4.0 through the current head tag `v4.65-pause-progress-pairing-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+
+## v4.65-pause-progress-pairing-stable
+
+Commit: bundled source + doc in a single v4.65 commit (see `git log -1 v4.65-pause-progress-pairing-stable`).
+
+Meaning: Commit B of the planned UI batch. Renderer-only changes covering items #5, #8, and #9 from the agreed 12-item plan. (1) New ⏸ Pause button in BIC modal-actions row, wired through the existing `nbme:batch-import:pause-job` / `:resume-job` IPC handlers (already present in `electron/main.js:1243-1279`) and the preload bridge (`pauseJob`/`resumeJob` exposed). State toggle via `dataset.paused`. (2) `updateBatchImportStatusFromEvent` now computes percent dynamically from `question/questionTotal`, `chunk/chunkTotal`, or `page/pageTotal` counters on `pipeline_progress` events — progress bar actually moves. (3) Verbose `bic-progress-log` wrapped in a collapsible section, default collapsed, matching the v4.64 Queue/History collapse pattern. (4) New `detectNbmePairs(filePaths)` heuristic detector — Q+A pairs from filename markers (Questions/Stems/_Q vs Answers/Key/Explanations/_A), grouped by normalized stem, requires exactly one Q + one A per group for pair status. `renderBatchImportSelectedFiles` and `queueBatchImportJobs` both use the detector for `sourceType === 'nbme_pdf'`. (5) Bonus: fixed a latent `ReferenceError` in `openBatchImportCenter` from v4.64's blurb removal — `renderBatchImportSourceNote()` was still being called.
+
+Validated: `node --check` clean on every inline `<script>`. Pair detector behavioural test passes 6 of 6 cases (single pair, multi pair, _Q/_A suffix variant, pair+standalone mix, no-marker fallback, ambiguous-group fallback). `.app` rebuilt with 12 v4.65 markers in the bundled `index.html`. Live UI walkthrough is the pending field validation.
+
+Architecture significance: Establishes the renderer-side pattern for surfacing existing IPC handlers (the pause/resume IPC was already shipped invisibly; v4.65 just wires the UI). Dynamic-percent driver moves the BIC away from hardcoded step-percentages toward data-driven progress — pipelines that emit counters get smooth movement, pipelines that don't fall back gracefully. NBME pair detection is purely heuristic + opt-in by source type — no Python pipeline changes needed; the v4.61 dual-PDF orchestrator already handles paired Q+A inputs natively.
 
 ## v4.64-bic-simplification-stable
 
