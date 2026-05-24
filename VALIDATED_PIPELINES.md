@@ -1,8 +1,8 @@
 # Validated Pipelines
 
-Last updated: 2026-05-23
+Last updated: 2026-05-24
 
-Current stable tag: `v4.48-lecture-explanation-tables-stable`.
+Current stable tag: `v4.58-mehlman-tight-focus-stable`.
 
 This file records what is validated, what is not validated, and the risk level for each source. Do not upgrade a source's status without evidence.
 
@@ -12,7 +12,7 @@ This file records what is validated, what is not validated, and the risk level f
 |---|---|---|---|---|---|---|---|
 | AMBOSS PDF | Deterministic OCR-first pipeline rebuilt at v4.57 | Hybrid deterministic + per-question Gemini field-validated at v4.57 on a 39-page / 8-question QBank PDF: all 8 questions extracted with clean choices, correct answers, explanations, retrieval tags, review pearls | Stem fingerprinting + nav-pill union-find grouping + adjacent-merge | Live BIC end-to-end with packaged app | Packaged `.app` 8-question live BIC run validated (~$0.11 cost, ~2.5min runtime) | OCR variance can occasionally fragment 1 question into a duplicate (resolved post-extraction via stem dedupe) or land 1 question in the recovery fallback (resolved via 1 extra Gemini call); in-stem clinical images need NBME cropper UI integration (Phase 2) | Medium |
 | Emma | Shared profile stable | Live generation can fail semantic validation | Validated through v4.14 downstream | Existing-output BIC import validated | BIC existing-output import path validated | Semantic validator rejected unsupported term `dystocia` in live run | Medium-high |
-| Mehlman | Shared profile stable | Tagged live profile stable | Validated in v4.12 | Registered in BIC | Stable tag exists; revalidate packaged path before broad claims | Scaling and source variety not fully characterized | Medium |
+| Mehlman | Shared profile stable; v4.58 tight-focus chunking + deterministic page-proximity image attachment + full-PDF processing | Tagged live profile stable | Validated in v4.12; v4.58 retargets chunks to 1.5K chars with sentence-split fallback so each chunk maps to one Mehlman fact | Registered in BIC; v4.58 drops the prior 10-page validation cap so live runs cover every page of the uploaded PDF | Stable tag exists; revalidate packaged path before broad claims | Scaling and source variety not fully characterized; live v4.58 cost/quality on a full 300-page Mehlman PDF not field-validated yet | Medium |
 | NBME | BIC orchestration stable | Existing NBME pipeline stable for known workflows | Adapter foundation exists | BIC orchestration tagged stable | Earlier figure/image workflows packaged-validated; recheck for new changes | OCR variability, figure linking, source-specific PDFs | Medium |
 | Images & Tables | Shared image/table profile stable; v4.15 attachment-first cards superseded by v4.56 live Gemini generation | Live Gemini per-image classification + NBME-style question generation field-validated at v4.56 (5-image BIC run, 5 questions imported in one test, mixed diagnostic-stem / explanation-only / table placement) | Normalized image/table chunks validated for dry-run sanity stub | Live BIC auto-import validated end-to-end on the packaged `.app` | Packaged `.app` live multi-image BIC run validated: stable combined output filename + accumulating merge across BIC's per-input invocations + non-duplicate explanation rendering all confirmed | `sourceType` `images_tables_source`; visible source "Images & Tables"; supports `.png .jpg .jpeg .webp .bmp .tif .tiff`; tables/charts are forced to the explanation panel by both prompt + post-classification override | Medium |
 | Anki | Shared profile + live BIC generation stable at v4.52 | Field-validated 2026-05-23 on 15-card .txt → 15 real questions with proper stems / choices / explanations | Normalized text chunks validated | Live BIC auto-import validated end-to-end | Packaged app live BIC generation + auto-import + quiz rendering verified on the same run | Broad Anki export variation (other languages, complex HTML, media references) not stressed | Medium |
@@ -77,10 +77,23 @@ Validated:
 - Shared-ingestion live profile at v4.12.
 - Text-heavy normalized chunks with preserved figures/tables where available.
 
+Newly validated at v4.58 (tight-focus chunking + deterministic page-proximity image attachment + full-PDF processing):
+
+- `tools/mehlman-pdf-question-generator/generate_mehlman_questions.py` chunk window retargeted from 8,000–12,000 chars to 1,200–1,800 chars (~1.5K target). Each chunk is intended to cover one discrete Mehlman fact slice so one question per chunk has a single grounded topic to test.
+- Per-page chunking now falls back to sentence splits when paragraph breaks are lost in PDF extraction (PyMuPDF/pdfplumber often strip `\n\n` markers on dense Mehlman pages). Verified on the 15-page `HY Internal Medicine (2).pdf` slice: 39,971 body chars → 33 chunks, avg 1,210 chars, max 1,796, 0 chunks over the 1,800 cap.
+- Default `--questions-per-chunk` lowered from 5 to 1, paired with the tighter chunks for one-fact-per-question NBME stems. Override remains available for backward compatibility.
+- Deterministic page-proximity image attachment: each chunk already tracks the figures extracted from its `pageStart-pageEnd` range, so the generator now attaches those figures to the first question produced for the chunk via `q.explanationImages[]` + `q.figureRefs[]` (`hasEmbeddedFigure: true`). No Gemini multimodal call required — pure file-system attachment, free.
+- Attachment helper `_attach_chunk_figures_to_questions` is hardened against BIC's out-of-tree `--output-dir`: the prior `relative_to(_BASE)` ValueError silently killed every chunk that had figures during the first packaged live run (8 chunks dropped on the `Test Mehlman.pdf` field test, 0 images on 20 surviving questions). v4.58 catches the ValueError, records the per-figure failure in `extractionWarnings`, and keeps the question with its remaining figures.
+- `tools/shared-ingestion/mehlman_profile_runner.py` no longer overrides `--questions-per-chunk` to 2 (pre-v4.58 contract from the 8-12K-chunk era). The runner now inherits the generator's v4.58 default of 1, so the BIC live path actually hits the tight-focus contract end-to-end.
+- BIC + profile-runner page cap lifted: the dry-run and live registry entries no longer pass `--limit 10`, and the profile runner's `--limit` default is 0 (process every page). Field-verified on `Test Mehlman.pdf` (19 pages): full PDF processed → 36 chunks → 36 questions with 12 carrying 23 figures across pages 1, 2, 3, 4, 5, 8, 9, 10, 11, 16, 17, 19. Previously the 10-page cap dropped pages 11-19 and ~half the figures on every import.
+- Cardiology test fixture (`test_mehlman_cardiology_fixture.pdf`, 13 pages → 20,849 chars) re-chunks to 15 chunks (avg 1,389, max 1,734); page-6 table propagates to its chunk and renders in the explanation panel via the existing table-markdown asset marker path.
+
 Not claimed:
 
 - Every Mehlman PDF variant.
 - Full semantic stability across all Mehlman topics.
+- Live Gemini cost/quality on a full 300-page Mehlman PDF at the v4.58 chunk size — only dry-run + chunk-manifest sanity checks have run on the small fixtures. The cost model projects ~$1.30 per 300-page import and ~600 questions per import, but a live run on a 300-page Mehlman has not been field-validated yet.
+- Packaged `.app` live BIC run at the v4.58 chunk size on a large Mehlman PDF — packaged rebuild ships the v4.58 generator, runner, and BIC registry; the next field check is a live run on the 19-page `Test Mehlman.pdf` after the v4.58 rebuild.
 
 ## NBME
 

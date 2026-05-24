@@ -1,12 +1,33 @@
 # Project Status 2026-05-23
 
-Current stable tag: `v4.57-amboss-deterministic-hybrid-stable`
+Current stable tag: `v4.58-mehlman-tight-focus-stable`
 Current branch: `phase11-fastfacts-stability`
-Last committed HEAD: doc commit landing alongside the v4.57 source commit.
+Last committed HEAD: doc commit landing alongside the v4.58 source commit.
 
 Supersedes `docs/archive/PROJECT_STATUS_2026-05-21.md`.
 
 ## What Is New Since 2026-05-21
+
+### v4.58 — Mehlman tight-focus chunking + deterministic page-proximity image attachment + full-PDF processing (offline-validated)
+
+Three-part Mehlman rework that the user accepted from a cost/quality tradeoff table at the top of the session: 1.5K-char chunks, 1 question per chunk, deterministic image attachment by page proximity. Plus two integration bugs the first packaged live run surfaced — an out-of-tree `Path.relative_to` crash that silently dropped every chunk with figures, and a hardcoded 10-page validation cap that truncated every uploaded PDF.
+
+Source changes:
+
+- `tools/mehlman-pdf-question-generator/generate_mehlman_questions.py`: `_MIN_CHUNK 8_000 → 1_200`, `_MAX_CHUNK 12_000 → 1_800`; sentence-split fallback added inside the single-page overflow branch of `split_pages_into_chunks` because PDF extraction often strips `\n\n` from dense Mehlman pages; new helpers `_mime_for`, `_data_url`, `_attach_chunk_figures_to_questions`; attachment wired into both dry-run and live branches; per-figure exception isolation so a single bad image cannot kill its sibling figures or the question; `--questions-per-chunk` default `5 → 1`.
+- `tools/shared-ingestion/mehlman_profile_runner.py`: drop the pre-v4.58 `--questions-per-chunk 2` override so the BIC live path inherits the new default; `--limit` default `10 → 0` (0 = process every page); omit `--max-pages` from the subprocess call when `page_limit == 0`.
+- `tools/batch-import-center/pipeline_registry.json`: `mehlman_pdf` dry-run and live steps no longer pass `--limit 10`; notes updated.
+
+Field surface from this session, in order:
+
+1. **First packaged live run on `Test Mehlman.pdf` (19 pages): 20 questions, zero images.** Investigation showed the chunk manifest correctly tracked 19 figures across 18 chunks, but my v4.58-day-1 attachment helper called `fig_path.relative_to(_BASE)` on figures under the writable job dir while `_BASE` still pointed at the read-only `.app` bundle root. `ValueError` propagated to the chunk's `except Exception` and dropped all 8 chunks that had figures (questions + figures). 10 figure-less chunks × 2 q/chunk (profile-runner override) = 20 questions, no images. Fixed by catching the ValueError and falling back to `extracted_figures/<name>` as the informational `assetPath` (the actual binary already lives in the inline base64 `dataUrl`).
+2. **User asked to lift the 10-page cap.** Profile runner default flipped to 0 / unlimited; BIC registry dropped `--limit 10`; the wrapper omits `--max-pages` when unlimited.
+
+Field-validated end-to-end through the packaged `.app` on `Test Mehlman.pdf` (19 pages) via the profile runner: 36 chunks (avg ~1,200 chars, max 1,796, 0 over the 1,800 cap), 36 questions (1 per chunk), 12 questions with 23 figures attached spanning pages 1, 2, 3, 4, 5, 8, 9, 10, 11, 16, 17, 19. `extractionWarnings` empty. `pageLimit: 0` in the runner report.
+
+Architecture significance: this is the first BIC source where image attachment is fully deterministic (no Gemini multimodal call) and driven entirely by chunk-to-page proximity already tracked during extraction. The same template applies cleanly to any future PDF source whose figures live on identifiable pages.
+
+Tag commits: `<source-hash>` (source) + `<doc-hash>` (doc).
 
 ### v4.57 — AMBOSS PDF deterministic-first + Gemini-assisted extractor (field-validated)
 

@@ -2,7 +2,7 @@
 
 Last updated: 2026-05-23
 
-This file documents stable v4 tags from v4.0 through the current head tag `v4.57-amboss-deterministic-hybrid-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+This file documents stable v4 tags from v4.0 through the current head tag `v4.58-mehlman-tight-focus-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
 
 ## v4.0-images-tables-generator-stable
 
@@ -557,3 +557,39 @@ Not validated by this milestone:
 - Broad real-world AMBOSS QBank export variation beyond the single 8-question Test PDF.
 - Long QBank exports (50+ questions). The pipeline scales linearly; cost scales linearly at ~$0.01 per question. No upper bound tested.
 - Bit-for-bit reproducibility — OCR variance means consecutive runs may extract 7 or 8 questions. Post-extraction dedupe + Gemini recovery bring most runs to 8/8 but a worst-case OCR failure on multiple pages of one question may still land 7/8.
+
+## v4.58-mehlman-tight-focus-stable
+
+Commits: `<source-hash>` (source) + `<doc-hash>` (doc).
+
+Meaning: Retargets the Mehlman PDF question generator from coarse 8-12K-char chunks producing 5 generic questions per chunk to tight ~1.5K-char chunks producing 1 grounded NBME-style question per Mehlman fact, with figures attached deterministically by page proximity. Also unblocks two BIC integration bugs that surfaced on the first packaged live run: an out-of-tree `Path.relative_to` crash that silently killed every chunk with figures, and a hardcoded 10-page validation cap in both the profile runner and BIC registry that dropped pages 11+ of every uploaded PDF.
+
+The starting point: a 19-page `Test Mehlman.pdf` ran through BIC's packaged live path produced 20 questions with **zero images** attached. Two of those questions were the only honest signal in that test — the chunk manifest showed 19 figures correctly tracked across chunks, but my v4.58-day-1 attachment helper called `fig_path.relative_to(_BASE)` on a figure path under the writable job dir, while `_BASE` still pointed at the read-only `.app` bundle root. `ValueError: ... is not in the subpath of ...` bubbled to the chunk's `except Exception` and dropped the whole chunk (questions + figures). Eight of 18 chunks had figures, all eight failed, leaving 10 figure-less chunks × 2 q/chunk (profile-runner override) = 20 questions, zero images. The fix catches the ValueError, falls back to `extracted_figures/<name>` as the informational `assetPath`, and routes per-figure failures into `extractionWarnings` so a single bad image cannot take down its sibling figures or the question itself.
+
+Separately, the profile runner and BIC registry both hardcoded `--limit 10`, which the runner translated into `--max-pages 10` for the generator. So a 19-page upload got truncated to pages 1-10 on every import. v4.58 lifts both caps: `--limit` defaults to 0 (unlimited) in the profile runner and the registry args drop `--limit 10` entirely. The runner now omits `--max-pages` when `page_limit == 0` and inherits the generator's "process every page" behavior.
+
+The three "recommended fixes" the user accepted at the top of the session:
+
+1. **Chunk window 8,000–12,000 chars → 1,200–1,800 chars.** Each chunk is intended to cover one discrete Mehlman fact slice. `tools/mehlman-pdf-question-generator/generate_mehlman_questions.py` `_MIN_CHUNK` / `_MAX_CHUNK` retargeted; the existing paragraph-split fallback in `split_pages_into_chunks` extended with a sentence-split fallback because PDF extraction often strips `\n\n` markers from dense Mehlman pages (verified: 15-page `HY Internal Medicine (2).pdf` slice → 39,971 body chars → 33 chunks, avg 1,210, max 1,796, 0 over cap).
+2. **`--questions-per-chunk` default 5 → 1.** Paired with the tighter chunks so one chunk → one NBME stem on one fact. Override remains available. `tools/shared-ingestion/mehlman_profile_runner.py` also dropped its `--questions-per-chunk 2` override from the pre-v4.58 era so the BIC live path inherits the new default end-to-end.
+3. **Deterministic page-proximity image attachment.** New `_attach_chunk_figures_to_questions` helper attaches every figure from a chunk's `pageStart-pageEnd` range to the chunk's first question via `q.explanationImages[]` + `q.figureRefs[]` (`hasEmbeddedFigure: true`), with `dataUrl` base64-encoded inline. No Gemini multimodal call — pure file-system attachment. Stable per-figure ids: `mehlman_q###_p###_##_<hash>`. Field-verified through the packaged `.app` on `Test Mehlman.pdf`: full 19-page PDF → 36 chunks → 36 questions → 12 questions carrying 23 figures across pages 1, 2, 3, 4, 5, 8, 9, 10, 11, 16, 17, 19, zero chunk failures.
+
+Source changes:
+- `tools/mehlman-pdf-question-generator/generate_mehlman_questions.py`: new constants `_MIN_CHUNK=1_200` / `_MAX_CHUNK=1_800`; sentence-split fallback inside the single-page overflow branch of `split_pages_into_chunks`; new helpers `_mime_for`, `_data_url`, `_attach_chunk_figures_to_questions` (with ValueError catch on `relative_to(_BASE)` and per-figure exception isolation); attachment wired into both dry-run and live branches of the chunk loop; stats skeleton gains `figuresAttached`; `--questions-per-chunk` default `5 → 1`.
+- `tools/shared-ingestion/mehlman_profile_runner.py`: drop `--questions-per-chunk 2` override; `--limit` default `10 → 0`; omit `--max-pages` from the subprocess call when `page_limit == 0`.
+- `tools/batch-import-center/pipeline_registry.json`: `mehlman_pdf` dry-run and live steps no longer pass `--limit 10`; notes updated.
+
+Architecture significance: this is the first BIC source where image attachment is fully deterministic (no Gemini multimodal call) and driven entirely by chunk-to-page proximity already tracked during extraction. The same template applies cleanly to any future PDF source whose figures live on identifiable pages (Mehlman, future text-heavy reference PDFs, NBME PDFs once their extractor is rewritten). Cost stays at the projected ~$1.30 / 300-page Mehlman because no per-image vision call is needed.
+
+Validated:
+
+- Packaged `.app` end-to-end through the profile runner on `Test Mehlman.pdf` (19 pages). Output: 36 chunks (avg ~1,200 chars, max 1,796, 0 over cap), 36 questions (1 per chunk), 12 questions with 23 figures attached spanning pages 1, 2, 3, 4, 5, 8, 9, 10, 11, 16, 17, 19. `extractionWarnings` empty, `pageLimit: 0` in the runner report.
+- Sentence-split fallback on `HY Internal Medicine (2).pdf` first 15 pages: 39,971 chars → 33 chunks, avg 1,210, max 1,796.
+- Cardiology test fixture (`test_mehlman_cardiology_fixture.pdf`, 13 pages → 20,849 chars) re-chunks to 15 chunks (avg 1,389, max 1,734); page-6 table renders in the explanation panel via the existing table-markdown asset marker path.
+- `npm run electron:build:mac` succeeded; packaged generator + profile runner + BIC registry all confirmed to carry the v4.58 changes.
+
+Not validated by this milestone:
+
+- Live Gemini run on a 300-page Mehlman PDF at the v4.58 chunk size. The cost model projects ~$1.30 per import and ~600 questions; only dry-run + chunk-manifest sanity checks have run end-to-end at full size.
+- Packaged `.app` live BIC run on `Test Mehlman.pdf` (the dry-run path through the packaged profile runner is validated; the live path uses the same code but spends real Gemini tokens).
+- Behavior under Gemini quota exhaustion mid-Mehlman-import (inherited from the v4.54 UWorld-family quota-aware retry stop; not stressed for v4.58 specifically).
