@@ -1,8 +1,8 @@
 # Validated Pipelines
 
-Last updated: 2026-05-24
+Last updated: 2026-05-24 (v4.59)
 
-Current stable tag: `v4.58-mehlman-tight-focus-stable`.
+Current stable tag: `v4.59-uworld-live-stable`.
 
 This file records what is validated, what is not validated, and the risk level for each source. Do not upgrade a source's status without evidence.
 
@@ -19,6 +19,7 @@ This file records what is validated, what is not validated, and the risk level f
 | OME | Shared PDF profile stable | Live Gemini OME generation field-validated at v4.51 on small OME PDF | Normalized text chunks validated | Live BIC auto-import validated end-to-end | Packaged app live BIC generation, auto-import, and quiz rendering validated | Broad OME PDF variety not stressed; writable packaged output for live mode follows v4.51 registry change | Medium |
 | Divine (Audio + Transcript) | Dry-run BIC handoff validated for text inputs | Live BIC audio → transcribe → clean → questions field-validated at v4.55 on a 17.2 MB MP3 (`Test Divine.mp3`, 131s, 7 valid questions, `sourceFormat: divine-audio`) | Normalized transcript chunks validated for text inputs; audio inputs skip the shared chunk pipeline (chunks emerge after transcription) | Live BIC end-to-end validated in dev Electron | Packaged `.txt` and `.md` dry-run auto-import previously validated; packaged live audio run via the same `.app` is the next field check | `sourceType` `divine_transcript`; visible source "Divine (Audio + Transcript)"; supports `.txt .md .mp3 .m4a .wav`; audio dry-run is rejected on purpose so transcription tokens are never wasted | Medium |
 | Fast Facts | Cache foundation plus narrow screening stabilization | Dev Electron live BIC generation validated only through the capped 3-attempt stabilization path | Adapter foundation exists | Dev BIC app-ready discovery and auto-import validated on one small PPTX | Not run for this Fast Facts fix | Broad deck coverage, broad semantic stability, renderer Gemini-alert mismatch | High |
+| UWorld Notes | v4.59 BIC profile registered (text-only, no images) | Live Gemini generation wired through `uworld_profile_runner.py`; downstream-runner dry-run path verified offline end-to-end on a 1.8K and a 4.1K UWorld fixture inside the packaged `.app` | Shared normalized text chunks emitted via the same UWorld heading-aware splitter the downstream generator uses | Live BIC path wired; auto-import target directory registered in registry | Packaged `.app` profile-runner dry-run validated; packaged live run on a real UWorld notes file is the next field check | Live Gemini run on a real UWorld notes file not yet validated; broad input-format variance (.docx with complex formatting, .rtf, very large notes) not stressed | Medium |
 
 ## AMBOSS PDF
 
@@ -241,3 +242,22 @@ Not validated (still):
 - Broad OME PDF coverage beyond small user-supplied samples.
 - Controlled asset extraction for OME.
 - Non-writable packaged resource tree behavior (live OME output paths follow `BIC_JOB_OUTPUT_ROOT` redirection but signed/notarized distribution behavior was not stressed in this validation).
+
+## UWorld Notes
+
+Validated at v4.59 (text-only BIC enablement of the foundational UWorld generator):
+
+- `tools/uworld-notes-question-generator/generate_uworld_questions.py` gained `--input-file` and `--output-dir` CLI flags so the existing generator can be driven from outside its source tree (BIC's job dir lives outside the `.app` bundle).
+- `tools/shared-ingestion/uworld_profile_runner.py` (new) emits shared normalized text chunks via the UWorld text extractor + heading-aware splitter, then invokes the existing UWorld generator with the right `--input-file` / `--output-dir` / `--questions-per-file`. Skips all image/table machinery because the user confirmed UWorld notes are text-only.
+- High-yield density: `--questions-per-file` auto-scales to ~1 question per 500 chars (roughly 3× Mehlman density) because the user specifically asked for higher question frequency on UWorld notes — they are "extremely high yield." Auto bound is `max(5, chars // 500)` clamped at 80 to avoid runaway cost on unexpectedly large files. Explicit `--questions-per-file N` override stays available.
+- `tools/shared-ingestion/source_descriptor.py` gains a `uworld_notes` descriptor (modality: text, asset_policy: none).
+- `tools/shared-ingestion/pipeline_adapter.py` gains a `uworld_notes_to_normalized_chunks` adapter that reuses the UWorld text extractor + chunker. Returns chunks with grounded `topicIndex` + `heading` provenance.
+- `tools/shared-ingestion/chunk_pipeline.py` adds `uworld_notes` to the `--source-type` allowlist.
+- `tools/batch-import-center/pipeline_registry.json` registers `uworld_notes` with dry-run + live steps (`requiresGemini: true`) and supports `.txt .md .rtf .docx` inputs.
+- Offline-verified end-to-end on a 1.8K `test_cardiology.txt` (5 questions emitted — MIN clamp) and a 4.1K synthetic UWorld file (8 questions — auto-scaled). Verified through the packaged `.app` profile runner: `outcome: completed`, `candidateQuestionCount: 8`, `sourceFormat: uworld-notes`, `schemaVersion: nbme-gemini-json-v3` (the canonical app-ready shape).
+
+Not yet validated:
+
+- Live Gemini run on a real UWorld notes file — only the dry-run path through the packaged profile runner has been exercised so far. Live cost projection per UWorld file is ~$0.02-$0.16 (5-80 questions × ~$0.002/question) depending on file size.
+- Broad input-format variance: `.docx` with complex formatting, `.rtf`, very large notes (>40K chars where the MAX_AUTO_QUESTIONS_PER_FILE clamp would kick in).
+- Packaged `.app` live BIC run from the UI dropdown — the packaged generator + profile runner + registry all carry the v4.59 changes, but the end-to-end live BIC click-through hasn't been field-tested.

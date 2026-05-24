@@ -1,12 +1,35 @@
 # Project Status 2026-05-23
 
-Current stable tag: `v4.58-mehlman-tight-focus-stable`
+Current stable tag: `v4.59-uworld-live-stable`
 Current branch: `phase11-fastfacts-stability`
-Last committed HEAD: doc commit landing alongside the v4.58 source commit.
+Last committed HEAD: doc commit landing alongside the v4.59 source commit.
 
 Supersedes `docs/archive/PROJECT_STATUS_2026-05-21.md`.
 
 ## What Is New Since 2026-05-21
+
+### v4.59 — UWorld notes BIC enablement: text-only, high-yield density, foundational generator gets first-class CLI flags (offline-validated)
+
+First BIC integration of the foundational UWorld notes generator. UWorld was the underlying module every other text-heavy source (Anki, OME, Mehlman, Divine wrappers) had been importing for months — through the v4.51 stem-quality validator, v4.53 review-survivor flow, and v4.54 chunk-planning recovery — but it had never been wired through BIC itself. The user had no "UWorld" option in the source dropdown despite having UWorld notes ready to import.
+
+v4.59 closes that gap with the same profile-runner + shared-chunk-emitter integration the four wrappers already used, with three properties tuned to the user's UWorld content:
+
+- **Text-only.** The user confirmed UWorld notes are "absolutely no images, just text," so the profile runner skips all image/table machinery. No deterministic figure attachment (v4.58), no Gemini multimodal call (v4.56), no figure-extraction pass.
+- **High-yield density.** The user said UWorld notes are "extremely high yield" and asked for higher question frequency per content unit. The runner auto-scales `--questions-per-file` to `max(5, chars // 500)` clamped at 80 — roughly 3× Mehlman's 1-question-per-1.5K-chars density. Override via explicit `--questions-per-file N`.
+- **Foundational module gets first-class CLI flags.** The UWorld generator had no `--input-file` or `--output-dir` (fixed `input_notes/` scan only). v4.59 adds both, mirroring the Anki / Mehlman wrapper pattern so BIC can drive UWorld from outside the read-only `.app` bundle source tree.
+
+Source changes:
+
+- `tools/uworld-notes-question-generator/generate_uworld_questions.py`: new `_resolve_selected_input` and `_apply_output_dir` helpers; new `--input-file` and `--output-dir` CLI args; file-discovery branch uses the selected input when set.
+- `tools/shared-ingestion/uworld_profile_runner.py` (new): mirrors `anki_profile_runner.py` / `ome_profile_runner.py`. Runs `run_shared_chunk_pipeline(source_type="uworld_notes")` then `subprocess.run` on the UWorld generator with auto-scaled `--questions-per-file`. Respects `BIC_JOB_OUTPUT_ROOT`.
+- `tools/shared-ingestion/source_descriptor.py`: new `uworld_notes` `SourceDescriptor` (modality=text, asset_policy=none).
+- `tools/shared-ingestion/pipeline_adapter.py`: new `uworld_notes_to_normalized_chunks` adapter that reuses the UWorld text extractor + heading-aware splitter, wired into the `emit_normalized_chunks` dispatcher.
+- `tools/shared-ingestion/chunk_pipeline.py`: added `uworld_notes` to `--source-type` allowlist.
+- `tools/batch-import-center/pipeline_registry.json`: new `uworld_notes` registry entry (label `UWorld Notes`, accepts `.txt .md .rtf .docx`, `requiresGemini: true`).
+
+Validated offline end-to-end on a 1.8K `test_cardiology.txt` (5 questions, MIN clamp) and a 4.1K synthetic 5-section UWorld file (8 questions, auto-scaled). Packaged `.app` profile-runner dry-run verified: `chunkCount: 2`, `candidateQuestionCount: 8`, `sourceFormat: uworld-notes`, `schemaVersion: nbme-gemini-json-v3`, `outcome: completed`. Live Gemini run on a real UWorld notes file is the next field check.
+
+Tag commits: `<source-hash>` (source) + `<doc-hash>` (doc).
 
 ### v4.58 — Mehlman tight-focus chunking + deterministic page-proximity image attachment + full-PDF processing (offline-validated)
 
