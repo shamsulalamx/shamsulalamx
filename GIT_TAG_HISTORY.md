@@ -2,7 +2,17 @@
 
 Last updated: 2026-05-24
 
-This file documents stable v4 tags from v4.0 through the current head tag `v4.65-pause-progress-pairing-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+This file documents stable v4 tags from v4.0 through the current head tag `v4.66-bic-redesign-and-widget-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+
+## v4.66-bic-redesign-and-widget-stable
+
+Commit: bundled source + doc in a single v4.66 commit (see `git log -1 v4.66-bic-redesign-and-widget-stable`).
+
+Meaning: Commit C of the planned UI batch. Two renderer-only visual changes. (1) BIC modal redesign: the Job Setup form went from 5 stacked `form-group` rows to a compact 3-column grid (Source / Target Folder / Run Mode) + 2-column row (Test name / Files button). Modal max-width bumped 680px → 760px. New CSS classes `.bic-form-grid` and `.bic-form-row` with `@media (max-width: 640px)` fallback to single-column. Registered Sources status text moved into the modal title as a small inline subtitle. (2) Floating jobs widget: new `#jobs-widget` DOM element anchored bottom-right with `position: fixed; z-index: 100` (below modals at z-index 1000). Auto-shows on running/queued jobs, auto-hides when queue is empty. Compact counts line + currently-running job filename + click-to-open-BIC. New `renderJobsWidget(jobs)` called from `renderBatchImportQueueSummary` whenever the queue refreshes. One-time `refreshBatchImportQueue()` call added to `App.init()` (200 ms delay) so the widget surfaces session-persistent queue state without requiring the user to open the BIC modal.
+
+Validated: `node --check` clean on every inline `<script>`. 28 v4.66 markers (`bic-form-grid`, `jobs-widget`, `renderJobsWidget`, `jw-counts`, `bic-form-row`) confirmed in source. `.app` rebuilt with the same markers in the bundled `index.html`. Visual walkthrough is the pending field validation.
+
+Architecture significance: Establishes a persistent UI element pattern (the floating widget) outside the existing app shell + modal stack — anchored to viewport, z-index below modals, fed by the same queue-event stream that drives the modal's internal summary. Reusable for future "always-on" status indicators (Drive sync status, background tasks, etc.). The form-grid redesign is purely CSS-driven and reversible.
 
 ## v4.65-pause-progress-pairing-stable
 

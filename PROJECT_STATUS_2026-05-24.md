@@ -1,12 +1,54 @@
 # Project Status 2026-05-24
 
-Current stable tag: `v4.65-pause-progress-pairing-stable`
+Current stable tag: `v4.66-bic-redesign-and-widget-stable`
 Current branch: `phase11-fastfacts-stability`
-Last committed HEAD: source + doc bundled in a single v4.65 commit (v4.64/v4.63/v4.62 still exist as prior tags).
+Last committed HEAD: source + doc bundled in a single v4.66 commit (v4.65 / v4.64 / v4.63 / v4.62 still exist as prior tags). Note: the v4.65 tag points at the pre-follow-up commit (4b18447) which is missing `electron/main.js`; the missing handlers landed as a separate follow-up commit (02fea12) that's on `phase11-fastfacts-stability` but not tagged — see the v4.65 entry below.
 
 Supersedes `docs/archive/PROJECT_STATUS_2026-05-23.md`.
 
 ## What Is New Since 2026-05-23
+
+### v4.66 — BIC modal redesign + floating jobs widget
+
+Commit C of the planned UI batch. Two coordinated visual changes:
+
+#### BIC modal redesign (#12)
+
+The Job Setup section used to be five stacked `form-group` rows (Source Type, Files, Target Folder, Test name, Run Mode) plus a separate "Registered Sources" section title. v4.66 compacts it into:
+
+- **Top row (3-column grid)**: Source Type · Target Folder · Run Mode — the three settings the user actually picks per submission, side by side.
+- **Second row (2-column grid)**: Test name (optional) · Choose Files button (full-width within its column).
+- **Selected-files preview** (with NBME pair detection from v4.65) below.
+- **Registered Sources** status text moved into the modal title as a small inline subtitle ("Batch Import Center · Active: emma_holiday_pdf, mehlman_pdf, …") rather than its own section.
+
+Modal max-width bumped from 680px → 760px to accommodate the 3-column grid. New CSS classes `.bic-form-grid` (3-col) and `.bic-form-row` (2-col), each with a `@media (max-width: 640px)` breakpoint that collapses back to single-column on narrower viewports.
+
+Net effect: the user sees the entire job-setup form without scrolling on a typical laptop screen, and the visual hierarchy is clearer (related fields adjacent rather than buried in a long vertical list).
+
+#### Floating jobs widget (#11)
+
+New `#jobs-widget` DOM element anchored bottom-right of the viewport (`position: fixed; bottom: 18px; right: 18px; z-index: 100`). Auto-shows whenever there's any running or queued job; auto-hides when the queue is empty.
+
+Shows:
+- A small "⚡ Generation Queue" title.
+- Compact counts line: `● 2 running · ⏸ 3 queued · ✓ 12 done` (failures + needs-review + interrupted appended only when non-zero, same compact-summary pattern as v4.64's queue header).
+- Currently-running job's input filename on its own line (`▶ cardiology.pdf`).
+- "Click for details" hint.
+
+Click anywhere on the widget → opens the Batch Import Center modal. The widget sits beneath modals (z-index 100 vs modal-overlay 1000) so it never blocks dialogs.
+
+New `renderJobsWidget(jobs)` function called from `renderBatchImportQueueSummary` whenever the queue refreshes (`refreshBatchImportQueue`, `onQueueChanged` IPC subscription, or initial app boot). One-time queue refresh added to `App.init()` (delayed 200 ms so non-Electron environments don't throw) so the widget appears immediately on app startup if there were queued jobs from a previous session — without requiring the user to open the BIC modal first.
+
+#### Validation
+
+- **`node --check`** clean on every inline `<script>` extracted from `index.html`.
+- **28 v4.66 markers** (`bic-form-grid`, `jobs-widget`, `renderJobsWidget`, `jw-counts`, `bic-form-row`) in source.
+- **`.app` rebuilt**: `dist/mac-arm64/shamsulalamx.app` with bundled v4.66 markers verified present.
+- **Visual walkthrough**: pending field validation. All changes are CSS / DOM additions plus one render function — no data-layer changes, no IPC changes.
+
+#### Why "stable"
+
+Pure renderer change. New CSS classes are scoped (only applied where I added the matching class names). New DOM element (`#jobs-widget`) sits outside the existing app shell, so layout-wise it can't push or hide anything. The only modification to existing behavior is the modal max-width bump and the form-group → grid layout, both reversible by removing the new CSS. Worst-case from misbehaving v4.66 component: the widget doesn't appear (degrades to v4.65 behavior) or the form layout falls back to single-column on narrow screens (intended fallback).
 
 ### v4.65 — Pause/resume UI + dynamic progress percent + collapsible log + NBME Q+A pair detection
 

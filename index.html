@@ -864,6 +864,75 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 .btn-modal.danger  { background: var(--red);  color: white; border-color: var(--red); }
 .btn-modal.danger:hover { background: #a93226; }
 
+/* v4.66: BIC compact horizontal form grid — Source / Folder / Run Mode share one row */
+.bic-form-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.bic-form-grid .form-group { margin-bottom: 0; }
+@media (max-width: 640px) { .bic-form-grid { grid-template-columns: 1fr; } }
+.bic-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.bic-form-row .form-group { margin-bottom: 0; }
+@media (max-width: 640px) { .bic-form-row { grid-template-columns: 1fr; } }
+
+/* v4.66: floating "jobs widget" — bottom-right chip showing active+queued job counts.
+ * Hidden by default (display:none in HTML); shown by JS only when there are running
+ * or pending jobs. Click anywhere on it to open the Batch Import Center modal. */
+#bic-jobs-widget {
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  z-index: 1500;
+  background: linear-gradient(135deg, #1e3a8a 0%, #0284c7 55%, #14b8a6 100%);
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.1px;
+  min-width: 180px;
+  max-width: 320px;
+  user-select: none;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+#bic-jobs-widget:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.36);
+}
+#bic-jobs-widget:active { transform: translateY(0); }
+#bic-jobs-widget .bic-jobs-widget-summary { display: block; }
+#bic-jobs-widget .bic-jobs-widget-active {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.22);
+  font-size: 11.5px;
+  opacity: 0.92;
+  max-height: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* v4.66: Floating jobs widget — persistent bottom-right card showing active queue
+   status whenever there's something running or pending. Stays under modals
+   (z-index 100 vs modal 1000) so it doesn't block UI. */
+#jobs-widget {
+  position: fixed; bottom: 18px; right: 18px; z-index: 100;
+  background: white; border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.12);
+  padding: 10px 14px;
+  font-size: 12px; color: var(--navy);
+  min-width: 220px; max-width: 320px;
+  cursor: pointer;
+  transition: transform .15s, box-shadow .15s;
+  display: none;
+}
+#jobs-widget:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(0,0,0,.18); }
+#jobs-widget.has-jobs { display: block; }
+.jw-title { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+.jw-counts { font-weight: 600; color: var(--navy); }
+.jw-current { font-size: 11px; color: var(--muted); margin-top: 4px; padding-top: 4px; border-top: 1px dashed var(--border); }
+.jw-hint { font-size: 10px; color: var(--muted); margin-top: 4px; opacity: .7; }
+
 /* Form fields in modals */
 .form-group { margin-bottom: 12px; }
 .form-label { display: block; font-size: 11px; font-weight: 600; color: var(--navy); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em; }
@@ -1284,6 +1353,14 @@ body.quiz-fullscreen-mode .modal-overlay {
       <button class="topbar-btn" id="btn-lock-app" onclick="PIN.lock()" title="Lock app" style="display:none;">🔒</button>
       <button class="topbar-btn" onclick="App.openSettings()" title="Settings">⚙ Settings</button>
     </div>
+  </div>
+
+  <!-- v4.66: floating "active jobs" chip — fixed bottom-right, click opens BIC.
+       Hidden until there's at least one running or queued job. Updated by
+       updateBatchImportJobsWidget() on every onQueueChanged event. -->
+  <div id="bic-jobs-widget" style="display:none;" onclick="App.openBatchImportCenter()" title="Click to open Batch Import Center">
+    <span class="bic-jobs-widget-summary">⚡ 0 active</span>
+    <div class="bic-jobs-widget-active" id="bic-jobs-widget-active"></div>
   </div>
 
   <!-- ═══ MAIN ═══ -->
@@ -2338,50 +2415,61 @@ body.quiz-fullscreen-mode .modal-overlay {
   </div>
 </div>
 
+<!-- v4.66: Floating jobs widget — persistent status indicator for active/queued
+     jobs anywhere in the app. Auto-shows when any job is running or queued;
+     auto-hides when queue is empty. Click to open the Batch Import Center modal. -->
+<div id="jobs-widget" onclick="App.openBatchImportCenter()" title="Click to open Batch Import Center">
+  <div class="jw-title">⚡ Generation Queue</div>
+  <div class="jw-counts" id="jw-counts">No active jobs</div>
+  <div class="jw-current" id="jw-current" style="display:none;"></div>
+  <div class="jw-hint">Click for details</div>
+</div>
+
 <!-- ═══ BATCH IMPORT CENTER PLACEHOLDER ═══ -->
 <div id="modal-batch-import-center" class="modal-overlay">
-  <div class="modal-box" style="max-width:680px;">
-    <h3>Batch Import Center</h3>
+  <div class="modal-box" style="max-width:760px;">
+    <h3>Batch Import Center <span id="bic-registry-status" style="font-size:10px;font-weight:500;color:var(--muted);text-transform:none;letter-spacing:0;margin-left:8px;">Registry not loaded.</span></h3>
 
-    <div class="notes-import-section-title">Registered Sources</div>
-    <div id="bic-registry-status" class="notes-import-summary">Registry not loaded.</div>
-
-    <div class="notes-import-section-title">Job Setup</div>
-    <div class="form-group">
-      <label class="form-label">Source Type</label>
-      <select class="form-input" id="bic-source-type" onchange="App.onBatchImportSourceChange()">
-        <option value="emma_holiday_pdf">Emma Holiday PDF</option>
-        <option value="mehlman_pdf">Mehlman PDF</option>
-        <option value="uworld_notes">UWorld Notes</option>
-        <option value="images_tables_source">Images & Tables</option>
-        <option value="anki_notes">Anki Notes</option>
-        <option value="ome_pdf">OME PDF</option>
-        <option value="divine_transcript">Divine (Audio + Transcript)</option>
-        <option value="fast_facts_pptx">Fast Facts PPTX</option>
-        <option value="amboss_pdf">Amboss PDF</option>
-        <option value="nbme_pdf">NBME PDF</option>
-      </select>
+    <!-- v4.66: 3-column form grid (Source / Folder / Run Mode) + 2-column row (Test name / Files button) compacts what used to be 5 stacked rows. -->
+    <div class="bic-form-grid">
+      <div class="form-group">
+        <label class="form-label">Source Type</label>
+        <select class="form-input" id="bic-source-type" onchange="App.onBatchImportSourceChange()">
+          <option value="emma_holiday_pdf">Emma Holiday PDF</option>
+          <option value="mehlman_pdf">Mehlman PDF</option>
+          <option value="uworld_notes">UWorld Notes</option>
+          <option value="images_tables_source">Images &amp; Tables</option>
+          <option value="anki_notes">Anki Notes</option>
+          <option value="ome_pdf">OME PDF</option>
+          <option value="divine_transcript">Divine (Audio + Transcript)</option>
+          <option value="fast_facts_pptx">Fast Facts PPTX</option>
+          <option value="amboss_pdf">Amboss PDF</option>
+          <option value="nbme_pdf">NBME PDF</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Target Folder</label>
+        <select class="form-input" id="bic-target-folder" onchange="App.handleBatchImportFolderChange()"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Run Mode</label>
+        <select class="form-input" id="bic-run-mode">
+          <option value="generate-auto-import" selected>Generate + Import</option>
+          <option value="generate">Generate (save to archive)</option>
+        </select>
+      </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">Files</label>
-      <button type="button" class="btn-modal" id="bic-select-files-btn" onclick="App.selectBatchImportFiles()">Choose Files</button>
-      <div id="bic-selected-files" class="notes-import-summary">No files selected.</div>
+    <div class="bic-form-row">
+      <div class="form-group">
+        <label class="form-label">Test name (optional)</label>
+        <input type="text" class="form-input" id="bic-test-name" autocomplete="off" placeholder="Use app-ready title when blank">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Files</label>
+        <button type="button" class="btn-modal" id="bic-select-files-btn" onclick="App.selectBatchImportFiles()" style="width:100%;">Choose Files…</button>
+      </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">Target Folder</label>
-      <select class="form-input" id="bic-target-folder" onchange="App.handleBatchImportFolderChange()"></select>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Test name (optional)</label>
-      <input type="text" class="form-input" id="bic-test-name" autocomplete="off" placeholder="Use app-ready title when blank">
-    </div>
-    <div class="form-group">
-      <label class="form-label">Run Mode</label>
-      <select class="form-input" id="bic-run-mode">
-        <option value="generate-auto-import" selected>Generate + Import</option>
-        <option value="generate">Generate (save to archive, don't import)</option>
-      </select>
-    </div>
+    <div id="bic-selected-files" class="notes-import-summary">No files selected.</div>
     <div id="bic-run-status" class="notes-import-summary">No job run yet.</div>
     <div id="bic-create-status" class="test-create-status" aria-live="polite"></div>
     <div class="notes-import-section-title bic-collapsible-toggle" style="cursor:pointer;user-select:none;font-size:11px;color:#7a8a9a;" onclick="App.toggleBicSection('bic-progress-log-body', this)" data-label="Progress log (verbose)">▶ Progress log (verbose)</div>
@@ -8711,6 +8799,33 @@ const App = (() => {
     window.toast = toast;
     renderSidebar();
     showHome();
+
+    // v4.66: kick a one-time queue refresh at boot so the floating jobs widget
+    // shows up immediately if there are queued or running jobs from a previous
+    // session — without requiring the user to open the BIC modal first.
+    // Silently no-ops in non-Electron contexts (browser-only deployment).
+    setTimeout(function() {
+      try { refreshBatchImportQueue(); } catch (e) { /* widget stays hidden */ }
+    }, 200);
+
+    // v4.66: persistent global subscription to queue-changed events so the
+    // floating jobs widget updates LIVE even when the BIC modal is closed.
+    // The BIC modal also subscribes locally (in openBatchImportCenter); both
+    // subscribers receive the same events and both re-render — idempotent,
+    // cheap, no conflict.
+    try {
+      const _bicApi = window.nbmeDesktop && window.nbmeDesktop.batchImport;
+      if (_bicApi && typeof _bicApi.onQueueChanged === 'function') {
+        _bicApi.onQueueChanged(function(payload) {
+          const jobs = Array.isArray(payload?.queue?.jobs) ? payload.queue.jobs : [];
+          if (_batchImportState) _batchImportState.queue = jobs;
+          renderBatchImportQueueSummary(jobs);
+          // Also re-render the queue list itself if the BIC modal is open
+          // (cheap DOM update if elements are present; no-op if not).
+          renderBatchImportQueue(jobs);
+        });
+      }
+    } catch (e) { /* widget stays hidden in non-Electron */ }
 
     // Restore sidebar collapsed state
     if (localStorage.getItem('sidebar_collapsed') === '1') {
@@ -22829,6 +22944,59 @@ const App = (() => {
     if (counts.needs_review > 0) parts.push(`⚠ ${counts.needs_review} need review`);
     if (counts.interrupted_or_canceled > 0) parts.push(`⊘ ${counts.interrupted_or_canceled} interrupted`);
     target.textContent = parts.join(' · ');
+    // v4.66: keep the floating jobs widget in sync with the same queue data.
+    renderJobsWidget(jobs);
+  }
+
+  // v4.66: floating jobs widget renderer. Auto-shows/hides #jobs-widget based on
+  // whether there are running or queued jobs. Compact counts in jw-counts;
+  // optional currently-running job name in jw-current.
+  function renderJobsWidget(jobs) {
+    const widget = document.getElementById('jobs-widget');
+    const countsEl = document.getElementById('jw-counts');
+    const currentEl = document.getElementById('jw-current');
+    if (!widget || !countsEl) return;
+
+    const list = Array.isArray(jobs) ? jobs : [];
+    let running = 0, queued = 0, completed = 0, failed = 0, needsReview = 0;
+    let runningJob = null;
+    list.forEach(function(job) {
+      const status = String(job?.status || '');
+      if (status === 'running') { running += 1; if (!runningJob) runningJob = job; }
+      else if (status === 'pending') queued += 1;
+      else if (status === 'completed') completed += 1;
+      else if (status === 'failed') failed += 1;
+      else if (status === 'needs_review') needsReview += 1;
+    });
+
+    // Widget visibility: show only if there's something active or queued.
+    if (running + queued === 0) {
+      widget.classList.remove('has-jobs');
+      if (currentEl) { currentEl.textContent = ''; currentEl.style.display = 'none'; }
+      return;
+    }
+    widget.classList.add('has-jobs');
+
+    const parts = [];
+    parts.push(`● ${running} running`);
+    parts.push(`⏸ ${queued} queued`);
+    if (completed > 0) parts.push(`✓ ${completed} done`);
+    if (failed > 0) parts.push(`✗ ${failed} failed`);
+    if (needsReview > 0) parts.push(`⚠ ${needsReview} review`);
+    countsEl.textContent = parts.join(' · ');
+
+    if (runningJob && currentEl) {
+      const firstInput = Array.isArray(runningJob.inputFiles) ? runningJob.inputFiles[0] : null;
+      const inputPath = firstInput && (firstInput.path || firstInput);
+      const inputName = inputPath
+        ? String(inputPath).split(/[\\/]/).pop()
+        : (runningJob.jobId || 'job');
+      currentEl.textContent = '▶ ' + inputName;
+      currentEl.style.display = '';
+    } else if (currentEl) {
+      currentEl.textContent = '';
+      currentEl.style.display = 'none';
+    }
   }
 
   // v4.64: collapsible section toggle for BIC's Generation Queue + Job History.
@@ -22845,6 +23013,80 @@ const App = (() => {
       body.style.display = 'none';
       toggleEl.textContent = '▶ ' + label;
     }
+  }
+
+  // v4.66: floating jobs widget. Reads job statuses from the queue payload
+  // and updates the chip in the bottom-right corner. Hidden when nothing is
+  // running or queued; visible (gradient chip) when there's work in progress.
+  // Click handler is wired directly on the HTML element to open the BIC.
+  function updateBatchImportJobsWidget(jobs) {
+    const widget = document.getElementById('bic-jobs-widget');
+    if (!widget) return;
+    const summary = widget.querySelector('.bic-jobs-widget-summary');
+    const activeBody = document.getElementById('bic-jobs-widget-active');
+    if (!summary) return;
+
+    const safeJobs = Array.isArray(jobs) ? jobs : [];
+    const running = safeJobs.filter(function(j) { return j && j.status === 'running'; });
+    const queued = safeJobs.filter(function(j) { return j && j.status === 'pending'; });
+
+    if (running.length === 0 && queued.length === 0) {
+      widget.style.display = 'none';
+      return;
+    }
+    widget.style.display = 'block';
+
+    const parts = [];
+    if (running.length > 0) parts.push('⚡ ' + running.length + ' running');
+    if (queued.length > 0) parts.push('⏸ ' + queued.length + ' queued');
+    summary.textContent = parts.join(' · ');
+
+    if (activeBody) {
+      if (running.length > 0) {
+        const r = running[0];
+        const firstInput = r.inputFiles && r.inputFiles[0];
+        const path = firstInput ? (firstInput.path || firstInput) : null;
+        const shortName = path
+          ? String(path).split(/[\\/]/).pop()
+          : ('Job ' + (r.jobId || '?'));
+        activeBody.textContent = shortName;
+        activeBody.style.display = '';
+      } else {
+        activeBody.style.display = 'none';
+      }
+    }
+  }
+
+  // Initialize the widget subscription at app startup. Runs once; the same
+  // onQueueChanged stream feeds both this widget and (when open) the BIC
+  // modal's queue list. We don't need to unsubscribe — widget lifetime ==
+  // app lifetime.
+  async function _initBatchImportJobsWidget() {
+    const api = window.nbmeDesktop && window.nbmeDesktop.batchImport;
+    if (!api || typeof api.getQueue !== 'function' || typeof api.onQueueChanged !== 'function') return;
+    // Initial render in case there are jobs already in flight.
+    try {
+      const result = await api.getQueue();
+      if (result && result.ok) {
+        updateBatchImportJobsWidget(result.queue && result.queue.jobs);
+      }
+    } catch (err) {
+      console.warn('[bic-widget] initial getQueue failed:', err);
+    }
+    api.onQueueChanged(function(payload) {
+      const jobs = (payload && payload.queue && Array.isArray(payload.queue.jobs))
+        ? payload.queue.jobs
+        : [];
+      updateBatchImportJobsWidget(jobs);
+    });
+  }
+
+  // Kick off after DOM is ready (preload bridge is already available at script load,
+  // but the widget element needs to exist in the DOM first).
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _initBatchImportJobsWidget);
+  } else {
+    _initBatchImportJobsWidget();
   }
 
   function batchImportQueuePathText(paths) {
