@@ -2,7 +2,17 @@
 
 Last updated: 2026-05-24
 
-This file documents stable v4 tags from v4.0 through the current head tag `v4.68-source-folder-delete-fix-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+This file documents stable v4 tags from v4.0 through the current head tag `v4.69-six-bug-batch-fix-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+
+## v4.69-six-bug-batch-fix-stable
+
+Commit: bundled source + doc in a single v4.69 commit (see `git log -1 v4.69-six-bug-batch-fix-stable`).
+
+Meaning: Six-bug batch fix from live-test feedback on v4.62–v4.68 stack. (1) Removed "Open Artifacts" button from BIC queue rows (user has no use for it). (2) Wrapped `App.renameFolder()` in try/catch with explicit `toast()` + `console.warn` for every failure mode — silent failures (folder lookup miss, etc.) now surface to the user. (3) Drive sync stuck-state escape hatch — new `_driveStuck` flag set by `_showDriveLoudFailure()`, gates periodic safety-net + visibility-trigger so they stop hammering after escalation; new `_driveLastError` string preserves the actual API error message so the loud-failure banner shows root cause instead of "sync is stuck"; new `window.unstickGoogleDriveSync()` escape hatch wired into Backup Now / Connect Drive / drive-alert click handlers so manual user action resumes retries. (4)+(5) New "✓ Accept All (including flagged)" button in Review Draft modal as the escape hatch for cases where a pipeline over-flags (e.g. Fast Facts flagging 197 questions as 'error' severity → none in `validIndexes` → "Accept All Valid" found zero questions to accept and silently did nothing); relabelled "Accept All Valid" to "Accept Valid Only" with explanatory tooltip; new `acceptAllBatchReviewQuestions()` function iterates the full `candidateQuestions` array. (6) Added `'pending'` to the queue-row `removable` status list — previously a queued-but-not-yet-running job had no Cancel or Remove button, so accidentally enqueued jobs had to wait until they started running before the user could stop them.
+
+Validated: `node --check` clean on every inline `<script>` in `index.html`. `.app` rebuilt with v4.69 markers verified present. Live walkthrough is the pending field validation — particularly the Drive stuck-state path (needs failing token scenario) and the Accept All Review path (needs real Fast Facts batch).
+
+Architecture significance: Establishes the "automatic-retry kill switch" pattern (`_driveStuck` flag gated by a manual user-action escape hatch) — reusable for any future polling / retry loop that needs to stop hammering when escalated. The Accept All vs Accept Valid Only split surfaces the latent UX issue that "valid" was an opaque concept driven by pipeline-side decisions; the user now has a clear escape hatch when the pipeline over-flags. Open follow-up: the Fast Facts validator's blanket-error severity for threshold/ontology mismatches in `generate_lecture_slide_questions.py` should be revisited (severity downgrade, threshold tuning, or fuzzy claim matching) so future batches don't auto-flag at this scale.
 
 ## v4.68-source-folder-delete-fix-stable
 

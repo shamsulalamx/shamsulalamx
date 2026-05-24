@@ -2474,7 +2474,8 @@ body.quiz-fullscreen-mode .modal-overlay {
     <h3>Review Draft</h3>
     <div id="bic-review-draft-status" class="notes-import-summary">No review draft loaded.</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;">
-      <button type="button" class="btn-modal" onclick="App.acceptAllValidBatchReviewQuestions()">Accept All Valid</button>
+      <button type="button" class="btn-modal" onclick="App.acceptAllBatchReviewQuestions()" title="Accept every question in the draft, including flagged ones. Use this when you trust the generation enough to import even the questions the validator flagged.">✓ Accept All (including flagged)</button>
+      <button type="button" class="btn-modal" onclick="App.acceptAllValidBatchReviewQuestions()" title="Accept only the questions that passed validation. Flagged questions stay 'pending' and won't be imported.">Accept Valid Only</button>
       <button type="button" class="btn-modal" onclick="App.rejectAllFlaggedBatchReviewQuestions()">Reject All Flagged</button>
       <button type="button" class="btn-modal" onclick="App.saveBatchReviewDecisions()">Save Decisions</button>
       <button type="button" class="btn-modal primary" onclick="App.importAcceptedBatchReviewQuestions()">Import Accepted Questions</button>
@@ -3130,8 +3131,8 @@ body.quiz-fullscreen-mode .modal-overlay {
       <label class="form-label">Google Drive Backup</label>
       <p style="font-size:12px;color:#5a6a7a;margin-bottom:8px;">Stores tests and question images in your Google Drive. Works from any HTTPS origin or from localhost (Electron dev). To use Drive from a new static host, add its origin to <code>DRIVE_EXTRA_ORIGINS</code> in the source and register it in Google Cloud Console.</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-        <button class="btn-modal" onclick="connectGoogleDrive()">Connect Drive</button>
-        <button class="btn-modal" onclick="saveGoogleDriveNow()">Backup Now</button>
+        <button class="btn-modal" onclick="window.unstickGoogleDriveSync && window.unstickGoogleDriveSync(); connectGoogleDrive()">Connect Drive</button>
+        <button class="btn-modal" onclick="window.unstickGoogleDriveSync && window.unstickGoogleDriveSync(); saveGoogleDriveNow()">Backup Now</button>
         <button class="btn-modal" onclick="restoreGoogleDriveNow()">Restore Drive</button>
         <button class="btn-modal" onclick="window.nbmeDiagnosticExport()" title="Download a JSON backup of your current local data with diagnostic info">📥 Diagnostic Backup</button>
       </div>
@@ -4042,6 +4043,13 @@ window.MiscDocStore = MiscDocStore;
   let _driveRetryTimer = null;
   let _driveConsecutiveFailures = 0;
   let _driveLastSyncTimestamp = null;
+  // v4.69: stuck-state flag — once we hit MAX_RETRIES, AUTOMATIC retries stop
+  // (periodic safety-net + debounce both gate on this). User-initiated actions
+  // (manual Backup Now, Reconnect Drive) clear the flag and let retries resume.
+  // Also preserve the last error message text so we can show the actual root
+  // cause in the loud-failure banner instead of the generic "stuck" message.
+  let _driveStuck = false;
+  let _driveLastError = '';
   const _DRIVE_MAX_RETRIES = 5;
   const _DRIVE_PERIODIC_INTERVAL_MS = 5 * 60 * 1000;     // 5-min safety-net backup
   const _DRIVE_RETRY_BASE_DELAY_MS = 2000;               // 2s, doubles per retry, capped at 60s
@@ -4080,8 +4088,14 @@ window.MiscDocStore = MiscDocStore;
   }
 
   window.driveIndicatorClick = function() {
-    if (_accessToken) window.saveGoogleDriveNow();
-    else App.openSettings();
+    if (_accessToken) {
+      // v4.69: a click on the drive indicator is a manual user action — clear
+      // stuck flag + failure counter so the retry chain resumes from scratch.
+      window.unstickGoogleDriveSync();
+      window.saveGoogleDriveNow();
+    } else {
+      App.openSettings();
+    }
   };
 
   function isDriveOriginAllowed() {
@@ -4420,6 +4434,8 @@ window.MiscDocStore = MiscDocStore;
       _driveLastSyncTimestamp = Date.now();
       try { localStorage.setItem(_DRIVE_LAST_SYNC_KEY, String(_driveLastSyncTimestamp)); } catch (e) {}
       _driveConsecutiveFailures = 0;
+      _driveStuck = false;  // v4.69: clear stuck on success
+      _driveLastError = '';
       if (_driveRetryTimer) { clearTimeout(_driveRetryTimer); _driveRetryTimer = null; }
       setDriveStatus('Drive backup complete.', '#27ae60');
       updateDriveIndicator();
@@ -4429,6 +4445,7 @@ window.MiscDocStore = MiscDocStore;
       // v4.67: count consecutive failures + escalate to loud surfacing after
       // _DRIVE_MAX_RETRIES; otherwise schedule an exponential-backoff retry.
       _driveConsecutiveFailures++;
+      _driveLastError = e && e.message ? String(e.message) : String(e);  // v4.69: preserve for diagnostics
       if (_driveConsecutiveFailures >= _DRIVE_MAX_RETRIES) {
         _showDriveLoudFailure(e);
       } else {
@@ -4557,9 +4574,17 @@ window.MiscDocStore = MiscDocStore;
   // After N consecutive failures, escalate to a toast + a more prominent
   // status banner so the user actually notices Drive is broken rather than
   // staring at a small grey error line.
+  // v4.69: also flip the _driveStuck flag so AUTOMATIC retries (periodic
+  // safety-net, debounce) stop hammering until the user manually intervenes.
+  // Surface the actual error message so the user can see WHY it's failing
+  // (token expired, network, quota, etc.) instead of just "sync is stuck."
   function _showDriveLoudFailure(error) {
-    const msg = '⚠ Drive backup has failed ' + _driveConsecutiveFailures + ' times in a row — sync is stuck. Reconnect Drive in Settings.';
-    setDriveStatus(msg, '#e74c3c', 'Drive sync stuck — reconnect required', 'error');
+    _driveStuck = true;
+    const errText = (error && error.message) ? String(error.message) : (_driveLastError || 'unknown error');
+    const msg = '⚠ Drive backup has failed ' + _driveConsecutiveFailures
+      + ' times — automatic retries paused. Last error: ' + errText
+      + '. Click "Backup Now" or "Connect Drive" to retry.';
+    setDriveStatus(msg, '#e74c3c', 'Drive sync stuck — manual retry required', 'error');
     if (typeof toast === 'function') {
       try { toast(msg); } catch (e) { /* toast unavailable */ }
     }
@@ -4598,8 +4623,10 @@ window.MiscDocStore = MiscDocStore;
   // pending dirty changes. Catches cases where the debounce timer was
   // cleared mid-flight or where _driveDirty got set but the trigger was
   // missed (e.g. brief network outage right when the debounce fired).
+  // v4.69: also gates on !_driveStuck so a permanently-failing sync doesn't
+  // get hammered every 5 minutes after escalation.
   setInterval(function() {
-    if (!_accessToken || !_driveDirty || _busy || _driveSyncInProgress) return;
+    if (!_accessToken || !_driveDirty || _busy || _driveSyncInProgress || _driveStuck) return;
     console.log('[drive periodic] 5-min safety-net firing');
     window.saveGoogleDriveNow();
   }, _DRIVE_PERIODIC_INTERVAL_MS);
@@ -4608,10 +4635,22 @@ window.MiscDocStore = MiscDocStore;
   // if there are already pending dirty changes. Crucially does NOT call
   // scheduleGoogleDriveSave (which would set _driveDirty=true unconditionally
   // and force a no-op upload on every focus event).
+  // v4.69: also gates on !_driveStuck.
   window.flushDriveBackupIfPending = function() {
-    if (!_accessToken || !_driveDirty || _busy || _driveSyncInProgress) return;
+    if (!_accessToken || !_driveDirty || _busy || _driveSyncInProgress || _driveStuck) return;
     console.log('[drive visibility] flushing pending backup on focus-restore');
     window.saveGoogleDriveNow();
+  };
+
+  // v4.69: manual-retry escape hatch. Called when the user explicitly clicks
+  // "Backup Now" or "Connect Drive" — clears the stuck flag and resets the
+  // failure counter so retries can resume. Without this, _driveStuck would
+  // stay true forever after one bad sync.
+  window.unstickGoogleDriveSync = function() {
+    if (_driveStuck) console.log('[drive] manual unstick — clearing stuck flag and resetting failure counter');
+    _driveStuck = false;
+    _driveConsecutiveFailures = 0;
+    if (_driveRetryTimer) { clearTimeout(_driveRetryTimer); _driveRetryTimer = null; }
   };
 
   window.addEventListener('beforeunload', (e) => {
@@ -22153,11 +22192,29 @@ const App = (() => {
   }
 
   function renameFolder(id) {
-    const folder = DB.getFolders().find(f => f.id === id);
-    if (!folder) return;
-    const name = prompt('Rename subfolder:', folder.name);
-    if (name === null) return;
-    if (saveRenamedFolder(folder, name)) toast('Renamed.');
+    // v4.69: defensive logging + explicit error toasts so silent failures
+    // (e.g. folder lookup miss, save() throw, name validation reject)
+    // surface to the user instead of just appearing to "do nothing."
+    try {
+      const folder = DB.getFolders().find(f => f.id === id);
+      if (!folder) {
+        console.warn('[renameFolder] folder id not found:', id);
+        toast('Could not find that subfolder. Refresh and try again.');
+        return;
+      }
+      const name = prompt('Rename subfolder:', folder.name);
+      if (name === null) return;  // user cancelled — silent
+      const ok = saveRenamedFolder(folder, name);
+      if (ok) {
+        toast('Renamed.');
+      } else {
+        console.warn('[renameFolder] saveRenamedFolder returned false for', folder.id, 'name=', name);
+        // saveRenamedFolder already toasts the specific reason (empty / duplicate)
+      }
+    } catch (err) {
+      console.error('[renameFolder] unexpected error:', err);
+      toast('Rename failed: ' + (err.message || String(err)));
+    }
   }
 
   function startRenameFolder(id) {
@@ -23176,7 +23233,10 @@ const App = (() => {
       const fileName = filePath.split(/[\\/]/).pop() || filePath || 'No file';
       const retryable = ['failed', 'interrupted', 'canceled', 'needs_review', 'completed_with_review_required'].includes(job.status);
       const cancelable = job.status === 'running';
-      const removable = ['completed', 'completed_with_review_required', 'completed_with_review', 'failed', 'interrupted', 'canceled'].includes(job.status);
+      // v4.69: allow removing 'pending' (waiting-in-queue) jobs too — previously
+      // users could accidentally enqueue a job and had no way to cancel it
+      // until it started running.
+      const removable = ['pending', 'completed', 'completed_with_review_required', 'completed_with_review', 'failed', 'interrupted', 'canceled'].includes(job.status);
       const progress = job.progress?.message || job.progress?.phase || 'Waiting.';
       const chunkProgress = formatBatchChunkProgress(job);
       const inputPaths = batchImportQueuePathText(job.inputFiles);
@@ -23205,7 +23265,6 @@ const App = (() => {
             ${cancelable ? `<button type="button" class="btn-modal" onclick="App.cancelBatchImportQueueJob('${escapeHTML(job.jobId || '')}')">Cancel</button>` : ''}
             ${retryable ? `<button type="button" class="btn-modal" onclick="App.retryBatchImportQueueJob('${escapeHTML(job.jobId || '')}')">Retry</button>` : ''}
             ${canReviewDraft ? `<button type="button" class="btn-modal primary" onclick="App.openBatchReviewDraft('${escapeHTML(job.jobId || '')}')">Review Draft</button>` : ''}
-            <button type="button" class="btn-modal" onclick="App.openBatchImportQueueArtifacts('${escapeHTML(job.jobId || '')}')">Open Artifacts</button>
             ${removable ? `<button type="button" class="btn-modal" onclick="App.removeBatchImportQueueJob('${escapeHTML(job.jobId || '')}')">Remove</button>` : ''}
           </div>
           <details style="margin-top:6px;" ontoggle="App.toggleBatchImportQueueDetails('${escapeHTML(job.jobId || '')}', this.open)">
@@ -23417,6 +23476,23 @@ Errors: ${escapeHTML(errors)}</div>
     if (!_batchReviewState) return;
     _batchReviewState.validIndexes.forEach(function(index) { _batchReviewState.decisions[index] = 'accept'; });
     renderBatchReviewDraft();
+  }
+
+  // v4.69: Accept ALL questions including those the validator flagged.
+  // This is the escape hatch for cases where a pipeline (e.g. Fast Facts)
+  // over-flags and the user is willing to import the lot rather than triage
+  // hundreds of questions by hand. Iterates the full candidateQuestions list
+  // and marks every index as 'accept'.
+  function acceptAllBatchReviewQuestions() {
+    if (!_batchReviewState) return;
+    const questions = Array.isArray(_batchReviewState.draft?.candidateQuestions) ? _batchReviewState.draft.candidateQuestions : [];
+    questions.forEach(function(_q, offset) {
+      _batchReviewState.decisions[offset + 1] = 'accept';
+    });
+    renderBatchReviewDraft();
+    if (typeof toast === 'function') {
+      try { toast('Accepted all ' + questions.length + ' questions.'); } catch (e) {}
+    }
   }
 
   function rejectAllFlaggedBatchReviewQuestions() {
@@ -28997,6 +29073,7 @@ Errors: ${escapeHTML(errors)}</div>
     setBatchReviewDecision,
     updateBatchReviewEditedQuestion,
     acceptAllValidBatchReviewQuestions,
+    acceptAllBatchReviewQuestions,
     rejectAllFlaggedBatchReviewQuestions,
     saveBatchReviewDecisions,
     importAcceptedBatchReviewQuestions,

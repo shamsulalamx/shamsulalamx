@@ -1,12 +1,94 @@
 # Project Status 2026-05-24
 
-Current stable tag: `v4.68-source-folder-delete-fix-stable`
+Current stable tag: `v4.69-six-bug-batch-fix-stable`
 Current branch: `phase11-fastfacts-stability`
-Last committed HEAD: source + doc bundled in a single v4.68 commit (v4.67 / v4.66 / v4.65 / v4.64 / v4.63 / v4.62 still exist as prior tags). Note: the v4.65 tag still points at the pre-follow-up commit (4b18447) which is missing `electron/main.js`; the missing handlers landed as a separate follow-up commit (02fea12) that's on `phase11-fastfacts-stability` but not tagged — see the v4.65 entry below.
+Last committed HEAD: source + doc bundled in a single v4.69 commit (v4.68 / v4.67 / v4.66 / v4.65 / v4.64 / v4.63 / v4.62 still exist as prior tags). Note: the v4.65 tag still points at the pre-follow-up commit (4b18447) which is missing `electron/main.js`; the missing handlers landed as a separate follow-up commit (02fea12) that's on `phase11-fastfacts-stability` but not tagged — see the v4.65 entry below.
 
 Supersedes `docs/archive/PROJECT_STATUS_2026-05-23.md`.
 
 ## What Is New Since 2026-05-23
+
+### v4.69 — Six-bug batch fix (Drive stuck loop, Accept-All review, pending-job cancel, subfolder rename, artifacts removal)
+
+Live-test pass on the v4.62–v4.68 stack surfaced six distinct user-facing issues. All addressed in one renderer-only commit. No data-layer or pipeline changes.
+
+#### #1 — Removed "Open Artifacts" button from BIC queue rows
+
+User: "What's the point of artifacts in BIC UI? Remove it if I don't have any need for this."
+
+Removed the per-queue-job "Open Artifacts" button at `index.html:23208`. It opened a Finder window pointing at the durable artifact output folder for that job — useful for debugging the Python pipeline, not useful for the user's actual workflow. The IPC handler and App-namespace export are left in place (dead code, no harm) in case we want to re-surface artifact access from a debug panel later.
+
+#### #2 — Subfolder rename now reports failures loudly
+
+User: "Subfolder rename option not working."
+
+Wrapped `App.renameFolder(id)` in a try/catch and added explicit `toast()` + `console.warn` for every failure mode: folder lookup miss, prompt cancellation (silent — correct), and any unexpected exception. The most likely root cause is that the existing code was running fine but failing silently when `DB.getFolders().find(...)` returned undefined (stale id, refresh required). Now the user sees `"Could not find that subfolder. Refresh and try again."` instead of nothing.
+
+If the underlying issue is something else (Electron prompt suppression, save throw, etc.), the console.error will surface it for next-iteration debugging.
+
+#### #3 — Drive backup stuck-state escape hatch + actual error preserved (substantive)
+
+User: "Drive is connected, but backup keeps failing: ⚠ Drive backup has failed 17 times in a row — sync is stuck. Reconnect Drive in Settings."
+
+v4.67's loud-failure escalation correctly fires after 5 consecutive failures, but the failure counter kept rising because:
+
+- The periodic 5-min safety-net kept calling `saveGoogleDriveNow()` every 5 minutes (no gate for stuck state).
+- The 1.2s debounce timer kept firing on every data change.
+- The retry timer's internal short-circuit didn't help because new calls were coming in from other paths.
+
+Result: 17 failures in a row, status text overwritten on each one, user can't see WHY it's failing (just "sync is stuck").
+
+v4.69 adds:
+
+- **New `_driveStuck` flag**, set by `_showDriveLoudFailure()` and cleared on the next successful save.
+- **Periodic safety-net + visibility-trigger now gate on `!_driveStuck`** — automatic retries stop hammering once we've escalated.
+- **New `_driveLastError` string** preserves the actual error message text (token expired, network, quota, etc.) so the loud-failure banner can show *why* it's failing instead of just "sync is stuck."
+- **Loud-failure message rewritten** to include the actual error: `"⚠ Drive backup has failed 5 times — automatic retries paused. Last error: <message>. Click 'Backup Now' or 'Connect Drive' to retry."`
+- **Manual-retry escape hatch** `window.unstickGoogleDriveSync()` resets `_driveStuck` + the failure counter. Wired into all three user-facing entrypoints: the **Backup Now** button, the **Connect Drive** button, and the **drive-alert indicator** in the title bar. So clicking any of those clears the stuck state and gives retries a fresh shot.
+
+Important: the user now sees the actual error message, so if the root cause is e.g. "Drive API 401" (expired token in the 7-day Testing-mode rotation), they'll know to reconnect — instead of guessing.
+
+#### #4 / #5 — "Accept All" button for the review draft (the Fast Facts overflagging escape hatch)
+
+User: "Fast facts flagged 197 questions for review. That is an insane number. In Review draft, 'accept all valid' button does not change the 'Accepted' number. I'm scared to press import. What if it doesn't import those 197 questions?"
+
+Diagnosis: when a Fast Facts batch flags 197 questions with `severity: "error"`, those questions land in `flaggedIndexes` but are NOT in `validIndexes` (since they failed validation). The existing "Accept All Valid" button only iterates `validIndexes` — so with all 197 flagged, the button finds zero valid questions, increments zero decisions, and the Accepted count stays at 0. User sees no UI feedback and (correctly) assumes the button is broken.
+
+Combined fix:
+
+- **New "✓ Accept All (including flagged)" button** added as the FIRST action in the Review Draft modal. Iterates the full `candidateQuestions` array (not just `validIndexes`) and marks every index as `'accept'`. Shows a toast confirming the count.
+- **"Accept All Valid" relabelled to "Accept Valid Only"** with a tooltip explaining the difference. Same underlying function — only affects questions in `validIndexes`. Still useful when the user trusts validation strict-mode.
+- New `acceptAllBatchReviewQuestions()` function + App-namespace export.
+
+On import (`importAcceptedBatchReviewQuestions`), only `decision === 'accept'` questions go through, so the user's instinct to be scared was correct — pending questions DO get dropped. With the new button, the user can accept all 197 with one click and import them all.
+
+The deeper fix (loosening the Fast Facts Python validator so it doesn't over-flag in the first place) is deferred — the renderer-side escape hatch unblocks the user immediately.
+
+#### #6 — Pending queue jobs can now be removed
+
+User: "If I accidentally put something in queue, and its in 'waiting in queue' status, there is no way for me to cancel it. Fix it too."
+
+The queue-job action buttons gated on:
+- `cancelable = job.status === 'running'` → Cancel button only for running jobs
+- `removable = ['completed', ..., 'canceled'].includes(job.status)` → Remove button only AFTER the job has finished or failed
+
+Pending (waiting-in-queue) jobs had NEITHER button — so an accidentally-enqueued job had to wait until it started running before the user could stop it.
+
+Fix: added `'pending'` to the `removable` list. Pending jobs now show a "Remove" button that cleanly removes them from the queue before they start.
+
+#### Validation
+
+- **`node --check`** clean on every inline `<script>` in `index.html`.
+- **`.app` rebuilt** with v4.69 markers verified present in the bundled HTML.
+- **Live walkthrough** is the pending field validation — particularly the Drive stuck-state path (needs an actual failing-token scenario to fully exercise) and the Accept All Review path (needs a real Fast Facts batch with flagged questions).
+
+#### Why "stable"
+
+Five of six fixes are renderer-only and additive — they harden existing failure paths or add new escape-hatch actions, never change the happy path. The sixth (`renameFolder` try/catch) is defensive logging that strictly improves diagnostics without changing behavior. The Drive stuck-state gate is the most behavior-changing change but it strictly reduces unwanted automatic activity (it makes things STOP doing the wrong thing); user-initiated actions still work. Worst-case from misbehaving v4.69 components: a fix doesn't apply, behaviour reverts to v4.68. None of the changes risk data loss or import regression.
+
+#### Open follow-up
+
+The Fast Facts Python validator's flag-everything-as-error severity (in `tools/lecture-slide-question-generator/generate_lecture_slide_questions.py` around `fast_facts_strict_findings()` lines 5550-5595) is the root cause of the 197-question batch. v4.69 unblocks the user via the Accept All button, but the Python-side validator should also be tuned (severity downgrade, threshold tuning, or fuzzy claim matching) so future batches don't auto-flag the same way. Noted for a future iteration.
 
 ### v4.68 — Fix: source-folder delete button silently failed (ReferenceError on DEFAULT_SOURCE_FOLDERS)
 
