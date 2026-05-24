@@ -872,46 +872,6 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 .bic-form-row .form-group { margin-bottom: 0; }
 @media (max-width: 640px) { .bic-form-row { grid-template-columns: 1fr; } }
 
-/* v4.66: floating "jobs widget" — bottom-right chip showing active+queued job counts.
- * Hidden by default (display:none in HTML); shown by JS only when there are running
- * or pending jobs. Click anywhere on it to open the Batch Import Center modal. */
-#bic-jobs-widget {
-  position: fixed;
-  bottom: 18px;
-  right: 18px;
-  z-index: 1500;
-  background: linear-gradient(135deg, #1e3a8a 0%, #0284c7 55%, #14b8a6 100%);
-  color: #fff;
-  padding: 10px 14px;
-  border-radius: 10px;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0.1px;
-  min-width: 180px;
-  max-width: 320px;
-  user-select: none;
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
-}
-#bic-jobs-widget:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.36);
-}
-#bic-jobs-widget:active { transform: translateY(0); }
-#bic-jobs-widget .bic-jobs-widget-summary { display: block; }
-#bic-jobs-widget .bic-jobs-widget-active {
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.22);
-  font-size: 11.5px;
-  opacity: 0.92;
-  max-height: 60px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* v4.66: Floating jobs widget — persistent bottom-right card showing active queue
    status whenever there's something running or pending. Stays under modals
    (z-index 100 vs modal 1000) so it doesn't block UI. */
@@ -1355,12 +1315,15 @@ body.quiz-fullscreen-mode .modal-overlay {
     </div>
   </div>
 
-  <!-- v4.66: floating "active jobs" chip — fixed bottom-right, click opens BIC.
-       Hidden until there's at least one running or queued job. Updated by
-       updateBatchImportJobsWidget() on every onQueueChanged event. -->
-  <div id="bic-jobs-widget" style="display:none;" onclick="App.openBatchImportCenter()" title="Click to open Batch Import Center">
-    <span class="bic-jobs-widget-summary">⚡ 0 active</span>
-    <div class="bic-jobs-widget-active" id="bic-jobs-widget-active"></div>
+  <!-- v4.66: floating "active jobs" widget — fixed bottom-right, click opens BIC.
+       Hidden by default (CSS display:none); revealed by renderJobsWidget() via
+       the .has-jobs class when running+queued > 0. Updates live from the global
+       onQueueChanged subscription wired in App.init(). -->
+  <div id="jobs-widget" onclick="App.openBatchImportCenter()" title="Click to open Batch Import Center">
+    <div class="jw-title">⚡ Generation Queue</div>
+    <div id="jw-counts" class="jw-counts"></div>
+    <div id="jw-current" class="jw-current" style="display:none;"></div>
+    <div class="jw-hint">Click for details</div>
   </div>
 
   <!-- ═══ MAIN ═══ -->
@@ -23015,79 +22978,15 @@ const App = (() => {
     }
   }
 
-  // v4.66: floating jobs widget. Reads job statuses from the queue payload
-  // and updates the chip in the bottom-right corner. Hidden when nothing is
-  // running or queued; visible (gradient chip) when there's work in progress.
-  // Click handler is wired directly on the HTML element to open the BIC.
-  function updateBatchImportJobsWidget(jobs) {
-    const widget = document.getElementById('bic-jobs-widget');
-    if (!widget) return;
-    const summary = widget.querySelector('.bic-jobs-widget-summary');
-    const activeBody = document.getElementById('bic-jobs-widget-active');
-    if (!summary) return;
+  // v4.66 cleanup: my parallel implementation of the floating jobs widget
+  // (#bic-jobs-widget, updateBatchImportJobsWidget, _initBatchImportJobsWidget)
+  // was removed here in favour of the external implementation (#jobs-widget,
+  // renderJobsWidget at line ~22954, initial-refresh + global onQueueChanged
+  // subscription in App.init at line ~8803). Both versions did the same job;
+  // keeping the external one because it matches the documented design
+  // (jw-title / jw-counts / jw-current spans) and the white-card visual,
+  // and because its initialization is already wired into App.init.
 
-    const safeJobs = Array.isArray(jobs) ? jobs : [];
-    const running = safeJobs.filter(function(j) { return j && j.status === 'running'; });
-    const queued = safeJobs.filter(function(j) { return j && j.status === 'pending'; });
-
-    if (running.length === 0 && queued.length === 0) {
-      widget.style.display = 'none';
-      return;
-    }
-    widget.style.display = 'block';
-
-    const parts = [];
-    if (running.length > 0) parts.push('⚡ ' + running.length + ' running');
-    if (queued.length > 0) parts.push('⏸ ' + queued.length + ' queued');
-    summary.textContent = parts.join(' · ');
-
-    if (activeBody) {
-      if (running.length > 0) {
-        const r = running[0];
-        const firstInput = r.inputFiles && r.inputFiles[0];
-        const path = firstInput ? (firstInput.path || firstInput) : null;
-        const shortName = path
-          ? String(path).split(/[\\/]/).pop()
-          : ('Job ' + (r.jobId || '?'));
-        activeBody.textContent = shortName;
-        activeBody.style.display = '';
-      } else {
-        activeBody.style.display = 'none';
-      }
-    }
-  }
-
-  // Initialize the widget subscription at app startup. Runs once; the same
-  // onQueueChanged stream feeds both this widget and (when open) the BIC
-  // modal's queue list. We don't need to unsubscribe — widget lifetime ==
-  // app lifetime.
-  async function _initBatchImportJobsWidget() {
-    const api = window.nbmeDesktop && window.nbmeDesktop.batchImport;
-    if (!api || typeof api.getQueue !== 'function' || typeof api.onQueueChanged !== 'function') return;
-    // Initial render in case there are jobs already in flight.
-    try {
-      const result = await api.getQueue();
-      if (result && result.ok) {
-        updateBatchImportJobsWidget(result.queue && result.queue.jobs);
-      }
-    } catch (err) {
-      console.warn('[bic-widget] initial getQueue failed:', err);
-    }
-    api.onQueueChanged(function(payload) {
-      const jobs = (payload && payload.queue && Array.isArray(payload.queue.jobs))
-        ? payload.queue.jobs
-        : [];
-      updateBatchImportJobsWidget(jobs);
-    });
-  }
-
-  // Kick off after DOM is ready (preload bridge is already available at script load,
-  // but the widget element needs to exist in the DOM first).
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', _initBatchImportJobsWidget);
-  } else {
-    _initBatchImportJobsWidget();
-  }
 
   function batchImportQueuePathText(paths) {
     if (!Array.isArray(paths) || !paths.length) return 'None';
