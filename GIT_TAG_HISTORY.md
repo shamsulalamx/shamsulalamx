@@ -2,7 +2,33 @@
 
 Last updated: 2026-05-24
 
-This file documents stable v4 tags from v4.0 through the current head tag `v4.74-mehlman-progress-parser-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+This file documents stable v4 tags from v4.0 through the current head tag `v4.76-userdata-rename-shamsulalamx-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+
+Note on the recent v4.62–v4.76 batch: many of these tags shipped with source-level proof only (`node --check` clean + `.app` rebuilt + bundled-marker count). That is NOT verification of behavior, and several of those tags introduced regressions caught only when the user exercised the scenarios live. Going forward, tags labeled `-stable` should mean a live walkthrough was completed; otherwise, use `-source` or `-pending-validation` suffixes.
+
+## v4.76-userdata-rename-shamsulalamx-stable
+
+Commit: `416c0f6` (single source + doc commit; see `git log -1 v4.76-userdata-rename-shamsulalamx-stable`).
+
+Meaning: One-time atomic-rename migration of the Electron userData folder. Pre-v4.76 it lived at `~/Library/Application Support/nbme-self-assessment-suite/` (Electron's `app.getName()` returns `package.json`'s top-level `name` field, not `build.productName`). Post-v4.76 it lives at `~/Library/Application Support/shamsulalamx/` so the folder name matches the `.app` filename. Migration runs at the top of `electron/main.js` before any `app.getPath('userData')` call: detects the old folder, atomically renames via `fs.renameSync` (no half-state, fast regardless of directory size), then `app.setPath('userData', newPath)` so all subsequent Electron API calls return the new location. Migration is non-fatal — wrapped in try/catch, falls back to old name on failure. Preserves all IndexedDB state, BIC queue + history, pipeline job outputs (now in userData per v4.75), Drive sync tokens, quiz archive.
+
+Validated: `node --check` clean. 6 v4.76 markers in source. `.app` rebuilt with migration code verified in bundled `electron/main.js`. **Live validation pending**: user needs to relaunch the `.app`, confirm the migration runs cleanly, and verify the new `shamsulalamx/` folder appears in `~/Library/Application Support/` with all prior data intact.
+
+Architecture significance: Demonstrates the atomic-rename pattern for userData folder migrations. Reusable for any future rebrand. The deeper inconsistency between `package.json` `name` and `build.productName` is left alone — fixing it at the package.json level would break npm/Node tooling. The runtime userData override is the lighter, safer touch.
+
+## v4.75-output-to-userdata-stable
+
+Commit: `343e86c` (single source + doc commit).
+
+Meaning: Critical fix to where Python pipeline outputs land. Pre-v4.75 every downstream generator fell back to writing INSIDE the `.app` bundle (e.g. `shamsulalamx.app/Contents/Resources/app/tools/mehlman-pdf-question-generator/output_json/app_ready/`). This is wrong because `.app` bundles aren't valid user-data storage and every `npm run electron:build:mac` overwrites the bundle's contents — destroying pipeline outputs from prior runs. This destruction was the root cause of the user-reported "Mehlman log says 259 questions accepted but no test exists" failure: the run completed, wrote `Mehlman Internal Medicine_app_ready.json (259 questions)` into the bundle, then a subsequent `.app` rebuild silently overwrote the entire `output_json/app_ready/` directory with the source tree's stale fixtures (only ~104 questions across 5 unrelated test files). The user's actual 259-question output was permanently lost.
+
+Discovery: every `*_profile_runner.py` in `tools/shared-ingestion/` ALREADY checked for the `BIC_JOB_OUTPUT_ROOT` env var and routed outputs there if set. Pre-v4.75, that env var simply wasn't being set when `electron/main.js` spawned the Python pipeline runner. Single-line fix: when spawning the runner, add `BIC_JOB_OUTPUT_ROOT: manifest.outputRoot`, `BIC_JOB_ID: manifest.jobId`, `BIC_PROGRESS_SOURCE: manifest.sourceType` to the child env. `manifest.outputRoot` was already computed via `batchJobOutputRoot(jobId)` → `app.getPath('userData')/batch-import-center/jobs/<id>/`. We just weren't passing it down.
+
+Effect: future pipeline outputs land at `<userData>/batch-import-center/jobs/<jobId>/<pipeline-name>/output_json/app_ready/*.json`, outside the bundle, surviving every future `.app` rebuild. Auto-import in `processQueuedBatchAutoImports()` finds them via the existing `manifest.outputRoot` scan in `run_pipeline_job.py`.
+
+Validated: `node --check` clean. 3 v4.75 markers in source. `.app` rebuilt with env-var fix verified in bundled `electron/main.js`. **Live validation pending**: user needs to re-run the Mehlman job and confirm the output lands at the new userData location (not inside the bundle).
+
+Architecture significance: Closes a major silent-data-loss class. Pipeline outputs are now treated as first-class user data; the `.app` bundle is purely code distribution. The pattern (Electron-spawned child processes get location-dependent paths via env vars derived from `app.getPath('userData')`, never bundle-relative defaults) is reusable for any future child-process integration.
 
 ## v4.74-mehlman-progress-parser-stable
 
