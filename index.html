@@ -3703,8 +3703,14 @@ const DB = (() => {
     save();
   }
 
+  // v4.68: expose default-source check so App.deleteSourceFolder can warn the
+  // user that default sources reappear on next launch via ensureSourceFolders.
+  function isDefaultSourceFolder(id) {
+    return DEFAULT_SOURCE_FOLDERS.some(function(s) { return s.id === id; });
+  }
+
   return { get, save, initAsync, flushAppState, saveAppState, uid,
-    getSourceFolders, getSourceFolder, getDefaultSourceFolderWorkflows, createSourceFolder, renameSourceFolder, deleteSourceFolder,
+    getSourceFolders, getSourceFolder, isDefaultSourceFolder, getDefaultSourceFolderWorkflows, createSourceFolder, renameSourceFolder, deleteSourceFolder,
     getFolders, createFolder, renameFolder, deleteFolder,
     getTests, getTest, createTest, updateTest, renameTest, trashTest, restoreTest, emptyTrash, permanentDelete,
     saveAttempt, finishAttempt, getHistory, getFlags, addFlag, removeFlag, isFlagged,
@@ -22070,7 +22076,11 @@ const App = (() => {
     if (!source) return;
     const folders = DB.getFolders(id);
     const totalTests = folders.reduce(function(sum, f) { return sum + DB.getTests(f.id).length; }, 0);
-    const isDefault = DEFAULT_SOURCE_FOLDERS.some(function(d) { return d.id === id; });
+    // v4.68: was DEFAULT_SOURCE_FOLDERS.some(...) — that constant lives inside
+    // the DB IIFE and is not accessible from the App scope, so the original
+    // call threw ReferenceError and the entire delete flow silently failed
+    // (the button appeared to do nothing). Now goes through DB.isDefaultSourceFolder.
+    const isDefault = DB.isDefaultSourceFolder(id);
     const lines = [
       `Delete "${source.name}"?`,
       '',

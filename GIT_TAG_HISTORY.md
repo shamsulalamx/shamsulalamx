@@ -2,7 +2,17 @@
 
 Last updated: 2026-05-24
 
-This file documents stable v4 tags from v4.0 through the current head tag `v4.67-drive-sync-hardening-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+This file documents stable v4 tags from v4.0 through the current head tag `v4.68-source-folder-delete-fix-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+
+## v4.68-source-folder-delete-fix-stable
+
+Commit: bundled source + doc in a single v4.68 commit (see `git log -1 v4.68-source-folder-delete-fix-stable`).
+
+Meaning: Live-test fix for v4.64's source-folder delete button. User reported clicking the 🗑 Delete button on a source-folder card produced no visible response. Root cause: `App.deleteSourceFolder` at `index.html:22068` referenced `DEFAULT_SOURCE_FOLDERS.some(...)` (line 22073) — but that constant lives inside the DB IIFE and was out of scope, throwing `ReferenceError` silently before the `confirm()` dialog could open. Fix: added `DB.isDefaultSourceFolder(id)` method and exported it on the DB return object; switched the App handler to call `DB.isDefaultSourceFolder(id)` instead of the out-of-scope reference.
+
+Validated: `node --check` clean. 6 v4.68 markers in source. `.app` rebuilt with fix bundled. Manual click-test still pending user verification.
+
+Architecture significance: Surfaces the limitation of `node --check` — it validates JS syntax but not runtime scope resolution, so ReferenceError-class bugs slip through into "stable" tags. Note for future App-handlers that reference DB internals: always route through an exported DB method to keep the IIFE boundary clean and prevent this class of bug.
 
 ## v4.67-drive-sync-hardening-stable
 

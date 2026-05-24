@@ -1,12 +1,33 @@
 # Project Status 2026-05-24
 
-Current stable tag: `v4.67-drive-sync-hardening-stable`
+Current stable tag: `v4.68-source-folder-delete-fix-stable`
 Current branch: `phase11-fastfacts-stability`
-Last committed HEAD: source + doc bundled in a single v4.67 commit (v4.66 / v4.65 / v4.64 / v4.63 / v4.62 still exist as prior tags). Note: the v4.65 tag still points at the pre-follow-up commit (4b18447) which is missing `electron/main.js`; the missing handlers landed as a separate follow-up commit (02fea12) that's on `phase11-fastfacts-stability` but not tagged — see the v4.65 entry below.
+Last committed HEAD: source + doc bundled in a single v4.68 commit (v4.67 / v4.66 / v4.65 / v4.64 / v4.63 / v4.62 still exist as prior tags). Note: the v4.65 tag still points at the pre-follow-up commit (4b18447) which is missing `electron/main.js`; the missing handlers landed as a separate follow-up commit (02fea12) that's on `phase11-fastfacts-stability` but not tagged — see the v4.65 entry below.
 
 Supersedes `docs/archive/PROJECT_STATUS_2026-05-23.md`.
 
 ## What Is New Since 2026-05-23
+
+### v4.68 — Fix: source-folder delete button silently failed (ReferenceError on DEFAULT_SOURCE_FOLDERS)
+
+Live-test bug fix on v4.64's source-folder delete feature. User reported: clicking the 🗑 Delete button on a source-folder card in the Study Library produced no visible response — no confirm dialog, no toast, nothing.
+
+Root cause: `App.deleteSourceFolder(id)` at `index.html:22068` referenced `DEFAULT_SOURCE_FOLDERS.some(...)` (line 22073) to check whether the target source was a built-in default (and therefore would reappear after restart). But `DEFAULT_SOURCE_FOLDERS` is a `const` defined inside the `DB` IIFE (`index.html:3166`), so it was out of scope from the App namespace. The reference threw `ReferenceError: DEFAULT_SOURCE_FOLDERS is not defined`, which killed the function before it could even open the `confirm()` dialog — hence the button appearing to do nothing.
+
+Fix: added new `DB.isDefaultSourceFolder(id)` method in the DB module that does the lookup inside the proper scope, exported it on the DB return object, and switched `App.deleteSourceFolder` to call `DB.isDefaultSourceFolder(id)` instead of the out-of-scope reference.
+
+This is a class of bug I should have caught at JS-check time, but `node --check` only validates syntax — not runtime scope resolution. The bundled .app passes syntax check while still containing this latent ReferenceError. The lesson: for new App handlers that reference DB internals, always route through an exported DB method.
+
+#### Validation
+
+- **`node --check`** clean.
+- **6 v4.68 markers** in source (`isDefaultSourceFolder`, `v4.68` comment markers).
+- **`.app` rebuilt** with the fix bundled.
+- **Manual click-test on the Delete button**: still pending — depends on user re-opening the app. But the fix is small, focused, and the new code path is mechanically identical to the original intent — `confirm()` should now actually appear.
+
+#### Why "stable"
+
+One-line behaviour change (out-of-scope identifier → proper exported method call). No new feature. Strict regression fix. If for some reason the new DB method itself misbehaves, the delete button just goes back to its previous broken state — no worse than v4.67.
 
 ### v4.67 — Drive auto-sync hardening (periodic safety net + retry/backoff + visibility trigger + loud failure + last-sync indicator)
 
