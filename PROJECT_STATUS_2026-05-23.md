@@ -27,7 +27,7 @@ Field-validated end-to-end through the packaged `.app` on `Test Mehlman.pdf` (19
 
 Architecture significance: this is the first BIC source where image attachment is fully deterministic (no Gemini multimodal call) and driven entirely by chunk-to-page proximity already tracked during extraction. The same template applies cleanly to any future PDF source whose figures live on identifiable pages.
 
-Tag commits: `<source-hash>` (source) + `<doc-hash>` (doc).
+Tag commits: `369cee1` (source) + `384bd4a` (doc).
 
 ### v4.57 — AMBOSS PDF deterministic-first + Gemini-assisted extractor (field-validated)
 

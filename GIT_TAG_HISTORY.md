@@ -560,7 +560,7 @@ Not validated by this milestone:
 
 ## v4.58-mehlman-tight-focus-stable
 
-Commits: `<source-hash>` (source) + `<doc-hash>` (doc).
+Commits: `369cee1` (source) + `384bd4a` (doc).
 
 Meaning: Retargets the Mehlman PDF question generator from coarse 8-12K-char chunks producing 5 generic questions per chunk to tight ~1.5K-char chunks producing 1 grounded NBME-style question per Mehlman fact, with figures attached deterministically by page proximity. Also unblocks two BIC integration bugs that surfaced on the first packaged live run: an out-of-tree `Path.relative_to` crash that silently killed every chunk with figures, and a hardcoded 10-page validation cap in both the profile runner and BIC registry that dropped pages 11+ of every uploaded PDF.
 
