@@ -1501,7 +1501,23 @@ async function runQueuedBatchJob(job) {
       });
     };
 
-    const childEnv = batchEnvironment?.env || process.env;
+    // v4.75: route pipeline outputs to the BIC's per-job userData directory
+    // (~/Library/Application Support/<appName>/batch-import-center/jobs/<jobId>/).
+    // Without these env vars, each downstream generator falls back to writing
+    // INSIDE the .app bundle (e.g. shamsulalamx.app/Contents/Resources/app/
+    // tools/mehlman-pdf-question-generator/output_json/app_ready/). That is
+    // wrong for two reasons: (1) .app bundles aren't valid macOS storage,
+    // and (2) every `npm run electron:build:mac` overwrites the bundle's
+    // contents, silently destroying any previous pipeline outputs. Every
+    // *_profile_runner.py in tools/shared-ingestion/ already checks
+    // BIC_JOB_OUTPUT_ROOT and routes outputs there if set — we just weren't
+    // setting it. This commit fixes that.
+    const baseChildEnv = batchEnvironment?.env || process.env;
+    const childEnv = Object.assign({}, baseChildEnv, {
+      BIC_JOB_OUTPUT_ROOT: manifest.outputRoot || '',
+      BIC_JOB_ID: manifest.jobId || '',
+      BIC_PROGRESS_SOURCE: manifest.sourceType || ''
+    });
     const useLoginShell = !!batchEnvironment?.useLoginShell;
     const command = useLoginShell ? '/bin/zsh' : 'python3';
     const args = useLoginShell

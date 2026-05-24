@@ -1,12 +1,46 @@
 # Project Status 2026-05-24
 
-Current stable tag: `v4.74-mehlman-progress-parser-stable`
+Current stable tag: `v4.75-output-to-userdata-stable`
 Current branch: `phase11-fastfacts-stability`
-Last committed HEAD: source + doc bundled in a single v4.69 commit (v4.68 / v4.67 / v4.66 / v4.65 / v4.64 / v4.63 / v4.62 still exist as prior tags). Note: the v4.65 tag still points at the pre-follow-up commit (4b18447) which is missing `electron/main.js`; the missing handlers landed as a separate follow-up commit (02fea12) that's on `phase11-fastfacts-stability` but not tagged — see the v4.65 entry below.
+Last committed HEAD: source + doc bundled in a single v4.75 commit (v4.74 / v4.73 / … / v4.62 still exist as prior tags). Note: the v4.65 tag still points at the pre-follow-up commit (4b18447) which is missing `electron/main.js`; the missing handlers landed as a separate follow-up commit (02fea12) that's on `phase11-fastfacts-stability` but not tagged. The v4.74 tag similarly points at the docs-only commit (29fccf8); the actual parser implementation landed as follow-up `35d933d`. Both follow-ups are on origin.
 
 Supersedes `docs/archive/PROJECT_STATUS_2026-05-23.md`.
 
 ## What Is New Since 2026-05-23
+
+### v4.75 — Route pipeline outputs to userData (out of the .app bundle)
+
+**Critical architecture fix.** Pipeline outputs were being written INSIDE the `.app` bundle at paths like `dist/mac-arm64/shamsulalamx.app/Contents/Resources/app/tools/mehlman-pdf-question-generator/output_json/app_ready/*.json`. This is wrong for two reasons:
+
+1. **macOS `.app` bundles aren't valid user-data storage.** Apple's hardened-runtime direction is read-only bundles. Today it works by accident; tomorrow it might not.
+2. **Every `npm run electron:build:mac` overwrites the bundle.** Pipeline outputs from previous runs vanish silently when the bundle is recreated. The user reported "Mehlman log says 259 questions accepted but output says 6" — that's exactly this scenario.
+
+#### Discovery
+
+Every `*_profile_runner.py` in `tools/shared-ingestion/` (anki, divine, emma, images_tables, lecture-slide, mehlman, ome, uworld) ALREADY checks for `BIC_JOB_OUTPUT_ROOT` env var and routes outputs there if set. Pre-v4.75, that env var simply wasn't being set when `electron/main.js` spawned the Python pipeline. Every runner fell back to bundle-relative paths.
+
+#### Fix
+
+In `electron/main.js`, when spawning the Python pipeline runner, the child env is now augmented with `BIC_JOB_OUTPUT_ROOT: manifest.outputRoot`, `BIC_JOB_ID: manifest.jobId`, `BIC_PROGRESS_SOURCE: manifest.sourceType`. `manifest.outputRoot` was already computed via `batchJobOutputRoot(jobId)` → `app.getPath('userData')/batch-import-center/jobs/<id>/`. We just weren't passing it down to the Python subprocess.
+
+#### Effect
+
+Future pipeline outputs land at `~/Library/Application Support/nbme-self-assessment-suite/batch-import-center/jobs/<jobId>/<pipeline-name>/output_json/app_ready/*.json` instead of inside the `.app` bundle. Survives `.app` rebuilds.
+
+#### Clarification: why "shamsulalamx" isn't in `~/Library/Application Support/`
+
+Electron's `app.getName()` reads `package.json`'s top-level `name` field, NOT `build.productName`. Package.json has `name: "nbme-self-assessment-suite"` (used for userData folder) and `build.productName: "shamsulalamx"` (used for the `.app` filename only). The actual userData folder is `~/Library/Application Support/nbme-self-assessment-suite/`. There's also an `Electron` folder for `npm run electron:dev` runs (dev mode uses the literal default name).
+
+#### Recovery for existing outputs
+
+Pre-v4.75 outputs are stuck inside the bundle. Previous step rescued 5 Mehlman outputs to `~/Desktop/mehlman-rescued/` (10 + 33 + 36 + 15 + 10 questions across 5 files for various Mehlman inputs). Drag any onto landing-page upload box to import. Other pipelines may have orphaned outputs — find them with `find dist/mac-arm64/shamsulalamx.app -name '*_app_ready.json'`.
+
+#### Validation
+
+- **`node --check`** clean on `electron/main.js`.
+- **3 v4.75 markers** in source.
+- **`.app` rebuilt** with env-var fix verified in bundled `main.js`.
+- **Live walkthrough**: pending — user needs to relaunch `.app` and run a fresh pipeline job. Verify the output appears at `~/Library/Application Support/nbme-self-assessment-suite/batch-import-center/jobs/<jobId>/<pipeline>/output_json/app_ready/`.
 
 ### v4.74 — Mehlman pipeline progress parser (no more "shared ingestion still running" heartbeats)
 
