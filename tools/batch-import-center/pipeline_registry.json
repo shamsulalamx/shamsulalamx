@@ -27,6 +27,35 @@
       "outputDirectories": ["tools/lecture-slide-question-generator/output_json/app_ready"],
       "notes": "Profile-style source: emits shared normalized chunks first, then invokes the existing Emma generator unchanged."
     },
+    "uworld_notes": {
+      "label": "UWorld Notes",
+      "status": "active",
+      "requiresGemini": true,
+      "inputExtensions": [".txt", ".md", ".rtf", ".docx"],
+      "workingDirectory": ".",
+      "pythonExecutable": "python3",
+      "dryRunSteps": [
+        {
+          "stage": "normalization",
+          "stageLabel": "UWorld shared-ingestion dry-run",
+          "heartbeatSeconds": 10,
+          "args": ["tools/shared-ingestion/uworld_profile_runner.py", "--mode", "dry-run", "--input-file", "{inputFile}"]
+        }
+      ],
+      "liveSteps": [
+        {
+          "stage": "normalization",
+          "stageLabel": "UWorld shared-ingestion live generation",
+          "heartbeatSeconds": 60,
+          "args": ["tools/shared-ingestion/uworld_profile_runner.py", "--mode", "generate", "--input-file", "{inputFile}"]
+        }
+      ],
+      "outputDirectories": [
+        "tools/shared-ingestion/output/uworld_app_ready_live",
+        "tools/shared-ingestion/output/uworld_app_ready_dry_run"
+      ],
+      "notes": "v4.59: text-only UWorld notes (.txt .md .rtf .docx). High-yield density — the runner auto-scales --questions-per-file to ~1 question per 500 chars (roughly 3× Mehlman) because the user's UWorld notes are the densest content in the library. Override by passing --questions-per-file explicitly. Live mode requires GEMINI_API_KEY."
+    },
     "mehlman_pdf": {
       "label": "Mehlman PDF",
       "status": "active",

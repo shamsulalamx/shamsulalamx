@@ -54,6 +54,23 @@ SOURCE_DESCRIPTORS: dict[str, SourceDescriptor] = {
         cache_policy="source_hash",
         notes="Uses existing NBME OCR/chunk artifacts; app-ready conversion remains in the existing generator.",
     ),
+    "uworld_notes": SourceDescriptor(
+        source_type="uworld_notes",
+        modality="text",
+        extraction_style="native_text",
+        generation_style="existing_downstream",
+        asset_policy="none",
+        cache_policy="source_hash",
+        notes="High-yield UWorld notes profile (v4.59). Emits normalized text chunks before invoking the existing UWorld generator; the user confirmed UWorld notes are text-only so this source skips all image/table machinery. Default density is ~1 question per 500 chars (roughly 3× Mehlman) because the user's UWorld notes are the densest content in the library.",
+        metadata={
+            "profileStatus": "active",
+            "supportedInputs": [".txt", ".md", ".rtf", ".docx"],
+            "downstreamGenerator": "tools/uworld-notes-question-generator/generate_uworld_questions.py",
+            "promptPolicy": "unchanged",
+            "densityPolicy": "auto-scale --questions-per-file to ~1 question per 500 chars; override via --questions-per-file",
+            "assetHandling": "none — text-only source",
+        },
+    ),
     "anki_notes": SourceDescriptor(
         source_type="anki_notes",
         modality="text",

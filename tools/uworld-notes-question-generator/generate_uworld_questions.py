@@ -1144,6 +1144,47 @@ def discover_input_files() -> List[Path]:
     )
 
 
+def _resolve_selected_input(raw_path: str) -> Path:
+    selected = Path(raw_path).expanduser()
+    if not selected.is_absolute():
+        selected = (Path.cwd() / selected).resolve()
+    else:
+        selected = selected.resolve()
+    if not selected.exists():
+        raise ValueError(f"--input-file does not exist: {selected}")
+    if not selected.is_file():
+        raise ValueError(f"--input-file must be a file: {selected}")
+    if selected.suffix.lower() not in SUPPORTED_EXTENSIONS:
+        supported = ", ".join(sorted(SUPPORTED_EXTENSIONS))
+        raise ValueError(f"--input-file has unsupported extension '{selected.suffix}'. Supported: {supported}")
+    return selected
+
+
+def _apply_output_dir(raw_path: str) -> Path:
+    """Repoint per-module path globals at an external output root.
+
+    v4.59: BIC's profile runner passes --output-dir <jobRoot>/uworld so all
+    raw_text/, chunks/, generated/, app_ready/, and reports/ artifacts land
+    inside the BIC job dir rather than the script's source tree (which lives
+    inside a read-only .app bundle when run from the packaged app).
+    """
+    global RAW_DIR, SEGMENT_DIR, GEN_DIR, DEBUG_DIR, APP_DIR, REPORT_DIR
+    output_root = Path(raw_path).expanduser()
+    if not output_root.is_absolute():
+        output_root = (Path.cwd() / output_root).resolve()
+    else:
+        output_root = output_root.resolve()
+    if output_root.exists() and not output_root.is_dir():
+        raise ValueError(f"--output-dir must be a directory path: {output_root}")
+    RAW_DIR = output_root / "raw_text"
+    SEGMENT_DIR = output_root / "chunks"
+    GEN_DIR = output_root / "generated"
+    DEBUG_DIR = output_root / "generated" / "debug"
+    APP_DIR = output_root / "app_ready"
+    REPORT_DIR = output_root / "reports"
+    return output_root
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="UWorld Notes → Step 2 Question Generator",
@@ -1153,8 +1194,8 @@ def main() -> None:
               python3 generate_uworld_questions.py --dry-run
               python3 generate_uworld_questions.py --generate
               python3 generate_uworld_questions.py --generate --questions-per-file 15
-              python3 generate_uworld_questions.py --generate --questions-per-file 8
-              python3 generate_uworld_questions.py --generate --questions-per-file 20
+              python3 generate_uworld_questions.py --input-file input_notes/topic.md --dry-run
+              python3 generate_uworld_questions.py --input-file input_notes/topic.md --generate --output-dir /tmp/uworld-output
         """),
     )
     parser.add_argument(
@@ -1177,7 +1218,23 @@ def main() -> None:
         metavar="N",
         help="Target number of questions to generate per input file (default: 15).",
     )
+    parser.add_argument(
+        "--input-file",
+        default="",
+        help="Process one selected UWorld notes file instead of scanning input_notes/.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default="",
+        help="Optional output root. Writes raw_text/, chunks/, generated/, app_ready/, and reports/ under this directory.",
+    )
     args = parser.parse_args()
+
+    try:
+        selected_input = _resolve_selected_input(args.input_file) if args.input_file else None
+        _apply_output_dir(args.output_dir) if args.output_dir else None
+    except ValueError as exc:
+        parser.error(str(exc))
 
     if args.dry_run and args.generate:
         parser.error("--dry-run and --generate are mutually exclusive.")
@@ -1193,7 +1250,7 @@ def main() -> None:
     for d in (RAW_DIR, SEGMENT_DIR, GEN_DIR, DEBUG_DIR, APP_DIR, REPORT_DIR):
         d.mkdir(parents=True, exist_ok=True)
 
-    files = discover_input_files()
+    files = [selected_input] if selected_input else discover_input_files()
     if not files:
         log("No supported input files found in input_notes/")
         log(f"Supported formats: {', '.join(sorted(SUPPORTED_EXTENSIONS))}")

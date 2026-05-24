@@ -39,6 +39,7 @@ IMAGES_TABLES_ASSET_DIR = (
 )
 SUPPORTED_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
 SUPPORTED_ANKI_EXTS = {".txt", ".md"}
+SUPPORTED_UWORLD_EXTS = {".txt", ".md", ".rtf", ".docx"}
 SUPPORTED_DIVINE_TRANSCRIPT_EXTS = {".txt", ".md"}
 DIVINE_TIMESTAMP_RE = re.compile(r"(?<!\d)(\d{1,2}:\d{2}(?::\d{2})?)(?!\d)")
 
@@ -407,6 +408,105 @@ def anki_notes_to_normalized_chunks(input_path: Path, limit: int = 25) -> dict[s
         source_path=source_path,
         chunks=chunks,
         warnings=[] if cards else ["No Anki card rows found in source file."],
+    )
+
+
+def uworld_notes_to_normalized_chunks(input_path: Path, limit: int = 0) -> dict[str, Any]:
+    """
+    Emit normalized text chunks for UWorld notes (txt / md / rtf / docx).
+
+    v4.59: UWorld notes are pure text (user confirmed "absolutely no images,
+    just text"), so this adapter goes through the existing UWorld text
+    extractor + heading-aware splitter and emits one normalized text chunk
+    per resulting topic chunk. No image/table refs are ever populated.
+
+    The downstream UWorld generator re-splits the raw text itself; the
+    normalized chunks emitted here serve as the shared-ingestion contract
+    (BIC's chunk-count event surface + grounded sourceFile / sourcePath
+    metadata) and let the BIC recovery layer reason about per-chunk
+    progress the same way it does for Anki / OME / Mehlman.
+    """
+    input_path = input_path.resolve()
+    if input_path.suffix.lower() not in SUPPORTED_UWORLD_EXTS:
+        raise ValueError(
+            f"Unsupported UWorld notes extension: {input_path.suffix}. "
+            f"Supported: {', '.join(sorted(SUPPORTED_UWORLD_EXTS))}"
+        )
+
+    # Reuse the existing UWorld text extractor + chunker so the chunk
+    # boundaries that downstream Gemini sees match what the normalized
+    # bundle reports here.
+    uworld_dir = PROJECT_ROOT / "tools" / "uworld-notes-question-generator"
+    sys.path.insert(0, str(uworld_dir))
+    try:
+        import generate_uworld_questions as _uw  # type: ignore
+    finally:
+        # Keep sys.path tidy for subsequent dispatcher calls — but only
+        # remove if our exact insertion is still at the front.
+        if sys.path and sys.path[0] == str(uworld_dir):
+            sys.path.pop(0)
+
+    raw_text = _uw.extract_text(input_path)
+    source_file = input_path.name
+    source_path = rel(input_path)
+
+    if not raw_text.strip():
+        return build_chunk_bundle(
+            source_descriptor=get_source_descriptor("uworld_notes").to_dict(),
+            source_file=source_file,
+            source_path=source_path,
+            chunks=[],
+            warnings=[f"Empty UWorld notes file: {input_path.name}"],
+        )
+
+    text_chunks = _uw.split_into_chunks(raw_text)
+    selected = text_chunks[:limit] if limit else text_chunks
+
+    chunks: list[dict[str, Any]] = []
+    for index, item in enumerate(selected, start=1):
+        # split_into_chunks returns {chunkIndex, chunkText, charCount};
+        # the heading (if any) is inlined as the first line of chunkText.
+        text = str(item.get("chunkText") or item.get("text") or "").strip()
+        if not text:
+            continue
+        first_line = text.splitlines()[0].strip() if text else ""
+        heading = first_line if (first_line.startswith("#") or first_line.endswith(":")) else ""
+        chunk_id = f"{slugify(input_path.stem)}_uworld_topic_{index:04d}"
+        grounding = {
+            "topicIndex": index,
+            "heading": heading,
+            "sourcePath": source_path,
+        }
+        chunks.append(NormalizedChunk(
+            chunkId=chunk_id,
+            chunkType="text",
+            sourceType="uworld_notes",
+            sourceFile=source_file,
+            sourceGrounding=grounding,
+            text=text,
+            textBlocks=[
+                {"role": "heading", "text": heading},
+                {"role": "body", "text": text},
+            ],
+            imageRefs=[],
+            tableRefs=[],
+            confidence=0.85,
+            metadata={
+                "sourceFormat": "uworld-notes",
+                "topicIndex": index,
+                "heading": heading,
+                "charCount": len(text),
+                "downstreamHandoff": "shared text chunks emitted ahead of the existing UWorld generator; downstream split + question generation logic untouched",
+            },
+            warnings=[],
+        ).to_dict())
+
+    return build_chunk_bundle(
+        source_descriptor=get_source_descriptor("uworld_notes").to_dict(),
+        source_file=source_file,
+        source_path=source_path,
+        chunks=chunks,
+        warnings=[] if chunks else ["UWorld notes file produced 0 chunks after splitting."],
     )
 
 
@@ -801,6 +901,8 @@ def emit_normalized_chunks(source_type: str, input_path: Path, output_path: Path
         bundle = nbme_to_normalized_chunks(input_path, limit=limit, refresh=refresh)
     elif source_type == "anki_notes":
         bundle = anki_notes_to_normalized_chunks(input_path, limit=limit)
+    elif source_type == "uworld_notes":
+        bundle = uworld_notes_to_normalized_chunks(input_path, limit=limit)
     elif source_type == "fast_facts_pptx":
         bundle = fast_facts_to_normalized_chunks(input_path, limit=limit)
     elif source_type == "mehlman_pdf":
