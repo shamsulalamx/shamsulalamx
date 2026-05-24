@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -90,10 +91,98 @@ def run_existing_mehlman_generator(input_file: Path, mode: str, page_limit: int)
         text=True,
     )
     assert proc.stdout is not None
+    # v4.74: parse the downstream generator's stdout for known progress
+    # patterns and emit pipeline_progress events with proper counters.
+    # Previously the runner only emitted mehlman_downstream_log events with
+    # generic messages, which left the renderer with nothing better than
+    # "shared ingestion still running after Xs" heartbeats. Now the floating
+    # log shows things like "Generating questions from chunk 23/76 (page 12)".
+    _PAGE_TOTAL_RE = re.compile(r"^\s*(\d+)\s+pages\s+detected")
+    _CHUNK_TOTAL_RE = re.compile(r"^\s*(\d+)\s+chunk\(s\)\s+→")
+    _CHUNK_PROGRESS_RE = re.compile(r"^\s*Chunk\s+(\d+):\s+(\d+)\s+question\(s\)\s+generated")
+    _STAGE_RE = re.compile(r"^\s*Stage\s+(\d+):\s+(.+)$")
+    _EXTRACTING_RE = re.compile(r"Extracting pages from (.+)$")
+    _APP_READY_RE = re.compile(r"App-ready → (\S+)\s+\((\d+)\s+questions\)")
+    total_chunks = 0
+    total_pages = 0
+    cumulative_questions = 0
     for line in proc.stdout:
         message = line.rstrip("\n")
-        if message:
-            emit("mehlman_downstream_log", message=message)
+        if not message:
+            continue
+        # Always emit the raw log line so the verbose progress log keeps
+        # everything (power users can dig in if needed).
+        emit("mehlman_downstream_log", message=message)
+        # Then try to extract a hyperspecific structured event on top of it.
+        m = _CHUNK_PROGRESS_RE.match(message)
+        if m:
+            chunk_num = int(m.group(1))
+            q_count = int(m.group(2))
+            cumulative_questions += q_count
+            payload = {
+                "phase": "generating",
+                "message": f"Generated {q_count} question(s) from chunk {chunk_num}" + (f"/{total_chunks}" if total_chunks else ""),
+                "chunk": chunk_num,
+                "question": cumulative_questions,
+            }
+            if total_chunks:
+                payload["chunkTotal"] = total_chunks
+                # Mehlman default is ~1 question per chunk so chunkTotal is a
+                # reasonable estimate for questionTotal — gives the renderer's
+                # dynamic-percent bar a denominator to compute against.
+                payload["questionTotal"] = total_chunks
+            emit("pipeline_progress", **payload)
+            continue
+        m = _CHUNK_TOTAL_RE.match(message)
+        if m:
+            total_chunks = int(m.group(1))
+            emit(
+                "pipeline_progress",
+                phase="chunking",
+                message=f"Chunked text into {total_chunks} chunks",
+                chunkTotal=total_chunks,
+            )
+            continue
+        m = _PAGE_TOTAL_RE.match(message)
+        if m:
+            total_pages = int(m.group(1))
+            emit(
+                "pipeline_progress",
+                phase="extracting",
+                message=f"Extracting text from {total_pages} pages",
+                pageTotal=total_pages,
+            )
+            continue
+        m = _EXTRACTING_RE.search(message)
+        if m:
+            emit(
+                "pipeline_progress",
+                phase="extracting",
+                message=f"Extracting pages from {Path(m.group(1)).name}",
+            )
+            continue
+        m = _STAGE_RE.match(message)
+        if m:
+            stage_num = m.group(1)
+            stage_desc = m.group(2).strip()
+            phase_label = {"1": "extracting", "2": "chunking", "3": "generating"}.get(stage_num, f"stage-{stage_num}")
+            emit(
+                "pipeline_progress",
+                phase=phase_label,
+                message=f"Stage {stage_num}: {stage_desc}",
+            )
+            continue
+        m = _APP_READY_RE.search(message)
+        if m:
+            q_count = int(m.group(2))
+            emit(
+                "pipeline_progress",
+                phase="writing",
+                message=f"Wrote app-ready JSON with {q_count} questions",
+                question=q_count,
+                questionTotal=q_count,
+            )
+            continue
     code = proc.wait()
     runtime = round(time.time() - started_at, 3)
     return code, runtime, newest_app_ready_since(started_at)

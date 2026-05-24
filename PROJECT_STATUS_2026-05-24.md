@@ -1,12 +1,57 @@
 # Project Status 2026-05-24
 
-Current stable tag: `v4.73-folder-routing-fix-and-move-button-stable`
+Current stable tag: `v4.74-mehlman-progress-parser-stable`
 Current branch: `phase11-fastfacts-stability`
 Last committed HEAD: source + doc bundled in a single v4.69 commit (v4.68 / v4.67 / v4.66 / v4.65 / v4.64 / v4.63 / v4.62 still exist as prior tags). Note: the v4.65 tag still points at the pre-follow-up commit (4b18447) which is missing `electron/main.js`; the missing handlers landed as a separate follow-up commit (02fea12) that's on `phase11-fastfacts-stability` but not tagged — see the v4.65 entry below.
 
 Supersedes `docs/archive/PROJECT_STATUS_2026-05-23.md`.
 
 ## What Is New Since 2026-05-23
+
+### v4.74 — Mehlman pipeline progress parser (no more "shared ingestion still running" heartbeats)
+
+User: *"The floating job log still kept saying shared ingestion for however many seconds more than a few times. That message is useless to me. I want specific, targeted status on what the generator is doing."*
+
+This is the open follow-up I noted in v4.70 but didn't address: non-lecture pipelines don't emit `pipeline_progress` events with `page` / `chunk` / `question` counters, so the renderer falls back to generic stage_heartbeat messages ("Mehlman shared-ingestion live generation still running after 1596s") and the v4.70 smart-heartbeat workaround has nothing meaningful to surface.
+
+v4.74 fixes this for **Mehlman** specifically by adding a stdout parser to `tools/shared-ingestion/mehlman_profile_runner.py`. The runner already pipes the downstream `generate_mehlman_questions.py` stdout line-by-line as `mehlman_downstream_log` events. v4.74 extends that loop to ALSO regex-match each line against six known patterns from the downstream generator's log format:
+
+| Pattern | Emitted event |
+|---|---|
+| `\d+ pages detected` | `pipeline_progress phase=extracting pageTotal=N` |
+| `Extracting pages from <file>` | `pipeline_progress phase=extracting file=<basename>` |
+| `\d+ chunk(s) → ...` | `pipeline_progress phase=chunking chunkTotal=N` |
+| `Chunk N: M question(s) generated` | `pipeline_progress phase=generating chunk=N chunkTotal=T question=cumulative questionTotal=T` |
+| `Stage N: <desc>` | `pipeline_progress phase=<extracting/chunking/generating> message=...` |
+| `App-ready → ... (N questions)` | `pipeline_progress phase=writing question=N questionTotal=N` |
+
+The raw `mehlman_downstream_log` event still fires for every line (so the verbose progress log keeps the full history); the `pipeline_progress` event is emitted in ADDITION when a structured pattern matches.
+
+Renderer-side effects (no JS changes needed):
+
+- **Floating log panel (v4.70)** now shows: `"Generated 1 question(s) from chunk 23/76 (chunk 23/76 · q 23/76)"` instead of `"mehlman shared-ingestion still running after 1320s"`.
+- **Status bar percent (v4.65 dynamic percent)** moves smoothly from 50% → 85% as questions roll through, because cumulative `question` + `questionTotal` are now provided.
+- **Smart heartbeat (v4.70)** now has meaningful text to fall back to between progress events.
+
+Behavioural smoke-tested with mock Mehlman stdout (8 of 12 representative log lines extracted to structured events; the other 4 — "Processing:", "→ filename.txt", "Total body chars" — don't carry counter data and just go to the raw log).
+
+#### What's NOT in v4.74
+
+Other pipelines (UWorld, OME, NBME, Anki, Divine, Amboss) still emit generic heartbeats. Each will need its own runner-side parser following the same pattern. Their log formats differ enough that I'd rather see one pattern work in live use before replicating it across 5 more runners. The Mehlman fix is the proof of concept.
+
+#### Validation
+
+- `python3 -m py_compile tools/shared-ingestion/mehlman_profile_runner.py` clean.
+- Module imports cleanly with `emit` and `run_existing_mehlman_generator` callable.
+- Behavioural mock-stdout regex test: 8/12 lines correctly parsed to structured events with proper counters; 4 lines fall through to raw log only (no counter data to extract — correct behavior).
+- `.app` rebuilt with bundled Mehlman runner verified to contain the v4.74 parser markers.
+
+Live walkthrough is the pending field validation — needs an actual Mehlman generation run with the new .app to confirm the floating log shows chunk-by-chunk progress.
+
+#### Open follow-ups (deferred)
+
+- **Apply the same parser pattern to UWorld, OME, NBME, Anki, Divine, Amboss profile runners.** Each downstream generator has its own log format; one-time work per pipeline.
+- **All other open follow-ups from v4.73** still open (multi-output auto-import, IPC job.status propagation gap, Fast Facts validator over-flagging, queue-time destinationFolderId validation).
 
 ### v4.73 — Folder-routing fix (Mehlman silent-no-import + Fast Facts wrong-folder) + visible Move button
 

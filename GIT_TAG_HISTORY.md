@@ -2,7 +2,17 @@
 
 Last updated: 2026-05-24
 
-This file documents stable v4 tags from v4.0 through the current head tag `v4.73-folder-routing-fix-and-move-button-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+This file documents stable v4 tags from v4.0 through the current head tag `v4.74-mehlman-progress-parser-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+
+## v4.74-mehlman-progress-parser-stable
+
+Commit: bundled source + doc in a single v4.74 commit (see `git log -1 v4.74-mehlman-progress-parser-stable`).
+
+Meaning: Adds stdout-pattern parser to `tools/shared-ingestion/mehlman_profile_runner.py` that converts downstream `generate_mehlman_questions.py` log lines into structured `pipeline_progress` events with `chunk`/`chunkTotal`/`question`/`questionTotal`/`pageTotal` counters. Closes the user-frustration of the floating log showing only generic "shared ingestion still running after Xs" heartbeats — Mehlman runs now show "Generated 1 question(s) from chunk 23/76" etc. The raw `mehlman_downstream_log` event still fires for every line (full history in the verbose log); structured events are emitted ADDITIONALLY when a pattern matches. Six regex patterns: pages-detected, extracting-pages-from-file, chunk(s)-arrow, Chunk-N-M-questions, Stage-N-desc, App-ready-N-questions. Cumulative question count tracked across chunks (Mehlman default is ~1q/chunk) so the v4.65 dynamic-percent bar gets a denominator. v4.70 smart heartbeat now has meaningful text to surface between progress events.
+
+Validated: `python3 -m py_compile` clean. Module imports cleanly. Behavioural mock-stdout regex test: 8/12 representative Mehlman log lines correctly extracted to structured events; 4 lines fall through to raw log (no counter data — correct). `.app` rebuilt with v4.74 markers verified in bundled Mehlman runner. Live walkthrough pending.
+
+Architecture significance: Establishes the runner-side log-line-parser pattern for pipelines whose downstream generators emit text logs rather than structured events. Reusable for UWorld, OME, NBME, Anki, Divine, Amboss profile runners — each will need its own pattern set since downstream log formats differ. Cleaner long-term fix would be to update each downstream generator to emit native structured events (matching `generate_lecture_slide_questions.py`'s `emit_bic_progress(phase, message, **payload)`), but the runner-side parser is less invasive and ships per-pipeline value incrementally.
 
 ## v4.73-folder-routing-fix-and-move-button-stable
 
