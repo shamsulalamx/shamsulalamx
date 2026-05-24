@@ -671,7 +671,7 @@ Not validated by this milestone:
 
 ## v4.61-nbme-dual-pdf-stable
 
-Commits: `<source-hash>` (source) + `<doc-hash>` (doc).
+Commits: `b531f67` (source) + `413b164` (doc).
 
 Meaning: Full NBME pipeline rewrite into a single dual-PDF orchestrator. The v4.60 four-stage wrapper (OCR / chunking / normalization / app-ready) handled NBME Self-Assessment PDFs that had the answer key inline, but the user's actual NBME workflow is Q-PDF + A-PDF as two separate uploads. v4.61 introduces a single orchestrator that handles three input modes auto-detected from upload (dual / Q-only / combined), runs a five-tier extraction cascade per question, smart-triggers Gemini multimodal figure detection only where it's needed, and ALWAYS runs a canonical-polish Gemini call so every question lands with a real reviewPearl, retrievalTag, and educationalObjective rather than placeholder text.
 

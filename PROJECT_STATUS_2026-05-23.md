@@ -35,7 +35,7 @@ Renderer fix in `index.html`: `#q-stem`, `.shared-group-stem`, `.question-indivi
 
 Field-validated live BIC end-to-end through the packaged `.app` on `Medicalstudyzone.com Internal Medicine 3 Questions.pdf + Answers.pdf` (50 questions): **50/50 imported**, q9 gap-recovered, q20 (11 valid A-E + G-L choices), q26 (12 A-L), q28 + q29 (10 A-J matching sets with shared instruction prefix), q30 (tabular column-prefixed), q39 + q42 (real clinical images attached). Runtime ~13 min, ~58 Gemini calls, ~$0.30 cost.
 
-Tag commits: `<source-hash>` (source) + `<doc-hash>` (doc).
+Tag commits: `b531f67` (source) + `413b164` (doc).
 
 ### v4.60 — NBME boundary regex fix + automatic stem-image attachment (offline-validated)
 
