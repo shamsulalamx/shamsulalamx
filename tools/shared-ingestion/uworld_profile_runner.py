@@ -81,24 +81,50 @@ def parse_app_ready_json(path: Path) -> dict[str, Any]:
     return payload
 
 
-def auto_questions_per_file(input_path: Path) -> int:
-    """Auto-scale --questions-per-file based on input size for high-yield density.
+def extract_text_for_density(input_path: Path) -> tuple[str, str]:
+    """Return (extracted_text, dependency_error).
 
-    Reads the raw file, counts characters, and converts to a question target
-    using DEFAULT_CHARS_PER_QUESTION. The downstream UWorld generator then
-    splits across chunks evenly. .docx / .rtf files are read as bytes for a
-    rough chars-per-question proxy — not perfect but the bounds keep it
-    within a sensible range either way.
+    Uses the same UWorld text extractor the downstream generator uses so
+    the char count reflects actual textual content, not byte size of a
+    compressed container. .docx files in particular are zipped XML where
+    raw byte count can be 40× larger than the real text content — the
+    old auto-density math saw a 57 KB .docx file as "80 questions worth"
+    when the actual text was 1.4 KB.
+
+    If python-docx / docx2txt / striprtf are missing, extract_text returns
+    empty silently. Surface that as a dependency_error string so the
+    runner can emit a precise failure instead of treating it as
+    legitimately-empty content.
     """
+    uworld_dir = Path(__file__).resolve().parent.parent / "uworld-notes-question-generator"
+    sys.path.insert(0, str(uworld_dir))
     try:
-        if input_path.suffix.lower() in {".txt", ".md"}:
-            chars = len(input_path.read_text(encoding="utf-8", errors="replace"))
-        else:
-            # .rtf / .docx: byte count overestimates (markup), but bounded.
-            chars = input_path.stat().st_size
-    except Exception:
-        return MIN_AUTO_QUESTIONS_PER_FILE
-    target = max(MIN_AUTO_QUESTIONS_PER_FILE, chars // DEFAULT_CHARS_PER_QUESTION)
+        import generate_uworld_questions as _uw  # type: ignore
+    finally:
+        if sys.path and sys.path[0] == str(uworld_dir):
+            sys.path.pop(0)
+
+    suffix = input_path.suffix.lower()
+    if suffix == ".docx" and not getattr(_uw, "DOCX_AVAILABLE", False):
+        return "", "python-docx (or docx2txt) is required for .docx input. Install with: pip install --user python-docx"
+    if suffix == ".rtf" and not getattr(_uw, "RTF_AVAILABLE", False):
+        return "", "striprtf is required for .rtf input. Install with: pip install --user striprtf"
+
+    try:
+        text = _uw.extract_text(input_path)
+    except Exception as exc:
+        return "", f"text extraction raised: {exc}"
+    return text or "", ""
+
+
+def auto_questions_per_file(text_chars: int) -> int:
+    """Convert a known char count to a question target.
+
+    text_chars is the count of actual extracted text, NOT raw file bytes.
+    Caller is responsible for the extraction so we don't repeat the
+    parse twice.
+    """
+    target = max(MIN_AUTO_QUESTIONS_PER_FILE, text_chars // DEFAULT_CHARS_PER_QUESTION)
     return min(MAX_AUTO_QUESTIONS_PER_FILE, target)
 
 
@@ -211,8 +237,35 @@ def main() -> int:
         emit("uworld_profile_complete", ok=False, error=f"Input file not found: {input_path}")
         return 1
 
+    # v4.59 follow-up: extract text once up front so the density calc uses
+    # actual text chars (not .docx byte count, which overcounts ~40×) AND
+    # so we can fail fast with an actionable error if extraction returned
+    # empty because of a missing dependency (python-docx / striprtf).
+    extracted_text, dep_error = extract_text_for_density(input_path)
+    if dep_error:
+        emit(
+            "uworld_profile_complete",
+            ok=False,
+            error=dep_error,
+            inputPath=str(input_path),
+            hint="Missing Python dependency. Install it on the Python interpreter the .app subprocesses use (system python3 on macOS).",
+        )
+        return 1
+    extracted_chars = len(extracted_text)
+    if extracted_chars == 0 and input_path.stat().st_size > 100:
+        emit(
+            "uworld_profile_complete",
+            ok=False,
+            error=f"Extracted 0 chars of text from a non-empty {input_path.suffix} file. The file may be image-only, password-protected, or use an unsupported encoding.",
+            inputPath=str(input_path),
+            fileBytes=input_path.stat().st_size,
+        )
+        return 1
+
     questions_per_file = (
-        int(args.questions_per_file) if args.questions_per_file > 0 else auto_questions_per_file(input_path)
+        int(args.questions_per_file)
+        if args.questions_per_file > 0
+        else auto_questions_per_file(extracted_chars)
     )
 
     limit = max(0, int(args.limit or 0))
@@ -227,6 +280,7 @@ def main() -> int:
         inputPath=str(input_path),
         mode=mode,
         limit=limit,
+        extractedChars=extracted_chars,
         questionsPerFile=questions_per_file,
         densityMode="auto" if args.questions_per_file == 0 else "explicit",
     )

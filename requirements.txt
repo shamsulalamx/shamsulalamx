@@ -1,0 +1,28 @@
+# Python dependencies for the Batch Import Center generators.
+#
+# These are NOT bundled with the .app — electron-builder ships only the
+# .py source files, and each subprocess call uses the system Python
+# (`/usr/bin/python3` on macOS). Install once per machine via:
+#
+#   python3 -m pip install --user -r requirements.txt
+#
+# v4.59 documented this list after the user's first live UWorld run
+# failed silently because python-docx was missing. The downstream
+# generators gracefully degrade when an optional dep is absent (return
+# empty text + warn), which used to surface as a cryptic "did not
+# produce expected app-ready JSON" error two layers up. The v4.59
+# profile runner now fast-fails with a clear missing-dep message.
+
+# PDF extraction (Mehlman, OME, NBME, AMBOSS, Emma)
+pdfplumber>=0.11
+PyMuPDF>=1.26          # imported as `fitz`
+
+# .docx / .rtf notes (UWorld, Anki, Mehlman ad-hoc)
+python-docx>=1.0
+striprtf>=0.0.30
+
+# PowerPoint (Fast Facts)
+python-pptx>=1.0
+
+# Image processing (Images & Tables, NBME figure extraction)
+Pillow>=11.0
