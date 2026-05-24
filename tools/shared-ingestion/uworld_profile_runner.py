@@ -135,9 +135,15 @@ def auto_questions_per_file(text_chars: int) -> int:
     text_chars is the count of actual extracted text, NOT raw file bytes.
     Caller is responsible for the extraction so we don't repeat the
     parse twice.
+
+    v4.63: ceiling lifted. The 80-question cap was a cost guard that
+    prevented full coverage of dense high-yield UWorld notes (12+ KB
+    files were getting 66-80 questions when the real target should have
+    been 80-120+). The floor of 8 is preserved so short notes still get
+    rigorous coverage. MAX_AUTO_QUESTIONS_PER_FILE is kept as a soft
+    reference constant but is no longer enforced.
     """
-    target = max(MIN_AUTO_QUESTIONS_PER_FILE, text_chars // DEFAULT_CHARS_PER_QUESTION)
-    return min(MAX_AUTO_QUESTIONS_PER_FILE, target)
+    return max(MIN_AUTO_QUESTIONS_PER_FILE, text_chars // DEFAULT_CHARS_PER_QUESTION)
 
 
 def run_uworld_generator(input_path: Path, mode: str, questions_per_file: int) -> dict[str, Any]:

@@ -2,7 +2,17 @@
 
 Last updated: 2026-05-24
 
-This file documents stable v4 tags from v4.0 through the current head tag `v4.62-quiz-archive-and-icon-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+This file documents stable v4 tags from v4.0 through the current head tag `v4.63-polish-pro-and-critic-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+
+## v4.63-polish-pro-and-critic-stable
+
+Commit: bundled source + doc in a single v4.63 commit (see `git log -1 v4.63-polish-pro-and-critic-stable`).
+
+Meaning: Four pipeline-quality upgrades enabled by new Gemini API credits. (1) NBME canonical-polish call (`gemini_polish_question()`) now routes through a new `POLISH_MODEL = "gemini-2.5-pro"` constant — extraction, figure-detection, and gap-recovery stay on Flash. (2) New `_critic_polish_fields()` function gates polish output through deterministic placeholder checks plus a Flash LLM critic; if the gate fails, one regeneration attempt is made with the critic's issues fed back as a fix hint. (3) Figure detection smart-trigger gate removed — every NBME question now gets a figure-detection Gemini multimodal call regardless of stem language or embedded raster size. (4) `MAX_AUTO_QUESTIONS_PER_FILE = 80` cap removed in UWorld density (floor of 8 preserved).
+
+Validated: `python3 -m py_compile` clean on `nbme_dual_pdf_runner.py` and `uworld_profile_runner.py`. Module imports succeed with all expected attributes exposed (`POLISH_MODEL`, `CRITIC_MODEL`, `CRITIC_ENABLED`, `_critic_polish_fields`). `gemini_text` signature verified to accept the new `model: str | None = None` parameter. UWorld density behaviour confirmed via direct call (e.g. 15K chars → 100 questions, previously capped at 80). Env-var toggle `NBME_CRITIC_ENABLED=0` correctly disables the critic at import time. Live pipeline run against a real NBME PDF or UWorld doc is the pending field validation.
+
+Architecture significance: Establishes per-call model routing via a parameterized `gemini_text(model=...)` rather than the previous all-or-nothing global `GEMINI_MODEL` constant — pattern is reusable for other pipelines that want to mix Pro and Flash. Critic is purely additive: a stage 0 deterministic gate (free) plus a stage 1 LLM gate (Flash) with a one-shot regenerate; gracefully no-ops on any critic-internal failure so pipeline behaviour degrades to v4.62 if the critic is broken. Figure-detection liberalization shifts the cost vs. completeness trade-off toward "always check" because budget room now allows it.
 
 ## v4.62-quiz-archive-and-icon-stable
 

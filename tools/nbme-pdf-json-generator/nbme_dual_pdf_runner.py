@@ -59,8 +59,13 @@ sys.path.insert(0, str(SCRIPT_DIR))
 import extract_pdfs  # noqa: E402  — reuses OCR / chunker / Gemini text-norm
 import nbme_extract_figures  # noqa: E402  — reuses CV figure extractor
 
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-2.5-flash"          # default for extraction / completion / figure-detection
+POLISH_MODEL = "gemini-2.5-pro"            # v4.63: canonical-polish quality bump (reviewPearl, retrievalTag, educationalObjective)
+CRITIC_MODEL = "gemini-2.5-flash"          # v4.63: quick LLM critic of polish output
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
+
+# v4.63: critic-and-regenerate is on by default. Disable with NBME_CRITIC_ENABLED=0.
+CRITIC_ENABLED = os.environ.get("NBME_CRITIC_ENABLED", "1").strip().lower() not in ("0", "false", "no", "off", "")
 
 # ── Auto-detect heuristics ────────────────────────────────────────────────────
 
@@ -673,11 +678,17 @@ def _bump_call_count() -> None:
         )
 
 
-def gemini_text(prompt: str, max_tokens: int = 8192, temperature: float = 0.2) -> str:
-    """Plain-text Gemini call (no images)."""
+def gemini_text(prompt: str, max_tokens: int = 8192, temperature: float = 0.2, model: str | None = None) -> str:
+    """Plain-text Gemini call (no images).
+
+    v4.63: optional `model` override lets callers route the polish pass to
+    gemini-2.5-pro and the critic to gemini-2.5-flash while extraction and
+    completion stay on the default Flash model.
+    """
     _bump_call_count()
     api_key = _api_key_or_die()
-    url = f"{GEMINI_API_BASE}/{GEMINI_MODEL}:generateContent?key={api_key}"
+    use_model = (model or GEMINI_MODEL).strip()
+    url = f"{GEMINI_API_BASE}/{use_model}:generateContent?key={api_key}"
     payload = json.dumps({
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
         "generationConfig": {
@@ -830,6 +841,124 @@ stem and explanation text. If the raw explanation is sparse, write a shorter
 grounded version rather than padding."""
 
 
+# ── v4.63: critic + regenerate infrastructure ────────────────────────────────
+# Deterministic placeholder lists drawn from observed v4.60 / v4.61 failures
+# (the canonical-polish path historically emitted these strings when Gemini
+# truncated or fell into a low-confidence response).
+_PLACEHOLDER_PEARLS = {
+    "refer to the explanation.",
+    "refer to the explanation",
+    "apply the tested clinical reasoning.",
+    "apply the tested clinical reasoning",
+    "see the explanation.",
+    "see the explanation",
+    "see explanation.",
+    "see explanation",
+    "review the explanation.",
+    "review the explanation",
+    "n/a",
+    "tbd",
+    "todo",
+}
+
+_PLACEHOLDER_EDU_OBJS = {
+    "apply the tested clinical reasoning.",
+    "apply the tested clinical reasoning",
+    "demonstrate clinical reasoning.",
+    "demonstrate clinical reasoning",
+    "identify the correct answer.",
+    "identify the correct answer",
+}
+
+_CRITIC_PROMPT = """You are a strict NBME exam-quality reviewer. Below is a question stem, its choices, the correct answer, and the auto-generated polish fields. Decide if the polish fields meet a board-quality bar.
+
+QUESTION STEM:
+{stem}
+
+CHOICES:
+{choices}
+
+CORRECT ANSWER: {correct_answer}
+
+POLISH FIELDS:
+- reviewPearl: {pearl}
+- retrievalTag: {tag}
+- educationalObjective: {edu_obj}
+
+Quality bar:
+- reviewPearl must be a concise, board-relevant, hyperspecific clinical rule (NOT generic, NOT a placeholder like "refer to the explanation").
+- retrievalTag must be hyperspecific (e.g., "pheochromocytoma preoperative alpha-blockade before beta-blockade"); generic categories like "cardiology" or "treatment" are NOT acceptable.
+- educationalObjective must state the actual tested reasoning task (e.g., "identify next step in management of acute pancreatitis").
+
+Return ONLY a JSON object — first character '{{', last character '}}':
+
+{{
+  "ok": <true if all three fields meet the bar, false otherwise>,
+  "issues": [<short specific issues if any, max 5>]
+}}"""
+
+
+def _critic_polish_fields(
+    stem: str,
+    choices: list[dict[str, str]],
+    correct_answer: str,
+    polish: dict[str, Any],
+) -> tuple[bool, list[str]]:
+    """v4.63: critic gate on polish output. Returns (ok, issues).
+
+    Deterministic checks first (free, instant). LLM critic call (Flash,
+    ~$0.001) only runs if deterministic checks pass — saves cost on
+    obviously-bad outputs.
+
+    Returns (True, []) on any critic-internal failure so a flaky critic
+    never blocks a polish that already passed deterministic guards.
+    """
+    pearl = str(polish.get("reviewPearl") or "").strip()
+    tag = str(polish.get("retrievalTag") or "").strip()
+    edu_obj = str(polish.get("educationalObjective") or "").strip()
+
+    issues: list[str] = []
+
+    # Deterministic guards (free, instant).
+    if pearl.lower() in _PLACEHOLDER_PEARLS or len(pearl.split()) < 5:
+        issues.append("reviewPearl is a placeholder or too short (<5 words)")
+    tag_word_count = len(tag.split())
+    if not tag or tag_word_count < 2 or tag_word_count > 12:
+        issues.append(f"retrievalTag must be 2-12 words (got {tag_word_count})")
+    if edu_obj.lower() in _PLACEHOLDER_EDU_OBJS or len(edu_obj.split()) < 5:
+        issues.append("educationalObjective is a placeholder or too short (<5 words)")
+
+    if issues:
+        return False, issues
+
+    # LLM critic — only runs if deterministic passes.
+    choices_text = "\n".join(f"{c.get('label','?')}) {c.get('text','')}" for c in choices)
+    prompt = _CRITIC_PROMPT.format(
+        stem=stem[:1500],
+        choices=choices_text,
+        correct_answer=correct_answer or "?",
+        pearl=pearl,
+        tag=tag,
+        edu_obj=edu_obj,
+    )
+    try:
+        raw = gemini_text(prompt, max_tokens=512, model=CRITIC_MODEL)
+        if raw.strip().startswith("{"):
+            parsed = json.loads(raw)
+        else:
+            m = re.search(r"\{.*\}", raw, re.DOTALL)
+            if not m:
+                return True, []  # malformed critic response — don't block
+            parsed = json.loads(m.group(0))
+        ok = bool(parsed.get("ok"))
+        critic_issues = parsed.get("issues") or []
+        if not isinstance(critic_issues, list):
+            critic_issues = [str(critic_issues)]
+        return ok, [str(i) for i in critic_issues[:5]]
+    except Exception:
+        return True, []  # critic itself failed — don't block the polish
+
+
 def gemini_polish_question(
     stem: str,
     choices: list[dict[str, str]],
@@ -845,6 +974,13 @@ def gemini_polish_question(
     Retries on JSON parse failures (same pattern as gemini_complete_q_only).
     On total failure, returns an empty-canonical dict so the caller can
     proceed with placeholder values rather than dropping the question.
+
+    v4.63: routed to gemini-2.5-pro (POLISH_MODEL) for higher-quality
+    reviewPearl / retrievalTag / educationalObjective output. After a
+    successful polish, a Flash critic call (CRITIC_MODEL, gated by
+    CRITIC_ENABLED) scores the output against a rubric; if the critic
+    finds issues, ONE regeneration attempt is made with the critic's
+    issues fed back as a fix hint. Disable via NBME_CRITIC_ENABLED=0.
     """
     choices_text = "\n".join(f"{c['label']}) {c['text']}" for c in choices)
     base_prompt = _POLISH_PROMPT.format(
@@ -854,6 +990,7 @@ def gemini_polish_question(
         explanation=explanation_text[:6000] if explanation_text else "(no raw explanation available)",
     )
     last_err: Exception | None = None
+    parsed: dict[str, Any] | None = None
     for attempt in range(retries + 1):
         prompt = base_prompt
         if attempt > 0:
@@ -868,20 +1005,46 @@ def gemini_polish_question(
             # routinely overflows 2048 tokens and triggers Gemini to truncate
             # mid-string. 4096 tokens fits even the longest matching-set polish
             # responses observed in field testing.
-            raw = gemini_text(prompt, max_tokens=4096)
-            return json.loads(raw)
+            raw = gemini_text(prompt, max_tokens=4096, model=POLISH_MODEL)
+            parsed = json.loads(raw)
+            break
         except json.JSONDecodeError as exc:
             last_err = exc
             try:
                 m = re.search(r"\{.*\}", raw, re.DOTALL)
                 if m:
-                    return json.loads(m.group(0))
+                    parsed = json.loads(m.group(0))
+                    break
             except Exception:
                 pass
             continue
         except Exception as exc:
             last_err = exc
             continue
+
+    # v4.63: critic + regenerate gate. Only runs on the success path with
+    # parsed JSON. Critic itself is best-effort — if it fails internally
+    # the polish is accepted unchanged. Regeneration is capped at 1.
+    if parsed is not None and CRITIC_ENABLED:
+        ok, issues = _critic_polish_fields(stem, choices, correct_answer, parsed)
+        if not ok:
+            try:
+                fix_prompt = base_prompt + (
+                    "\n\nIMPORTANT: a previous attempt produced low-quality polish "
+                    "fields. Fix these specific issues this time:\n"
+                    + "\n".join(f"- {issue}" for issue in issues[:5])
+                    + "\nReturn ONLY the JSON object."
+                )
+                raw = gemini_text(fix_prompt, max_tokens=4096, model=POLISH_MODEL)
+                regen = json.loads(raw)
+                parsed = regen  # trust regen (cap of 1 retry — no loops)
+            except Exception:
+                # Regen failed — keep the original parsed output.
+                pass
+
+    if parsed is not None:
+        return parsed
+
     # Total polish failure — try a tiny salvage call that asks Gemini for
     # JUST the meta fields (pearl, tag, eduObj). Much smaller response,
     # less chance of truncation. The big explanation text we already have
@@ -903,13 +1066,13 @@ def gemini_polish_question(
     salvage_tag = ""
     salvage_obj = ""
     try:
-        raw = gemini_text(salvage_prompt, max_tokens=512)
-        parsed = json.loads(raw) if raw.strip().startswith("{") else json.loads(
+        raw = gemini_text(salvage_prompt, max_tokens=512, model=POLISH_MODEL)
+        parsed_salvage = json.loads(raw) if raw.strip().startswith("{") else json.loads(
             re.search(r"\{.*\}", raw, re.DOTALL).group(0)
         )
-        salvage_pearl = str(parsed.get("reviewPearl") or "").strip()
-        salvage_tag = str(parsed.get("retrievalTag") or "").strip()
-        salvage_obj = str(parsed.get("educationalObjective") or "").strip()
+        salvage_pearl = str(parsed_salvage.get("reviewPearl") or "").strip()
+        salvage_tag = str(parsed_salvage.get("retrievalTag") or "").strip()
+        salvage_obj = str(parsed_salvage.get("educationalObjective") or "").strip()
     except Exception:
         pass
     return {
@@ -1484,10 +1647,13 @@ def detect_and_attach_figures(
 
     for q_num, page_num in question_number_to_page.items():
         stem = stems_by_q.get(q_num, "")
+        # v4.63: liberalized — figure detection now runs on EVERY question,
+        # not just smart-triggered ones. Catches cases where the stem describes
+        # a finding without naming "the photograph" or similar trigger words.
+        # The has_image_lang / has_embedded booleans are still computed because
+        # downstream code may use them for logging or confidence scoring.
         has_image_lang = bool(_IMAGE_LANGUAGE_RE.search(stem))
         has_embedded = page_has_embedded_raster(pdf_path, page_num)
-        if not (has_image_lang or has_embedded):
-            continue
         try:
             page_png = render_page_to_png(pdf_path, page_num, render_dir)
             detected = gemini_detect_figures(page_png)
