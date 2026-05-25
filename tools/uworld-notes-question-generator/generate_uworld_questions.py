@@ -67,11 +67,15 @@ GEMINI_MODEL    = "gemini-2.5-flash"
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 
 # v4.79: Vertex AI migration — backend selection + connection config.
-# GEMINI_BACKEND defaults to "ai_studio" (current behavior). Flip to "vertex"
-# to route every Gemini call through Vertex AI / Application Default Credentials
-# instead of an API key. Cascades to Mehlman, OME, Anki, Divine (text path)
-# since they all import _uw and reuse call_gemini_with_retry.
-GEMINI_BACKEND   = os.environ.get("GEMINI_BACKEND", "ai_studio").strip().lower()
+# CUTOVER: default flipped from "ai_studio" → "vertex" after Stage 2 + Phase D
+# validation passed end-to-end (Divine audio transcription in 42s, smoke tests
+# clean on both backends, side-by-side prose-quality comparison favored Vertex
+# with thinking mode enabled). User explicitly committed to Vertex regardless
+# of any non-fatal output quirks; the $300 Free Trial absorbs all usage cost.
+# To roll back to AI Studio for any single run, set: GEMINI_BACKEND=ai_studio.
+# The AI Studio code path stays as a fallback for ~1 week post-cutover, then
+# gets removed entirely.
+GEMINI_BACKEND   = os.environ.get("GEMINI_BACKEND", "vertex").strip().lower()
 GCP_PROJECT_ID   = os.environ.get("GCP_PROJECT_ID", "shamsulalamx").strip()
 GCP_REGION       = os.environ.get("GCP_REGION", "us-central1").strip()
 _gemini_client_singleton: Any = None
