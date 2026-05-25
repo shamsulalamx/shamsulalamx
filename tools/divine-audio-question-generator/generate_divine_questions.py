@@ -904,13 +904,31 @@ def main() -> None:
     ):
         d.mkdir(parents=True, exist_ok=True)
 
-    # ── API key check ──────────────────────────────────────────────────────────
+    # ── API key / auth check ──────────────────────────────────────────────────
+    # v4.79: backend-aware. AI Studio needs GEMINI_API_KEY env var; Vertex
+    # uses Application Default Credentials (gcloud auth) instead, so the key
+    # is irrelevant. We only fail-fast on missing auth when the chosen backend
+    # would actually need it.
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
     needs_api = not (args.dry_run or args.chunk_only)
-    if needs_api and not api_key:
-        _uw.log("ERROR: GEMINI_API_KEY is required for this mode.")
-        _uw.log("Set with: export GEMINI_API_KEY=your_key_here")
-        sys.exit(1)
+    if needs_api:
+        backend = _uw.GEMINI_BACKEND
+        if backend == "ai_studio" and not api_key:
+            _uw.log("ERROR: GEMINI_API_KEY is required for the ai_studio backend.")
+            _uw.log("Set with: export GEMINI_API_KEY=your_key_here")
+            _uw.log("Or switch to Vertex: export GEMINI_BACKEND=vertex")
+            sys.exit(1)
+        if backend == "vertex":
+            # Sanity check: Vertex needs ADC. _gemini_client() will raise a
+            # detailed error from inside, but doing one upfront probe here
+            # lets us fail fast with a clear message before the user waits
+            # through chunking + upload only to die at the first call.
+            try:
+                _uw._gemini_client()  # constructs client, doesn't call API
+            except EnvironmentError as e:
+                _uw.log(f"ERROR: Vertex backend not ready: {e}")
+                _uw.log("Run: gcloud auth application-default login")
+                sys.exit(1)
 
     report_data: Dict = {
         "runTimestamp": datetime.now().isoformat(),
