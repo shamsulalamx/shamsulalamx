@@ -2,9 +2,27 @@
 
 Last updated: 2026-05-25
 
-This file documents stable v4 tags from v4.0 through the current head tag `v4.80-ux-fixes-and-renderer-vertex-pending-validation`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+This file documents stable v4 tags from v4.0 through the current head tag `v4.80.1-async-prompt-scope-fix-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
 
-Note on the recent v4.62–v4.80 batch: many of these tags shipped with source-level proof only (`node --check` clean + `.app` rebuilt + bundled-marker count). That is NOT verification of behavior, and several of those tags introduced regressions caught only when the user exercised the scenarios live. Going forward, tags labeled `-stable` should mean a live walkthrough was completed; otherwise, use `-source` or `-pending-validation` suffixes.
+Note on the recent v4.62–v4.80 batch: many of these tags shipped with source-level proof only (`node --check` clean + `.app` rebuilt + bundled-marker count). That is NOT verification of behavior, and several of those tags introduced regressions caught only when the user exercised the scenarios live. v4.80.1 codified this as a binding rule via the new `CLAUDE.md` working-agreement file: no `-stable` suffix without user click-through verification.
+
+## v4.80.1-async-prompt-scope-fix-stable
+
+Commit: bundled source + doc in a single v4.80.1 commit on branch `phase12-vertex-migration` (see `git log -1 v4.80.1-async-prompt-scope-fix-stable`).
+
+Meaning: Critical hotfix to v4.80's `asyncPrompt` (the Promise-based `prompt()` replacement). v4.80.0 added the helper to the wrong scope — outside the `App` IIFE — by matching on a non-unique anchor (`escapeHTML`, which exists twice in the file: once at top level, once inside App). The App-internal callers (`renameFolder`, `startRenameTest`, `renameSourceFolder`, `miscFolderRename`, `miscFolderCreate`, `handleBatchImportFolderChange`) all threw `ReferenceError: asyncPrompt is not defined` on every rename click. `node --check` passed because the function existed somewhere; static grep counts confirmed presence in the file; but no runtime check was done to confirm reachability from the calling scope. The bug was caught only when the user clicked rename in the v4.80 build and got the runtime error.
+
+Fix: relocate `asyncPrompt` from line 8583 (outer scope, next to top-level `escapeHTML`) to line 9751 (inside App IIFE, next to App's own `escapeHTML`). All call sites unchanged. Scope verified via:
+```bash
+awk '/^const App = \(\(\)/{app=NR}/function asyncPrompt/{p=NR}END{print (p>app?"INSIDE":"OUTSIDE")}' index.html
+```
+Plus check for zero IIFE close (`})();`) between App start (line 9293) and asyncPrompt (line 9751).
+
+Companion change: new `CLAUDE.md` working-agreement file in repo root documents the verification protocol that this bug exposed as missing. Future Claude sessions read it first. Key rules: no commit/tag/push without user click-through verification; scope-sensitive edits require explicit scope check; Edit anchors must be unique or expanded to be unique; `-stable` only after live walkthrough.
+
+Validated: User click-through confirmed rename on subfolder ✓ AND rename on quiz card ✓ both produce the asyncPrompt modal, accept input, and rename successfully. First v4.x tag in many versions to ship with `-stable` suffix earned via actual user behavioral verification rather than static-check inference.
+
+Architecture significance: Establishes the **scope-verification step** as mandatory before any code-addition Edit. Adds the **CLAUDE.md binding protocol** pattern — a file at repo root that all future Claude sessions read first, encoding hard rules learned from past failures. Reinforces the **user-as-verification-step** model for any UI-facing change in an Electron app (where automated click-through is not possible).
 
 ## v4.80-ux-fixes-and-renderer-vertex-pending-validation
 

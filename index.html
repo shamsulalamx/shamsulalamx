@@ -8573,50 +8573,14 @@ const Results = (() => {
     }[ch]));
   }
 
-  // v4.80: Promise-based replacement for window.prompt(). Electron renderer
-  // disabled window.prompt() permanently ("Prompt() is and will not be
-  // supported.") and every call site that used it was silently broken
-  // (rename folder, rename test, new subfolder, etc.). This helper drives
-  // #modal-async-prompt and resolves with the typed string OR null on
-  // cancel. All previous prompt() call sites in this file have been
-  // migrated to `await asyncPrompt(...)`.
-  function asyncPrompt(label, defaultValue) {
-    return new Promise((resolve) => {
-      const modal = document.getElementById('modal-async-prompt');
-      const labelEl = document.getElementById('async-prompt-label');
-      const inputEl = document.getElementById('async-prompt-input');
-      const okBtn = document.getElementById('async-prompt-ok');
-      const cancelBtn = document.getElementById('async-prompt-cancel');
-      if (!modal || !labelEl || !inputEl || !okBtn || !cancelBtn) {
-        console.error('[asyncPrompt] modal element missing in DOM');
-        resolve(null);
-        return;
-      }
-      labelEl.textContent = String(label || 'Enter value');
-      inputEl.value = String(defaultValue || '');
-      modal.style.display = 'flex';
-      setTimeout(() => { try { inputEl.focus(); inputEl.select(); } catch(_) {} }, 30);
-
-      const cleanup = () => {
-        modal.style.display = 'none';
-        okBtn.removeEventListener('click', onOk);
-        cancelBtn.removeEventListener('click', onCancel);
-        inputEl.removeEventListener('keydown', onKey);
-        modal.removeEventListener('click', onBackdrop);
-      };
-      const onOk = () => { const v = inputEl.value; cleanup(); resolve(v); };
-      const onCancel = () => { cleanup(); resolve(null); };
-      const onKey = (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); onOk(); }
-        else if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
-      };
-      const onBackdrop = (e) => { if (e.target === modal) onCancel(); };
-      okBtn.addEventListener('click', onOk);
-      cancelBtn.addEventListener('click', onCancel);
-      inputEl.addEventListener('keydown', onKey);
-      modal.addEventListener('click', onBackdrop);
-    });
-  }
+  // v4.80.1: asyncPrompt definition removed from this OUTER scope and moved
+  // to its correct location INSIDE the App IIFE (next to App's own
+  // escapeHTML). See the v4.80.1 comment block there for full context.
+  // This file has two escapeHTML functions in different scopes; the previous
+  // v4.80.0 commit accidentally placed asyncPrompt next to this one (the
+  // top-level one), which made it inaccessible from App.renameFolder /
+  // App.startRenameTest — those call sites threw "asyncPrompt is not
+  // defined" on every rename click.
 
   function getRetrievalTag(q) {
     return (q && (q.retrievalTag || q.metadata?.retrievalTag)) || '';
@@ -9774,6 +9738,52 @@ const App = (() => {
     return String(str || '').replace(/[&<>"']/g, ch => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
     }[ch]));
+  }
+
+  // v4.80.1: Promise-based replacement for window.prompt(). Electron renderer
+  // disabled window.prompt() permanently ("Prompt() is and will not be
+  // supported.") so the prior prompt() callsites in this file (rename folder,
+  // rename test, new subfolder, etc.) all failed silently or with that error.
+  // v4.80.0 added this helper but to the WRONG scope (outside the App IIFE)
+  // so renameFolder/startRenameTest threw "asyncPrompt is not defined". This
+  // v4.80.1 placement (inside App, next to App's escapeHTML) is what the
+  // call sites actually have access to.
+  function asyncPrompt(label, defaultValue) {
+    return new Promise((resolve) => {
+      const modal = document.getElementById('modal-async-prompt');
+      const labelEl = document.getElementById('async-prompt-label');
+      const inputEl = document.getElementById('async-prompt-input');
+      const okBtn = document.getElementById('async-prompt-ok');
+      const cancelBtn = document.getElementById('async-prompt-cancel');
+      if (!modal || !labelEl || !inputEl || !okBtn || !cancelBtn) {
+        console.error('[asyncPrompt] modal element missing in DOM');
+        resolve(null);
+        return;
+      }
+      labelEl.textContent = String(label || 'Enter value');
+      inputEl.value = String(defaultValue || '');
+      modal.style.display = 'flex';
+      setTimeout(() => { try { inputEl.focus(); inputEl.select(); } catch(_) {} }, 30);
+
+      const cleanup = () => {
+        modal.style.display = 'none';
+        okBtn.removeEventListener('click', onOk);
+        cancelBtn.removeEventListener('click', onCancel);
+        inputEl.removeEventListener('keydown', onKey);
+        modal.removeEventListener('click', onBackdrop);
+      };
+      const onOk = () => { const v = inputEl.value; cleanup(); resolve(v); };
+      const onCancel = () => { cleanup(); resolve(null); };
+      const onKey = (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); onOk(); }
+        else if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
+      };
+      const onBackdrop = (e) => { if (e.target === modal) onCancel(); };
+      okBtn.addEventListener('click', onOk);
+      cancelBtn.addEventListener('click', onCancel);
+      inputEl.addEventListener('keydown', onKey);
+      modal.addEventListener('click', onBackdrop);
+    });
   }
 
   // ── Views ──────────────────────────────────────────────────
