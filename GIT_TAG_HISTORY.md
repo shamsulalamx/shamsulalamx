@@ -2,9 +2,25 @@
 
 Last updated: 2026-05-25
 
-This file documents stable v4 tags from v4.0 through the current head tag `v4.80.1-async-prompt-scope-fix-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
+This file documents stable v4 tags from v4.0 through the current head tag `v4.80.2-nbme-pair-detection-fix-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
 
-Note on the recent v4.62–v4.80 batch: many of these tags shipped with source-level proof only (`node --check` clean + `.app` rebuilt + bundled-marker count). That is NOT verification of behavior, and several of those tags introduced regressions caught only when the user exercised the scenarios live. v4.80.1 codified this as a binding rule via the new `CLAUDE.md` working-agreement file: no `-stable` suffix without user click-through verification.
+Note on the recent v4.62–v4.80 batch: many of these tags shipped with source-level proof only (`node --check` clean + `.app` rebuilt + bundled-marker count). That is NOT verification of behavior, and several of those tags introduced regressions caught only when the user exercised the scenarios live. v4.80.1 codified this as a binding rule via the new `CLAUDE.md` working-agreement file: no `-stable` suffix without user click-through verification. v4.80.2 follows that rule — tag earned via real "Detected 1 NBME pair" UI confirmation by the user after re-selecting files in the rebuilt .app.
+
+## v4.80.2-nbme-pair-detection-fix-stable
+
+Commit: bundled source + doc in a single v4.80.2 commit on branch `phase12-vertex-migration` (see `git log -1 v4.80.2-nbme-pair-detection-fix-stable`).
+
+Meaning: Hotfix to the BIC renderer-side NBME pair detection. Pre-v4.80.2 the regexes in `detectNbmePairs()` (index.html line 23488) only allowed `[_\s\-]` (underscore, space, dash) immediately before the Q/A role suffix — so filenames like `NBME 3Q.pdf` / `NBME 3A.pdf` (where the suffix attaches directly to a digit) were NOT detected as a Q+A pair. Both files got marked `role=null` and were enqueued as 2 separate standalone single-PDF jobs, which the NBME dual runner couldn't pair downstream. User saw `"Detected 0 NBME pairs + 2 standalone. Queue Files will enqueue 2 jobs."` and stopped before clicking Queue.
+
+Fix: regex updated to use a lookbehind that includes digits — `(?<=^|[_\s\-\d])Q(?=[._\s\-]|$)`. The lookbehind keeps the digit OUT of the consumed match, so `stripRole()` produces a stem of `"nbme 3"` (not `"nbme"`), allowing multi-pair uploads (NBME 1 + NBME 2 + NBME 3 in one selection) to group correctly by stem instead of collapsing all three pairs into a single 6-file group that would fail the `length === 2` pair check.
+
+Validated:
+1. Runtime test (no rebuild needed): 9 filename test cases ran through a standalone Node REPL with the new regex — `NBME 3A`/`3Q` correctly paired, `NBME 1A/Q + 2A/Q + 3A/Q` correctly paired as 3 separate pairs, `test_Q/A.pdf` (pre-v4.80.2 pattern) still works (backwards compat), unknown filenames still go standalone (no false positives).
+2. `node --check` clean.
+3. .app rebuilt; source ↔ bundle MD5 match; updated regex with `\d` in lookbehind verified in bundled `index.html`.
+4. **User click-through**: re-selected `NBME 3A.pdf` + `NBME 3Q.pdf` in the rebuilt .app, UI showed `"Detected 1 NBME pair + 0 standalone. Queue Files will enqueue 1 job."` ✓ Hence `-stable` suffix.
+
+Architecture significance: Establishes the **runtime-test-before-rebuild** pattern for any regex change — run the new pattern through Node directly to validate input/output, not just `node --check` to confirm syntax. Reinforces the **user-as-verification-step** rule from CLAUDE.md: the .app rebuild + user click-through caught any subtle mistakes that the Node REPL test might have missed.
 
 ## v4.80.1-async-prompt-scope-fix-stable
 

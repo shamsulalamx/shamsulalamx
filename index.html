@@ -23486,8 +23486,17 @@ const App = (() => {
   // and 1 A-file with the same base) are kept as standalone to avoid
   // surprising the user.
   function detectNbmePairs(filePaths) {
-    const Q_RE = /(?:\b(?:questions?|stems?)\b|(?:^|[_\s\-])Q(?=[._\s\-]|$))/i;
-    const A_RE = /(?:\b(?:answers?|key|explanations?)\b|(?:^|[_\s\-])A(?=[._\s\-]|$))/i;
+    // v4.80.2: regex updated to accept a digit immediately before Q/A so
+    // filenames like "NBME 3Q.pdf" / "NBME 3A.pdf" pair correctly.
+    // Pre-v4.80.2: only [_\s\-] before Q/A was accepted, so digit-attached
+    // suffixes ("3Q", "3A") were missed → both files marked standalone →
+    // 2 separate jobs enqueued instead of 1 paired job.
+    // Lookbehind keeps the digit OUT of the consumed match so the stripped
+    // stem retains the test number ("nbme 3"), letting multi-test uploads
+    // (NBME 1 pair + NBME 2 pair + NBME 3 pair in one selection) group
+    // correctly by stem instead of all collapsing to "nbme".
+    const Q_RE = /(?:\b(?:questions?|stems?)\b|(?<=^|[_\s\-\d])Q(?=[._\s\-]|$))/i;
+    const A_RE = /(?:\b(?:answers?|key|explanations?)\b|(?<=^|[_\s\-\d])A(?=[._\s\-]|$))/i;
 
     const cleanBase = function(p) {
       const name = String(p || '').split(/[\\/]/).pop() || '';
