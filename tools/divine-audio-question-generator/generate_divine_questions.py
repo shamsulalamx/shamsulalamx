@@ -56,13 +56,30 @@ sys.path.insert(0, str(_UW_DIR))
 import generate_uworld_questions as _uw  # noqa: E402
 
 # v4.79: Vertex migration — google-genai SDK types for the multimodal calls
-# (transcription via fileData). The Files API upload path still uses raw
-# urllib (deferred to Phase D — needs GCS bucket).
+# (transcription via fileData/fileUri). When GEMINI_BACKEND=vertex, audio
+# uploads land in GCS (gs:// URI) and the SDK consumes that URI directly;
+# when GEMINI_BACKEND=ai_studio, the original AI Studio Files API resumable
+# upload + https:// URI path is preserved as a fallback.
 try:
     from google.genai import types as _genai_types  # noqa: E402
     _GENAI_SDK_AVAILABLE = True
 except ImportError:
     _GENAI_SDK_AVAILABLE = False
+
+# v4.79 Phase D: google-cloud-storage for Vertex-mode audio uploads.
+# Optional — only required when GEMINI_BACKEND=vertex; AI Studio fallback
+# doesn't need it.
+try:
+    from google.cloud import storage as _gcs_storage  # noqa: E402
+    _GCS_SDK_AVAILABLE = True
+except ImportError:
+    _GCS_SDK_AVAILABLE = False
+
+# GCS bucket where Divine audio gets staged. Lifecycle rule on the bucket
+# auto-deletes objects after 1 day (mirrors AI Studio Files API's 48-hour
+# auto-delete with a tighter window). Bucket must be in the same region
+# as Vertex (us-central1) to avoid cross-region transfer costs.
+_GCS_BUCKET = os.environ.get("GCS_BUCKET", "shamsulalamx-divine-audio").strip()
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 _BASE      = Path(__file__).parent
@@ -360,19 +377,131 @@ def _transcribe_with_gemini(file_uri: str, mime_type: str, api_key: str) -> str:
     return parts[0].get("text", "")
 
 
+# ── v4.79 Phase D: GCS upload path (Vertex backend) ───────────────────────────
+
+def _upload_audio_to_gcs(filepath: Path) -> str:
+    """Upload audio to GCS, return its gs:// URI.
+
+    Used when GEMINI_BACKEND=vertex. Replaces the AI Studio Files API
+    two-step resumable upload with a single google-cloud-storage upload.
+    GCS uploads are atomic and synchronous — no state polling needed.
+
+    The bucket lifecycle rule (1-day delete) handles cleanup automatically.
+
+    Raises:
+        EnvironmentError: if google-cloud-storage SDK isn't installed.
+        google.cloud.exceptions.NotFound: if bucket doesn't exist (one-time
+            setup: `gcloud storage buckets create gs://<bucket-name>
+            --location=us-central1`).
+    """
+    if not _GCS_SDK_AVAILABLE:
+        raise EnvironmentError(
+            "GEMINI_BACKEND=vertex requires google-cloud-storage. "
+            "Install with: pip install google-cloud-storage"
+        )
+    file_size = filepath.stat().st_size
+    _uw.log(f"    Size: {file_size / (1024 * 1024):.1f} MB  MIME: {_detect_mime_type(filepath)}")
+    _uw.log(f"    Target: gs://{_GCS_BUCKET}/divine-audio/{filepath.name}")
+
+    client = _gcs_storage.Client(project=_uw.GCP_PROJECT_ID)
+    bucket = client.bucket(_GCS_BUCKET)
+    blob_name = f"divine-audio/{filepath.name}"
+    blob = bucket.blob(blob_name)
+    blob.upload_from_filename(str(filepath), content_type=_detect_mime_type(filepath))
+    gs_uri = f"gs://{_GCS_BUCKET}/{blob_name}"
+    _uw.log(f"    Upload complete: {gs_uri}")
+    return gs_uri
+
+
+def _transcribe_with_vertex(gs_uri: str, mime_type: str) -> str:
+    """Transcribe audio via Vertex AI generateContent with a gs:// fileUri.
+
+    Used when GEMINI_BACKEND=vertex. Replaces the AI Studio
+    _transcribe_with_gemini path. The SDK accepts gs:// URIs directly via
+    Part.from_uri — no special handling needed beyond providing the URI.
+
+    Preserves all the pre-v4.79 behavior:
+      - 65536 max output tokens (max for gemini-2.5-flash)
+      - MAX_TOKENS truncation warning
+      - Custom prompt from prompts/transcribe_audio_prompt.txt with fallback
+    """
+    if not _GENAI_SDK_AVAILABLE:
+        raise EnvironmentError(
+            "google-genai SDK not installed. Install with: pip install google-genai"
+        )
+    prompt_path = PROMPTS_DIR / "transcribe_audio_prompt.txt"
+    if prompt_path.exists():
+        prompt = prompt_path.read_text(encoding="utf-8").strip()
+    else:
+        prompt = (
+            "Transcribe this medical podcast completely and verbatim. "
+            "Output only the spoken content as plain text paragraphs."
+        )
+
+    client = _uw._gemini_client()
+    response = client.models.generate_content(
+        model=_uw.GEMINI_MODEL,
+        contents=[
+            _genai_types.Part.from_uri(file_uri=gs_uri, mime_type=mime_type),
+            prompt,
+        ],
+        config=_genai_types.GenerateContentConfig(
+            temperature=0.1,
+            # max output for gemini-2.5-flash. Long episodes (>~3hrs) may
+            # still hit this; the MAX_TOKENS check below catches that.
+            max_output_tokens=65536,
+            # v4.79: thinking enabled. Transcription benefits less than
+            # question-gen but doesn't hurt — model can reason about
+            # ambiguous audio segments.
+            thinking_config=_genai_types.ThinkingConfig(thinking_budget=-1),
+        ),
+    )
+
+    # MAX_TOKENS truncation detection — preserved from pre-v4.79.
+    candidates = getattr(response, "candidates", None) or []
+    if candidates:
+        finish = str(getattr(candidates[0], "finish_reason", "") or "")
+        if "MAX_TOKENS" in finish.upper():
+            _uw.warn(
+                "Transcription output was truncated (MAX_TOKENS). "
+                "Episode may be > ~3 hours. Transcript is incomplete."
+            )
+
+    text = getattr(response, "text", None)
+    return str(text or "")
+
+
 def transcribe_audio(filepath: Path) -> str:
     """
-    Full audio transcription pipeline: upload → poll → generateContent.
-    Returns raw transcription text.
-    Does NOT save to disk — caller saves the returned text.
+    Full audio transcription pipeline: upload → generateContent → text.
+    Returns raw transcription text. Does NOT save to disk — caller saves.
+
+    v4.79: now dispatches on GEMINI_BACKEND.
+      - vertex: upload to GCS bucket, transcribe via Vertex with gs:// URI
+      - ai_studio: original AI Studio Files API resumable upload + transcribe
+
+    Both paths produce identical transcript text; only the storage + auth
+    layer differs. AI Studio path stays as a fallback through the cutover
+    window — remove ~1 week post-Vertex-stable.
     """
-    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
-    if not api_key:
-        raise EnvironmentError("GEMINI_API_KEY is not set")
+    backend = _uw.GEMINI_BACKEND
 
     mime_type = _detect_mime_type(filepath)
     size_mb = filepath.stat().st_size / (1024 * 1024)
-    _uw.log(f"  Uploading {filepath.name} ({size_mb:.1f} MB, {mime_type})...")
+    _uw.log(f"  Uploading {filepath.name} ({size_mb:.1f} MB, {mime_type}) via {backend}...")
+
+    if backend == "vertex":
+        # v4.79 Phase D: GCS + Vertex path. Atomic upload (no polling).
+        gs_uri = _upload_audio_to_gcs(filepath)
+        _uw.log("  Transcribing via Vertex AI...")
+        transcript = _transcribe_with_vertex(gs_uri, mime_type)
+        _uw.log(f"  Transcription done: {len(transcript):,} chars")
+        return transcript
+
+    # AI Studio fallback path (pre-v4.79 behavior, preserved verbatim).
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        raise EnvironmentError("GEMINI_API_KEY is not set (required for ai_studio backend)")
 
     file_meta = _upload_audio_file(filepath, api_key)
     file_name = file_meta["name"]
@@ -383,7 +512,7 @@ def transcribe_audio(filepath: Path) -> str:
         _uw.log("  Waiting for file processing...")
         file_meta = _poll_file_active(file_name, api_key)
 
-    _uw.log("  Transcribing with Gemini...")
+    _uw.log("  Transcribing via AI Studio...")
     transcript = _transcribe_with_gemini(file_uri, mime_type, api_key)
     _uw.log(f"  Transcription done: {len(transcript):,} chars")
     return transcript
