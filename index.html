@@ -1309,6 +1309,23 @@ body.quiz-fullscreen-mode .modal-overlay {
   z-index: 10000;
 }
 
+/* v4.80: pause overlay needs to clear the focus-mode z-index too.
+   Pre-v4.80 bug: clicking Pause while in focus mode set the overlay's
+   display:flex but the focus-mode screen (z-index:9999) covered it —
+   so the user saw NO pause UI until they exited focus mode. Now the
+   pause overlay sits above focus mode and shows immediately. */
+body.quiz-fullscreen-mode #overlay-pause {
+  z-index: 10001 !important;
+}
+
+/* v4.80: async-prompt modal sits above EVERYTHING — pause overlay,
+   focus mode, regular modals — so it works regardless of current UI
+   state. Used to replace window.prompt() calls (Electron renderer
+   disabled window.prompt). */
+#modal-async-prompt {
+  z-index: 10100 !important;
+}
+
 /* ── v4.70: Floating Log Panel ──────────────────────────────────────────── */
 /* Bottom-left companion to the bottom-right jobs widget. Persistent live
    stream of pipeline progress events so the user can see WHAT the pipeline
@@ -2068,6 +2085,23 @@ body.quiz-fullscreen-mode .modal-overlay {
     </div><!-- lab-body -->
   </div><!-- lab-panel -->
 </div><!-- modal-lab -->
+
+<!-- ═══ v4.80: ASYNC PROMPT MODAL (replaces window.prompt) ═══
+     Electron's renderer process disabled window.prompt() permanently — calls
+     hang or throw "Prompt() is and will not be supported." This modal +
+     App.asyncPrompt() Promise-based helper replaces every prompt() callsite
+     in the renderer. z-index 10100 sits above the pause overlay (10001) and
+     focus mode (9999) so it works mid-quiz too. -->
+<div id="modal-async-prompt" class="modal-overlay" style="display:none;">
+  <div class="modal-box" style="max-width:420px;">
+    <h3 id="async-prompt-label" style="font-size:14px;margin-bottom:12px;">Enter value</h3>
+    <input type="text" id="async-prompt-input" class="form-input" style="width:100%;margin-bottom:12px;" autocomplete="off">
+    <div class="modal-actions" style="justify-content:flex-end;gap:8px;">
+      <button class="btn-modal" id="async-prompt-cancel">Cancel</button>
+      <button class="btn-modal primary" id="async-prompt-ok">OK</button>
+    </div>
+  </div>
+</div>
 
 <!-- ═══ PAUSE OVERLAY ═══ -->
 <div id="overlay-pause" style="display:none;position:fixed;inset:0;background:rgba(26,58,92,.97);z-index:500;align-items:center;justify-content:center;">
@@ -4235,7 +4269,22 @@ window.MiscDocStore = MiscDocStore;
     // 'https://your-static-host.example.com',  // ← add your deployed origin here
   ];
   const DRIVE_CLIENT_ID = '274374578651-5edirahp87c5hpv69donfpvcr81tmidk.apps.googleusercontent.com';
-  const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+  // v4.80: scope extended to include cloud-platform so the same OAuth token
+  // that authenticates Drive sync can ALSO authenticate Vertex AI calls
+  // (renderer-side hints + autotagging). One auth flow, one token, two
+  // services. Pre-v4.80 the renderer hit AI Studio with a separate API key
+  // (db.settings.geminiApiKey). Now it prefers the Drive token + Vertex
+  // (absorbed by the user's $300 Free Trial credit) and falls back to the
+  // AI Studio key only when no Drive token is available.
+  //
+  // IMPORTANT: after upgrading to v4.80, users must click "Connect Drive"
+  // ONCE to grant the new cloud-platform scope. Existing drive.file-only
+  // tokens won't have Vertex access and will fall back to AI Studio key.
+  const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/cloud-platform';
+  // v4.80: GCP project + region for Vertex calls (mirrors the values
+  // pinned in tools/uworld-notes-question-generator/generate_uworld_questions.py).
+  const VERTEX_PROJECT = 'shamsulalamx';
+  const VERTEX_REGION = 'us-central1';
   const DRIVE_FOLDER_NAME    = 'NBME Self-Assessment Suite';
   const DRIVE_MANIFEST_NAME  = 'nbme_manifest.json';
   const DRIVE_MISC_DOCS_NAME = 'NBME_MiscDocs_backup.json';
@@ -4307,6 +4356,14 @@ window.MiscDocStore = MiscDocStore;
     }
   };
 
+  // v4.80: expose the in-memory access token to callGeminiDirect so the
+  // renderer-side hints + autotagging can call Vertex AI via the same OAuth
+  // flow used for Drive sync. Returns the current token string OR null if
+  // not connected. Outside this IIFE the token is otherwise inaccessible.
+  window.getCurrentDriveToken = function() {
+    return _accessToken || null;
+  };
+
   function isDriveOriginAllowed() {
     if (location.protocol === 'https:') return true;
     if (location.origin === 'http://localhost:8080') return true;
@@ -4372,6 +4429,15 @@ window.MiscDocStore = MiscDocStore;
       // so the loud-failure banner doesn't blow up the modal.
       let bodyText = '';
       try { bodyText = await resp.text(); } catch (e) { /* body unreadable */ }
+      // v4.80: on 401, auto-invalidate the cached _accessToken so the NEXT
+      // driveFetch triggers a fresh ensureDriveAuth() flow instead of
+      // re-using the dead token forever. Pairs with the connectGoogleDrive
+      // explicit-clear: that handles the user-clicked path; this handles
+      // the silent-expiry path (token died but we haven't tried to use it
+      // since). Together they kill the "hard-restart-required" UX.
+      if (resp.status === 401) {
+        _accessToken = null;
+      }
       const hint = _driveErrorHint(resp.status);
       const parts = ['Drive API ' + resp.status];
       if (hint) parts.push('(' + hint + ')');
@@ -4606,6 +4672,17 @@ window.MiscDocStore = MiscDocStore;
   window.connectGoogleDrive = async function() {
     try {
       setDriveStatus('Connecting Drive...', '#f0a500');
+      // v4.80: force-clear the cached in-memory token before re-auth. Pre-v4.80
+      // bug: clicking "Connect Drive" with a stale (expired) token cached in
+      // _accessToken would short-circuit at ensureDriveAuth's `if (_accessToken)
+      // return _accessToken;` check — the same dead token got returned, the
+      // backup retried with it, and Drive 401'd again. Only a hard app restart
+      // (which cleared in-memory state) fixed it. Now: clicking Connect Drive
+      // ALWAYS forces a fresh OAuth flow + new access token. No restart needed.
+      _accessToken = null;
+      _driveStuck = false;
+      _driveConsecutiveFailures = 0;
+      _driveLastError = '';
       await ensureDriveAuth('consent');
       await ensureDriveFolder();
       await ensureManifestFile();
@@ -8261,12 +8338,43 @@ function setLocalGeminiKey(key) {
   // DB.save() above already calls scheduleGoogleDriveSave() — no second call needed.
 }
 
-/* Direct call to Gemini API from the renderer — no Netlify involved. */
+/* v4.80: Direct call to Gemini API from the renderer.
+   Dispatches by available auth, preferring Vertex (which draws from the
+   user's $300 Free Trial credit) and falling back to AI Studio (which hits
+   the user's card after the GDP $10/mo credit is exhausted).
+
+   Priority:
+     1. Vertex AI via Drive OAuth token (if Drive is connected with the
+        cloud-platform scope granted in v4.80+)
+     2. AI Studio via user-configured API key (legacy fallback)
+     3. Error: NO_KEY / NO_AUTH
+
+   Same input/output shape as pre-v4.80 — callers don't need to change. */
 async function callGeminiDirect(contents, generationConfig) {
+  // ── Try Vertex AI first (free trial credit) ──
+  const driveToken = (typeof window.getCurrentDriveToken === 'function')
+    ? window.getCurrentDriveToken()
+    : null;
+  if (driveToken) {
+    try {
+      return await _callGeminiViaVertex(driveToken, contents, generationConfig);
+    } catch (vertexErr) {
+      // Vertex failed (could be: scope not granted, project misconfigured,
+      // quota issue, network glitch). Log + fall through to AI Studio path
+      // so the user's hint/autotag still works rather than hard-failing.
+      console.warn('[callGeminiDirect] Vertex path failed, falling back to AI Studio:', vertexErr.message);
+    }
+  }
+
+  // ── Fallback: AI Studio with user-configured API key ──
   const key = getLocalGeminiKey();
   if (!key) {
-    const err = new Error('Gemini API key not configured. Add your key in Settings.');
-    err.code = 'NO_KEY';
+    const err = new Error(
+      driveToken
+        ? 'Vertex AI call failed and no AI Studio key configured as fallback. Re-connect Drive (to re-grant cloud-platform scope) or add a Gemini API key in Settings.'
+        : 'Gemini API key not configured. Connect Drive (preferred, uses $300 credit) or add your Gemini API key in Settings.'
+    );
+    err.code = 'NO_AUTH';
     throw err;
   }
   const ctrl = new AbortController();
@@ -8281,6 +8389,45 @@ async function callGeminiDirect(contents, generationConfig) {
     const data = await resp.json().catch(() => ({}));
     if (resp.status === 429) throw new Error('Gemini rate limit reached. Try again later.');
     if (!resp.ok) throw new Error(data?.error?.message || `Gemini API error (${resp.status})`);
+    return data;
+  } finally {
+    clearTimeout(tid);
+  }
+}
+
+// v4.80: Vertex AI generateContent call from the renderer.
+// Uses the Drive OAuth access token (cloud-platform scope) as Bearer auth.
+// Same response shape as AI Studio for callers downstream.
+async function _callGeminiViaVertex(accessToken, contents, generationConfig) {
+  const project = (typeof VERTEX_PROJECT !== 'undefined') ? VERTEX_PROJECT : 'shamsulalamx';
+  const region = (typeof VERTEX_REGION !== 'undefined') ? VERTEX_REGION : 'us-central1';
+  const url = `https://${region}-aiplatform.googleapis.com/v1/projects/${project}/locations/${region}/publishers/google/models/${_GEMINI_MODEL}:generateContent`;
+  const ctrl = new AbortController();
+  const tid  = setTimeout(() => ctrl.abort(), 30000);
+  try {
+    const resp = await fetch(url, {
+      method: 'POST',
+      signal: ctrl.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + accessToken,
+      },
+      body: JSON.stringify({ contents, generationConfig: generationConfig || {} })
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (resp.status === 401) {
+      // Token expired / scope insufficient. Throw with a specific message
+      // so callGeminiDirect's fallback path can decide to invalidate the
+      // token cache (Drive sync will pick that up too) and try AI Studio.
+      const err = new Error('Vertex token rejected (401) — likely expired or missing cloud-platform scope. Reconnect Drive.');
+      err.code = 'VERTEX_AUTH';
+      throw err;
+    }
+    if (resp.status === 429) throw new Error('Vertex rate limit reached. Try again later.');
+    if (!resp.ok) {
+      const apiMsg = data?.error?.message || `Vertex API error (${resp.status})`;
+      throw new Error(apiMsg);
+    }
     return data;
   } finally {
     clearTimeout(tid);
@@ -8424,6 +8571,51 @@ const Results = (() => {
     return String(str || '').replace(/[&<>"']/g, ch => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
     }[ch]));
+  }
+
+  // v4.80: Promise-based replacement for window.prompt(). Electron renderer
+  // disabled window.prompt() permanently ("Prompt() is and will not be
+  // supported.") and every call site that used it was silently broken
+  // (rename folder, rename test, new subfolder, etc.). This helper drives
+  // #modal-async-prompt and resolves with the typed string OR null on
+  // cancel. All previous prompt() call sites in this file have been
+  // migrated to `await asyncPrompt(...)`.
+  function asyncPrompt(label, defaultValue) {
+    return new Promise((resolve) => {
+      const modal = document.getElementById('modal-async-prompt');
+      const labelEl = document.getElementById('async-prompt-label');
+      const inputEl = document.getElementById('async-prompt-input');
+      const okBtn = document.getElementById('async-prompt-ok');
+      const cancelBtn = document.getElementById('async-prompt-cancel');
+      if (!modal || !labelEl || !inputEl || !okBtn || !cancelBtn) {
+        console.error('[asyncPrompt] modal element missing in DOM');
+        resolve(null);
+        return;
+      }
+      labelEl.textContent = String(label || 'Enter value');
+      inputEl.value = String(defaultValue || '');
+      modal.style.display = 'flex';
+      setTimeout(() => { try { inputEl.focus(); inputEl.select(); } catch(_) {} }, 30);
+
+      const cleanup = () => {
+        modal.style.display = 'none';
+        okBtn.removeEventListener('click', onOk);
+        cancelBtn.removeEventListener('click', onCancel);
+        inputEl.removeEventListener('keydown', onKey);
+        modal.removeEventListener('click', onBackdrop);
+      };
+      const onOk = () => { const v = inputEl.value; cleanup(); resolve(v); };
+      const onCancel = () => { cleanup(); resolve(null); };
+      const onKey = (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); onOk(); }
+        else if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
+      };
+      const onBackdrop = (e) => { if (e.target === modal) onCancel(); };
+      okBtn.addEventListener('click', onOk);
+      cancelBtn.addEventListener('click', onCancel);
+      inputEl.addEventListener('keydown', onKey);
+      modal.addEventListener('click', onBackdrop);
+    });
   }
 
   function getRetrievalTag(q) {
@@ -22417,18 +22609,18 @@ const App = (() => {
   }
 
   // ── Folders & Tests management ─────────────────────────────
-  function promptNewSourceFolder() {
-    const name = prompt('New library folder name:');
+  async function promptNewSourceFolder() {
+    const name = await asyncPrompt('New library folder name:');
     if (!name || !name.trim()) return;
     const source = DB.createSourceFolder(name.trim());
     toast(`Folder "${source.name}" created.`);
     showSourceHome(source.id);
   }
 
-  function renameSourceFolder(id) {
+  async function renameSourceFolder(id) {
     const source = DB.getSourceFolder(id);
     if (!source) return;
-    const name = prompt('Rename folder:', source.name);
+    const name = await asyncPrompt('Rename folder:', source.name);
     if (!name || !name.trim()) return;
     DB.renameSourceFolder(id, name.trim());
     renderSidebar();
@@ -22522,10 +22714,13 @@ const App = (() => {
     return true;
   }
 
-  function renameFolder(id) {
+  async function renameFolder(id) {
     // v4.69: defensive logging + explicit error toasts so silent failures
     // (e.g. folder lookup miss, save() throw, name validation reject)
     // surface to the user instead of just appearing to "do nothing."
+    // v4.80: prompt() → asyncPrompt() (Electron renderer doesn't support
+    // window.prompt — was producing "Rename failed. Prompt() is and will
+    // not be supported." every time the user tried to rename a subfolder).
     try {
       const folder = DB.getFolders().find(f => f.id === id);
       if (!folder) {
@@ -22533,7 +22728,7 @@ const App = (() => {
         toast('Could not find that subfolder. Refresh and try again.');
         return;
       }
-      const name = prompt('Rename subfolder:', folder.name);
+      const name = await asyncPrompt('Rename subfolder:', folder.name);
       if (name === null) return;  // user cancelled — silent
       const ok = saveRenamedFolder(folder, name);
       if (ok) {
@@ -22578,10 +22773,10 @@ const App = (() => {
     });
   }
 
-  function startRenameTest(id) {
+  async function startRenameTest(id) {
     const test = DB.getTest(id);
     if (!test) return;
-    const name = prompt('Rename test:', test.name);
+    const name = await asyncPrompt('Rename test:', test.name);
     if (name && name.trim()) { DB.renameTest(id, name.trim()); renderSidebar(); renderHomeGrid(); toast('Renamed.'); }
   }
 
@@ -23216,7 +23411,7 @@ const App = (() => {
   // selections from the BIC target-folder dropdown. Prompts inline, creates the
   // folder, repopulates the dropdown, and selects the new folder. Reverts to
   // the previously-valid selection if the user cancels.
-  function handleBatchImportFolderChange() {
+  async function handleBatchImportFolderChange() {
     const sel = document.getElementById('bic-target-folder');
     if (!sel) return;
     const value = String(sel.value || '');
@@ -23225,7 +23420,7 @@ const App = (() => {
       const srcId = value.slice('newsub:'.length);
       const src = DB.getSourceFolder(srcId);
       const srcName = src ? src.name : 'this source';
-      const name = (prompt('New folder name under "' + srcName + '":') || '').trim();
+      const name = (await asyncPrompt('New folder name under "' + srcName + '":') || '').trim();
       if (!name) {
         sel.value = sel.dataset.lastValid || '';
         return;
@@ -23245,12 +23440,12 @@ const App = (() => {
     }
 
     if (value === '__newmain__') {
-      const mainName = (prompt('New top-level source name (e.g. "Biostats", "Ethics"):') || '').trim();
+      const mainName = (await asyncPrompt('New top-level source name (e.g. "Biostats", "Ethics"):') || '').trim();
       if (!mainName) {
         sel.value = sel.dataset.lastValid || '';
         return;
       }
-      const subName = (prompt('Initial subfolder name under "' + mainName + '":') || '').trim();
+      const subName = (await asyncPrompt('Initial subfolder name under "' + mainName + '":') || '').trim();
       if (!subName) {
         sel.value = sel.dataset.lastValid || '';
         return;
@@ -23685,11 +23880,22 @@ const App = (() => {
     }
     // Respect explicit dismissal for THIS job
     if (jobId && jobId === _floatingLogState.dismissedJobId) return;
+    // v4.80: skip stage_heartbeat events in the visible log. The Python
+    // runner emits BOTH stage_heartbeat AND pipeline_progress with the same
+    // "still running after Xs" message at every heartbeat tick, which made
+    // the floating log show every heartbeat twice. The pipeline_progress
+    // event carries the same info plus the chunk-counter detail when
+    // available — that's the one we want to keep. stage_heartbeat is still
+    // delivered to other listeners (smart-heartbeat fallback, BIC tracker)
+    // because we still call _floatingLogEventSummary below, just don't
+    // append it to the DOM.
+    const type = String(event.type || '');
     const summary = _floatingLogEventSummary(event);
     // Track last non-heartbeat meaningful text for the smart-heartbeat fallback
     if (!summary.isHeartbeat && summary.text && summary.text !== 'progress') {
       _floatingLogState.lastMeaningfulText = (summary.text + (summary.detail ? ' (' + summary.detail + ')' : ''));
     }
+    if (type === 'stage_heartbeat') return;
     // Append the event line
     const div = document.createElement('div');
     div.className = 'flw-event' + (summary.tone ? ' flw-' + summary.tone : '');
@@ -29622,17 +29828,17 @@ Errors: ${escapeHTML(errors)}</div>
     }
   }
 
-  function miscFolderCreate() {
-    const name = (prompt('New subfolder name:') || '').trim();
+  async function miscFolderCreate() {
+    const name = (await asyncPrompt('New subfolder name:') || '').trim();
     if (!name) return;
     DB.upsertMiscDocFolder({ id: DB.uid(), name, createdAt: Date.now() });
     if (_currentView === 'misc-docs') renderMiscDocPanel();
   }
 
-  function miscFolderRename(id) {
+  async function miscFolderRename(id) {
     const folder = DB.getMiscDocFolders().find(f => f.id === id);
     if (!folder) return;
-    const name = (prompt('Rename subfolder:', folder.name) || '').trim();
+    const name = (await asyncPrompt('Rename subfolder:', folder.name) || '').trim();
     if (!name || name === folder.name) return;
     DB.upsertMiscDocFolder({ ...folder, name });
     if (_currentView === 'misc-docs') renderMiscDocPanel();

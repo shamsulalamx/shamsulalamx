@@ -507,7 +507,11 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
     reader = threading.Thread(target=read_stdout, daemon=True)
     reader.start()
     stream_done = False
-    heartbeat_seconds = 30.0
+    # v4.80: bumped 30s → 60s. The floating log was emitting two lines every
+    # 30s (one stage_heartbeat + one pipeline_progress for the same message);
+    # at 30s cadence on long Mehlman runs that's a wall of duplicate noise.
+    # 60s cadence is still informative without overwhelming.
+    heartbeat_seconds = 60.0
     next_heartbeat = time.time() + heartbeat_seconds if heartbeat_seconds > 0 else 0
     last_chunk_event: dict[str, Any] | None = None
     graph_job_complete = False
