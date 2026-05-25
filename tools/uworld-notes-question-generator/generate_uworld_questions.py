@@ -786,17 +786,20 @@ def _raw_gemini_call(api_key: str, prompt: str) -> str:
             contents=prompt,
             config=_genai_types.GenerateContentConfig(
                 temperature=0.4,
-                max_output_tokens=16384,
-                # v4.79: Gemini 2.5 ships with "thinking" enabled by default
-                # on Vertex AI. Thinking tokens consume part of the
-                # max_output_tokens budget BEFORE any visible output is
-                # produced. Without disabling it, low-budget calls can return
-                # empty text (all tokens consumed by thinking). For our use
-                # case — generating questions — we want the model to write
-                # output directly. Setting thinking_budget=0 reproduces the
-                # pre-v4.79 raw-HTTP behavior exactly. If we ever want
-                # thinking-enhanced quality, this is the single dial.
-                thinking_config=_genai_types.ThinkingConfig(thinking_budget=0),
+                # v4.79: Bumped from 16384 to 32768 to absorb thinking-token
+                # consumption alongside the actual output. Question-gen runs
+                # at ~12-15 questions per chunk on Anki .txt exports; with
+                # dynamic thinking enabled (typically 1-4K thinking tokens
+                # for question-gen tasks), we need ~28K headroom for the
+                # actual JSON output to land cleanly without truncation.
+                max_output_tokens=32768,
+                # v4.79: Dynamic thinking enabled (budget=-1 lets the model
+                # decide how much reasoning to do based on task complexity).
+                # User priority: quality > cost. The $300 Vertex Free Trial
+                # absorbs the higher per-call cost during validation.
+                # Earlier iteration had thinking_budget=0 to match pre-v4.79
+                # raw-HTTP behavior; flipped to -1 per explicit user request.
+                thinking_config=_genai_types.ThinkingConfig(thinking_budget=-1),
             ),
         )
     except EnvironmentError:

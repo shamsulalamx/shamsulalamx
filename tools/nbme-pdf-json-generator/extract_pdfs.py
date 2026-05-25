@@ -703,9 +703,11 @@ def _call_gemini_api(api_key: str, prompt: str) -> str:
             contents=prompt,
             config=_genai_types.GenerateContentConfig(
                 temperature=0.1,
-                max_output_tokens=8192,
-                # v4.79: disable Gemini 2.5 thinking (see _uw for rationale).
-                thinking_config=_genai_types.ThinkingConfig(thinking_budget=0),
+                # v4.79: Bumped 2x for thinking headroom. Original 8192
+                # was output-only sizing; thinking adds ~1-4K typically.
+                max_output_tokens=16384,
+                # v4.79: Dynamic thinking enabled. Quality > cost.
+                thinking_config=_genai_types.ThinkingConfig(thinking_budget=-1),
             ),
         )
     except EnvironmentError:

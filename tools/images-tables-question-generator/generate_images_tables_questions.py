@@ -301,9 +301,11 @@ def call_gemini(api_key: str, image_path: Path, mime: str, prompt: str) -> str:
             ],
             config=_genai_types.GenerateContentConfig(
                 temperature=0.15,
-                max_output_tokens=4096,
-                # v4.79: disable Gemini 2.5 thinking (see _uw for rationale).
-                thinking_config=_genai_types.ThinkingConfig(thinking_budget=0),
+                # v4.79: 3x bump (4096 → 12288) for thinking on multimodal.
+                # Image interpretation + reasoning eats more thinking tokens.
+                max_output_tokens=12288,
+                # v4.79: Dynamic thinking. Quality > cost.
+                thinking_config=_genai_types.ThinkingConfig(thinking_budget=-1),
             ),
         )
     except EnvironmentError:

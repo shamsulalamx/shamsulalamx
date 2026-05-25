@@ -713,10 +713,15 @@ def gemini_text(prompt: str, max_tokens: int = 8192, temperature: float = 0.2, m
             contents=prompt,
             config=_genai_types.GenerateContentConfig(
                 temperature=temperature,
-                max_output_tokens=max_tokens,
+                # v4.79: 2x bump for thinking headroom. The v4.63 Pro polish
+                # path especially benefits from thinking — that's the
+                # canonical-quality enrichment step (reviewPearl, retrievalTag,
+                # educationalObjective) where reasoning helps most.
+                max_output_tokens=max(max_tokens * 2, 16384),
                 response_mime_type="application/json",
-                # v4.79: disable Gemini 2.5 thinking (see _uw for rationale).
-                thinking_config=_genai_types.ThinkingConfig(thinking_budget=0),
+                # v4.79: Dynamic thinking. Quality > cost — particularly
+                # valuable for the v4.63 gemini-2.5-pro polish path.
+                thinking_config=_genai_types.ThinkingConfig(thinking_budget=-1),
             ),
         )
     except (TimeoutError, socket.timeout) as exc:
@@ -759,10 +764,13 @@ def gemini_image(prompt: str, image_paths: list[Path], max_tokens: int = 4096, t
             contents=contents,
             config=_genai_types.GenerateContentConfig(
                 temperature=temperature,
-                max_output_tokens=max_tokens,
+                # v4.79: 3x bump (4096 → 12288) for thinking on multimodal.
+                # Image-based reasoning especially benefits from thinking,
+                # which can be 2-5K tokens on figure-detection tasks.
+                max_output_tokens=max(max_tokens * 3, 12288),
                 response_mime_type="application/json",
-                # v4.79: disable Gemini 2.5 thinking (see _uw for rationale).
-                thinking_config=_genai_types.ThinkingConfig(thinking_budget=0),
+                # v4.79: Dynamic thinking. Quality > cost.
+                thinking_config=_genai_types.ThinkingConfig(thinking_budget=-1),
             ),
         )
     except (TimeoutError, socket.timeout) as exc:

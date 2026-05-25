@@ -957,10 +957,13 @@ def raw_gemini_call(api_key: str, prompt: str, temperature: float, max_tokens: i
             contents=prompt,
             config=_genai_types.GenerateContentConfig(
                 temperature=temperature,
-                max_output_tokens=max_tokens,
-                # v4.79: disable Gemini 2.5 thinking (see _uw._raw_gemini_call
-                # for full rationale) — preserves pre-migration output behavior.
-                thinking_config=_genai_types.ThinkingConfig(thinking_budget=0),
+                # v4.79: Bumped 2x to absorb thinking tokens. Original cap
+                # (8192) was sized for output-only; with dynamic thinking
+                # adding ~1-4K, doubling gives safe headroom.
+                max_output_tokens=max(max_tokens * 2, 16384),
+                # v4.79: Dynamic thinking — model decides. Quality > cost.
+                # See _uw._raw_gemini_call for full rationale.
+                thinking_config=_genai_types.ThinkingConfig(thinking_budget=-1),
             ),
         )
     except (TimeoutError, socket.timeout) as exc:
@@ -1017,9 +1020,10 @@ def raw_gemini_image_call(
         ))
     config_kwargs: dict[str, Any] = {
         "temperature": temperature,
-        "max_output_tokens": max_tokens,
-        # v4.79: disable Gemini 2.5 thinking by default (see _uw for rationale).
-        "thinking_config": _genai_types.ThinkingConfig(thinking_budget=0),
+        # v4.79: 2x bump for thinking headroom (see raw_gemini_call above).
+        "max_output_tokens": max(max_tokens * 2, 16384),
+        # v4.79: Dynamic thinking. Quality > cost.
+        "thinking_config": _genai_types.ThinkingConfig(thinking_budget=-1),
     }
     if response_mime_type:
         config_kwargs["response_mime_type"] = response_mime_type

@@ -418,9 +418,13 @@ def _gemini_text_call(
             contents=prompt,
             config=_genai_types.GenerateContentConfig(
                 temperature=0.2,
+                # v4.79: max_output already large (32K-65K default) so no
+                # additional bump needed for thinking — there's plenty of
+                # headroom. Thinking helps cleaning quality on transcripts
+                # with mixed clinical + housekeeping content.
                 max_output_tokens=max_output,
-                # v4.79: disable Gemini 2.5 thinking (see _uw for rationale).
-                thinking_config=_genai_types.ThinkingConfig(thinking_budget=0),
+                # v4.79: Dynamic thinking. Quality > cost.
+                thinking_config=_genai_types.ThinkingConfig(thinking_budget=-1),
             ),
         )
     except EnvironmentError:

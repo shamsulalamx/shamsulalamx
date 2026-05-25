@@ -113,12 +113,17 @@ def _call_with_backend(backend: str, prompt: str, model: str = "gemini-2.5-flash
             contents=prompt,
             config=_genai_types.GenerateContentConfig(
                 temperature=0.0,
-                max_output_tokens=256,
-                # v4.79: disable Gemini 2.5 thinking (see _uw for rationale).
-                # Critical — without this, low-token-budget tests like the
-                # smoke test return empty text (all tokens consumed by
-                # thinking before any output is generated).
-                thinking_config=_genai_types.ThinkingConfig(thinking_budget=0),
+                # v4.79: Bumped 32x (256 → 8192) so that smoke test still
+                # works with thinking enabled. The smoke prompt needs only
+                # a few tokens of output but dynamic thinking can consume
+                # 500-2000 tokens reasoning about "say OK".
+                max_output_tokens=8192,
+                # v4.79: Thinking ENABLED here so the validation harness
+                # exercises the same configuration the production code uses.
+                # Don't change this to thinking_budget=0 — the harness must
+                # mirror real-world behavior to catch bugs in real-world
+                # behavior.
+                thinking_config=_genai_types.ThinkingConfig(thinking_budget=-1),
             ),
         )
         text = getattr(response, "text", None) or ""
