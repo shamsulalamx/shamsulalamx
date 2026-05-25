@@ -56,6 +56,17 @@ from typing import Any
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
+# v4.79: Vertex migration — reuse _uw._gemini_client() factory.
+_UW_DIR = SCRIPT_DIR.parent / "uworld-notes-question-generator"
+if str(_UW_DIR) not in sys.path:
+    sys.path.insert(0, str(_UW_DIR))
+import generate_uworld_questions as _uw  # noqa: E402
+try:
+    from google.genai import types as _genai_types  # noqa: E402
+    _GENAI_SDK_AVAILABLE = True
+except ImportError:
+    _GENAI_SDK_AVAILABLE = False
+
 import extract_pdfs  # noqa: E402  — reuses OCR / chunker / Gemini text-norm
 import nbme_extract_figures  # noqa: E402  — reuses CV figure extractor
 
@@ -684,79 +695,87 @@ def gemini_text(prompt: str, max_tokens: int = 8192, temperature: float = 0.2, m
     v4.63: optional `model` override lets callers route the polish pass to
     gemini-2.5-pro and the critic to gemini-2.5-flash while extraction and
     completion stay on the default Flash model.
+
+    v4.79: rewritten to use google-genai SDK via _uw._gemini_client().
+    Preserves the responseMimeType=application/json behavior (forces JSON-only
+    output, drastically reduces parse failures) and the v4.63 model override.
     """
     _bump_call_count()
-    api_key = _api_key_or_die()
+    if not _GENAI_SDK_AVAILABLE:
+        raise RuntimeError(
+            "google-genai SDK not installed. Install with: pip install google-genai"
+        )
     use_model = (model or GEMINI_MODEL).strip()
-    url = f"{GEMINI_API_BASE}/{use_model}:generateContent?key={api_key}"
-    payload = json.dumps({
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "temperature": temperature,
-            "maxOutputTokens": max_tokens,
-            "responseMimeType": "application/json",
-        },
-    }).encode("utf-8")
-    req = urllib.request.Request(
-        url, data=payload, method="POST", headers={"Content-Type": "application/json"}
-    )
     try:
-        with urllib.request.urlopen(req, timeout=90) as resp:
-            response = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")[:400]
-        raise RuntimeError(f"Gemini HTTP {exc.code}: {detail}") from exc
+        client = _uw._gemini_client()
+        response = client.models.generate_content(
+            model=use_model,
+            contents=prompt,
+            config=_genai_types.GenerateContentConfig(
+                temperature=temperature,
+                max_output_tokens=max_tokens,
+                response_mime_type="application/json",
+                # v4.79: disable Gemini 2.5 thinking (see _uw for rationale).
+                thinking_config=_genai_types.ThinkingConfig(thinking_budget=0),
+            ),
+        )
     except (TimeoutError, socket.timeout) as exc:
         raise RuntimeError("Gemini timed out") from exc
-    candidates = response.get("candidates") or []
-    if not candidates:
-        raise RuntimeError(f"Gemini returned no candidates: {json.dumps(response)[:300]}")
-    parts = candidates[0].get("content", {}).get("parts") or []
-    if not parts or "text" not in parts[0]:
-        raise RuntimeError("Gemini candidate had no text part")
-    return str(parts[0]["text"])
+    except EnvironmentError:
+        raise
+    except Exception as exc:
+        raise RuntimeError(f"Gemini call failed: {exc}") from exc
+    text = getattr(response, "text", None)
+    if not text:
+        candidates = getattr(response, "candidates", None) or []
+        raise RuntimeError(f"Gemini candidate had no text part. candidates={candidates!r}"[:400])
+    return str(text)
 
 
 def gemini_image(prompt: str, image_paths: list[Path], max_tokens: int = 4096, temperature: float = 0.0) -> str:
-    """Multimodal Gemini call."""
+    """Multimodal Gemini call.
+
+    v4.79: rewritten to use google-genai SDK via _uw._gemini_client(). The SDK
+    handles base64 encoding internally via types.Part.from_bytes.
+    Preserves responseMimeType=application/json (NBME's structured-output flow
+    depends on getting clean JSON back, not markdown-fenced JSON).
+    """
     _bump_call_count()
-    api_key = _api_key_or_die()
-    parts: list[dict[str, Any]] = [{"text": prompt}]
+    if not _GENAI_SDK_AVAILABLE:
+        raise RuntimeError(
+            "google-genai SDK not installed. Install with: pip install google-genai"
+        )
+    contents: list[Any] = [prompt]
     for image_path in image_paths:
         mime = mimetypes.guess_type(image_path.name)[0] or "image/png"
-        parts.append({
-            "inline_data": {
-                "mime_type": mime,
-                "data": base64.b64encode(image_path.read_bytes()).decode("ascii"),
-            }
-        })
-    url = f"{GEMINI_API_BASE}/{GEMINI_MODEL}:generateContent?key={api_key}"
-    payload = json.dumps({
-        "contents": [{"role": "user", "parts": parts}],
-        "generationConfig": {
-            "temperature": temperature,
-            "maxOutputTokens": max_tokens,
-            "responseMimeType": "application/json",
-        },
-    }).encode("utf-8")
-    req = urllib.request.Request(
-        url, data=payload, method="POST", headers={"Content-Type": "application/json"}
-    )
+        contents.append(_genai_types.Part.from_bytes(
+            data=image_path.read_bytes(),
+            mime_type=mime,
+        ))
     try:
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            response = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")[:400]
-        raise RuntimeError(f"Gemini HTTP {exc.code}: {detail}") from exc
+        client = _uw._gemini_client()
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=contents,
+            config=_genai_types.GenerateContentConfig(
+                temperature=temperature,
+                max_output_tokens=max_tokens,
+                response_mime_type="application/json",
+                # v4.79: disable Gemini 2.5 thinking (see _uw for rationale).
+                thinking_config=_genai_types.ThinkingConfig(thinking_budget=0),
+            ),
+        )
     except (TimeoutError, socket.timeout) as exc:
         raise RuntimeError("Gemini multimodal timed out") from exc
-    candidates = response.get("candidates") or []
-    if not candidates:
-        raise RuntimeError(f"Gemini multimodal returned no candidates: {json.dumps(response)[:300]}")
-    parts_out = candidates[0].get("content", {}).get("parts") or []
-    if not parts_out or "text" not in parts_out[0]:
-        raise RuntimeError("Gemini multimodal candidate had no text part")
-    return str(parts_out[0]["text"])
+    except EnvironmentError:
+        raise
+    except Exception as exc:
+        raise RuntimeError(f"Gemini multimodal call failed: {exc}") from exc
+    text = getattr(response, "text", None)
+    if not text:
+        candidates = getattr(response, "candidates", None) or []
+        raise RuntimeError(f"Gemini multimodal candidate had no text part. candidates={candidates!r}"[:400])
+    return str(text)
 
 
 # ── Q-only Gemini completion prompt ──────────────────────────────────────────

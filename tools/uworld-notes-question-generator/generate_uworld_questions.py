@@ -18,7 +18,18 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
+# v4.79: google-genai SDK — unified client for both AI Studio and Vertex AI
+# backends. Selected at runtime via the GEMINI_BACKEND env var. Falls back to
+# raw urllib if SDK is not installed (legacy AI Studio path), so existing
+# deployments keep working until they explicitly install the SDK.
+try:
+    from google import genai as _genai_sdk
+    from google.genai import types as _genai_types
+    _GENAI_SDK_AVAILABLE = True
+except ImportError:
+    _GENAI_SDK_AVAILABLE = False
 
 # ── Optional imports (graceful degradation) ───────────────────────────────────
 try:
@@ -54,6 +65,79 @@ SUPPORTED_EXTENSIONS = {".txt", ".md", ".rtf", ".docx"}
 # Matches repo convention from tools/nbme-pdf-json-generator/extract_pdfs.py
 GEMINI_MODEL    = "gemini-2.5-flash"
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
+
+# v4.79: Vertex AI migration — backend selection + connection config.
+# GEMINI_BACKEND defaults to "ai_studio" (current behavior). Flip to "vertex"
+# to route every Gemini call through Vertex AI / Application Default Credentials
+# instead of an API key. Cascades to Mehlman, OME, Anki, Divine (text path)
+# since they all import _uw and reuse call_gemini_with_retry.
+GEMINI_BACKEND   = os.environ.get("GEMINI_BACKEND", "ai_studio").strip().lower()
+GCP_PROJECT_ID   = os.environ.get("GCP_PROJECT_ID", "shamsulalamx").strip()
+GCP_REGION       = os.environ.get("GCP_REGION", "us-central1").strip()
+_gemini_client_singleton: Any = None
+
+
+def _gemini_client():
+    """Return a cached google-genai SDK client configured for the active backend.
+
+    GEMINI_BACKEND=ai_studio (default)
+        Uses the GEMINI_API_KEY env var. Same auth as pre-v4.79.
+
+    GEMINI_BACKEND=vertex
+        Uses Application Default Credentials (run `gcloud auth
+        application-default login` once) + GCP_PROJECT_ID + GCP_REGION.
+        Requires the Vertex AI API to be enabled on the project.
+
+    Raises:
+        EnvironmentError: if the SDK is not installed, or required env vars
+            are missing for the chosen backend. Errors are loud-and-explicit
+            rather than silent fallbacks so the user knows exactly what to fix.
+    """
+    global _gemini_client_singleton
+    if _gemini_client_singleton is not None:
+        return _gemini_client_singleton
+
+    if not _GENAI_SDK_AVAILABLE:
+        raise EnvironmentError(
+            "google-genai SDK not installed. Install with: "
+            "pip install google-genai"
+        )
+
+    if GEMINI_BACKEND == "vertex":
+        if not GCP_PROJECT_ID:
+            raise EnvironmentError(
+                "GEMINI_BACKEND=vertex requires GCP_PROJECT_ID env var "
+                "(or default 'shamsulalamx')."
+            )
+        _gemini_client_singleton = _genai_sdk.Client(
+            vertexai=True,
+            project=GCP_PROJECT_ID,
+            location=GCP_REGION,
+        )
+    elif GEMINI_BACKEND == "ai_studio":
+        api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+        if not api_key:
+            raise EnvironmentError(
+                "GEMINI_BACKEND=ai_studio requires GEMINI_API_KEY env var."
+            )
+        _gemini_client_singleton = _genai_sdk.Client(api_key=api_key)
+    else:
+        raise EnvironmentError(
+            f"GEMINI_BACKEND must be 'ai_studio' or 'vertex', "
+            f"got: {GEMINI_BACKEND!r}"
+        )
+
+    return _gemini_client_singleton
+
+
+def _reset_gemini_client() -> None:
+    """Force the client to be re-constructed on next _gemini_client() call.
+
+    Used by tests + the validation harness to swap backends mid-process.
+    Should not be called from normal pipeline code.
+    """
+    global _gemini_client_singleton
+    _gemini_client_singleton = None
 
 FORBIDDEN_STRINGS = [
     "Here are the questions",
@@ -350,24 +434,46 @@ def check_duplicate_stems(questions: List[Dict]) -> List[str]:
 def is_quota_failure(error) -> bool:
     text = str(error).lower()
     return (
+        # AI Studio patterns (pre-v4.79, kept verbatim for backwards compat)
         "http 429" in text
         or "resource_exhausted" in text
         or "prepayment credits are depleted" in text
         or "quota exceeded" in text
         or "rate limit" in text
         or "too many requests" in text
+        # v4.79: Vertex AI-specific patterns. Vertex error messages tend to
+        # be more structured (mention specific quota metrics by name) and use
+        # different prose for the same conditions. Conservative additions —
+        # add more here as we observe real Vertex 429s in production.
+        or "quota metric" in text
+        or "online_prediction_requests" in text
+        or "generate_content_requests" in text
+        or "generate_content_input_tokens" in text
+        or "exhausted the quota" in text
+        or "quota_exceeded" in text
+        or "429 resource exhausted" in text
+        # gRPC status code text — google-genai SDK may surface these
+        or "status.resource_exhausted" in text
+        or "code=429" in text
     )
 
 
 def is_network_failure(error) -> bool:
     text = str(error).lower()
     return (
+        # AI Studio patterns (pre-v4.79)
         "urlopen error" in text
         or "nodename nor servname provided" in text
         or "name or service not known" in text
         or "network is unreachable" in text
         or "temporary failure in name resolution" in text
         or "gemini request timed out" in text
+        # v4.79: SDK / gRPC failure modes
+        or "connection refused" in text
+        or "connection reset" in text
+        or "deadline exceeded" in text
+        or "service unavailable" in text
+        or "status.unavailable" in text
     )
 
 
@@ -659,45 +765,61 @@ def load_prompt_template() -> str:
 
 
 def _raw_gemini_call(api_key: str, prompt: str) -> str:
-    """Single raw HTTP POST to Gemini generateContent. Never logs the key."""
-    url = f"{GEMINI_API_BASE}/{GEMINI_MODEL}:generateContent?key={api_key}"
-    payload = json.dumps({
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "temperature": 0.4,
-            # Bumped from 8192 to 16384 to give headroom for chunks that
-            # generate multiple questions. The old cap was hit by Anki .txt
-            # exports where one chunk could ask for 15 questions worth of
-            # JSON in a single response — Gemini truncated mid-string and
-            # the 3-stage JSON cleanup couldn't recover invalid JSON. The
-            # complementary fix is the force-slice pass in split_into_chunks
-            # so chunks themselves stay near 3000 chars and per-chunk
-            # question counts stay small; this token bump is the second-line
-            # safety net.
-            "maxOutputTokens": 16384,
-        },
-    }).encode("utf-8")
+    """Single Gemini generateContent call. Never logs the key.
 
-    req = urllib.request.Request(
-        url, data=payload, method="POST",
-        headers={"Content-Type": "application/json"},
-    )
+    v4.79: rewritten to use google-genai SDK via _gemini_client(). The api_key
+    arg is kept for signature compatibility — all existing callers pass it in
+    — but it's only actually used when GEMINI_BACKEND=ai_studio (Vertex uses
+    ADC). Error formats are preserved (text-matchable by is_quota_failure /
+    is_network_failure in the calling retry layer).
+
+    The 16384 max_output_tokens cap is the v4.5x headroom for Anki .txt
+    exports that ask for ~15 questions per chunk. Pre-v4.5x default was 8192;
+    that caused truncation mid-JSON-string which the 3-stage JSON cleanup
+    couldn't recover. Force-slice in split_into_chunks is the primary defense;
+    this token bump is the secondary safety net. Same value on both backends.
+    """
     try:
-        with urllib.request.urlopen(req, timeout=90) as resp:
-            raw = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        body_text = e.read().decode("utf-8", errors="replace")
-        raise ValueError(f"Gemini HTTP {e.code}: {body_text[:400]}")
+        client = _gemini_client()
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=_genai_types.GenerateContentConfig(
+                temperature=0.4,
+                max_output_tokens=16384,
+                # v4.79: Gemini 2.5 ships with "thinking" enabled by default
+                # on Vertex AI. Thinking tokens consume part of the
+                # max_output_tokens budget BEFORE any visible output is
+                # produced. Without disabling it, low-budget calls can return
+                # empty text (all tokens consumed by thinking). For our use
+                # case — generating questions — we want the model to write
+                # output directly. Setting thinking_budget=0 reproduces the
+                # pre-v4.79 raw-HTTP behavior exactly. If we ever want
+                # thinking-enhanced quality, this is the single dial.
+                thinking_config=_genai_types.ThinkingConfig(thinking_budget=0),
+            ),
+        )
+    except EnvironmentError:
+        # _gemini_client() raises EnvironmentError on misconfig — re-raise
+        # as-is so the operator sees the actionable message.
+        raise
+    except Exception as exc:
+        # Re-raise with a string format compatible with is_quota_failure /
+        # is_network_failure text matching downstream. Preserve the original
+        # exception via `from exc` for traceback fidelity.
+        raise ValueError(f"Gemini call failed: {exc}") from exc
 
-    candidates = raw.get("candidates", [])
-    if not candidates:
-        raise ValueError(f"Gemini returned no candidates: {json.dumps(raw)[:300]}")
+    text = getattr(response, "text", None)
+    if not text:
+        # Diagnostic detail — quota/safety filters can return empty candidates
+        # with finish_reason='SAFETY'/'MAX_TOKENS'/etc. that calling code wants
+        # to see in the error.
+        candidates = getattr(response, "candidates", None) or []
+        raise ValueError(
+            f"Gemini returned empty text: candidates={candidates!r}"[:400]
+        )
 
-    parts = candidates[0].get("content", {}).get("parts", [])
-    if not parts:
-        raise ValueError("Gemini returned empty parts in candidate")
-
-    return parts[0].get("text", "")
+    return str(text)
 
 
 def _build_repair_prompt(

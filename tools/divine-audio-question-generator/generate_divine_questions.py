@@ -55,6 +55,15 @@ if not _UW_DIR.is_dir():
 sys.path.insert(0, str(_UW_DIR))
 import generate_uworld_questions as _uw  # noqa: E402
 
+# v4.79: Vertex migration — google-genai SDK types for the multimodal calls
+# (transcription via fileData). The Files API upload path still uses raw
+# urllib (deferred to Phase D — needs GCS bucket).
+try:
+    from google.genai import types as _genai_types  # noqa: E402
+    _GENAI_SDK_AVAILABLE = True
+except ImportError:
+    _GENAI_SDK_AVAILABLE = False
+
 # ── Paths ──────────────────────────────────────────────────────────────────────
 _BASE      = Path(__file__).parent
 AUDIO_DIR  = _BASE / "input_audio"
@@ -154,6 +163,16 @@ def _apply_output_dir(raw_path: str) -> Path:
 
 
 # ── Gemini File API: upload ────────────────────────────────────────────────────
+# v4.79 NOTE: The audio upload + transcription path below stays on the AI Studio
+# Files API (raw urllib + GEMINI_API_KEY) regardless of GEMINI_BACKEND, because
+# the Files API has no direct Vertex equivalent — Vertex uses GCS bucket URIs
+# (gs://) for multimodal large media instead. The GCS migration is Phase D
+# (tomorrow), tracked in STAGE1_VERTEX_DESIGN.md.
+#
+# Result: when GEMINI_BACKEND=vertex, Divine becomes mixed-backend:
+#   - Audio upload + transcription: AI Studio (uses GEMINI_API_KEY directly)
+#   - Transcript cleaning, chunking, question generation: Vertex (via SDK)
+# Both env vars need to be set during this transitional period.
 
 def _upload_audio_file(filepath: Path, api_key: str) -> Dict:
     """
@@ -383,43 +402,47 @@ def _gemini_text_call(
     Used for transcript cleaning — podcast transcripts require higher maxOutputTokens
     than the UWorld generator's default of 8192 (which would truncate long transcripts).
     Never logs the API key.
+
+    v4.79: rewritten to use google-genai SDK via _uw._gemini_client(). The
+    finishReason='MAX_TOKENS' truncation check is preserved — long episodes
+    can blow the 32K output cap and the user needs to know.
     """
-    url = f"{_uw.GEMINI_API_BASE}/{_uw.GEMINI_MODEL}:generateContent?key={api_key}"
-    payload = json.dumps({
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "temperature": 0.2,
-            "maxOutputTokens": max_output,
-        },
-    }).encode("utf-8")
-
-    req = urllib.request.Request(
-        url, data=payload, method="POST",
-        headers={"Content-Type": "application/json"},
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        body_text = e.read().decode("utf-8", errors="replace")
-        raise ValueError(f"Gemini HTTP {e.code}: {body_text[:400]}")
-
-    candidates = raw.get("candidates", [])
-    if not candidates:
-        raise ValueError("Gemini returned no candidates")
-
-    parts = candidates[0].get("content", {}).get("parts", [])
-    if not parts:
-        raise ValueError("Gemini returned empty parts")
-
-    finish = candidates[0].get("finishReason", "")
-    if finish == "MAX_TOKENS":
-        _uw.warn(
-            "Cleaning output truncated (MAX_TOKENS). "
-            "Transcript may be too long for a single cleaning call."
+    if not _GENAI_SDK_AVAILABLE:
+        raise ValueError(
+            "google-genai SDK not installed. Install with: pip install google-genai"
         )
+    try:
+        client = _uw._gemini_client()
+        response = client.models.generate_content(
+            model=_uw.GEMINI_MODEL,
+            contents=prompt,
+            config=_genai_types.GenerateContentConfig(
+                temperature=0.2,
+                max_output_tokens=max_output,
+                # v4.79: disable Gemini 2.5 thinking (see _uw for rationale).
+                thinking_config=_genai_types.ThinkingConfig(thinking_budget=0),
+            ),
+        )
+    except EnvironmentError:
+        raise
+    except Exception as e:
+        raise ValueError(f"Gemini call failed: {e}")
 
-    return parts[0].get("text", "")
+    # Truncation check — preserved from pre-v4.79 because long Divine
+    # episodes can hit max_output even at 32768 tokens.
+    candidates = getattr(response, "candidates", None) or []
+    if candidates:
+        finish = str(getattr(candidates[0], "finish_reason", "") or "")
+        if "MAX_TOKENS" in finish.upper():
+            _uw.warn(
+                "Cleaning output truncated (MAX_TOKENS). "
+                "Transcript may be too long for a single cleaning call."
+            )
+
+    text = getattr(response, "text", None)
+    if not text:
+        raise ValueError(f"Gemini returned no usable text: candidates={candidates!r}"[:400])
+    return str(text)
 
 
 def clean_transcript(raw_text: str, api_key: str) -> str:

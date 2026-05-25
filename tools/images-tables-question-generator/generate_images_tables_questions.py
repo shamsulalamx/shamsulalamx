@@ -33,6 +33,17 @@ ASSET_DIR = BASE_DIR / "output_assets"
 LOG_DIR = BASE_DIR / "logs"
 INTERMEDIATE_DIR = BASE_DIR / "intermediate"
 
+# v4.79: Vertex migration — reuse _uw._gemini_client() factory.
+_UW_DIR = BASE_DIR.parent / "uworld-notes-question-generator"
+if str(_UW_DIR) not in sys.path:
+    sys.path.insert(0, str(_UW_DIR))
+import generate_uworld_questions as _uw  # noqa: E402
+try:
+    from google.genai import types as _genai_types  # noqa: E402
+    _GENAI_SDK_AVAILABLE = True
+except ImportError:
+    _GENAI_SDK_AVAILABLE = False
+
 GEMINI_MODEL = "gemini-2.5-flash"
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 SOURCE_FORMAT = "images-tables"
@@ -266,40 +277,44 @@ def normalized_schema_text() -> str:
 
 
 def call_gemini(api_key: str, image_path: Path, mime: str, prompt: str) -> str:
-    url = f"{GEMINI_API_BASE}/{GEMINI_MODEL}:generateContent?key={api_key}"
-    body = json.dumps(
-        {
-            "contents": [
-                {
-                    "role": "user",
-                    "parts": [
-                        {"text": prompt},
-                        {
-                            "inline_data": {
-                                "mime_type": mime,
-                                "data": base64.b64encode(image_path.read_bytes()).decode("ascii"),
-                            }
-                        },
-                    ],
-                }
-            ],
-            "generationConfig": {"temperature": 0.15, "maxOutputTokens": 4096},
-        }
-    ).encode("utf-8")
-    req = urllib.request.Request(url, data=body, method="POST", headers={"Content-Type": "application/json"})
+    """Multimodal Gemini call — one image + one prompt.
+
+    v4.79: rewritten to use google-genai SDK via _uw._gemini_client(). SDK
+    handles base64 encoding internally. Preserves the temperature=0.15 +
+    max_tokens=4096 used by this generator. Error wrapping (GeneratorError)
+    preserved so the calling retry/skip logic still recognizes failures.
+    """
+    if not _GENAI_SDK_AVAILABLE:
+        raise GeneratorError(
+            "google-genai SDK not installed. Install with: pip install google-genai"
+        )
     try:
-        with urllib.request.urlopen(req, timeout=90) as resp:
-            payload = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as err:
-        detail = err.read().decode("utf-8", errors="replace")[:500]
-        raise GeneratorError(f"Gemini HTTP {err.code}: {detail}") from err
-    candidates = payload.get("candidates") or []
-    if not candidates:
-        raise GeneratorError(f"Gemini returned no candidates: {str(payload)[:300]}")
-    parts = candidates[0].get("content", {}).get("parts") or []
-    if not parts or "text" not in parts[0]:
-        raise GeneratorError("Gemini candidate had no text part.")
-    return str(parts[0]["text"])
+        client = _uw._gemini_client()
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=[
+                prompt,
+                _genai_types.Part.from_bytes(
+                    data=image_path.read_bytes(),
+                    mime_type=mime,
+                ),
+            ],
+            config=_genai_types.GenerateContentConfig(
+                temperature=0.15,
+                max_output_tokens=4096,
+                # v4.79: disable Gemini 2.5 thinking (see _uw for rationale).
+                thinking_config=_genai_types.ThinkingConfig(thinking_budget=0),
+            ),
+        )
+    except EnvironmentError:
+        raise
+    except Exception as err:
+        raise GeneratorError(f"Gemini call failed: {err}") from err
+    text = getattr(response, "text", None)
+    if not text:
+        candidates = getattr(response, "candidates", None) or []
+        raise GeneratorError(f"Gemini candidate had no text part. candidates={candidates!r}"[:400])
+    return str(text)
 
 
 def clean_json_text(raw: str) -> str:

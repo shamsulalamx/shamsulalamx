@@ -33,6 +33,19 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
+# v4.79: Vertex migration — reuse the central _uw._gemini_client() factory.
+# Same sys.path pattern Mehlman/OME/Anki/Divine use.
+_THIS_DIR = Path(__file__).parent.resolve()
+_UW_DIR = _THIS_DIR.parent / "uworld-notes-question-generator"
+if str(_UW_DIR) not in sys.path:
+    sys.path.insert(0, str(_UW_DIR))
+import generate_uworld_questions as _uw  # noqa: E402
+try:
+    from google.genai import types as _genai_types  # noqa: E402
+    _GENAI_SDK_AVAILABLE = True
+except ImportError:
+    _GENAI_SDK_AVAILABLE = False
+
 try:
     import pdfplumber
 except ImportError:
@@ -669,41 +682,42 @@ def _build_repair_prompt(
 def _call_gemini_api(api_key: str, prompt: str) -> str:
     """
     Call Gemini generateContent and return the raw text response.
-    Uses urllib.request (stdlib). Never logs the API key.
-    Raises urllib.error.HTTPError or ValueError on failure.
+
+    v4.79: rewritten to use google-genai SDK via _uw._gemini_client(). The
+    api_key arg is kept for signature compatibility — only used when
+    GEMINI_BACKEND=ai_studio (Vertex uses ADC). Error format preserves the
+    ValueError(f"Gemini HTTP ...") shape so downstream parsing keeps working.
+
+    Temperature 0.1 + 8192 token cap preserved from pre-v4.79 — these are
+    NBME-extraction-specific settings tuned for the raw_text → normalized
+    pipeline step.
     """
-    url = f"{GEMINI_API_BASE}/{GEMINI_MODEL}:generateContent?key={api_key}"
-    body = json.dumps({
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "temperature": 0.1,
-            "maxOutputTokens": 8192,
-        },
-    }).encode("utf-8")
-
-    req = urllib.request.Request(
-        url,
-        data=body,
-        method="POST",
-        headers={"Content-Type": "application/json"},
-    )
-
+    if not _GENAI_SDK_AVAILABLE:
+        raise ValueError(
+            "google-genai SDK not installed. Install with: pip install google-genai"
+        )
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            raw = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        body_text = e.read().decode("utf-8", errors="replace")
-        raise ValueError(f"Gemini HTTP {e.code}: {body_text[:300]}")
+        client = _uw._gemini_client()
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=_genai_types.GenerateContentConfig(
+                temperature=0.1,
+                max_output_tokens=8192,
+                # v4.79: disable Gemini 2.5 thinking (see _uw for rationale).
+                thinking_config=_genai_types.ThinkingConfig(thinking_budget=0),
+            ),
+        )
+    except EnvironmentError:
+        raise
+    except Exception as e:
+        raise ValueError(f"Gemini call failed: {e}")
 
-    candidates = raw.get("candidates", [])
-    if not candidates:
-        raise ValueError(f"Gemini returned no candidates. Response: {str(raw)[:300]}")
-
-    parts = candidates[0].get("content", {}).get("parts", [])
-    if not parts:
-        raise ValueError("Gemini candidate has no content parts.")
-
-    return parts[0].get("text", "")
+    text = getattr(response, "text", None)
+    if not text:
+        candidates = getattr(response, "candidates", None) or []
+        raise ValueError(f"Gemini returned no usable text: candidates={candidates!r}"[:400])
+    return str(text)
 
 
 def _strip_llm_fences(text: str) -> str:

@@ -42,6 +42,20 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 from chunk_telemetry import ChunkHeartbeat, emit_bic_chunk_event  # noqa: E402
 
+# v4.79: Vertex migration — reuse the central _uw._gemini_client() factory
+# instead of duplicating the SDK setup. Same pattern Mehlman/OME/Anki/Divine
+# already use. Lets Fast Facts and Amboss inherit GEMINI_BACKEND switching
+# for free.
+_UW_DIR = TOOLS_DIR / "uworld-notes-question-generator"
+if str(_UW_DIR) not in sys.path:
+    sys.path.insert(0, str(_UW_DIR))
+import generate_uworld_questions as _uw  # noqa: E402
+try:
+    from google.genai import types as _genai_types  # noqa: E402
+    _GENAI_SDK_AVAILABLE = True
+except ImportError:
+    _GENAI_SDK_AVAILABLE = False
+
 def _load_uoga_module(name: str) -> Any:
     return importlib.import_module(".".join(["core", "uoga", name]))
 
@@ -920,35 +934,56 @@ def reset_quota_state() -> None:
 
 
 def raw_gemini_call(api_key: str, prompt: str, temperature: float, max_tokens: int = 8192, timeout_seconds: int = 120) -> str:
-    url = f"{GEMINI_API_BASE}/{GEMINI_MODEL}:generateContent?key={api_key}"
-    payload = json.dumps({
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "temperature": temperature,
-            "maxOutputTokens": max_tokens,
-        },
-    }).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=payload,
-        method="POST",
-        headers={"Content-Type": "application/json"},
-    )
+    """Single Gemini text generateContent call.
+
+    v4.79: rewritten to use google-genai SDK via _uw._gemini_client(). The
+    api_key arg is kept for signature compatibility — it's only used when
+    GEMINI_BACKEND=ai_studio (Vertex uses ADC). Error format preserves the
+    PipelineError wrapping so downstream timeout / quota detection still
+    matches on the same text patterns.
+
+    The timeout_seconds parameter is kept in the signature but the SDK
+    enforces its own timeouts internally — it's still respected via the
+    short-timeout repair-detection branch below.
+    """
+    if not _GENAI_SDK_AVAILABLE:
+        raise PipelineError(
+            "google-genai SDK not installed. Install with: pip install google-genai"
+        )
     try:
-        with urllib.request.urlopen(req, timeout=timeout_seconds) as resp:
-            response = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")[:600]
-        raise PipelineError(f"Gemini HTTP {exc.code}: {detail}") from exc
+        client = _uw._gemini_client()
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=_genai_types.GenerateContentConfig(
+                temperature=temperature,
+                max_output_tokens=max_tokens,
+                # v4.79: disable Gemini 2.5 thinking (see _uw._raw_gemini_call
+                # for full rationale) — preserves pre-migration output behavior.
+                thinking_config=_genai_types.ThinkingConfig(thinking_budget=0),
+            ),
+        )
     except (TimeoutError, socket.timeout) as exc:
-        raise PipelineError("repair_timeout" if timeout_seconds <= 60 else "Gemini request timed out") from exc
-    candidates = response.get("candidates") or []
-    if not candidates:
-        raise PipelineError(f"Gemini returned no candidates: {json.dumps(response)[:300]}")
-    parts = candidates[0].get("content", {}).get("parts") or []
-    if not parts or "text" not in parts[0]:
-        raise PipelineError("Gemini candidate had no text part.")
-    return str(parts[0].get("text") or "")
+        # Preserve the v4.5x repair-vs-generic-timeout distinction so the
+        # retry layer can tell which kind of timeout it was.
+        raise PipelineError(
+            "repair_timeout" if timeout_seconds <= 60 else "Gemini request timed out"
+        ) from exc
+    except EnvironmentError:
+        raise
+    except Exception as exc:
+        # SDK exceptions get wrapped as PipelineError with the original
+        # message so downstream is_quota_failure / is_network_failure text
+        # matching (in _uw) still works on the call here too.
+        raise PipelineError(f"Gemini call failed: {exc}") from exc
+
+    text = getattr(response, "text", None)
+    if not text:
+        candidates = getattr(response, "candidates", None) or []
+        raise PipelineError(
+            f"Gemini candidate had no text part. candidates={candidates!r}"[:400]
+        )
+    return str(text)
 
 
 def raw_gemini_image_call(
@@ -960,48 +995,55 @@ def raw_gemini_image_call(
     timeout_seconds: int = 90,
     response_mime_type: str | None = None,
 ) -> str:
-    parts: list[dict[str, Any]] = [{"text": prompt}]
+    """Multimodal Gemini call — prompt + N inline images.
+
+    v4.79: rewritten to use google-genai SDK via _uw._gemini_client(). The
+    SDK handles base64 encoding internally via types.Part.from_bytes, so the
+    explicit base64 step is gone. Behavior is identical on both backends.
+
+    The response_mime_type='application/json' option is preserved — that's
+    the v4.6x discovery that forcing JSON mime dramatically improves Fast
+    Facts JSON parse success rates (Gemini stops emitting markdown fences).
+    """
+    if not _GENAI_SDK_AVAILABLE:
+        raise PipelineError(
+            "google-genai SDK not installed. Install with: pip install google-genai"
+        )
+    contents: list[Any] = [prompt]
     for image_path in image_paths:
-        parts.append({
-            "inline_data": {
-                "mime_type": mime_for(image_path),
-                "data": base64.b64encode(image_path.read_bytes()).decode("ascii"),
-            }
-        })
-    url = f"{GEMINI_API_BASE}/{GEMINI_MODEL}:generateContent?key={api_key}"
-    generation_config: dict[str, Any] = {
+        contents.append(_genai_types.Part.from_bytes(
+            data=image_path.read_bytes(),
+            mime_type=mime_for(image_path),
+        ))
+    config_kwargs: dict[str, Any] = {
         "temperature": temperature,
-        "maxOutputTokens": max_tokens,
+        "max_output_tokens": max_tokens,
+        # v4.79: disable Gemini 2.5 thinking by default (see _uw for rationale).
+        "thinking_config": _genai_types.ThinkingConfig(thinking_budget=0),
     }
     if response_mime_type:
-        # Forcing application/json prevents Gemini from emitting prose / markdown
-        # fences instead of valid JSON, dramatically improving JSON parse success.
-        generation_config["responseMimeType"] = response_mime_type
-    payload = json.dumps({
-        "contents": [{"role": "user", "parts": parts}],
-        "generationConfig": generation_config,
-    }).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=payload,
-        method="POST",
-        headers={"Content-Type": "application/json"},
-    )
+        config_kwargs["response_mime_type"] = response_mime_type
     try:
-        with urllib.request.urlopen(req, timeout=timeout_seconds) as resp:
-            response = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")[:600]
-        raise PipelineError(f"Gemini HTTP {exc.code}: {detail}") from exc
+        client = _uw._gemini_client()
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=contents,
+            config=_genai_types.GenerateContentConfig(**config_kwargs),
+        )
     except (TimeoutError, socket.timeout) as exc:
         raise PipelineError("Gemini request timed out") from exc
-    candidates = response.get("candidates") or []
-    if not candidates:
-        raise PipelineError(f"Gemini returned no candidates: {json.dumps(response)[:300]}")
-    parts_out = candidates[0].get("content", {}).get("parts") or []
-    if not parts_out or "text" not in parts_out[0]:
-        raise PipelineError("Gemini candidate had no text part.")
-    return str(parts_out[0].get("text") or "")
+    except EnvironmentError:
+        raise
+    except Exception as exc:
+        raise PipelineError(f"Gemini call failed: {exc}") from exc
+
+    text = getattr(response, "text", None)
+    if not text:
+        candidates = getattr(response, "candidates", None) or []
+        raise PipelineError(
+            f"Gemini candidate had no text part. candidates={candidates!r}"[:400]
+        )
+    return str(text)
 
 
 def deterministic_normalize_slide(slide: dict[str, Any]) -> dict[str, Any]:
