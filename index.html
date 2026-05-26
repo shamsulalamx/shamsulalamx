@@ -7162,7 +7162,54 @@ function renderExplanationTablesInto(q, container) {
   }
 
   function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // #9: lab block detection inside a long prose paragraph. The existing _isLabPara
+  // rejects paragraphs > 400 chars, which is almost every real stem with embedded
+  // labs (the patient description alone exceeds that). This finds the longest
+  // contiguous run of lab-shaped lines within a paragraph and returns the prose
+  // before, the lab rows, and the prose after.
+  // #9: lab line detection. Widened to include qualitative results (negative/positive/
+  // trace/normal/etc.), charge markers (1+/2+/3+/4+), value ranges (10-20/hpf), and
+  // /hpf, /lpf, sec units so HBsAg, Anti-HBs, urine RBC/WBC, Prothrombin time, Ketones,
+  // etc. all stay inside the lab table instead of breaking the streak.
+  const _EMBED_LAB_LINE_RE = /^([A-Za-z][A-Za-z0-9\s\+\-²³⁻\/.,]{0,50}?)\s+(?:[\d.,]+(?:\-[\d.,]+)?\s*(?:mEq\/L|mg\/dL|mg\/dl|mmol\/L|µg\/dL|µg\/dl|ng\/dL|ng\/dl|%|U\/L|IU\/L|mm\s?Hg|g\/dL|g\/dl|\/mm[²³]?|\/µm[²³]?|\/hpf|\/lpf|sec)|[\d.]+\+|trace|negative|positive|normal|abnormal|elevated|absent|present|reactive|nonreactive|non-reactive|increased|decreased|unchanged|none|nonreactive)(\s+.*)?$/i;
+  function _extractEmbeddedLabBlock(paragraph) {
+    if (!paragraph) return null;
+    const lines = paragraph.split('\n');
+    let bestStart = -1, bestLen = 0;
+    let curStart = -1, curLen = 0;
+    for (let i = 0; i < lines.length; i++) {
+      if (_EMBED_LAB_LINE_RE.test(lines[i].trim())) {
+        if (curStart === -1) curStart = i;
+        curLen++;
+      } else {
+        if (curLen >= 3 && curLen > bestLen) { bestStart = curStart; bestLen = curLen; }
+        curStart = -1; curLen = 0;
+      }
+    }
+    if (curLen >= 3 && curLen > bestLen) { bestStart = curStart; bestLen = curLen; }
+    if (bestStart === -1) return null;
+    const labs = lines.slice(bestStart, bestStart + bestLen).map(l => {
+      const trimmed = l.trim();
+      const m = trimmed.match(_EMBED_LAB_LINE_RE);
+      if (!m) return { name: trimmed, val: '' };
+      const name = m[1].trim();
+      let val = m[2].trim();
+      if (m[3]) val += ' ' + m[3].trim();
+      return { name, val };
+    });
+    return {
+      pre: lines.slice(0, bestStart).join('\n'),
+      labs,
+      post: lines.slice(bestStart + bestLen).join('\n')
+    };
+  }
+
   window.buildStemHTML = function(text) {
+    // #1-#27: normalize legacy NBME extraction artifacts before rendering.
+    if (typeof window._normalizeDisplayText === 'function') {
+      text = window._normalizeDisplayText(text || '');
+    }
     const paras = (text || '').split('\n\n').map(p => p.trim()).filter(Boolean);
     if (!paras.length) return '<p>' + esc(text || '') + '</p>';
     let html = '';
@@ -7190,7 +7237,18 @@ function renderExplanationTablesInto(q, container) {
         ).join('');
         if (rows) html += `<table class="lab-values-table"><tbody>${rows}</tbody></table>`;
       } else {
-        html += `<p>${esc(paras[i])}</p>`;
+        // #9: try to pull an embedded lab block out of a long prose paragraph.
+        const labBlock = _extractEmbeddedLabBlock(paras[i]);
+        if (labBlock && labBlock.labs.length >= 3) {
+          if (labBlock.pre.trim()) html += `<p>${esc(labBlock.pre.trim())}</p>`;
+          const tableRows = labBlock.labs.map(({ name, val }) =>
+            `<tr><td>${esc(name)}</td><td>${esc(val)}</td></tr>`
+          ).join('');
+          html += `<table class="lab-values-table"><tbody>${tableRows}</tbody></table>`;
+          if (labBlock.post.trim()) html += `<p>${esc(labBlock.post.trim())}</p>`;
+        } else {
+          html += `<p>${esc(paras[i])}</p>`;
+        }
         i++;
       }
     }
@@ -7204,10 +7262,18 @@ function renderExplanationTablesInto(q, container) {
     return parts.join('\n\n').trim();
   };
   window.getQuestionChoices = function(q) {
+    let raw;
     if (q?.sharedGroup?.sharedChoices && q.sharedGroup.sharedChoices.length) {
-      return q.sharedGroup.sharedChoices;
+      raw = q.sharedGroup.sharedChoices;
+    } else {
+      raw = q?.o || [];
     }
-    return q?.o || [];
+    // #1-#27: return normalized copies so all callers (renderOptions,
+    // buildExplanationHTML, search/match logic on letters) see repaired text.
+    if (typeof window._normalizeChoices === 'function') {
+      return window._normalizeChoices(raw);
+    }
+    return raw;
   };
 	  window.buildSharedGroupHTML = function(q) {
 	    const group = q?.sharedGroup;
@@ -7255,7 +7321,13 @@ function renderExplanationTablesInto(q, container) {
 	    let html;
 	    if (!group) {
 	      if (highlightedStemHtml) {
-	        html = highlightedStemHtml;
+	        // #1-#27: also normalize saved-highlight HTML so questions that were
+	        // highlighted before today's normalizer existed still get repaired.
+	        // The patterns operate on text content; HTML tags (<mark>, <p>, etc.)
+	        // don't contain the matched character sequences so they're untouched.
+	        html = (typeof window._normalizeDisplayText === 'function')
+	          ? window._normalizeDisplayText(highlightedStemHtml)
+	          : highlightedStemHtml;
 	      } else {
 	        // #17: Strip a leading duplicate question-number prefix from extracted stems.
 	        // Observed forms include "11. ", "11 . ", "Item 11. ", "11) ", "11 ) ", "11 A man..."
@@ -7332,6 +7404,280 @@ function renderExplanationTablesInto(q, container) {
     });
   };
 
+})();
+
+/* ============================================================
+   #1/#9/#10/#11/#13/#24/#26/#27: Render-time normalization for legacy NBME
+   stems and choices. Repairs PDF-extraction artifacts: OCR letter/digit
+   confusion (cI/Cl, HC0/HCO, P/β, !/l), exiled super- and subscripts
+   (S₃ gallop, V₂ leads, mm³, PO₂, kg/m²), Greek letters from Symbol font
+   (~→β, a-→α-), stray orphan bullets/periods on their own lines, lab name
+   +value pairs split across newlines, HCO3- reconstruction, and B-vitamin
+   choices identified by parenthetical hints. Patterns are anchored to
+   specific contexts so they don't touch genuine numbers/letters in prose.
+   Data is never modified — normalization runs at every display site.
+============================================================ */
+(() => {
+  const _SUB_DIGIT = {'0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉'};
+  const _SUP_DIGIT = {'0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹'};
+
+  window._normalizeDisplayText = function(text) {
+    if (!text) return text;
+    let t = String(text);
+
+    // ── Strip stray bullets/periods on their own lines (PDF layout artifacts) ──
+    // Done FIRST so orphan digits below become adjacent to their letters.
+    t = t.replace(/\n[ \t]*[•·][ \t]*\n/g, '\n');
+    t = t.replace(/\n[ \t]*\.[ \t]*\n/g, '\n');
+
+    // ── Greek letters (Symbol font in PDF: β→~, α→a) ──
+    // α- patterns run FIRST so "a- and ~" matches before the ~ is rewritten to β.
+    t = t.replace(/\ba-\s*and\s*~/g, 'α- and β');
+    t = t.replace(/\ba-\s*and\s*β/g, 'α- and β');  // also catches the post-replace case
+    t = t.replace(/\ba-[Aa]drenergic/g, 'α-adrenergic');
+    t = t.replace(/~\s*-\s*[Aa]drenergic/g, 'β-adrenergic');
+    t = t.replace(/~\s*-\s*[Bb]locking/g, 'β-blocking');
+    t = t.replace(/~\s*-\s*[Bb]locker/g, 'β-blocker');
+    t = t.replace(/~\s*-\s*globulin/g, 'β-globulin');
+    t = t.replace(/~\s*-\s*hydroxybutyric/g, 'β-hydroxybutyric');
+    t = t.replace(/\bP-hydroxybutyric/g, 'β-hydroxybutyric');
+    // β-hCG / β-thalassemia (NBME 4 Q47, NBME 5 Q15, NBME 6 Q27)
+    t = t.replace(/~\s*-\s*hCG/g, 'β-hCG');
+    t = t.replace(/\b13-hCG/g, 'β-hCG');
+    t = t.replace(/~\s*-\s*([Tt])halassemia/g, 'β-$1halassemia');
+
+    // ── OCR letter/digit confusion ──
+    t = t.replace(/\bcI(?=[\s\-])/g, 'Cl');           // chloride
+    t = t.replace(/\bCl·/g, 'Cl-');                   // middle-dot in chloride (NBME 4 Q7)
+    t = t.replace(/\bHC0(?=\s)/g, 'HCO');             // bicarbonate zero
+    t = t.replace(/\bPericardia!/g, 'Pericardial');   // ! mistaken for l
+    t = t.replace(/\bBrachia!/g, 'Brachial');         // (NBME 6 Q33 choice A)
+    t = t.replace(/\bbrachia!/g, 'brachial');         // (NBME 6 Q12 choice C/D, Q9)
+    t = t.replace(/\blgG\b/g, 'IgG');                 // immunoglobulin G OCR I → l (NBME 6 Q29)
+    t = t.replace(/\bbiORSY\b/g, 'biopsy');           // (NBME 6 Q1)
+    t = t.replace(/AcY,clovir/g, 'Acyclovir');        // (NBME 6 Q5)
+    t = t.replace(/eml\)yema/g, 'empyema');           // (NBME 6 Q39)
+    t = t.replace(/hyP,oxemia/g, 'hypoxemia');        // (NBME 6 Q34)
+
+    // ── HCO3- reconstruction (subscript 3 and superscript - both exiled) ──
+    t = t.replace(
+      /\bHCO\s+([\d.,]+\s*mEq\/L)\s*\n[ \t]*-[ \t]*\n[ \t]*3\b/g,
+      'HCO3- $1'
+    );
+    // Variant: HCO followed by mEq/L and orphan 3 with NO `-` line between (the `-` was
+    // never extracted, or the orphan was a bullet stripped by the earlier pass). NBME 4 Q39.
+    t = t.replace(
+      /\bHCO\s+([\d.,]+\s*mEq\/L)\s*\n[ \t]*3\b/g,
+      'HCO3- $1'
+    );
+
+    // ── Inline superscripts (with OR without whitespace) ──
+    // JS \b only respects ASCII word boundaries, so it fails on "µm" (µ is non-ASCII).
+    // Anchor with a leading non-word/whitespace char and a trailing non-word boundary.
+    // \s* (not \s+) handles both "mm 3" (Q39) and "mm3" (Q50) cases.
+    t = t.replace(/(^|[^A-Za-z0-9])(mm|µm|cm)\s*([23])(?=\s|$|[.,;)])/g, (_, p, u, d) => p + u + _SUP_DIGIT[d]);
+    t = t.replace(/\bkg\/m\s*([23])\b/g, (_, d) => 'kg/m' + _SUP_DIGIT[d]);
+
+    // ── Orphan superscript digit AFTER a per-volume unit ──
+    t = t.replace(/(\/mm|\/cm|\/µm)\s*\n[ \t]*([23])[ \t]*(?=\n|$)/g, (_, u, d) => u + _SUP_DIGIT[d]);
+    // ── Orphan superscript digit BEFORE its unit on next line (Q43: "g/dL\n3\nLeukocyte ... /mm" → /mm³) ──
+    t = t.replace(/\n[ \t]*([23])[ \t]*\n([A-Z][a-zA-Z]*(?:\s+[a-zA-Z]+)*\s+[\d.,]+\s*\/(?:mm|cm|µm))(?![²³])/g, (_, d, line) => '\n' + line + _SUP_DIGIT[d]);
+
+    // ── Heart sound subscripts (S₁-S₄) ──
+    // Pattern A: orphan digit on its own line near "S gallop/sound/splitting/etc."
+    t = t.replace(
+      /\b(S)(\s+(?:gallop|sound|heart\s+sound|splitting|split)[A-Za-z0-9\s,.;:'+\-?]{0,220}?)\n[ \t]*([1-4])[ \t]*(?=\n|$)/g,
+      (_, s, mid, d) => s + _SUB_DIGIT[d] + mid
+    );
+    // Pattern B: bare "S " + short text + orphan digit (Q14 "S There is\n2", Item 6 "an S She has...\n3")
+    t = t.replace(
+      /\b(S)(\s+[A-Z][a-zA-Z][A-Za-z\s,.;:'+\-]{0,40}?)\n[ \t]*([1-4])[ \t]*(?=\n|$)/g,
+      (_, s, mid, d) => s + _SUB_DIGIT[d] + mid
+    );
+    // Pattern C: "S and\n3\nS gallop" → "S₃ and S gallop" (Q33 first match)
+    t = t.replace(
+      /\b(S)\s+and\s*\n[ \t]*([1-4])[ \t]*\n\s*(S\s+gallop)/g,
+      (_, s, d, rest) => s + _SUB_DIGIT[d] + ' and ' + rest
+    );
+    // Pattern C2: after Pattern C, "S₃ and S gallop ... \n4\n..." → "S₃ and S₄ gallop ..."
+    // (Q33 has a second orphan digit far from its S.)
+    t = t.replace(
+      /\b(S[₁₂₃₄])\s+and\s+(S)\s+(gallop[\s\S]{0,250}?)\n[ \t]*([1-4])[ \t]*(?=\n|$)/g,
+      (_, s1, _s2, mid, d) => s1 + ' and S' + _SUB_DIGIT[d] + ' ' + mid
+    );
+    // Pattern E: "splitting of S and a prominent apical impulse. An ECG shows left\n2\n..." (Q31)
+    // The orphan digit is far from the S and the post-"and" text starts lowercase.
+    t = t.replace(
+      /\b(S)(\s+and\s+(?:a\s+)?[a-z][A-Za-z0-9\s,.;:'+\-]{0,200}?)\n[ \t]*([1-4])[ \t]*(?=\n|$)/g,
+      (_, s, mid, d) => s + _SUB_DIGIT[d] + mid
+    );
+    // Pattern D: inline "S [1-4] gallop/sound/splitting"
+    t = t.replace(/\b(S)\s+([1-4])\b(?=\s+(?:gallop|sound|heart\s+sound|splitting|split))/gi, (_, s, d) => s + _SUB_DIGIT[d]);
+
+    // ── ECG lead subscripts (V₁-V₆) ──
+    // Pattern A: "V through\n2\n" → "V₂ through"
+    t = t.replace(
+      /\b(V)(\s+through[A-Za-z0-9\s,.;:'+\-?]{0,40}?)\n[ \t]*([1-6])[ \t]*(?=\n|$)/g,
+      (_, v, mid, d) => v + _SUB_DIGIT[d] + mid
+    );
+    // Pattern B: "V text\n[1-6]\n" — broader catch (Q33 second V, where digit may be at end of stem)
+    t = t.replace(
+      /\b(V)(\s+[A-Z][a-z][A-Za-z0-9\s,.;:'+\-?]{0,220}?)\n[ \t]*([1-6])[ \t]*(?=\n|$)/g,
+      (_, v, mid, d) => v + _SUB_DIGIT[d] + mid
+    );
+    // Pattern C: inline "lead(s) V [1-6]"
+    t = t.replace(/\b(lead[s]?\s+V)\s+([1-6])\b/gi, (_, p, d) => p + _SUB_DIGIT[d]);
+
+    // ── PO₂ / PCO₂ / O₂ saturation ──
+    // Pco / PCO / Po / PO with exiled subscript 2 (Q43, Q47)
+    t = t.replace(
+      /\b(P[oOcC](?:[oO])?)\s+(\d[\d.,]*\s+mm\s*Hg)\s*\n[ \t]*2[ \t]*(?=\n|$)/g,
+      (_, p, val) => p + _SUB_DIGIT['2'] + ' ' + val
+    );
+    // O₂ saturation where leading 0 is OCR for letter O and subscript is exiled
+    t = t.replace(
+      /(^|\n)0(\s+saturation\s+\d+%)\s*\n[ \t]*2[ \t]*(?=\n|$)/g,
+      (_, prefix, suf) => prefix + 'O' + _SUB_DIGIT['2'] + suf
+    );
+
+    // ── Ca²⁺ ion split (Q49 NBME 3: "Ca\n2+ 15 mEq/L" → "Ca²⁺ 15 mEq/L") ──
+    // Must run BEFORE the general lab pair join below, otherwise Ca would be joined
+    // with "2+ 15 mEq/L" producing "Ca 2+ 15 mEq/L" instead of "Ca²⁺ 15 mEq/L".
+    t = t.replace(
+      /(^|\n)Ca\s*\n[ \t]*2\+\s+(\d[\d.,]*\s*(?:mEq\/L|mmol\/L|mg\/dL))/g,
+      '$1Ca²⁺ $2'
+    );
+
+    // ── Lab VALUE split: "Albumin 4\n.0 g/dL" → "Albumin 4.0 g/dL" (Item 28) ──
+    t = t.replace(
+      /([A-Z][a-zA-Z]+\s+\d+)\s*\n[ \t]*(\.\d+\s+(?:g\/dL|mg\/dL|mEq\/L|mmol\/L))/g,
+      '$1$2'
+    );
+
+    // ── Lab name + value pair joining (Q8, Q37) ──
+    t = t.replace(
+      /(^|\n)((?:Na\+?|K\+?|Cl\-?|cI\-?|Ca[2]?\+?|Mg[2]?\+?|HCO3\-?|Hco3\-?|PO4[\-]?[3]?\-?))\s*\n\s*([\d.,]+\s*(?:mEq\/L|mg\/dL|mg\/dl|mmol\/L|µg\/dL|ng\/dL|%|U\/L|IU\/L|mm\s?Hg|g\/dL|g\/dl))/g,
+      '$1$2 $3'
+    );
+
+    // ── B-vitamin recovery via parenthetical hints ──
+    t = t.replace(/\bVitamin B\s*\(thiamine\)/gi, 'Vitamin B₁ (thiamine)');
+    t = t.replace(/\bVitamin B\s*\(riboflavin\)/gi, 'Vitamin B₂ (riboflavin)');
+    t = t.replace(/\bVitamin B\s*\(niacin\)/gi, 'Vitamin B₃ (niacin)');
+    t = t.replace(/\bVitamin B\s*\(pantothenic\s+acid\)/gi, 'Vitamin B₅ (pantothenic acid)');
+    t = t.replace(/\bVitamin B\s*\(pyridoxine\)/gi, 'Vitamin B₆ (pyridoxine)');
+    t = t.replace(/\bVitamin B\s*\(biotin\)/gi, 'Vitamin B₇ (biotin)');
+    t = t.replace(/\bVitamin B\s*\(folate\)/gi, 'Vitamin B₉ (folate)');
+    t = t.replace(/\bVitamin B\s*\(folic\s+acid\)/gi, 'Vitamin B₉ (folic acid)');
+    t = t.replace(/\bVitamin B\s*\(cyanocobalamin\)/gi, 'Vitamin B₁₂ (cyanocobalamin)');
+    t = t.replace(/\bVitamin B\s*\(cobalamin\)/gi, 'Vitamin B₁₂ (cobalamin)');
+    t = t.replace(/\bVitamin\s+\(cobalamin\)/gi, 'Vitamin B₁₂ (cobalamin)');  // missing-B variant (NBME 6 Q48)
+    t = t.replace(/\bVitamin Be\b/g, 'Vitamin B₆');  // "Be" is OCR for "B₆" subscript (NBME 6 Q8)
+
+    // ── #1: Phantom line break repair (final pass) ──
+    // PDF visual line wraps get preserved as \n which, under white-space: pre-wrap,
+    // renders as visible line breaks mid-sentence. Heuristics:
+    //   • lowercase / comma + \n + lowercase  → soft sentence wrap, join with space
+    //   • lowercase / comma + \n + digit       → BP/lab value flowing from prose ("is\n85/45")
+    //   • digit + \n + lowercase                → wrap after a number ("3\nis positive")
+    //   • lowercase + \n + V/S₁₋₆               → "through V₆" wrap onto next line
+    //   • hyphenated mid-word wraps             → join ("hydrochlorot-\nhiazide")
+    // Sentence-ending punctuation (period/!/?) + \n preserves the break (new sentence).
+    // Colon + \n + UPPERCASE preserves structural breaks (e.g. "show:\nNa+ 139 mEq/L").
+    // Runs LAST so structural patterns above (orphan-digit, lab pair join, etc.) have
+    // intact \n positions to work with.
+    t = t.replace(/([a-z,;:%])\n[ \t]*([a-z])/g, '$1 $2');  // + % (NBME 4 Q15/Q41, NBME 3 Q27)
+    t = t.replace(/([a-z,%])\n[ \t]*(\d)/g, '$1 $2');
+    t = t.replace(/(\d)\n[ \t]*([a-z])/g, '$1 $2');
+    t = t.replace(/([a-z])\n[ \t]*([VS][₀₁₂₃₄₅₆₇₈₉])/g, '$1 $2');
+    t = t.replace(/(\w)-\n[ \t]*([a-z])/g, '$1$2');
+
+    return t;
+  };
+
+  // Returns a new array of choice objects with their .t fields normalized.
+  window._normalizeChoices = function(choices) {
+    if (!Array.isArray(choices)) return choices;
+    return choices.map(opt => Object.assign({}, opt, {
+      t: window._normalizeDisplayText(opt && opt.t || '')
+    }));
+  };
+
+  // #26: try to render a set of answer choices as a columned HTML table.
+  // Returns true if rendered (caller should not also render normal radio rows);
+  // false if the choices don't fit the columned pattern. onChoiceClick is invoked
+  // with the original choice object when a row is clicked (for selectAnswer).
+  window._tryRenderColumnedChoices = function(choices, container, onChoiceClick, options) {
+    if (!Array.isArray(choices) || choices.length < 2 || !container) return false;
+    const splits = choices.map(c => String(c.t || '').split('|').map(p => p.trim()).filter(Boolean));
+    const firstLen = splits[0].length;
+    if (firstLen < 3) return false;
+    if (!splits.every(s => s.length === firstLen)) return false;
+
+    // Derive column labels by scanning cells for the longest non-numeric leading phrase
+    // common across rows for each column.
+    const colLabels = [];
+    for (let c = 0; c < firstLen; c++) {
+      let bestLabel = '';
+      for (let i = 0; i < splits.length; i++) {
+        const cell = splits[i][c];
+        // Label = leading words before a numeric/symbol value or "none"/"trace"/etc.
+        const m = cell.match(
+          /^([A-Z][A-Za-z][A-Za-z\s\/]*?)(?=\s+(?:[\d.,+\-%]|-\s|\b(?:none|rare|trace|negative|positive|muddy|eosinophils|bacteria|WBC|RBC|tubular)\b)|\s*$)/
+        );
+        if (m && m[1].trim().length > bestLabel.length) bestLabel = m[1].trim();
+      }
+      colLabels.push(bestLabel || ('Col ' + (c + 1)));
+    }
+
+    const rows = choices.map((c, i) => {
+      const cells = splits[i].map((cell, ci) => {
+        const lbl = colLabels[ci];
+        if (lbl && cell.toLowerCase().startsWith(lbl.toLowerCase())) {
+          return cell.substring(lbl.length).trim() || '—';
+        }
+        return cell;
+      });
+      return { letter: c.l, cells, original: c };
+    });
+
+    const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const table = document.createElement('table');
+    table.className = 'opt-columned-table';
+    table.style.cssText = 'width:100%;border-collapse:collapse;margin:8px 0;font-size:13px;table-layout:auto;';
+    const thead = document.createElement('thead');
+    thead.innerHTML =
+      '<tr><th style="padding:6px 8px;border-bottom:2px solid #cbd5e0;text-align:left;font-weight:700;width:36px;"></th>' +
+      colLabels.map(l => `<th style="padding:6px 8px;border-bottom:2px solid #cbd5e0;text-align:left;font-weight:700;white-space:nowrap;">${esc(l)}</th>`).join('') +
+      '</tr>';
+    table.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    rows.forEach(row => {
+      const tr = document.createElement('tr');
+      tr.className = 'opt-columned-row';
+      tr.dataset.letter = row.letter;
+      const answered = options && options.answered;
+      const chosen = options && options.chosenLetter === row.letter;
+      const correct = options && options.correctLetter === row.letter;
+      let rowBg = '';
+      if (answered) {
+        if (correct) rowBg = 'background:#e8f5e9;';
+        else if (chosen) rowBg = 'background:#ffebee;';
+      } else if (chosen) {
+        rowBg = 'background:#e3f2fd;';
+      }
+      tr.style.cssText = 'cursor:pointer;border-bottom:1px solid #e8ecf1;' + rowBg;
+      tr.innerHTML = `<td style="padding:6px 8px;font-weight:700;vertical-align:top;">${esc(row.letter)})</td>` +
+        row.cells.map(v => `<td style="padding:6px 8px;vertical-align:top;">${esc(v)}</td>`).join('');
+      if (typeof onChoiceClick === 'function') {
+        tr.addEventListener('click', () => onChoiceClick(row.original));
+      }
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    container.appendChild(table);
+    return true;
+  };
 })();
 
 /* ============================================================
@@ -7766,6 +8112,22 @@ const Quiz = (() => {
     container.innerHTML = '';
 
     const choices = typeof window.getQuestionChoices === 'function' ? window.getQuestionChoices(q) : (q.o || []);
+
+    // #26: render columned answer choices (e.g. urinalysis table) as a real HTML table.
+    if (typeof window._tryRenderColumnedChoices === 'function') {
+      const rendered = window._tryRenderColumnedChoices(
+        choices,
+        container,
+        (opt) => { if (!r.answered) selectAnswer(opt.l); },
+        {
+          answered: r.answered,
+          chosenLetter: r.chosen,
+          correctLetter: r.answered ? q.c : null
+        }
+      );
+      if (rendered) return;
+    }
+
     choices.forEach(opt => {
       const isChosen  = r.chosen === opt.l;
       const isCorrect = q.c === opt.l;
