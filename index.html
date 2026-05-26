@@ -1138,11 +1138,12 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
   box-shadow: none;
 }
 .q-img {
-  width: 100%; max-width: none; height: auto;
+  width: auto; max-width: 100%; height: auto; max-height: 600px;
   border: none; border-radius: 0;
   display: block;
   background: #fff;
   box-shadow: none;
+  margin: 0 auto;
 }
 .q-stem-image-mode #q-stem,
 .rev-stem-image-mode #rev-stem { display: none; }
@@ -1645,7 +1646,6 @@ body.quiz-fullscreen-mode #overlay-pause {
               <span class="quiz-test-name" id="quiz-test-name">—</span>
               <span class="quiz-q-counter" id="quiz-q-num">Item 1</span>
               <span class="quiz-score-live" id="score-live">0/0 (0%)</span>
-              <span class="hint-usage-counter" id="hint-usage-counter">Gemini hints today: 0</span>
             </div>
             <div class="quiz-topbar-center">
               <div class="timer-block">
@@ -7868,7 +7868,10 @@ const Quiz = (() => {
     if (q.correctBlurb) {
       const blurbDiv = document.createElement('div');
       blurbDiv.className = 'exp-explanation-block exp-blurb';
-      blurbDiv.innerHTML = q.correctBlurb;
+      // #22: Strip duplicate "Educational Objective" section when EO is rendered separately above.
+      blurbDiv.innerHTML = q.educationalObjective
+        ? q.correctBlurb.replace(/<div class="ngj-exp-section"><strong>Educational\s+Objective<\/strong>[\s\S]*?<\/div>/gi, '')
+        : q.correctBlurb;
       container.appendChild(blurbDiv);
     } else if (q.explanation) {
       // Legacy plain-text explanation (pdf import) — only split on \n\n, never \n
@@ -8083,7 +8086,10 @@ window.buildExplanationHTML = function(q, r, container) {
   if (q.correctBlurb) {
     var blurbDiv = document.createElement('div');
     blurbDiv.className = 'exp-explanation-block exp-blurb';
-    blurbDiv.innerHTML = q.correctBlurb;
+    // #22: Strip duplicate "Educational Objective" section when EO is rendered separately above.
+    blurbDiv.innerHTML = q.educationalObjective
+      ? q.correctBlurb.replace(/<div class="ngj-exp-section"><strong>Educational\s+Objective<\/strong>[\s\S]*?<\/div>/gi, '')
+      : q.correctBlurb;
     container.appendChild(blurbDiv);
   } else if (q.explanation) {
     var expDiv = document.createElement('div');
@@ -8193,7 +8199,7 @@ function _renderHints() {
   if (!_hintTexts.length) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
   panel.innerHTML = _hintTexts.map((text, i) =>
-    `<div class="hint-item"><div class="hint-label">Hint ${i + 1}</div>${text}</div>`
+    `<div class="hint-item">${text}</div>`
   ).join('');
 }
 
@@ -8251,17 +8257,16 @@ async function requestHint() {
   try {
     const hintPrompt =
       'You are a Step 2 CK clinical reasoning coach. Generate exactly one hint, but the hint must contain 2-3 sentences and 35-80 words. ' +
-      'The hint should help the student notice the discriminating clue pattern, understand why it matters clinically or mechanistically, ' +
-      'and avoid at least one tempting distractor. ' +
+      'The hint should help the student notice the discriminating clue pattern and understand why it matters clinically or mechanistically. ' +
       'Do not state the diagnosis, answer choice, or management step if that would directly reveal the answer. ' +
+      'NEVER mention any specific answer choice — neither the correct one nor any wrong one. Do not name, paraphrase, or allude to any drug, diagnosis, test, or option that appears in the answer list. Do not say "the answer is not X", "rule out Y", "Choice A/B/C", or describe what something "is not." Discuss only the vignette\'s clinical clues and underlying reasoning. ' +
       'Do not restate the vignette. Do not give generic advice like "focus on the key features" or "think about the timeline" without specific clinical content. ' +
       'The output must be only the hint — no preamble, no label, no closing sentence.\n\n' +
-      'REQUIRED STRUCTURE (all 3 components must be present):\n' +
+      'REQUIRED STRUCTURE (both components must be present):\n' +
       '1. Name the specific clue or clue cluster in the vignette that controls the question.\n' +
-      '2. Explain why that clue matters — the mechanism, the clinical pattern, or the diagnostic implication.\n' +
-      '3. Identify one plausible competing answer and the specific reason it is less likely here.\n\n' +
+      '2. Explain why that clue matters — the mechanism, the clinical pattern, or the diagnostic implication.\n\n' +
       (stemImage ? 'Question stem is in the attached image.\n' : `Question stem: ${stem}\n`) +
-      `Answer choices:\n${choices}\n`;
+      `Answer choices (for your reference only — do NOT mention any of these in the hint):\n${choices}\n`;
     const parts = [{ text: hintPrompt }];
     if (stemImage?.mimeType && stemImage?.data) {
       parts.push({ inlineData: { mimeType: stemImage.mimeType, data: stemImage.data } });
@@ -28402,9 +28407,13 @@ Errors: ${escapeHTML(errors)}</div>
     // Build an HTML string for q.correctBlurb from explanationSections.
     // Each section gets a wrapper so headings can have inter-section spacing
     // while paragraphs within a section stay tightly grouped.
+    // #22: If EO is rendered separately above (top blue box), skip any
+    // "Educational Objective" section here so it doesn't appear twice.
+    const _hasSeparateEO = !!(educationalObjective && String(educationalObjective).trim());
     let html = '';
     (sections || []).forEach(sec => {
       const heading = (sec.heading || '').trim();
+      if (_hasSeparateEO && /^educational\s*objective\b/i.test(heading)) return;
       const body = Array.isArray(sec.body) ? sec.body : (typeof sec.body === 'string' ? [sec.body] : []);
       const bodyParts = body.filter(p => p && String(p).trim());
       if (!heading && !bodyParts.length) return;
