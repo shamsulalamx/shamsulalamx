@@ -567,8 +567,11 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 }
 .qns-item:hover { background: rgba(255,255,255,.04); }
 .qns-item.qns-current { background: rgba(41,128,185,.14); border-left-color: #2980b9; }
-.qns-item.qns-correct { border-left-color: #27ae60; }
-.qns-item.qns-wrong   { border-left-color: #c0392b; }
+.qns-item.qns-correct  { border-left-color: #27ae60; }
+.qns-item.qns-wrong    { border-left-color: #c0392b; }
+.qns-item.qns-answered { border-left-color: #4fc3f7; }
+.qns-item.qns-answered .qns-num { color: #9ed8f5; }
+.qns-item.qns-answered .qns-dot { background: #1a3a52; border-color: #4fc3f7; color: #9ed8f5; }
 .qns-item.qns-current.qns-correct,
 .qns-item.qns-current.qns-wrong { border-left-color: #4fc3f7; background: rgba(41,128,185,.22); }
 .qns-item.qns-marked  { box-shadow: inset 0 0 0 1px rgba(240,165,0,.45); }
@@ -727,6 +730,19 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 .opt-indicator { margin-left: auto; font-size: 11px; font-weight: 700; flex-shrink: 0; }
 .ind-correct { color: var(--green); }
 .ind-wrong   { color: var(--red); }
+
+/* Submit button row — v4.84 #5 */
+.submit-row { padding: 14px clamp(12px, 1.5vw, 18px); border-top: 1px solid #edf1f5; background: #fafbfc; display: flex; align-items: center; gap: 10px; }
+.submit-row .btn-submit {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 9px 22px; background: #2c5aa0; color: #fff; border: 1px solid #234a85;
+  border-radius: 3px; font-size: 14px; font-weight: 600; cursor: pointer;
+  transition: background .12s, opacity .12s;
+}
+.submit-row .btn-submit:hover { background: #234a85; }
+.submit-row .btn-submit.submitted { background: #6c757d; border-color: #5a6268; cursor: default; opacity: .85; }
+.submit-row .btn-submit.submitted:hover { background: #6c757d; }
+.submit-row .submit-hint { color: #6c757d; font-size: 12px; }
 
 /* Hint system */
 .btn-hint { display: inline-block; margin: 8px 0 4px; padding: 5px 14px; font-size: 11.5px; font-weight: 600; color: #92400e; background: #fffbeb; border: 1px solid #f59e0b; border-radius: 4px; cursor: pointer; transition: background .12s; }
@@ -1158,6 +1174,21 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
   align-items: center; justify-content: center;
 }
 #modal-lab.open { display: flex; }
+/* v4.84 #25: inline highlight + Enter-cycle lab search. */
+.lab-search-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px; border-bottom: 1px solid #eef0f3;
+  background: #fafbfc;
+}
+.lab-search-input {
+  flex: 1; padding: 6px 10px; font-size: 13px;
+  border: 1px solid #cbd5e0; border-radius: 3px;
+  background: #fff; color: var(--text);
+}
+.lab-search-input:focus { border-color: var(--blue); outline: none; }
+.lab-search-status { font-size: 11px; color: #6c757d; min-width: 90px; text-align: right; }
+#modal-lab tr.lab-match td { background: #fff3cd !important; }
+#modal-lab tr.lab-match-active td { background: #ffe082 !important; box-shadow: inset 3px 0 0 #f59e0b; }
 .lab-panel {
   background: #fff; border-radius: 10px;
   width: min(820px, 96vw); max-height: 88vh;
@@ -1320,6 +1351,14 @@ body.quiz-fullscreen-mode .modal-overlay {
 body.quiz-fullscreen-mode #overlay-pause {
   z-index: 10001 !important;
 }
+/* v4.84 #3 / #15: in focus mode the screen-quiz container creates a
+   stacking context at z-index 9999, which buried the calculator popup
+   (z-index 200) and the lab values modal (z-index 600). Both clicks
+   appeared to "do nothing" because the popup was rendered behind the
+   fullscreen overlay. Bumping their z-index above 9999 makes them
+   render on top of focus mode the same way they would normally. */
+body.quiz-fullscreen-mode #calc-popup { z-index: 10002 !important; }
+body.quiz-fullscreen-mode #modal-lab  { z-index: 10002 !important; }
 
 /* v4.80: async-prompt modal sits above EVERYTHING — pause overlay,
    focus mode, regular modals — so it works regardless of current UI
@@ -1687,6 +1726,10 @@ body.quiz-fullscreen-mode #overlay-pause {
             <!-- Options -->
             <div class="options-card">
               <div id="options-list"></div>
+              <div class="submit-row" id="submit-row">
+                <button class="btn-submit" id="btn-submit" onclick="Quiz.submitAnswer()">Submit</button>
+                <span class="submit-hint" id="submit-hint"></span>
+              </div>
             </div>
 
             <!-- Explanation -->
@@ -1868,6 +1911,11 @@ body.quiz-fullscreen-mode #overlay-pause {
       <button class="lab-tab" onclick="labTab('csf',this)">CSF</button>
       <button class="lab-tab" onclick="labTab('heme',this)">Hematologic</button>
       <button class="lab-tab" onclick="labTab('urine',this)">Urine &amp; BMI</button>
+    </div>
+    <div class="lab-search-row">
+      <input id="lab-search-input" class="lab-search-input" type="search"
+             placeholder="Search lab name (Enter: next match, Esc: clear)" autocomplete="off">
+      <div id="lab-search-status" class="lab-search-status"></div>
     </div>
     <div class="lab-body">
 
@@ -4493,7 +4541,7 @@ window.MiscDocStore = MiscDocStore;
 
   function driveDbSnapshot() {
     const db = DB.get();
-    return JSON.parse(JSON.stringify({
+    const snap = JSON.parse(JSON.stringify({
       version: 1,
       updatedAt: new Date().toISOString(),
       settings: db.settings || {},
@@ -4516,6 +4564,25 @@ window.MiscDocStore = MiscDocStore;
       if (typeof value === 'string' && /^data:image\/[^;]+;base64,/i.test(value)) return undefined;
       return value;
     }));
+    // v4.84 #33: instrumentation — log snapshot composition so a backup→restore
+    // mismatch shows which side dropped content. Look for "[Drive #33]" in console.
+    try {
+      console.log('[Drive #33] snapshot composed:', {
+        tests:        Array.isArray(snap.tests)        ? snap.tests.length        : 'missing',
+        folders:      Array.isArray(snap.folders)      ? snap.folders.length      : 'missing',
+        trash:        Array.isArray(snap.trash)        ? snap.trash.length        : 'missing',
+        flags:        Array.isArray(snap.flags)        ? snap.flags.length        : 'missing',
+        marks:        Array.isArray(snap.marks)        ? snap.marks.length        : 'missing',
+        notes:        Array.isArray(snap.notes)        ? snap.notes.length        : 'missing',
+        history:      Array.isArray(snap.history)      ? snap.history.length      : 'missing',
+        flashcards:   Array.isArray(snap.flashcards)   ? snap.flashcards.length   : 'missing',
+        sourceFolders:Array.isArray(snap.sourceFolders)? snap.sourceFolders.length: 'missing',
+        miscDocFolders:Array.isArray(snap.miscDocFolders)?snap.miscDocFolders.length:'missing',
+        stemHighlightsKeys: snap.stemHighlights && typeof snap.stemHighlights==='object' ? Object.keys(snap.stemHighlights).length : 'missing',
+        updatedAt: snap.updatedAt
+      });
+    } catch (e) { /* never throw from instrumentation */ }
+    return snap;
   }
 
   function dataUrlToBlob(dataUrl) {
@@ -4594,8 +4661,21 @@ window.MiscDocStore = MiscDocStore;
 
   async function saveManifestToDrive(snapshot) {
     const manifestId = await ensureManifestFile();
-    const blob = new Blob([JSON.stringify(snapshot)], { type: 'application/json' });
-    await uploadDriveFile(DRIVE_MANIFEST_NAME, blob, 'application/json', await ensureDriveFolder(), manifestId);
+    const json = JSON.stringify(snapshot);
+    const blob = new Blob([json], { type: 'application/json' });
+    // v4.84 #33: instrumentation — log the actual payload size hitting Drive.
+    try {
+      console.log('[Drive #33] saveManifestToDrive:', {
+        manifestId,
+        bytes: json.length,
+        tests: Array.isArray(snapshot.tests) ? snapshot.tests.length : 'missing',
+        folders: Array.isArray(snapshot.folders) ? snapshot.folders.length : 'missing'
+      });
+    } catch (e) { /* never throw from instrumentation */ }
+    const uploadedId = await uploadDriveFile(DRIVE_MANIFEST_NAME, blob, 'application/json', await ensureDriveFolder(), manifestId);
+    try {
+      console.log('[Drive #33] saveManifestToDrive complete — uploadedId:', uploadedId);
+    } catch (e) {}
   }
 
   // ── MiscDocStore Drive sync ────────────────────────────────────────────────
@@ -4783,11 +4863,34 @@ window.MiscDocStore = MiscDocStore;
       await ensureDriveAuth('');
       localStorage.setItem(DRIVE_ENABLED_KEY, '1');
       const manifestId = await ensureManifestFile();
+      // v4.84 #33: instrumentation — log every step of the restore so a
+      // "complete but empty" outcome is traceable to the exact stage that
+      // dropped the data (auth / manifest fetch / parse / apply).
+      try { console.log('[Drive #33] restore: fetching manifest', { manifestId }); } catch (e) {}
       const resp = await driveFetch(`https://www.googleapis.com/drive/v3/files/${manifestId}?alt=media`);
-      const snapshot = await resp.json();
+      const respText = await resp.text();
+      try { console.log('[Drive #33] restore: manifest fetched', { bytes: respText.length, httpStatus: resp.status }); } catch (e) {}
+      let snapshot;
+      try { snapshot = JSON.parse(respText); }
+      catch (parseErr) {
+        try { console.error('[Drive #33] restore: manifest JSON.parse failed', parseErr, { firstChars: respText.slice(0, 200) }); } catch (e) {}
+        throw parseErr;
+      }
 
       const snapTests   = Array.isArray(snapshot.tests)   ? snapshot.tests.length   : 'missing';
       const snapFolders = Array.isArray(snapshot.folders) ? snapshot.folders.length : 'missing';
+      try {
+        console.log('[Drive #33] restore: parsed snapshot composition:', {
+          tests: snapTests,
+          folders: snapFolders,
+          trash: Array.isArray(snapshot.trash) ? snapshot.trash.length : 'missing',
+          flags: Array.isArray(snapshot.flags) ? snapshot.flags.length : 'missing',
+          marks: Array.isArray(snapshot.marks) ? snapshot.marks.length : 'missing',
+          history: Array.isArray(snapshot.history) ? snapshot.history.length : 'missing',
+          flashcards: Array.isArray(snapshot.flashcards) ? snapshot.flashcards.length : 'missing',
+          updatedAt: snapshot.updatedAt
+        });
+      } catch (e) {}
 
       // Warn early if manifest looks empty — user can cancel before reload.
       if (snapTests === 0 && snapFolders === 0) {
@@ -7700,13 +7803,36 @@ const Quiz = (() => {
   */
 
   // ── Timer helpers ──────────────────────────────────────────
+  // v4.84 #6: instrumentation. The intermittent "total timer stuck at 4:44"
+  // bug needs repro data — these logs (prefix "[Timer #6]") capture every
+  // start/stop/tick-anomaly so the next stall surfaces the exact event
+  // sequence that caused it. Tagged on console for easy grep.
+  function _t6log(tag, info) {
+    try { console.log('[Timer #6] ' + tag, info || ''); } catch (e) {}
+  }
+  let _lastTotTickAt = 0;
+  let _lastTotSecs = -1;
   function startTotalTimer() {
-    if (_totTimerRef) clearInterval(_totTimerRef);
+    if (_totTimerRef) {
+      _t6log('startTotalTimer: clearing existing interval', { prevRef: !!_totTimerRef, qIdx: state?.qIdx });
+      clearInterval(_totTimerRef);
+    }
     const base = Date.now() - state.totSecs * 1000;
+    _t6log('startTotalTimer', { base, totSecs: state.totSecs, qIdx: state?.qIdx });
     renderTotalTimer(); // immediate render so display is correct from tick 0
     _totTimerRef = setInterval(() => {
       if (!state) { clearInterval(_totTimerRef); _totTimerRef = null; return; }
-      state.totSecs = Math.floor((Date.now() - base) / 1000);
+      const now = Date.now();
+      state.totSecs = Math.floor((now - base) / 1000);
+      // Warn on tick anomalies: if the wall clock advanced but state.totSecs didn't,
+      // or if two consecutive ticks land >2 seconds apart (browser throttling / sleep).
+      if (_lastTotTickAt) {
+        const dt = now - _lastTotTickAt;
+        if (dt > 2200) _t6log('total tick gap >2.2s', { dt, totSecs: state.totSecs, lastSecs: _lastTotSecs });
+        if (state.totSecs === _lastTotSecs && dt > 1500) _t6log('total tick stalled', { dt, totSecs: state.totSecs });
+      }
+      _lastTotTickAt = now;
+      _lastTotSecs = state.totSecs;
       renderTotalTimer();
     }, 1000);
   }
@@ -7715,6 +7841,7 @@ const Quiz = (() => {
     stopQTimer();
     state.qSecs = 0;
     state.qStart = Date.now();
+    _t6log('startQTimer', { qIdx: state.qIdx });
     renderQTimer(); // clear warning immediately on question change
     state.qTimerRef = setInterval(() => {
       state.qSecs = Math.floor((Date.now() - state.qStart) / 1000);
@@ -7723,11 +7850,16 @@ const Quiz = (() => {
   }
 
   function stopQTimer() {
-    if (state.qTimerRef) { clearInterval(state.qTimerRef); state.qTimerRef = null; }
+    if (state.qTimerRef) {
+      _t6log('stopQTimer', { qIdx: state.qIdx, qSecs: state.qSecs });
+      clearInterval(state.qTimerRef);
+      state.qTimerRef = null;
+    }
     return state.qSecs || 0;
   }
 
   function stopAllTimers() {
+    _t6log('stopAllTimers', { qIdx: state?.qIdx, totSecs: state?.totSecs });
     if (_totTimerRef) { clearInterval(_totTimerRef); _totTimerRef = null; }
     stopQTimer();
   }
@@ -7878,34 +8010,87 @@ const Quiz = (() => {
     document.getElementById('overlay-pause').style.display = 'none';
     state.paused = false;
     startTotalTimer();
-    startQTimer();
+    // v4.84 #5: only restart the per-Q timer if the current question
+    // hasn't already been submitted. Submitted questions show the frozen
+    // r.time and must not resume ticking when the user unpauses.
+    const r = state.results[state.qIdx];
+    if (!r.answered) {
+      startQTimer();
+    }
   }
 
   // ── Answer selection ───────────────────────────────────────
+  // v4.84 #5: clicking a choice now just updates the candidate (r.chosen).
+  // The answer is not committed until the user clicks Submit. Pre-submit,
+  // the user may freely change their choice. Re-clicking the same letter
+  // is a no-op. Once r.answered=true (submitted), choice clicks are ignored.
   function selectAnswer(letter) {
     if (!state) return;
     const r = state.results[state.qIdx];
     if (r.answered) return;
+    if (r.chosen === letter) return;
+    r.chosen = letter;
+    persistState();
+    renderOptions();
+    renderSubmitButton();
+  }
+
+  // v4.84 #5: commit the candidate answer. No-op if no candidate selected
+  // (per spec: button is always clickable but does nothing without choice).
+  // Locks the answer, freezes both timers permanently, and in tutor mode
+  // auto-opens the explanation. Exam mode keeps the explanation hidden
+  // until end-of-test review.
+  function submitAnswer() {
+    if (!state) return;
+    const r = state.results[state.qIdx];
+    if (r.answered) return;
+    if (!r.chosen) return; // no-op when no candidate selected
     const q = getQuestion();
-    const ok = letter === q.c;
-    r.answered = true; r.correct = ok; r.chosen = letter;
+    const elapsed = Math.floor((Date.now() - (state.qStart || Date.now())) / 1000);
+    r.time = (r.time || 0) + elapsed;
+    r.answered = true;
+    r.correct = (r.chosen === q.c);
+    // Freeze both timers — they restart only when the user advances to the next Q.
+    stopQTimer();
+    if (_totTimerRef) { clearInterval(_totTimerRef); _totTimerRef = null; }
     persistState();
 
     if (state.mode === 'tutor') {
       renderOptions(); renderExplanation();
     } else {
-      renderOptions(); // show selection + right/wrong in nav
+      renderOptions(); // exam mode: show selection but not right/wrong reveal
     }
 
-    // Reveal tags now that the question has been answered
+    // Reveal tags now that the question has been submitted
     const tagEl = document.getElementById('q-tags');
     if (tagEl && q.tags && q.tags.length) {
       tagEl.innerHTML = q.tags.map(t => `<span class="q-tag">${t}</span>`).join('');
       tagEl.style.display = 'flex';
     }
 
+    renderSubmitButton();
     updateNavPanel();
     renderScoreLive();
+  }
+
+  // v4.84 #5: render the Submit button row state. Always clickable; clicking
+  // with no choice selected is a silent no-op (handled in submitAnswer).
+  function renderSubmitButton() {
+    if (!state) return;
+    const btn  = document.getElementById('btn-submit');
+    const hint = document.getElementById('submit-hint');
+    const row  = document.getElementById('submit-row');
+    if (!btn || !row) return;
+    const r = state.results[state.qIdx];
+    if (r.answered) {
+      btn.classList.add('submitted');
+      btn.textContent = 'Submitted';
+      if (hint) hint.textContent = '';
+    } else {
+      btn.classList.remove('submitted');
+      btn.textContent = 'Submit';
+      if (hint) hint.textContent = r.chosen ? '' : 'Select an answer, then click Submit to lock it in.';
+    }
   }
 
   // ── Navigation ─────────────────────────────────────────────
@@ -7913,9 +8098,14 @@ const Quiz = (() => {
     if (!state) return;
     const q_count = getTest().questions.length;
     if (idx < 0 || idx >= q_count) return;
-    const elapsed = Math.floor((Date.now() - (state.qStart || Date.now())) / 1000);
     const r = state.results[state.qIdx];
-    r.time = (r.time || 0) + elapsed;
+    // v4.84 #5: only accumulate elapsed time for questions the user has
+    // NOT yet submitted. Submitted questions have their r.time frozen at
+    // submit and should not advance on revisit.
+    if (!r.answered) {
+      const elapsed = Math.floor((Date.now() - (state.qStart || Date.now())) / 1000);
+      r.time = (r.time || 0) + elapsed;
+    }
     stopQTimer();
     state.qIdx = idx;
     if (typeof resetHintPanel === 'function') resetHintPanel();
@@ -8086,10 +8276,21 @@ const Quiz = (() => {
     renderExplanation();
     renderFlagButton();
     updateModeToggle();
+    renderSubmitButton();
     if (typeof window.syncHintPanel === 'function') window.syncHintPanel();
 
-    // Q timer always counts up from 0 — informational only
-    startQTimer();
+    // v4.84 #5: timer behavior depends on whether the question has been
+    // submitted. Submitted questions display their frozen r.time and do
+    // not tick. Un-submitted questions start the per-Q timer fresh and
+    // also restart the total timer if it was stopped by a prior submit.
+    if (r.answered) {
+      stopQTimer();
+      state.qSecs = r.time || 0;
+      renderQTimer();
+    } else {
+      startQTimer();
+      if (!_totTimerRef) startTotalTimer();
+    }
 
     // Prev/Next buttons
     const prevBtn = document.getElementById('btn-prev');
@@ -8113,6 +8314,12 @@ const Quiz = (() => {
 
     const choices = typeof window.getQuestionChoices === 'function' ? window.getQuestionChoices(q) : (q.o || []);
 
+    // v4.84 #21: exam mode never reveals right/wrong mid-test. Only the
+    // end-of-test score report shows correctness. Tutor mode reveals
+    // immediately on submit. `reveal` controls the green/red visual but
+    // does NOT affect the answer-lock state (which is r.answered alone).
+    const reveal = r.answered && state.mode === 'tutor';
+
     // #26: render columned answer choices (e.g. urinalysis table) as a real HTML table.
     if (typeof window._tryRenderColumnedChoices === 'function') {
       const rendered = window._tryRenderColumnedChoices(
@@ -8120,9 +8327,9 @@ const Quiz = (() => {
         container,
         (opt) => { if (!r.answered) selectAnswer(opt.l); },
         {
-          answered: r.answered,
+          answered: reveal,
           chosenLetter: r.chosen,
-          correctLetter: r.answered ? q.c : null
+          correctLetter: reveal ? q.c : null
         }
       );
       if (rendered) return;
@@ -8137,8 +8344,11 @@ const Quiz = (() => {
       div.className = 'opt-row';
       div.dataset.letter = opt.l;
 
-      // State classes
-      if (r.answered) {
+      // State classes — visual reveal gated on `reveal` (#21); the
+      // answer-lock check (`r.answered`) is separate and lives on the
+      // click handler below so exam-mode submitted choices stay locked
+      // even though they don't render as correct/wrong.
+      if (reveal) {
         if (isCorrect)         div.classList.add('opt-correct');
         else if (isChosen)     div.classList.add('opt-wrong');
       } else if (isChosen)     div.classList.add('opt-selected');
@@ -8146,13 +8356,13 @@ const Quiz = (() => {
 
       div.innerHTML = `
         <div class="opt-selector" data-letter="${opt.l}">
-          <div class="opt-radio">${isChosen || (r.answered && isCorrect) ? '<div class="opt-radio-dot"></div>' : ''}</div>
+          <div class="opt-radio">${isChosen || (reveal && isCorrect) ? '<div class="opt-radio-dot"></div>' : ''}</div>
           <span class="opt-letter">${opt.l})</span>
         </div>
         <div class="opt-text" data-letter="${opt.l}">${opt.t}</div>
         <div class="opt-indicator">
-          ${r.answered && isCorrect ? '<span class="ind-correct">✓</span>' : ''}
-          ${r.answered && isChosen && !isCorrect ? '<span class="ind-wrong">✗</span>' : ''}
+          ${reveal && isCorrect ? '<span class="ind-correct">✓</span>' : ''}
+          ${reveal && isChosen && !isCorrect ? '<span class="ind-wrong">✗</span>' : ''}
         </div>`;
 
       // Click selector (radio + letter) → select answer
@@ -8353,22 +8563,30 @@ const Quiz = (() => {
     const test = getTest();
     const list = document.getElementById('qns-list');
     if (!list) return;
+    // v4.84 #21: exam mode hides right/wrong mid-test in the sidebar too.
+    // Submitted questions still show as "answered" (filled dot) but never
+    // reveal correctness until the end-of-test score report.
+    const reveal = state.mode === 'tutor';
     test.questions.forEach((q, i) => {
       const item = list.querySelector(`[data-idx="${i}"]`);
       if (!item) return;
       const r    = state.results[i];
       const cur  = i === state.qIdx;
-      const corr = r.answered &&  r.correct;
-      const wrng = r.answered && !r.correct;
+      const ans  = !!r.answered;
+      const corr = reveal && ans &&  r.correct;
+      const wrng = reveal && ans && !r.correct;
       const mrkd = state.marks.has(i);
       const flgd = DB.isFlagged(state.testId, q.n);
       item.className = 'qns-item' +
-        (cur  ? ' qns-current' : '') +
-        (corr ? ' qns-correct' : '') +
-        (wrng ? ' qns-wrong'   : '') +
-        (mrkd ? ' qns-marked'  : '');
+        (cur  ? ' qns-current'  : '') +
+        (corr ? ' qns-correct'  : '') +
+        (wrng ? ' qns-wrong'    : '') +
+        (!reveal && ans ? ' qns-answered' : '') +
+        (mrkd ? ' qns-marked'   : '');
       const dot = item.querySelector('.qns-dot');
-      if (dot) dot.textContent = corr ? '✓' : wrng ? '✗' : cur ? '●' : '';
+      if (dot) {
+        dot.textContent = corr ? '✓' : wrng ? '✗' : (!reveal && ans ? '●' : (cur ? '●' : ''));
+      }
       const flagEl = item.querySelector('.qns-flag');
       if (flagEl) flagEl.textContent = flgd ? '🏳' : '';
     });
@@ -8455,6 +8673,7 @@ const Quiz = (() => {
     toggleFlag, toggleMark, unmarkQuestion, toggleStrike, saveHighlight, saveHighlightPart,
     renderQuestion, renderOptions, renderExplanation,
     updateNavPanel, renderScoreLive,
+    selectAnswer, submitAnswer,
     getState: () => state,
     getScore, getAnswered, fmtTime,
     enterQuizFullscreen, exitQuizFullscreen, toggleQuizFullscreen
@@ -26937,19 +27156,32 @@ Errors: ${escapeHTML(errors)}</div>
 
   // ── Highlighting ───────────────────────────────────────────
   function toggleSelectionHighlight(rootEl) {
+    // v4.84 #12a: instrumentation. The user reports highlight lag on a
+    // specific school computer — likely hardware-bound (CPU/RAM). Wall-clock
+    // timer measures range-walking + DOM-mutation cost so the next slow
+    // highlight surfaces concrete numbers (selectionLength, rangeIntersect
+    // count, mutate ms). Look for "[Highlight #12a]" in console. Cheap on
+    // fast machines (no measurable overhead).
+    const _t0 = (performance && performance.now) ? performance.now() : Date.now();
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || !sel.toString().trim() || !rootEl) return false;
+    const selLen = sel.toString().length;
     const range = sel.getRangeAt(0).cloneRange();
     if (!rootEl.contains(range.commonAncestorContainer)) return false;
+    const _t1 = (performance && performance.now) ? performance.now() : Date.now();
     const overlapping = Array.from(rootEl.querySelectorAll('mark[data-hl]'))
       .filter(m => range.intersectsNode(m));
+    const _t2 = (performance && performance.now) ? performance.now() : Date.now();
+    let mode;
     if (overlapping.length > 0) {
+      mode = 'unhighlight';
       overlapping.forEach(m => {
         const parent = m.parentNode;
         while (m.firstChild) parent.insertBefore(m.firstChild, m);
         parent.removeChild(m);
       });
     } else {
+      mode = 'highlight';
       try {
         const mark = document.createElement('mark');
         mark.className = 'hl-yellow'; mark.setAttribute('data-hl', 'hl-yellow');
@@ -26960,10 +27192,30 @@ Errors: ${escapeHTML(errors)}</div>
           const mark = document.createElement('mark');
           mark.className = 'hl-yellow'; mark.setAttribute('data-hl', 'hl-yellow');
           mark.appendChild(frag); range.insertNode(mark);
-        } catch(_) { return false; }
+        } catch(_) {
+          try { console.warn('[Highlight #12a] surround+extract both failed', { selLen }); } catch (e) {}
+          return false;
+        }
       }
     }
     sel.removeAllRanges();
+    const _t3 = (performance && performance.now) ? performance.now() : Date.now();
+    const totalMs = _t3 - _t0;
+    if (totalMs > 60) {
+      // Only log when measurable — avoids spam on a fast laptop where every
+      // highlight is sub-millisecond. 60ms is a perceptible UI hitch.
+      try {
+        console.log('[Highlight #12a] slow path:', {
+          mode,
+          selLen,
+          totalMs: Math.round(totalMs),
+          intersectMs: Math.round(_t2 - _t1),
+          mutateMs: Math.round(_t3 - _t2),
+          existingMarks: rootEl.querySelectorAll('mark[data-hl]').length,
+          overlapping: overlapping.length
+        });
+      } catch (e) {}
+    }
     return true;
   }
 
@@ -30821,10 +31073,17 @@ function adjFontSize(delta) {
 function openLabValues() {
   const m = document.getElementById('modal-lab');
   if (m) m.classList.add('open');
+  // v4.84 #25: focus the search box and reset any prior search when reopened.
+  const input = document.getElementById('lab-search-input');
+  if (input) {
+    setTimeout(() => input.focus(), 30);
+  }
+  if (window.LabSearch) window.LabSearch.reset();
 }
 function closeLabValues() {
   const m = document.getElementById('modal-lab');
   if (m) m.classList.remove('open');
+  if (window.LabSearch) window.LabSearch.reset();
 }
 function labTab(id, btn) {
   document.querySelectorAll('.lab-pane').forEach(p => p.classList.remove('active'));
@@ -30833,6 +31092,99 @@ function labTab(id, btn) {
   if (pane) pane.classList.add('active');
   if (btn) btn.classList.add('active');
 }
+
+// v4.84 #25: inline lab search. Highlights matches across all tabs as the
+// user types. Enter cycles forward through matches and wraps to the first.
+// Escape clears the search and removes highlights. Match is case-insensitive
+// against the first cell (lab name) of each row.
+window.LabSearch = (() => {
+  let matches = [];
+  let cursor = -1;
+
+  function clearHighlights() {
+    document.querySelectorAll('#modal-lab tr.lab-match, #modal-lab tr.lab-match-active').forEach(tr => {
+      tr.classList.remove('lab-match', 'lab-match-active');
+    });
+  }
+
+  function setStatus(text) {
+    const el = document.getElementById('lab-search-status');
+    if (el) el.textContent = text;
+  }
+
+  function reset() {
+    const input = document.getElementById('lab-search-input');
+    if (input) input.value = '';
+    clearHighlights();
+    matches = [];
+    cursor = -1;
+    setStatus('');
+  }
+
+  function onInput(e) {
+    const q = String(e.target.value || '').trim().toLowerCase();
+    clearHighlights();
+    matches = [];
+    cursor = -1;
+    if (!q) { setStatus(''); return; }
+    document.querySelectorAll('#modal-lab .lab-pane').forEach(pane => {
+      const tabId = pane.id.replace(/^lab-/, '');
+      pane.querySelectorAll('tbody tr').forEach(tr => {
+        const firstTd = tr.querySelector('td');
+        if (!firstTd) return;
+        const name = (firstTd.textContent || '').toLowerCase();
+        if (name.includes(q)) {
+          tr.classList.add('lab-match');
+          matches.push({ el: tr, tabId });
+        }
+      });
+    });
+    if (matches.length) {
+      cursor = 0;
+      focusMatch(0);
+    } else {
+      setStatus('No matches');
+    }
+  }
+
+  function focusMatch(i) {
+    if (!matches.length) return;
+    matches.forEach(m => m.el.classList.remove('lab-match-active'));
+    const m = matches[i];
+    if (!m) return;
+    m.el.classList.add('lab-match-active');
+    const activePane = document.querySelector('#modal-lab .lab-pane.active');
+    if (!activePane || activePane.id !== `lab-${m.tabId}`) {
+      const tabBtn = document.querySelector(`#modal-lab .lab-tab[onclick*="labTab('${m.tabId}'"]`);
+      if (tabBtn) tabBtn.click();
+    }
+    setStatus(`${i + 1} / ${matches.length}`);
+    setTimeout(() => m.el.scrollIntoView({ behavior: 'smooth', block: 'center' }), 40);
+  }
+
+  function onKey(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (!matches.length) return;
+      cursor = (cursor + 1) % matches.length;
+      focusMatch(cursor);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      reset();
+    }
+  }
+
+  function init() {
+    const input = document.getElementById('lab-search-input');
+    if (!input || input.dataset.bound) return;
+    input.addEventListener('input', onInput);
+    input.addEventListener('keydown', onKey);
+    input.dataset.bound = '1';
+  }
+
+  return { init, reset };
+})();
+document.addEventListener('DOMContentLoaded', () => window.LabSearch.init());
 
 document.addEventListener('DOMContentLoaded', async () => {
   // Pre-load app state from IndexedDB before any App.init() calls.
