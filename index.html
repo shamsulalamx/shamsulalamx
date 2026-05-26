@@ -27290,7 +27290,7 @@ Errors: ${escapeHTML(errors)}</div>
 
   // ── NBME Gemini JSON Import ────────────────────────────────
 
-  const VALID_SOURCE_FORMATS = ['pdf','docx','ocr_text','screenshot','mixed','unknown','rtf','anki-notes','ome-pdf','divine-audio',''];
+  const VALID_SOURCE_FORMATS = ['pdf','docx','ocr_text','screenshot','mixed','unknown','rtf','anki-notes','ome-pdf','nbme-pdf','divine-audio',''];
 
   function _ngjEsc(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -28649,7 +28649,7 @@ Errors: ${escapeHTML(errors)}</div>
     if (payload.sourceFormat !== undefined && payload.sourceFormat !== null) {
       const sf = String(payload.sourceFormat || '').toLowerCase();
       if (!VALID_SOURCE_FORMATS.includes(sf)) {
-        warnings.push(`sourceFormat "${payload.sourceFormat}" is not a recognized value. Allowed: pdf, docx, ocr_text, screenshot, mixed, unknown, anki-notes, ome-pdf, divine-audio.`);
+        warnings.push(`sourceFormat "${payload.sourceFormat}" is not a recognized value. Allowed: pdf, docx, ocr_text, screenshot, mixed, unknown, anki-notes, ome-pdf, nbme-pdf, divine-audio.`);
       }
     }
     if (!Array.isArray(payload.questions)) {

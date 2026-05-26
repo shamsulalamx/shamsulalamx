@@ -689,7 +689,7 @@ def _bump_call_count() -> None:
         )
 
 
-def gemini_text(prompt: str, max_tokens: int = 8192, temperature: float = 0.2, model: str | None = None) -> str:
+def gemini_text(prompt: str, max_tokens: int = 8192, temperature: float = 0.2, model: str | None = None, thinking_budget: int = -1) -> str:
     """Plain-text Gemini call (no images).
 
     v4.63: optional `model` override lets callers route the polish pass to
@@ -699,6 +699,13 @@ def gemini_text(prompt: str, max_tokens: int = 8192, temperature: float = 0.2, m
     v4.79: rewritten to use google-genai SDK via _uw._gemini_client().
     Preserves the responseMimeType=application/json behavior (forces JSON-only
     output, drastically reduces parse failures) and the v4.63 model override.
+
+    v4.84: explicit `thinking_budget` parameter. Default -1 (dynamic) for
+    polish/critic where reasoning helps. Extraction callsites pass 0 to
+    disable thinking and reserve the full token budget for the JSON output —
+    fixes the v4.79 regression where dynamic thinking consumed most of the
+    12K-token budget on multimodal extractions, leaving Gemini to return
+    empty or truncated JSON.
     """
     _bump_call_count()
     if not _GENAI_SDK_AVAILABLE:
@@ -713,15 +720,9 @@ def gemini_text(prompt: str, max_tokens: int = 8192, temperature: float = 0.2, m
             contents=prompt,
             config=_genai_types.GenerateContentConfig(
                 temperature=temperature,
-                # v4.79: 2x bump for thinking headroom. The v4.63 Pro polish
-                # path especially benefits from thinking — that's the
-                # canonical-quality enrichment step (reviewPearl, retrievalTag,
-                # educationalObjective) where reasoning helps most.
                 max_output_tokens=max(max_tokens * 2, 16384),
                 response_mime_type="application/json",
-                # v4.79: Dynamic thinking. Quality > cost — particularly
-                # valuable for the v4.63 gemini-2.5-pro polish path.
-                thinking_config=_genai_types.ThinkingConfig(thinking_budget=-1),
+                thinking_config=_genai_types.ThinkingConfig(thinking_budget=thinking_budget),
             ),
         )
     except (TimeoutError, socket.timeout) as exc:
@@ -737,13 +738,20 @@ def gemini_text(prompt: str, max_tokens: int = 8192, temperature: float = 0.2, m
     return str(text)
 
 
-def gemini_image(prompt: str, image_paths: list[Path], max_tokens: int = 4096, temperature: float = 0.0) -> str:
+def gemini_image(prompt: str, image_paths: list[Path], max_tokens: int = 4096, temperature: float = 0.0, thinking_budget: int = 0) -> str:
     """Multimodal Gemini call.
 
     v4.79: rewritten to use google-genai SDK via _uw._gemini_client(). The SDK
     handles base64 encoding internally via types.Part.from_bytes.
     Preserves responseMimeType=application/json (NBME's structured-output flow
     depends on getting clean JSON back, not markdown-fenced JSON).
+
+    v4.84: thinking_budget default flipped to 0 (no thinking). Multimodal
+    extraction is a structured page-parse task — when thinking was dynamic
+    (-1), Flash routinely consumed most of the 12K-token budget on reasoning
+    and returned empty/truncated JSON, dropping ~30 of 50 questions per NBME
+    test. Callers that genuinely need reasoning (e.g. figure-classification)
+    can opt in with thinking_budget=-1.
     """
     _bump_call_count()
     if not _GENAI_SDK_AVAILABLE:
@@ -764,13 +772,9 @@ def gemini_image(prompt: str, image_paths: list[Path], max_tokens: int = 4096, t
             contents=contents,
             config=_genai_types.GenerateContentConfig(
                 temperature=temperature,
-                # v4.79: 3x bump (4096 → 12288) for thinking on multimodal.
-                # Image-based reasoning especially benefits from thinking,
-                # which can be 2-5K tokens on figure-detection tasks.
                 max_output_tokens=max(max_tokens * 3, 12288),
                 response_mime_type="application/json",
-                # v4.79: Dynamic thinking. Quality > cost.
-                thinking_config=_genai_types.ThinkingConfig(thinking_budget=-1),
+                thinking_config=_genai_types.ThinkingConfig(thinking_budget=thinking_budget),
             ),
         )
     except (TimeoutError, socket.timeout) as exc:
@@ -1132,7 +1136,9 @@ def gemini_complete_q_only(stem: str, choices: list[dict[str, str]], retries: in
                 "first character must be '{' and the last character must be '}'."
             )
         try:
-            raw = gemini_text(prompt, max_tokens=4096)
+            # v4.84: thinking_budget=0 — Q-only completion is structured extraction;
+            # dynamic thinking starves the output token budget.
+            raw = gemini_text(prompt, max_tokens=4096, thinking_budget=0)
             return json.loads(raw)
         except json.JSONDecodeError as exc:
             last_err = exc
@@ -1167,9 +1173,11 @@ Output JSON only, no markdown fences:
 
 
 def gemini_extract_a_block(q_num: int, block_text: str) -> dict[str, str]:
+    # v4.84: thinking_budget=0 — A-PDF block extraction is structured, no reasoning needed.
     raw = gemini_text(
         _A_BLOCK_PROMPT.format(q_num=q_num, block=block_text[:6000]),
         max_tokens=2048,
+        thinking_budget=0,
     )
     return json.loads(raw)
 
