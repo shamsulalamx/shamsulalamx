@@ -643,7 +643,7 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
 #btn-flag { }
 #btn-flag.flagged { color: #ffd54f; border-color: rgba(255,213,79,.5); }
 
-.quiz-content-area { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 16px clamp(10px, 2.5vw, 32px) 80px; max-width: 1120px; width: 100%; margin: 0 auto; }
+.quiz-content-area { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 16px clamp(10px, 2.5vw, 32px); max-width: 1120px; width: 100%; margin: 0 auto; }
 .quiz-content-area.image-stem-active { max-width: 1280px; padding-left: clamp(10px, 1.5vw, 18px); padding-right: clamp(10px, 1.5vw, 18px); }
 
 /* Question card */
@@ -756,14 +756,16 @@ mark.hl-pink   { background: #f48fb1; color: inherit; }
 .exp-badge-wrong   { background: #f8d7da; color: #721c24; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; white-space: nowrap; }
 .exp-text { font-size: 12px; color: #444; line-height: 1.6; padding-left: 4px; }
 
-/* Quiz bottom nav */
+/* Quiz bottom nav — #16: moved from position:fixed into the flex flow of #quiz-main so
+   it sits flush with the bottom of the content area instead of leaving an empty gap
+   above the toolbar. The legacy .no-sidebar/fullscreen rules below become no-ops but are
+   left in place to avoid breaking any inline style writes from toggleNavSidebar. */
 .quiz-bottom-bar {
-  position: fixed; bottom: 0; left: var(--sidebar-w);
-  right: 0; background: var(--navy); padding: 8px clamp(10px, 2vw, 24px);
+  background: var(--navy); padding: 8px clamp(10px, 2vw, 24px);
   display: flex; align-items: center; justify-content: space-between;
   flex-wrap: wrap; gap: 6px;
   z-index: 50; border-top: 1px solid rgba(255,255,255,.1);
-  transition: left 200ms ease;
+  flex-shrink: 0;
 }
 .quiz-bottom-bar.no-sidebar { left: 200px; transition: left .22s ease; }
 .score-info { font-size: 13px; color: #9ab0c8; }
@@ -1673,7 +1675,7 @@ body.quiz-fullscreen-mode #overlay-pause {
                 <div class="q-num-badge" id="q-num-badge">Item 1</div>
               </div>
               <div class="q-images-top" id="q-images-top"></div>
-              <div id="q-stem" onmouseup="App.onStemSelect(event)"></div>
+              <div id="q-stem" onmouseup="App.onStemSelect(event)" onclick="App.onStemClick(event)" ondblclick="App.onStemDblClick(event)"></div>
               <div class="q-images-bottom" id="q-images-bottom"></div>
             </div>
 
@@ -7252,7 +7254,24 @@ function renderExplanationTablesInto(q, container) {
 	    const group = q?.sharedGroup;
 	    let html;
 	    if (!group) {
-	      html = highlightedStemHtml || window.buildStemHTML(q?.t || '');
+	      if (highlightedStemHtml) {
+	        html = highlightedStemHtml;
+	      } else {
+	        // #17: Strip a leading duplicate question-number prefix from extracted stems.
+	        // Observed forms include "11. ", "11 . ", "Item 11. ", "11) ", "11 ) ", "11 A man..."
+	        // (separator may be a dot, paren, or just whitespace, with optional space between
+	        // the number and the separator). Only strip when the leading number matches q.n,
+	        // so genuine numbers in the stem text are never touched.
+	        let rawText = q?.t || '';
+	        if (typeof q?.n === 'number') {
+	          const numEsc = String(q.n).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	          rawText = rawText.replace(
+	            new RegExp('^\\s*(?:Item\\s+)?' + numEsc + '\\s*[\\.\\)]?\\s+', 'i'),
+	            ''
+	          );
+	        }
+	        html = window.buildStemHTML(rawText);
+	      }
 	    } else {
 	      const sharedHtml = window.buildSharedGroupHTML(q);
 	      const individualHtml = buildGroupedIndividualStemHTML(q);
@@ -7811,11 +7830,41 @@ const Quiz = (() => {
     if (pearlBlock) {
       const rtVal = typeof getRetrievalTag === 'function' ? getRetrievalTag(q) : '';
       const rpVal = typeof getReviewPearl  === 'function' ? getReviewPearl(q)  : '';
-      pearlBlock.style.display = (rtVal || rpVal) ? 'block' : 'none';
+      // #30: when no pearl exists, kick off a Gemini call and show a "Generating…"
+      // placeholder. The async resolve updates the DOM only if we haven't navigated
+      // to another question in the meantime (dataset.genQn token check).
+      const canGenPearl = !rpVal && typeof window.generateClinicalPearl === 'function';
+      pearlBlock.style.display = (rtVal || rpVal || canGenPearl) ? 'block' : 'none';
       const rtNode = document.getElementById('q-retrieval-tag');
       const rpNode = document.getElementById('q-review-pearl');
       if (rtNode) rtNode.textContent = rtVal || '—';
-      if (rpNode) rpNode.textContent = rpVal || '—';
+      if (rpNode) {
+        if (rpVal) {
+          rpNode.textContent = rpVal;
+          rpNode.style.opacity = '';
+          delete rpNode.dataset.genQn;
+        } else if (canGenPearl) {
+          const qnToken = String(q?.n ?? state.qIdx);
+          rpNode.dataset.genQn = qnToken;
+          rpNode.textContent = 'Generating clinical pearl…';
+          rpNode.style.opacity = '0.6';
+          const test = (typeof DB !== 'undefined' && state.testId) ? DB.getTest(state.testId) : null;
+          window.generateClinicalPearl(q, test).then(pearl => {
+            if (!rpNode || rpNode.dataset.genQn !== qnToken) return;
+            if (pearl) {
+              rpNode.textContent = pearl;
+            } else {
+              rpNode.textContent = '—';
+            }
+            rpNode.style.opacity = '';
+            delete rpNode.dataset.genQn;
+          });
+        } else {
+          rpNode.textContent = '—';
+          rpNode.style.opacity = '';
+          delete rpNode.dataset.genQn;
+        }
+      }
     }
     buildExplanationHTML(q, r, document.getElementById('exp-body'));
     // Re-apply current font size with explanation offset.
@@ -8591,7 +8640,15 @@ const Results = (() => {
     return (q && (q.retrievalTag || q.metadata?.retrievalTag)) || '';
   }
   function getReviewPearl(q) {
-    return (q && (q.reviewPearl  || q.metadata?.reviewPearl))  || '';
+    // #30: include clinicalPearl + pearl + pearls so AI-generated pearls and legacy
+    // alternative fields are picked up.
+    if (!q) return '';
+    return q.reviewPearl
+        || q.clinicalPearl
+        || q.pearl
+        || (Array.isArray(q.pearls) ? q.pearls[0] : q.pearls)
+        || (q.metadata && (q.metadata.reviewPearl || q.metadata.clinicalPearl))
+        || '';
   }
 
   function show(testId, entry, results, questions) {
@@ -8652,21 +8709,56 @@ const Results = (() => {
   }
 
   function buildTopicAnalysis() {
-    const reviewTags = [];
-    const seen = new Set();
+    // #30: One row per incorrect question. If a pearl exists, show it. If not, show the
+    // first tag (or "Untagged") with a "…generating pearl" indicator and fire a Gemini
+    // call. The row's text is updated in place when the result arrives — generated pearls
+    // are also cached on q.clinicalPearl and persisted, so future renders skip the call.
+    const container = document.getElementById('res-weaknesses');
+    if (!container) return;
+
+    const rows = [];
     _questions.forEach((q, i) => {
       const r = _results[i];
       if (!r || !r.answered || r.correct) return;
-      const tag = (q.tags && q.tags.length) ? q.tags[0] : 'Untagged';
-      if (seen.has(tag)) return;
-      seen.add(tag);
-      reviewTags.push(tag);
+      const existing = String((typeof window.getReviewPearl === 'function')
+        ? (window.getReviewPearl(q) || '')
+        : (q.clinicalPearl || q.reviewPearl || q.pearl || '')
+      ).trim();
+      const tag = (q.tags && q.tags.length) ? String(q.tags[0]).trim() : '';
+      rows.push({ qIdx: i, q, pearl: existing, tag });
     });
 
-    document.getElementById('res-weaknesses').innerHTML =
-      reviewTags.length ? reviewTags.map(tag =>
-        `<div class="topic-row"><span class="topic-name">${escapeHTML(tag)}</span></div>`
-      ).join('') : '<div class="topic-empty">No incorrect answers.</div>';
+    if (!rows.length) {
+      container.innerHTML = '<div class="topic-empty">No incorrect answers.</div>';
+      return;
+    }
+
+    container.innerHTML = rows.map((row, idx) => {
+      if (row.pearl) {
+        return `<div class="topic-row" data-topic-idx="${idx}"><span class="topic-name">${escapeHTML(row.pearl)}</span></div>`;
+      }
+      const initial = row.tag || 'Untagged';
+      return `<div class="topic-row" data-topic-idx="${idx}">` +
+        `<span class="topic-name">${escapeHTML(initial)}</span>` +
+        `<span class="pearl-gen-status" style="font-size:10px;opacity:.55;margin-left:8px;font-style:italic;">… generating clinical pearl</span>` +
+        `</div>`;
+    }).join('');
+
+    const test = (typeof DB !== 'undefined' && _testId) ? DB.getTest(_testId) : null;
+    if (!test || typeof window.generateClinicalPearl !== 'function') return;
+    rows.forEach((row, idx) => {
+      if (row.pearl) return;
+      window.generateClinicalPearl(row.q, test).then(pearl => {
+        const rowEl = container.querySelector(`[data-topic-idx="${idx}"]`);
+        if (!rowEl) return;
+        const statusSpan = rowEl.querySelector('.pearl-gen-status');
+        if (statusSpan) statusSpan.remove();
+        if (pearl) {
+          const nameSpan = rowEl.querySelector('.topic-name');
+          if (nameSpan) nameSpan.textContent = pearl;
+        }
+      });
+    });
   }
 
   function buildNavDots() {
@@ -8787,11 +8879,39 @@ const Results = (() => {
     if (pearlBlock) {
       const rtVal = getRetrievalTag(q);
       const rpVal = getReviewPearl(q);
-      pearlBlock.style.display = (rtVal || rpVal) ? 'block' : 'none';
+      // #30: same Gemini-pearl-gen logic as the quiz interface (see q-pearl-block above).
+      const canGenPearl = !rpVal && typeof window.generateClinicalPearl === 'function';
+      pearlBlock.style.display = (rtVal || rpVal || canGenPearl) ? 'block' : 'none';
       const rtNode = document.getElementById('rev-retrieval-tag');
       const rpNode = document.getElementById('rev-review-pearl');
       if (rtNode) rtNode.textContent = rtVal || '—';
-      if (rpNode) rpNode.textContent = rpVal || '—';
+      if (rpNode) {
+        if (rpVal) {
+          rpNode.textContent = rpVal;
+          rpNode.style.opacity = '';
+          delete rpNode.dataset.genQn;
+        } else if (canGenPearl) {
+          const qnToken = String(q?.n ?? '');
+          rpNode.dataset.genQn = qnToken;
+          rpNode.textContent = 'Generating clinical pearl…';
+          rpNode.style.opacity = '0.6';
+          const test = (typeof DB !== 'undefined' && _testId) ? DB.getTest(_testId) : null;
+          window.generateClinicalPearl(q, test).then(pearl => {
+            if (!rpNode || rpNode.dataset.genQn !== qnToken) return;
+            if (pearl) {
+              rpNode.textContent = pearl;
+            } else {
+              rpNode.textContent = '—';
+            }
+            rpNode.style.opacity = '';
+            delete rpNode.dataset.genQn;
+          });
+        } else {
+          rpNode.textContent = '—';
+          rpNode.style.opacity = '';
+          delete rpNode.dataset.genQn;
+        }
+      }
     }
 
     // Flag button
@@ -9286,7 +9406,79 @@ window.Results = Results;
 window.openReview        = Results.openReview;
 window.toggleFlagReview  = Results.toggleFlagReview;
 window.getRetrievalTag   = (q) => (q && (q.retrievalTag || q.metadata?.retrievalTag)) || '';
-window.getReviewPearl    = (q) => (q && (q.reviewPearl  || q.metadata?.reviewPearl))  || '';
+window.getReviewPearl    = (q) => {
+  // #30: pearl priority chain. Includes the AI-generated clinicalPearl so questions
+  // that originally had no pearl but later had one generated via Gemini also display.
+  if (!q) return '';
+  return q.reviewPearl
+      || q.clinicalPearl
+      || q.pearl
+      || (Array.isArray(q.pearls) ? q.pearls[0] : q.pearls)
+      || (q.metadata && (q.metadata.reviewPearl || q.metadata.clinicalPearl))
+      || '';
+};
+
+// #30: AI-generated clinical pearls for legacy NBMEs that ship without one.
+// Generates only when ALL pearl fields are absent or empty. Caches to q.clinicalPearl
+// and persists via DB.updateTest so subsequent renders skip the Gemini call.
+window._hasAnyClinicalPearl = (q) => {
+  if (!q) return false;
+  const candidates = [
+    q.reviewPearl, q.clinicalPearl, q.pearl,
+    Array.isArray(q.pearls) ? q.pearls[0] : q.pearls,
+    q.metadata && q.metadata.reviewPearl,
+    q.metadata && q.metadata.clinicalPearl
+  ];
+  return candidates.some(v => v != null && String(v).trim() !== '');
+};
+window.generateClinicalPearl = async function(q, test) {
+  if (!q) return null;
+  if (window._hasAnyClinicalPearl(q)) {
+    return String(window.getReviewPearl(q) || '').trim() || null;
+  }
+  if (q._pearlInFlight) return q._pearlInFlight;
+  const stem = String(q.t || '').slice(0, 2000);
+  const correctOpt = (q.o || []).find(o => o.l === q.c);
+  const correctText = correctOpt ? `${correctOpt.l}) ${correctOpt.t}` : '';
+  let explanation = '';
+  if (q.correctBlurb) {
+    const div = document.createElement('div');
+    div.innerHTML = q.correctBlurb;
+    explanation = (div.textContent || div.innerText || '').slice(0, 1500);
+  } else if (q.explanation) {
+    explanation = String(q.explanation).slice(0, 1500);
+  }
+  const prompt =
+    'You are a Step 2 CK clinical knowledge expert. Given a question and its correct answer, ' +
+    'generate ONE high-yield clinical pearl — a 1-2 sentence takeaway that captures the core ' +
+    'teaching point. Be specific: name the diagnosis, mechanism, or distinguishing feature. ' +
+    'Do not restate the vignette. Do not mention answer choices by letter. ' +
+    'Output only the pearl text — no preamble, no quotes, no label.\n\n' +
+    `Question stem: ${stem}\n` +
+    (correctText ? `Correct answer: ${correctText}\n` : '') +
+    (explanation ? `Explanation: ${explanation}\n` : '');
+  q._pearlInFlight = (async () => {
+    try {
+      const data = await callGeminiDirect(
+        [{ parts: [{ text: prompt }] }],
+        { temperature: 0.3, maxOutputTokens: 200, thinkingConfig: { thinkingBudget: 0 } }
+      );
+      const pearl = String(extractGeminiText(data) || '').trim();
+      if (!pearl) return null;
+      q.clinicalPearl = pearl;
+      if (test && typeof DB !== 'undefined' && DB.updateTest) {
+        try { DB.updateTest(test.id, { questions: test.questions }); } catch (_) {}
+      }
+      return pearl;
+    } catch (e) {
+      console.warn('[clinical pearl gen] failed:', e);
+      return null;
+    } finally {
+      delete q._pearlInFlight;
+    }
+  })();
+  return q._pearlInFlight;
+};
 
 </script>
 <script>
@@ -26511,6 +26703,33 @@ Errors: ${escapeHTML(errors)}</div>
     if (st && toggleSelectionHighlight(stemEl)) Quiz.saveHighlight(st.qIdx, stemEl.innerHTML);
   }
 
+  // #12b: Single-click on an existing highlight removes it. Uses a short debounce so it
+  // doesn't fire as part of a dblclick (which is reserved for the word-select →
+  // toggleSelectionHighlight create flow). Drag-to-select is unaffected — we early-return
+  // when a non-collapsed selection exists at click time.
+  let _stemHlClickTimer = null;
+  function onStemClick(e) {
+    const mark = e.target && e.target.closest && e.target.closest('mark[data-hl]');
+    if (!mark) return;
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed && sel.toString().trim()) return;
+    if (_stemHlClickTimer) clearTimeout(_stemHlClickTimer);
+    _stemHlClickTimer = setTimeout(() => {
+      _stemHlClickTimer = null;
+      if (!mark.parentNode) return;
+      const parent = mark.parentNode;
+      while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+      parent.removeChild(mark);
+      const st = Quiz.getState();
+      const stemEl = document.getElementById('q-stem');
+      if (st && stemEl) Quiz.saveHighlight(st.qIdx, stemEl.innerHTML);
+    }, 280);
+  }
+  function onStemDblClick(e) {
+    // Cancel any pending single-click removal so dblclick-to-create-highlight is unaffected.
+    if (_stemHlClickTimer) { clearTimeout(_stemHlClickTimer); _stemHlClickTimer = null; }
+  }
+
   function hideSelectionToolbar() {
     const toolbar = document.getElementById('selection-toolbar');
     if (toolbar) {
@@ -30054,7 +30273,7 @@ Errors: ${escapeHTML(errors)}</div>
     confirmFinish,
     confirmFinishFromPause,
     doFinish,
-    onStemSelect,
+    onStemSelect, onStemClick, onStemDblClick,
     showExplanationNoteToolbar,
     saveSelectedExplanationNote,
     openSettings,
