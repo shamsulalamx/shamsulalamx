@@ -82,14 +82,17 @@ CRITIC_ENABLED = os.environ.get("NBME_CRITIC_ENABLED", "1").strip().lower() not 
 
 # Filename keywords scored: positive = Q-PDF, negative = A-PDF. Accept both
 # the full word ("Questions" / "Answers") and the conventional one-letter
-# shorthand ("…_Q.pdf" / "…_A.pdf" / "… Q.pdf" / "… A.pdf"), which the user
-# uses for selective test extracts.
+# shorthand ("…_Q.pdf" / "…_A.pdf" / "… Q.pdf" / "… A.pdf" / "…3Q.pdf"),
+# which the user uses for selective test extracts. v4.84: the previous
+# lookbehind only accepted `_`, space, or `-` before Q/A — so files like
+# "NBME 8Q.pdf" failed to detect because of the digit before Q. Widened to
+# also accept digit boundaries so "NBME 3Q.pdf" / "8A.pdf" detect correctly.
 _Q_KEYWORDS = re.compile(
-    r"(?:\b(?:questions?|stems?)\b|[_\s\-]Q(?=[._\s\-]|$))",
+    r"(?:\b(?:questions?|stems?)\b|(?:[_\s\-]|\d)Q(?=[._\s\-]|$))",
     re.IGNORECASE,
 )
 _A_KEYWORDS = re.compile(
-    r"(?:\b(?:answers?|key|explanations?)\b|[_\s\-]A(?=[._\s\-]|$))",
+    r"(?:\b(?:answers?|key|explanations?)\b|(?:[_\s\-]|\d)A(?=[._\s\-]|$))",
     re.IGNORECASE,
 )
 
@@ -351,8 +354,13 @@ _A_QUESTION_HEADER = re.compile(
 # Allow A-N letter labels — NBME matching sets occasionally have 12+
 # options (q20, q26 confirmed K/L; A-N gives headroom). Extended option
 # sets also appear in medication-selection questions.
+# v4.84: NBME 3A PDF prints the header as "CorrectAnswer: H" (no space
+# between "Correct" and "Answer") on every item. The previous `\s+` was
+# too strict and forced every NBME-3 answer onto the Gemini-completion
+# fallback path, which then guessed wrong on Q26 (J vs the printed H).
+# `\s*` accepts both the space-separated and concatenated OCR variants.
 _CORRECT_ANSWER_RE = re.compile(
-    r"\bCorrect\s+Answer\s*[:.]?\s*([A-N])\b",
+    r"\bCorrect\s*Answer\s*[:.]?\s*([A-N])\b",
     re.IGNORECASE,
 )
 
