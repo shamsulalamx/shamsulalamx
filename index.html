@@ -28951,10 +28951,17 @@ Errors: ${escapeHTML(errors)}</div>
       }
 
       // answerChoices
+      // v4.84: <2 choices used to be a hard blocking error, which rejected
+      // the entire test even when 49 of 50 questions were perfect (NBME 8
+      // Q48 biostatistics 2x2 table is the canonical example). Now it
+      // demotes to a per-question warning and marks the question incomplete
+      // so the test imports cleanly and the user sees the bad question
+      // flagged for manual review rather than losing the other 49.
       if (!Array.isArray(q.answerChoices)) {
         qErrors.push('answerChoices is missing or not an array.');
       } else if (q.answerChoices.length < 2) {
-        qErrors.push(`answerChoices has fewer than 2 items (found ${q.answerChoices.length}).`);
+        qWarnings.push(`answerChoices has fewer than 2 items (found ${q.answerChoices.length}); question marked incomplete for manual review.`);
+        isIncomplete = true;
       } else {
         const seenLabels = new Set();
         q.answerChoices.forEach((ch, ci) => {

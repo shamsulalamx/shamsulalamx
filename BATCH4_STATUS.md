@@ -233,17 +233,22 @@ Final per-test counts and file paths from this session's re-extractions.
 |---|---|---|---|---|---|
 | NBME 3 | 50 / 50 | 0 | 0 | 0 | `/Users/shamsulalam/Desktop/v4.84-app-ready/NBME 3_app_ready.json` |
 | NBME 7 | 50 / 50 | 0 | 0 | 0 | `/Users/shamsulalam/Desktop/v4.84-app-ready/NBME 7_app_ready.json` |
-| NBME 8 | 50 / 50 | 0 | 1 (Q48) | 0 | `/Users/shamsulalam/Desktop/v4.84-app-ready/NBME 8_app_ready.json` |
+| NBME 8 | 50 / 50 | 0 | 0 | 0 | `/Users/shamsulalam/Desktop/v4.84-app-ready/NBME 8_app_ready.json` |
 
 **NBME 3 Q26 confirmed: correctAnswer = `H` (Gastric bezoar).** This is the
 fatal-#23 fix verified end-to-end against the PDF source.
 
-**NBME 8 Q48** is the only residual partial: a biostatistics 2×2 contingency
-table question where the answer choices are tabular rows of numbers and
-the deterministic chunker couldn't isolate them. correctAnswer = B is
-still present from the A-PDF answer key; only the visible choice text
-is empty. Acceptable for shipping — you can manually inspect Q48 in the
-imported test or leave it as-is (it's solvable from the stem text alone).
+**NBME 8 Q48 — patched in v4.84.1.** Initial ship had 0 choices on Q48
+(a graph-pointing biostat question where the choices are literally the
+letters "A"–"E" labeling points on a sensitivity/specificity plot — the
+deterministic chunker filtered them out as single-character OCR noise).
+Patched two ways:
+1. Targeted multimodal page-extract recovered the 5 letter-labels →
+   inserted into the NBME 8 JSON on Desktop (now 50/50 with full
+   choices, distribution 4-7).
+2. Validator demoted the `<2 choices` rule from a blocking error to a
+   per-question warning (`isIncomplete = true`), so any future
+   one-question structural failure no longer rejects the whole test.
 
 ### How to import (your action, ~3 minutes)
 
