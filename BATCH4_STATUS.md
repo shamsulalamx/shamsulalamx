@@ -1,11 +1,23 @@
-# BATCH 4 — Session Status (v4.85)
+# BATCH 4 — Session Status (v4.86.1)
 
-Final hand-off doc for Batch 4. Supersedes all prior v4.84.x docs.
+Final hand-off doc for Batch 4. Supersedes all prior v4.84.x / v4.85.x docs.
 
 Branch: `phase12-vertex-migration`
-Tag: `v4.85-batch4-stable`
+Tag: `v4.86.1-batch4-stable` (latest); see version history below.
 Override accepted: all items ship under a single `-stable` tag per your
 session-specific override of CLAUDE.md §2.
+
+## Version history (this session)
+
+| Tag | What |
+|---|---|
+| `v4.83-batch3-stable` | Promoted from pending; baseline before this session |
+| `v4.84-batch4-stable` | Initial Batch 4 ship (Submit button, lab search, focus mode, etc.) |
+| `v4.84.1-batch4-stable` | Validator demotion + NBME 8 Q48 patch |
+| `v4.84.2-batch4-stable` | VERBATIM A-PDF explanations (no more Gemini summaries) |
+| `v4.85-batch4-stable` | Full NBME 3-8 re-extract, 300/300 audit-clean |
+| **`v4.86-batch4-stable`** | Per-Q timer **DISPLAY** lock on submit (DOM + queued-tick race) |
+| **`v4.86.1-batch4-stable`** | This doc updated to reflect v4.86 |
 
 ---
 
@@ -180,11 +192,40 @@ be replaced — that was OK'd in your batch-4 permissions.
 
 ---
 
+## v4.86 fix — per-Q timer DISPLAY lock on submit
+
+**User-reported regression on top of v4.85:** "PER QUESTION TIMER STILL
+DOES NOT STOP IMMEDIATELY AFTER CLICKING SUBMIT. THE TOTAL TIMER STOPS
+AFTER SUBMIT, BUT THE QUESTION SPECIFIC TIMER KEEPS GOING."
+
+Real cause: in v4.84-v4.85, `submitAnswer` cleared the per-Q interval
+correctly (`stopQTimer` → `clearInterval`), but two subtle paths made
+the displayed value appear to keep advancing:
+
+1. **Display lag** — submit captured `r.time` precisely but never
+   pushed it to the DOM. The DOM still showed whatever value the most
+   recent 500 ms tick had written to `state.qSecs`, which lagged
+   `r.time` by up to half a second. Felt like an extra tick.
+
+2. **Queued-tick race** — JS `setInterval` callbacks already scheduled
+   before `clearInterval` still fire on the event loop. That
+   post-clear tick re-wrote `state.qSecs` and re-rendered, making the
+   display tick once past submit.
+
+**Fix (v4.86, `index.html`):**
+
+- `submitAnswer` now sets `state.qSecs = r.time`, nulls `state.qStart`,
+  and explicitly calls `renderQTimer()` to lock the DOM to the exact
+  frozen value before any other render.
+- The setInterval callback bails defensively on any of: state
+  destroyed, `qTimerRef` nulled, `qStart` nulled, or `r.answered ===
+  true` — catches the queued-tick-after-clear edge case.
+
 ## Earlier Batch 4 items (unchanged from v4.84.x)
 
 | # | Status |
 |---|---|
-| #5 Submit button (all sources, both timers freeze on submit) | shipped |
+| #5 Submit button (all sources, both timers freeze on submit) | shipped (display-lock hardened in v4.86) |
 | #25 Lab search inline highlight + Enter cycle | shipped |
 | #3 / #15 Focus-mode pause/lab/calc z-index fix | shipped |
 | #21 Exam-mode reveal-at-end | shipped |
@@ -220,8 +261,19 @@ be replaced — that was OK'd in your batch-4 permissions.
 
 ## What you come back to
 - Branch `phase12-vertex-migration`, HEAD pushed to origin
-- Tag `v4.85-batch4-stable` pushed
-- `dist/mac-arm64/shamsulalamx.app` rebuilt and bundle-MD5-verified
+- Tag `v4.86.1-batch4-stable` (latest) pushed; earlier tags preserved
+  for clean rollback points
+- `dist/mac-arm64/shamsulalamx.app` rebuilt for v4.86 and bundle-MD5-
+  verified (no rebuild needed for v4.86.1 — docs-only patch)
 - `/Users/shamsulalam/Desktop/v4.85-app-ready/` containing 6 fresh
-  app-ready JSONs (every question audited clean)
+  app-ready JSONs (every question audited clean) — these are
+  binary-stable since v4.85; v4.86 only touched index.html
 - This document
+
+## Re-launch the .app to pick up v4.86
+
+You must **quit and relaunch** the .app to load the v4.86 bundle.
+Verify the per-Q timer freeze: click any choice → click Submit. The
+per-Q timer should freeze instantly, no half-second drift, no extra
+tick. Clicking Next on a submitted question advances to the next Q and
+both timers restart cleanly.
