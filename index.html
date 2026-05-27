@@ -7844,6 +7844,14 @@ const Quiz = (() => {
     _t6log('startQTimer', { qIdx: state.qIdx });
     renderQTimer(); // clear warning immediately on question change
     state.qTimerRef = setInterval(() => {
+      // v4.86: defense-in-depth — bail if this question has been submitted
+      // OR the timer was stopped between the schedule and the fire. Without
+      // this guard, a tick that was already queued at the moment of submit
+      // could still write to state.qSecs after stopQTimer cleared the
+      // interval, making the display appear to "keep going" by one tick.
+      if (!state || !state.qTimerRef || !state.qStart) return;
+      const r = state.results[state.qIdx];
+      if (r && r.answered) return;
       state.qSecs = Math.floor((Date.now() - state.qStart) / 1000);
       renderQTimer();
     }, 500);
@@ -8050,8 +8058,21 @@ const Quiz = (() => {
     r.time = (r.time || 0) + elapsed;
     r.answered = true;
     r.correct = (r.chosen === q.c);
-    // Freeze both timers — they restart only when the user advances to the next Q.
+    // v4.86 #5: freeze BOTH timers immediately and lock the displayed value
+    // to the frozen r.time. Previously we just cleared the per-Q interval,
+    // which froze the underlying state but left whatever value the last
+    // 500 ms tick had written to state.qSecs on screen. Some users
+    // perceived this as "the timer kept ticking" because the displayed
+    // value didn't match the moment-of-click value. Explicitly setting
+    // state.qSecs = r.time + calling renderQTimer locks both the state
+    // and the DOM to the same frozen value, and nulling state.qStart
+    // guards against any stray interval callback that might still be
+    // queued from a tick that fired between the clearInterval and the
+    // null assignment.
     stopQTimer();
+    state.qStart = null;
+    state.qSecs = r.time;
+    renderQTimer();
     if (_totTimerRef) { clearInterval(_totTimerRef); _totTimerRef = null; }
     persistState();
 
