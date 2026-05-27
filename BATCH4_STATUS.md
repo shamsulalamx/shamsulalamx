@@ -250,6 +250,40 @@ Patched two ways:
    per-question warning (`isIncomplete = true`), so any future
    one-question structural failure no longer rejects the whole test.
 
+**Explanations are now VERBATIM from the NBME A-PDFs (v4.84.2 — critical
+regression fix).** The runner was sending the chrome-scrubbed raw
+explanation text through `gemini_polish_question`, whose prompt
+explicitly summarizes everything down to 2-4 sentences. The user paid
+for the NBME PDF's full multi-paragraph explanations — including
+per-choice incorrect-answer reasoning — and was getting Gemini
+paraphrases instead. Two fixes:
+
+1. Runner (`nbme_dual_pdf_runner.py`): a new
+   `_split_verbatim_explanation()` helper splits the raw A-PDF text
+   into Correct + Incorrect bodies VERBATIM. The polish call is still
+   made, but ONLY for the meta fields (reviewPearl, retrievalTag,
+   educationalObjective) — those are short summaries where Gemini
+   distillation is appropriate. `explanationSections` is now built
+   from the raw chrome-scrubbed PDF text, not the polish output.
+
+2. `chunk_text()`: detects the "Item 10 of 50" → "Item 1 of 50" OCR
+   misread (the digit '0' is lost) and uses the in-chunk stem prefix
+   number to recover the correct questionNumber. Without this, NBME 3
+   Q10 silently disappeared because the chunker dedup'd it with Q1.
+
+3. Standalone `verbatim_patcher.py`: re-extracts verbatim explanation
+   text from the cached raw A-PDF dumps and patches the three
+   already-shipped Desktop JSONs. Applied to NBME 3 / 7 / 8 — every
+   question now carries the full multi-paragraph PDF text. Stats:
+
+   - NBME 3: Correct avg 1271 chars (max 4924), Incorrect avg 1448 (max 3622)
+   - NBME 7: Correct avg 1230 chars (max 2037), Incorrect avg 1227 (max 2055)
+   - NBME 8: Correct avg 1211 chars (max 1831), Incorrect avg 1167 (max 2367)
+
+   Compared to the previous Gemini-summary version (~80-200 chars per
+   section), this is ~5-6x more content per question — the actual
+   NBME source material the user wants to study against.
+
 ### How to import (your action, ~3 minutes)
 
 1. Launch the rebuilt `.app` at `dist/mac-arm64/shamsulalamx.app`.

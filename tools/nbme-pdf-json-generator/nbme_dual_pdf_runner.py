@@ -491,6 +491,34 @@ def _clean_explanation_chrome(text: str) -> str:
     return text.strip()
 
 
+# v4.84.2: split verbatim A-PDF explanation text into the canonical
+# 2-section structure that the app's explanation panel renders. Returns
+# (correct_body, incorrect_body) as fully verbatim PDF prose. The split
+# point is the literal "Incorrect Answer(s):" header that NBME prints
+# between the correct-answer rationale and the per-choice wrong-answer
+# rationales. The user explicitly wants explanations VERBATIM from the
+# PDF — previously the runner sent this text through a Gemini polish
+# call that paraphrased it down to 2-4 sentences, losing the per-choice
+# detail. Polish is now used ONLY for the meta fields.
+def _split_verbatim_explanation(text: str) -> tuple[str, str]:
+    m = re.search(r"\bIncorrect\s*Answers?\b\s*[:.]?", text, re.IGNORECASE)
+    if not m:
+        return text.strip(), ""
+    correct = text[:m.start()].rstrip()
+    incorrect = text[m.end():].lstrip()
+    # NBME prints a letter list right after "Incorrect Answers:" —
+    # "A, B, C, D, E, F, G, I, J, K, and L." — strip it; the per-choice
+    # prose that follows is what we want as the section body.
+    incorrect = re.sub(
+        r"^\s*[A-N](?:\s*,\s*[A-N])*(?:\s*,?\s+and\s+[A-N])?\s*\.\s*",
+        "",
+        incorrect,
+        count=1,
+        flags=re.IGNORECASE,
+    )
+    return correct.strip(), incorrect.strip()
+
+
 # ── Suspicion detection (v4.61 follow-up) ────────────────────────────────────
 # When deterministic parse_q_chunk returns something that looks wrong, we
 # escalate to Gemini multimodal extraction. Signals computed offline,
@@ -1647,8 +1675,22 @@ def process_pdf_full_text(pdf_path: Path) -> str:
     return Path(output_path).read_text(encoding="utf-8")
 
 
+_STEM_PREFIX_NUM_RE = re.compile(
+    r"^\s*[~*•·●◦‣■►▪)\(\[\]]*\s*(\d+)[.)]\s+",
+    re.MULTILINE,
+)
+
+
 def chunk_text(raw_text: str) -> list[dict[str, Any]]:
-    """Reuse the v4.60 two-tier chunker, returning the chunks list."""
+    """Reuse the v4.60 two-tier chunker, returning the chunks list.
+
+    v4.84.2: post-process each chunk to detect the "Item 10 of 50" OCR
+    misread → "Item 1 of 50" case. If the chunk body begins with a
+    stem-prefix like ")( 10. A 23-year-old..." that disagrees with the
+    header-derived questionNumber, prefer the stem-prefix value. Without
+    this, NBME 3 Q10 silently disappears (the chunker sees two "Item 1"
+    headers and dedups them, dropping Q10's content entirely).
+    """
     text = extract_pdfs._strip_page_markers(raw_text)
     matches = list(extract_pdfs._Q_BOUNDARY_STRONG_RE.finditer(text))
     if not matches:
@@ -1663,6 +1705,15 @@ def chunk_text(raw_text: str) -> list[dict[str, Any]]:
             continue
         end = matches[idx + 1].start() if idx + 1 < len(matches) else len(text)
         chunk_text = text[m.start():end].strip()
+        # v4.84.2: stem-prefix wins over a disagreeing header.
+        stem_m = _STEM_PREFIX_NUM_RE.search(chunk_text)
+        if stem_m:
+            try:
+                stem_num = int(stem_m.group(1))
+                if stem_num != q_num and 1 <= stem_num <= 50:
+                    q_num = stem_num
+            except ValueError:
+                pass
         chunks.append({"questionNumber": q_num, "chunkText": chunk_text})
     return chunks
 
@@ -1947,16 +1998,44 @@ def orchestrate(inputs: list[Path], job_output_root: Path) -> dict[str, Any]:
             # string-split left these as placeholders).
             correct_answer = ans["correctAnswer"]
             expl_text = ans["explanationText"]
-            log(f"  q{q_num}: polishing canonical fields via Gemini")
+            # v4.84.2: explanations come VERBATIM from the A-PDF source.
+            # The polish call is still made for the meta fields (reviewPearl,
+            # retrievalTag, educationalObjective) — those benefit from a
+            # short Gemini distillation. But explanationSections are built
+            # from the raw chrome-scrubbed text, preserving the full
+            # multi-paragraph clinical detail the user paid for in the
+            # PDF source. The previous behavior summarized everything down
+            # to 2-4 sentences and lost the per-choice incorrect-answer
+            # explanations entirely.
+            verbatim_correct, verbatim_incorrect = _split_verbatim_explanation(expl_text)
+            log(f"  q{q_num}: polishing meta fields via Gemini (explanation kept verbatim from PDF)")
             polished = gemini_polish_question(stem, choices, correct_answer, expl_text)
-            explanation_sections = polished.get("explanationSections") or [
-                {"heading": "Correct Answer Explanation", "body": [expl_text]},
-                {"heading": "Incorrect Answer Explanation", "body": ["See correct answer explanation."]},
-                {"heading": "Educational Objective", "body": ["Apply the tested clinical reasoning."]},
-            ]
+            explanation_sections = []
+            if verbatim_correct:
+                explanation_sections.append({
+                    "heading": "Correct Answer Explanation",
+                    "body": [verbatim_correct],
+                })
+            else:
+                # Fallback to whatever polish produced if the source text is
+                # somehow empty — should not happen on real NBME PDFs.
+                explanation_sections.append({
+                    "heading": "Correct Answer Explanation",
+                    "body": [expl_text],
+                })
+            if verbatim_incorrect:
+                explanation_sections.append({
+                    "heading": "Incorrect Answer Explanation",
+                    "body": [verbatim_incorrect],
+                })
             review_pearl = str(polished.get("reviewPearl") or "").strip() or "Refer to the explanation."
             retrieval_tag = str(polished.get("retrievalTag") or "").strip()
             educational_objective = str(polished.get("educationalObjective") or "").strip()
+            if educational_objective:
+                explanation_sections.append({
+                    "heading": "Educational Objective",
+                    "body": [educational_objective],
+                })
             if polished.get("_polishFailed"):
                 warnings_list.append(f"q{q_num}: canonical polish failed ({polished['_polishFailed']}); using raw explanation text")
         elif stem and choices:
