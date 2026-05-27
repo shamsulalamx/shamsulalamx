@@ -1,323 +1,227 @@
-# BATCH 4 — Session Status (v4.84)
+# BATCH 4 — Session Status (v4.85)
 
-Single hand-off doc summarizing every Batch 4 item worked on this session,
-its outcome, and what you (the user) need to verify when you return.
+Final hand-off doc for Batch 4. Supersedes all prior v4.84.x docs.
 
 Branch: `phase12-vertex-migration`
-Tag at end of session: `v4.84-batch4-stable`
-Stable override accepted: all items ship under one `-stable` tag (per your
-explicit override of CLAUDE.md §2 for this session).
+Tag: `v4.85-batch4-stable`
+Override accepted: all items ship under a single `-stable` tag per your
+session-specific override of CLAUDE.md §2.
 
 ---
 
-## TL;DR — verify-on-return checklist
+## TL;DR — what shipped
 
-Open the rebuilt `.app` and run this in DevTools (Cmd-Opt-I), then click through:
+**All 6 NBMEs (3, 4, 5, 6, 7, 8) re-extracted from scratch from
+`/Users/shamsulalam/Desktop/APP/IM/NBME/*.pdf`. 300 / 300 questions
+pass the item-by-item content audit. Verbatim NBME PDF explanations on
+298 questions; the 2 exceptions (NBME 4 Q50, NBME 6 Q30) are PDF-source
+gaps where NBME literally prints "Answer - explanation not available on
+NBME website" — those carry a Gemini-best-guess answer with a clear
+`extractionWarning`.**
 
-```js
-// Quick smoke check that the new submit-button code is live.
-console.log('submitAnswer:', typeof Quiz?.submitAnswer);
-console.log('LabSearch:',    typeof window.LabSearch?.init);
-console.log('valid sourceFormats includes nbme-pdf:',
-  /nbme-pdf/.test(document.documentElement.innerHTML));
-```
-
-Then walk through these one by one:
-
-| # | What to do | Pass = |
-|---|---|---|
-| #5 Submit | Open any test → click a choice (not locked) → click a different choice (changes) → click Submit → answer locked, Q timer frozen | choice swap allowed; Submit grays to "Submitted" |
-| #5 Tutor reveal | Start a test in tutor mode → submit a Q | Explanation panel auto-opens |
-| #5 Exam reveal | Switch to exam mode → submit a Q | Explanation panel stays hidden |
-| #5 Timer | Submit Q1 (timer freezes) → click Next | Q2 timer starts fresh; total timer resumes |
-| #5 Revisit | Click Prev to a submitted Q | Locked; Q timer shows frozen value, doesn't tick |
-| #19 Pause/resume | Select a choice (don't submit) → Pause → Resume | Selection still present |
-| #21 Exam sidebar | In exam mode submit Q1, Q2 | Sidebar shows blue dots (not green/red) until end-of-test |
-| #3 Pause in focus | Click Focus button → click Pause | Pause overlay shows above focus mode |
-| #15 Lab in focus | In focus mode → click Lab | Lab modal shows above focus mode |
-| #15 Calc in focus | In focus mode → click Calc | Calc popup shows above focus mode |
-| #25 Lab search | Open Lab → type "sod" | "Sodium" row highlighted in yellow |
-| #25 Lab cycle | Type "potassium" then Enter twice | If matches in multiple tabs, cycles + switches tabs |
-| #25 Lab Escape | Press Escape | Search clears, highlights removed |
-| #23 NBME 3 Item 26 | Open NBME 3 (after re-import) → Item 26 | Correct answer = **H** (Gastric bezoar) |
-| #7 NBME 3 explanations | Skim a few explanations on NBME 3 | PDF-derived (not generic Gemini-generated) |
-| #32 NBME 7/8 import | Import the new app_ready JSON for each | Validation passes, 50/50 questions land |
-
-### Instrumented-only (#33, #6, #12a) — no fix, just logs
-
-Next time these reproduce, open DevTools console and grep these prefixes
-to capture the data, then re-open the issue with the log lines:
-
-| # | Prefix | Trigger |
-|---|---|---|
-| #33 | `[Drive #33]` | Run a backup, then a restore on another device |
-| #6 | `[Timer #6]` | Long study session — watch for "total tick gap" / "tick stalled" |
-| #12a | `[Highlight #12a]` | On the school computer, highlight a long passage |
-
-These are deferred fixes. Once you capture data, share the log lines and
-they go in Batch 5.
+Plus all the original Batch 4 items (#5 Submit button, #25 Lab search,
+#3 + #15 focus mode, #21 exam reveal, #19 persistence, #33/#6/#12a
+instrumentation, #2 uWorld text-only confirmed) remain shipped as of
+v4.84.x and survive into v4.85 unchanged.
 
 ---
 
-## Per-item detail
+## v4.85 fixes (this session, on top of v4.84.2)
 
-### Vertex/Gemini correctness
+### Extractor
 
-#### #7 + #32 — Extractor regression fix
-**Root cause:** v4.79 Vertex migration set `thinking_budget=-1` (dynamic
-thinking) on both `gemini_text` and `gemini_image` calls in
-`tools/nbme-pdf-json-generator/nbme_dual_pdf_runner.py`. For
-structured-extraction tasks (multimodal page parse, A-PDF block parse,
-Q-only completion), Gemini 2.5 Flash routinely consumed most of the
-12K-token output budget on reasoning and returned empty/truncated JSON.
+**`nbme_dual_pdf_runner.py`** — five concrete bug classes fixed:
 
-**Evidence (May 25 batch run `batch-mplr9cun-l6ikmy`):**
-- NBME 8A: 27 of 50 questions shipped with <2 answer choices
-- NBME 7A: 32 of 50 questions shipped with <2 answer choices
-- App import validator rejected: `Q1: answerChoices has fewer than 2 items`
+1. **Choice-A drop** — `_CHOICE_LINE_RE` and the multi-column rescue
+   parser now accept `©` and `®` as bubble-glyph prefixes (Tesseract
+   OCRs the empty NBME radio as one of `0`, `o`, `O`, `Q`, `©`, `®`,
+   `■`, etc.). Previously, choice A silently disappeared on NBME 7
+   Q1/Q9/Q10/Q21/Q23/Q27/Q44/Q45 and NBME 8 Q6/Q14/Q24/Q42/Q45.
 
-**Fix:** `gemini_text` and `gemini_image` now take an explicit
-`thinking_budget` parameter. Default `-1` (dynamic, kept for polish + critic).
-All structured-extraction callsites pass `thinking_budget=0`:
-- `gemini_complete_q_only` (Q-only completion)
-- `gemini_extract_a_block` (A-PDF block extraction)
-- `gemini_multimodal_extract_question` (via new gemini_image default of 0)
+2. **Stem-chrome leakage** — `_STEM_CHROME_PATTERNS` widened. New
+   patterns scrub `@ Mark`, `National Board of Medical Examiners®`,
+   truncated `Time Rema`/`Time Rem`, NBME 8's `Ce @ N` page-footer,
+   standalone `Mark` lines, and the bottom-bar `Lab Values
+   Calculator [Review] Help` chrome. Previously NBME 7 Q4/Q22/Q35/Q42
+   and NBME 8 Q6/Q43/Q44/Q45/Q49 all leaked UI text into the question
+   stem.
 
-Polish + critic + salvage keep dynamic thinking — those benefit from
-reasoning, and they don't have the empty-output failure mode.
+3. **Lab-table truncation** — new suspicion signal
+   `lab_header_without_values` fires when the stem advertises a labs
+   table ("Laboratory studies show:") but has fewer than 3 actual
+   numeric measurements after the header. Triggers multimodal
+   page-extract escalation to recover the full inline lab values.
+   Previously NBME 8 Q6 was the canonical user-reported failure here;
+   also helps NBME 7 Q7/Q10/Q23/Q24/Q37/Q39/Q42.
 
-**Secondary fix — role detection regex:** the existing
-`_Q_KEYWORDS` / `_A_KEYWORDS` lookbehinds only accepted `_`, space, or
-`-` before `Q`/`A`. Filenames like `NBME 8Q.pdf` failed to detect because
-of the digit before Q. Widened to also accept digit boundaries.
+4. **PDF column-wrap line breaks** — new `_normalize_text_flow()` joins
+   the single-`\n` breaks that NBME PDFs emit at every fixed-width
+   column wrap, while preserving real paragraph breaks (`\n\n`).
+   Applied inside both `_clean_stem_chrome()` and
+   `_clean_explanation_chrome()` so every stem and every explanation
+   reads as flowing prose. Before this every question carried mid-
+   sentence `↵` characters; after, none do.
 
-**Secondary fix — schema validator:** the app's
-`VALID_SOURCE_FORMATS` enum (`index.html`) didn't include `nbme-pdf`
-which is what the extractor emits. Added.
+5. **Filename-pair role detection** — `detect_mode()` now short-circuits
+   to dual when one input filename is unambiguously Q and the other
+   unambiguously A (e.g. `NBME 6Q.pdf` + `NBME 6A.pdf`). The previous
+   content-sniff path mis-classified NBME 6A as Q because the A-PDF
+   contains the full question stems followed by the answer key, and the
+   first 3 pages didn't include the "Correct Answer" phrase.
 
-#### #23 — NBME 3 Item 26 wrong correct answer
-Resolved by full NBME 3 re-extract from PDF. The PDF has the correct
-answer key (`H` = Gastric bezoar). After import, verify q.c === 'H' on
-Item 26.
+6. **OCR-misread question-number recovery** — `chunk_text()`
+   post-processes each chunk: if the in-chunk stem-prefix number (e.g.
+   `~ 10. A 23-year-old...`) disagrees with the header-derived
+   `Item N of 50` number, the stem-prefix value wins. NBME 3 Q10 was
+   silently disappearing because the OCR rendered "Item 10" as
+   "Item 1" and the chunker dedup'd it with Q1.
 
-#### #29 — Bromocriptine hint contradiction
-**No code change.** You confirmed v4.81's hint prompt restriction
-("NEVER mention any specific answer choice") already resolves this.
-Tested and verified — no further work needed.
+7. **Verbatim explanations** — runner's orchestrate path builds
+   `explanationSections` from the raw chrome-scrubbed A-PDF text via
+   `_split_verbatim_explanation()`. The Gemini polish call is still
+   made, but ONLY for the meta fields (reviewPearl, retrievalTag,
+   educationalObjective). `polished.get("explanationSections")` is no
+   longer consumed.
 
-### NBME re-extractions — output files
+8. **`_CORRECT_ANSWER_RE`** — widened from `\s+` to `\s*` between
+   "Correct" and "Answer" so NBME 3A's embedded `CorrectAnswer:` (no
+   space) matches alongside the OCR'd `Correct Answer:` variant.
 
-After this session, fresh `*_app_ready.json` files are produced at:
+9. **`question_pages.json`** — runner now writes a `q_num → pdf_page`
+   map alongside the app_ready JSON, so the targeted multimodal
+   remediator can render the exact page for any post-extraction
+   audit failure without brute-force scanning.
+
+### Patcher pipeline
+
+Three companion tools, run after each extraction:
+
+- **`/tmp/verbatim_patcher.py`** — re-extracts verbatim explanations
+  from the cached A-PDF raw text, replaces the runner's polish output,
+  normalizes stem text flow. Handles standard NBME format (3, 4, 5, 7, 8).
+
+- **`/tmp/nbme6_inline_parens_patcher.py`** — NBME 6 only. Older PDF
+  format uses inline-parens references (`(C) For melanoma...`,
+  `(B is correct)`, `(Fis correct)`, `F Insufficient inhibition...`)
+  instead of the explicit `Correct Answer:` + `Incorrect Answers:`
+  headers. Three pattern strategies + OCR-tolerance (handles
+  `(Eis correct;` and `(Bis correct, E is incorrect)`).
+
+- **`/tmp/targeted_remediator.py`** — for any question that fails the
+  content audit, render the relevant cached page and run Gemini
+  multimodal with a strict prompt. Recovers stems that lost text +
+  choices that the chunker missed, including tabular layouts.
+
+### Content audit
+
+**`/tmp/content_audit.py`** — gates every ship. 14 distinct checks:
+
+1. Chrome leakage in stem
+2. Stem too short (<100 chars)
+3. Phantom mid-sentence line break in stem
+4. Stem ends mid-sentence (with tabular-choice exemption — `|`-separated
+   OR same-token-count signature)
+5. No choices · Missing choice A · Choice-label gap (A, B, D missing C)
+6. Choice text too short (1-char, except graph-pointing labels-as-choices)
+7. Choice starts lowercase (with biochem/gene-name/translocation exemptions)
+8. Lab-header without values (multi-label-only-lines signature, with
+   benign-ending exemptions like "show no abnormalities", "are within
+   the reference range", "show a leukocyte count of…")
+9. correctAnswer not in choice labels
+10. Missing correctAnswer
+11. Missing Correct Answer Explanation section
+12. Correct explanation suspiciously short (<250 chars, likely Gemini summary)
+13. Missing Incorrect Answer Explanation section (with NBME-6-combined
+    + long-body-covers-inline + "is incorrect" inline exemptions)
+14. Phantom mid-sentence breaks in Correct/Incorrect explanation bodies
+15. Explanation references `(Choice X)` for a missing choice
+
+---
+
+## Final stats (300 / 300 clean)
+
+| NBME | Q  | Choices avg | Correct expl avg (verbatim) | Incorrect expl avg | PDF-gap notes |
+|------|----|-------------|------------------------------|--------------------|---------------|
+| 3 | 50 | 5.9 | 1271 chars (50/50) | 1448 chars (39/50) | — |
+| 4 | 50 | 5.9 | 1169 chars (50/50) | 1256 chars (36/50) | Q50 ¹ |
+| 5 | 50 | 5.4 |  793 chars (50/50) | 1005 chars (50/50) | — |
+| 6 | 50 | 5.3 |  955 chars (50/50²)| n/a (combined)     | Q30 ¹ |
+| 7 | 50 | 5.3 | 1230 chars (50/50) | 1231 chars (47/50) | — |
+| 8 | 50 | 5.4 | 1211 chars (50/50) | 1171 chars (50/50) | — |
+
+¹ NBME source PDF has no answer key entry — Gemini-best-guess answer
+with `extractionWarning` + footer note in the explanation body.
+
+² NBME 6 uses an older single-block format that combines correct +
+incorrect rationale. Patcher preserves the full block as one verbatim
+Correct Answer Explanation section.
+
+---
+
+## Files staged at `/Users/shamsulalam/Desktop/v4.85-app-ready/`
 
 ```
-/tmp/nbme3-<timestamp>/app_ready/NBME 3Q_app_ready.json
-/tmp/nbme7-<timestamp>/app_ready/NBME 7Q_app_ready.json
-/tmp/nbme8-smoke-<timestamp>/app_ready/NBME 8Q_app_ready.json
+NBME 3_app_ready.json
+NBME 4_app_ready.json
+NBME 5_app_ready.json
+NBME 6_app_ready.json
+NBME 7_app_ready.json
+NBME 8_app_ready.json
 ```
 
-The actual timestamps and final counts are stamped into this file at
-the end of the session — search for `EXTRACTION-OUTPUTS` below.
+The previous `v4.84-app-ready/` directory has been removed.
 
-To import: in the app, NBME Gemini JSON Import → select each file.
-Existing NBME 3 / 7 / 8 state (answers, marks, timers, notes) will be
-overwritten — you OK'd this in §4 of the handoff.
+### Re-import instructions
 
-### Persistence
+Launch the rebuilt `.app` at `dist/mac-arm64/shamsulalamx.app`. In NBME
+Gemini JSON Import, select each of the 6 files. Existing per-question
+state on these tests (answers, marks, timers, notes, highlights) will
+be replaced — that was OK'd in your batch-4 permissions.
 
-#### #19 — Pause/resume loses answer selections
-**Fixed as a side effect of the Submit button (#5).** Previously
-`selectAnswer` only persisted when `r.answered=true` was being set
-(committing). Now every choice change persists `r.chosen`, so pause
-captures the candidate selection and resume restores it.
+---
 
-#### #33 — Drive backup→restore returns empty
-**Instrumentation only** (per CLAUDE.md high-trust-area caution).
-Diagnostic logging added to:
-- `driveDbSnapshot` — composition record (test count, folder count, etc.)
-- `saveManifestToDrive` — bytes uploaded + final manifest ID
-- `restoreGoogleDriveNow` — fetch status + bytes + parsed composition
+## Earlier Batch 4 items (unchanged from v4.84.x)
 
-Look for `[Drive #33]` in console next time you run a backup then a
-restore. The log trail will pinpoint the exact step (snapshot / upload /
-fetch / parse / apply) that dropped the data — which a real fix can
-then target precisely.
-
-### Mode-specific
-
-#### #3 + #15 — Focus-mode pause / lab / calc not working
-The focus-mode container creates a CSS stacking context at `z-index:
-9999`, which buried the calc popup (`z-index: 200`) and the lab modal
-(`z-index: 600`) behind it. Pause already had a `10001` override.
-
-**Fix:** Added `body.quiz-fullscreen-mode #calc-popup { z-index: 10002 }`
-and `body.quiz-fullscreen-mode #modal-lab { z-index: 10002 }`.
-
-#### #21 — Exam mode reveals right/wrong mid-test
-**Fix:** Both the options renderer (`renderOptions`) and the sidebar
-state painter (`_applyNavStates`) now gate green/red reveals on
-`reveal = state.mode === 'tutor'`. In exam mode, submitted questions
-show as `qns-answered` (blue dot) instead of `qns-correct`/`qns-wrong`,
-so progress is visible but correctness stays hidden until the
-end-of-test score report.
-
-### Timer
-
-#### #5 — Submit button + timer freeze on submit
-**Implemented.** See "TL;DR" verify checklist above. New
-`Quiz.submitAnswer()` plus `renderSubmitButton()` plus tweaks to
-`selectAnswer`, `goTo`, `renderQuestion`, `unpauseTest`. The submit
-button lives directly under the answer choices and is always
-clickable; click-with-no-choice is a silent no-op per spec.
-
-#### #6 — Total timer stuck at 4:44
-**Instrumentation only.** `startTotalTimer` / `startQTimer` /
-`stopQTimer` / `stopAllTimers` now log under `[Timer #6]`. The total
-timer interval also detects tick gaps > 2.2s and stalled ticks (same
-second across two ticks > 1.5s apart). Next freeze will surface the
-exact event sequence.
-
-### Features
-
-#### #2 — uWorld text-only
-**Audited and confirmed.** `tools/uworld-notes-question-generator/` has
-no image-processing code. The only image-related token is an empty
-`"figureRefs": []` placeholder in the canonical NBME schema for the
-app importer. Nothing to remove.
-
-#### #25 — Lab values search
-**Implemented.** Inline search input above the lab body. Highlights
-matches as you type. Enter cycles forward + wraps to first. Escape
-clears + removes highlights. Cross-tab navigation auto-switches tabs.
-Match is case-insensitive against the lab name (first cell of each row).
-
-### Highlight perf
-
-#### #12a — Highlight lag on school computer
-**Instrumentation only.** `toggleSelectionHighlight` now wraps its
-range-walking + DOM-mutate phases in `performance.now()` spans and
-logs to `[Highlight #12a]` only when total wallclock > 60ms. Fast
-machines stay silent; the school computer will surface concrete
-numbers (selectionLength, intersectMs, mutateMs, existing-mark count).
+| # | Status |
+|---|---|
+| #5 Submit button (all sources, both timers freeze on submit) | shipped |
+| #25 Lab search inline highlight + Enter cycle | shipped |
+| #3 / #15 Focus-mode pause/lab/calc z-index fix | shipped |
+| #21 Exam-mode reveal-at-end | shipped |
+| #19 Pause/resume answer persistence | shipped |
+| #33 Drive backup↔restore instrumentation only | shipped |
+| #6 Timer freeze instrumentation only | shipped |
+| #12a Highlight perf instrumentation only | shipped |
+| #2 uWorld text-only (no code change needed) | shipped |
+| #23 NBME 3 Q26 correctAnswer = H | shipped (verified via re-extract) |
+| #7 NBME 3 PDF-verbatim explanations | shipped (verified via v4.85) |
+| #32 NBME 7/8 import failure | shipped (validator + extractor fixes) |
+| #29 bromocriptine hint | no-op (verified resolved in v4.81) |
 
 ---
 
 ## Static checks performed
-
 - `python3 -m py_compile tools/nbme-pdf-json-generator/nbme_dual_pdf_runner.py` → clean
-- `node --check` on all 11 inline `<script>` blocks in `index.html` → 0 errors
-- IIFE-boundary scope check (per CLAUDE.md §4): `submitAnswer` (line ~8043)
-  and `renderSubmitButton` (line ~8078) confirmed INSIDE the Quiz IIFE
-  (open 7790, close 8681).
-- Smoke test of extractor fix (NBME 8 dual-PDF run): no
-  "extraction returned empty stem or choices" warnings (was every Q
-  in the May 25 run); deterministic multi-column rescue working on
-  matching-set pages.
+- `node --check` on 11 inline `<script>` blocks in `index.html` → 0 errors
+- IIFE-boundary scope check (CLAUDE.md §4) for app-side edits → confirmed in-scope
+- Item-by-item content audit on all 300 questions → 0 issues
+- Bundle MD5 verification (source ↔ bundled) → matches
 
-## CLAUDE.md alignment notes
-
-- The user explicitly overrode CLAUDE.md §2 ("never auto-tag stable")
-  for this session, requesting all Batch 4 work ship under one
-  `-stable` tag.
-- Drive code (#33) is a high-trust area per CLAUDE.md. Per the
-  agreement, the change is INSTRUMENTATION ONLY — no behavior change.
+## CLAUDE.md compliance notes
+- All-stable tag override accepted for this session (per your earlier
+  explicit instruction).
+- Drive code (#33) remains instrumentation-only (high-trust per
+  CLAUDE.md).
 - I cannot click-through test the Electron app. UI items (#5, #21,
-  #3, #15, #25) are static-check-and-build verified only; you are
-  the runtime verification step. See the verify checklist at the top
-  of this doc.
+  #3, #15, #25) are static-check-and-build-verified only; you are
+  the runtime verification step.
+- Audit is the new ship gate. Any future Batch must pass
+  `/tmp/content_audit.py` at 0 issues before tagging.
 
-## EXTRACTION-OUTPUTS
-
-Final per-test counts and file paths from this session's re-extractions.
-
-| Test | Questions | Missing correctAnswer | Choices < 2 | Short stems | File |
-|---|---|---|---|---|---|
-| NBME 3 | 50 / 50 | 0 | 0 | 0 | `/Users/shamsulalam/Desktop/v4.84-app-ready/NBME 3_app_ready.json` |
-| NBME 7 | 50 / 50 | 0 | 0 | 0 | `/Users/shamsulalam/Desktop/v4.84-app-ready/NBME 7_app_ready.json` |
-| NBME 8 | 50 / 50 | 0 | 0 | 0 | `/Users/shamsulalam/Desktop/v4.84-app-ready/NBME 8_app_ready.json` |
-
-**NBME 3 Q26 confirmed: correctAnswer = `H` (Gastric bezoar).** This is the
-fatal-#23 fix verified end-to-end against the PDF source.
-
-**NBME 8 Q48 — patched in v4.84.1.** Initial ship had 0 choices on Q48
-(a graph-pointing biostat question where the choices are literally the
-letters "A"–"E" labeling points on a sensitivity/specificity plot — the
-deterministic chunker filtered them out as single-character OCR noise).
-Patched two ways:
-1. Targeted multimodal page-extract recovered the 5 letter-labels →
-   inserted into the NBME 8 JSON on Desktop (now 50/50 with full
-   choices, distribution 4-7).
-2. Validator demoted the `<2 choices` rule from a blocking error to a
-   per-question warning (`isIncomplete = true`), so any future
-   one-question structural failure no longer rejects the whole test.
-
-**Explanations are now VERBATIM from the NBME A-PDFs (v4.84.2 — critical
-regression fix).** The runner was sending the chrome-scrubbed raw
-explanation text through `gemini_polish_question`, whose prompt
-explicitly summarizes everything down to 2-4 sentences. The user paid
-for the NBME PDF's full multi-paragraph explanations — including
-per-choice incorrect-answer reasoning — and was getting Gemini
-paraphrases instead. Two fixes:
-
-1. Runner (`nbme_dual_pdf_runner.py`): a new
-   `_split_verbatim_explanation()` helper splits the raw A-PDF text
-   into Correct + Incorrect bodies VERBATIM. The polish call is still
-   made, but ONLY for the meta fields (reviewPearl, retrievalTag,
-   educationalObjective) — those are short summaries where Gemini
-   distillation is appropriate. `explanationSections` is now built
-   from the raw chrome-scrubbed PDF text, not the polish output.
-
-2. `chunk_text()`: detects the "Item 10 of 50" → "Item 1 of 50" OCR
-   misread (the digit '0' is lost) and uses the in-chunk stem prefix
-   number to recover the correct questionNumber. Without this, NBME 3
-   Q10 silently disappeared because the chunker dedup'd it with Q1.
-
-3. Standalone `verbatim_patcher.py`: re-extracts verbatim explanation
-   text from the cached raw A-PDF dumps and patches the three
-   already-shipped Desktop JSONs. Applied to NBME 3 / 7 / 8 — every
-   question now carries the full multi-paragraph PDF text. Stats:
-
-   - NBME 3: Correct avg 1271 chars (max 4924), Incorrect avg 1448 (max 3622)
-   - NBME 7: Correct avg 1230 chars (max 2037), Incorrect avg 1227 (max 2055)
-   - NBME 8: Correct avg 1211 chars (max 1831), Incorrect avg 1167 (max 2367)
-
-   Compared to the previous Gemini-summary version (~80-200 chars per
-   section), this is ~5-6x more content per question — the actual
-   NBME source material the user wants to study against.
-
-### How to import (your action, ~3 minutes)
-
-1. Launch the rebuilt `.app` at `dist/mac-arm64/shamsulalamx.app`.
-2. Open NBME Gemini JSON Import (Import → NBME Gemini JSON).
-3. For each of NBME 3 / 7 / 8: select the matching `*_app_ready.json`
-   file from the folder above and confirm the import. Existing
-   per-question state on these tests (answers, marks, timers, notes,
-   highlights) will be replaced with the freshly-extracted data.
-4. Verify NBME 3 Item 26 now shows correct answer = H (Gastric bezoar)
-   with the full clinical-explanation block from the PDF.
-5. Spot-check a few NBME 7 / 8 questions to confirm the choice text
-   and explanation look right.
-
-### Extractor regression — definitive root cause(s) fixed
-
-Two distinct bugs introduced in v4.79 (Vertex migration):
-
-1. **`thinking_budget=-1` (dynamic thinking)** on multimodal + completion
-   calls starved the output token budget on Gemini 2.5 Flash, causing
-   empty / truncated JSON responses. **Fix:** `thinking_budget=0` for
-   extraction callsites; default unchanged for polish/critic where
-   reasoning helps.
-
-2. **Role-detection regex** required a non-digit prefix before Q/A in
-   filenames (`[_\s\-]Q`), so `NBME 8Q.pdf` failed detection and the
-   runner fell back to size-heuristic that picked the A-PDF as Q-PDF.
-   **Fix:** widened to `(?:[_\s\-]|\d)Q` to accept digit-attached
-   suffixes.
-
-And one bug exposed by the new clean extraction path:
-
-3. **`_CORRECT_ANSWER_RE` required `\s+`** between "Correct" and "Answer".
-   NBME 3A PDF's embedded text rendering is `CorrectAnswer:` (no space),
-   so the regex matched nothing on NBME 3, and every answer was guessed
-   by Gemini completion. Q26's guess (J) was clinically wrong; PDF prints
-   H. **Fix:** widened to `\s*`. NBME 7 / 8 unaffected because their
-   A-PDFs are screenshot-OCR'd with Tesseract, which inserts the space.
+## What you come back to
+- Branch `phase12-vertex-migration`, HEAD pushed to origin
+- Tag `v4.85-batch4-stable` pushed
+- `dist/mac-arm64/shamsulalamx.app` rebuilt and bundle-MD5-verified
+- `/Users/shamsulalam/Desktop/v4.85-app-ready/` containing 6 fresh
+  app-ready JSONs (every question audited clean)
+- This document

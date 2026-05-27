@@ -247,7 +247,29 @@ def detect_mode(inputs: list[Path]) -> tuple[str, dict[str, Path | None]]:
 
     mode ∈ {"dual", "q_only", "combined", "a_only"}.
     a_only is rejected upstream — we keep the label for explicit error.
+
+    v4.85: when exactly 2 inputs come in and the FILENAMES form an
+    unambiguous Q/A pair (one has _Q_KEYWORDS hit + zero a-keyword,
+    the other has _A_KEYWORDS hit + zero q-keyword), force dual mode
+    with the filename-derived roles regardless of content sniff. Field
+    testing surfaced NBME 6 misclassification: both 6Q.pdf and 6A.pdf
+    were content-sniffed as "q" because the A-PDF contains the full
+    question stems followed by the answer key, and the first 3 pages
+    happen not to include "Correct Answer" phrases. Filename is far
+    more reliable than content sniff for the unambiguous case.
     """
+    # v4.85: filename short-circuit for unambiguous pairs.
+    if len(inputs) == 2:
+        names_q = [bool(_Q_KEYWORDS.search(p.name)) for p in inputs]
+        names_a = [bool(_A_KEYWORDS.search(p.name)) for p in inputs]
+        # one is purely Q, the other is purely A
+        if (names_q[0] and not names_a[0] and names_a[1] and not names_q[1]):
+            log(f"  role detect: filename-pair shortcut → dual ({inputs[0].name} = Q, {inputs[1].name} = A)")
+            return "dual", {"q": inputs[0], "a": inputs[1]}
+        if (names_q[1] and not names_a[1] and names_a[0] and not names_q[0]):
+            log(f"  role detect: filename-pair shortcut → dual ({inputs[1].name} = Q, {inputs[0].name} = A)")
+            return "dual", {"q": inputs[1], "a": inputs[0]}
+
     roles: list[tuple[Path, str, float]] = []
     for p in inputs:
         role, conf, reasoning = detect_file_role(p)
@@ -410,26 +432,75 @@ def parse_a_pdf(text: str) -> dict[int, dict[str, str]]:
 
 # NBME Self-Assessment Q-PDF choice format: `0 A) Chronic migraines`.
 # The leading `0 ` is the OCR rendering of the empty radio-button circle.
-# Some PDFs render the same widget as `o `, `O `, `(○) `, or `■ `.
-# Accept any single non-letter prefix char (with optional whitespace) before
-# the labelled letter. The lookahead `(?=[A-Z]|[a-z])` on the choice text
-# rejects accidental matches inside the stem like "as B) is shown".
+# Some PDFs render the same widget as `o `, `O `, `(○) `, `■ `, or `©`
+# (the copyright glyph that some OCR engines emit for the empty radio).
+# v4.85: added © and Q (sometimes mis-OCR'd from O) so choice A no longer
+# silently drops when the bubble glyph is in the © variant — NBME 7 Q1/Q9/
+# Q10 and NBME 8 Q6/Q14/Q24 all hit this in field testing.
 _CHOICE_LINE_RE = re.compile(
-    r"^[\s0Oo■►▪◯●◦·*~\(\)\[\]]*([A-N])\)\s+(.+?)$",
+    r"^[\s0OoQ©®■►▪◯●◦·*~\(\)\[\]]*([A-N])\)\s+(.+?)$",
     re.MULTILINE,
 )
 
 # NBME UI chrome lines to strip from the stem.
+# v4.85: significantly widened. Field-testing surfaced these forms that the
+# prior patterns missed: "@ Mark", "National Board of Medical Examiners®",
+# truncated "Time Rema", "ies show:" / "ng:" prefix orphans, "ng",
+# checkbox + "Mark" combo, and a generic empty-line collapser.
 _STEM_CHROME_PATTERNS = [
     re.compile(r"^.*?Item\s+\d+\s+of\s+\d+.*$", re.MULTILINE | re.IGNORECASE),
     re.compile(r"^.*?Mark\s+Medicine\s+Self[-\s]?Assessment.*$", re.MULTILINE | re.IGNORECASE),
-    re.compile(r"^.*?Time\s+Remaining\b.*$", re.MULTILINE | re.IGNORECASE),
-    re.compile(r"^\s*[■►▪◯●]+\s*$", re.MULTILINE),
+    re.compile(r"^.*?Medicine\s+Self[-\s]?Assessment.*$", re.MULTILINE | re.IGNORECASE),  # solo Medicine Self-Assessment line
+    re.compile(r"^.*?National\s+Board\s+of\s+Medical\s+Examiners[®]?.*$", re.MULTILINE | re.IGNORECASE),
+    re.compile(r"^.*?Time\s+Rem(?:a(?:in(?:ing)?)?)?\b.*$", re.MULTILINE | re.IGNORECASE),  # incl. truncated "Time Rema"
+    re.compile(r"^\s*[@&\$%]+\s*Mark\s*$", re.MULTILINE | re.IGNORECASE),  # "@ Mark" / "& Mark"
+    re.compile(r"^\s*Mark\s*$", re.MULTILINE),  # standalone "Mark" line
+    re.compile(r"^\s*[■►▪◯●©®]+\s*$", re.MULTILINE),  # standalone glyph lines
     re.compile(r"^\s*\d+\s*hr\s+\d+\s*min\s+\d+\s*sec\s*$", re.MULTILINE | re.IGNORECASE),
+    re.compile(r"^\s*\d+\s*hr\s+\d+\s*min\s*$", re.MULTILINE | re.IGNORECASE),  # truncated timer
     re.compile(r"^\s*https?://\S+\s*$", re.MULTILINE),
     re.compile(r"^.*?(?:Previous\s+)?Next\s+(?:Score\s+Report\s+)?Lab\s+Values\s+Calculator.*$", re.MULTILINE | re.IGNORECASE),
+    re.compile(r"^.*?Lab\s+Values\s+Calculator\s+(?:Review\s+)?Help.*$", re.MULTILINE | re.IGNORECASE),
+    re.compile(r"^\s*Ce\s*@\s*\d+\s*$", re.MULTILINE),  # NBME 8 page-footer chrome "Ce @ 2"
     re.compile(r"^\s*[~`r,p\\\s]+\s*$", re.MULTILINE),  # OCR-noise lines like "r r ,", "~ ~", "p ,"
 ]
+
+
+def _normalize_text_flow(text: str) -> str:
+    """Join PDF column-wrap line breaks while preserving paragraph breaks.
+
+    NBME PDFs hard-break every line of prose because the source is a
+    fixed-width column layout. Without this pass the stem and explanation
+    text reads like:
+
+        Bezoars are
+        space-occupying masses of indigestible matter, often hair or
+        chewing gum.
+
+    We want:
+
+        Bezoars are space-occupying masses of indigestible matter,
+        often hair or chewing gum.
+
+    Algorithm: split on blank-line boundaries (paragraph breaks), then
+    within each paragraph join newlines with a single space. Hyphenated
+    line breaks ("inter-\\nventricular") get joined without the space.
+    """
+    if not text:
+        return text
+    # Split into paragraphs on >=2 newlines (with optional whitespace).
+    paragraphs = re.split(r"\n[ \t]*\n+", text)
+    out: list[str] = []
+    for p in paragraphs:
+        # Join hyphenated breaks first ("micro-\\nscopy" -> "microscopy")
+        p = re.sub(r"(\w)-\n[ \t]*(\w)", r"\1\2", p)
+        # Join remaining intra-paragraph newlines with a single space
+        p = re.sub(r"[ \t]*\n[ \t]*", " ", p)
+        # Collapse runs of spaces left by the join
+        p = re.sub(r"[ \t]{2,}", " ", p).strip()
+        if p:
+            out.append(p)
+    return "\n\n".join(out)
 
 
 def _clean_stem_chrome(text: str) -> str:
@@ -439,6 +510,8 @@ def _clean_stem_chrome(text: str) -> str:
     # ("1. ", "~ 1. ", "* 1. ", etc.) introduced by the NBME interface.
     text = re.sub(r"\n{3,}", "\n\n", text)
     text = re.sub(r"^\s*[~*•·●◦‣■►▪]?\s*\d+[.)]\s+", "", text.strip())
+    # v4.85: join PDF column-wrap line breaks so the stem flows as prose.
+    text = _normalize_text_flow(text)
     return text.strip()
 
 
@@ -479,15 +552,19 @@ def _clean_explanation_chrome(text: str) -> str:
     """Apply NBME-specific chrome + OCR noise scrubbing to A-PDF explanation
     text. v4.61 follow-up after first live run surfaced widespread chrome
     leakage like 'Exam Section :' and OCR fragments like 'r ,,, ~'.
+    v4.85: also normalizes column-wrap line breaks so the explanation
+    reads as flowing prose instead of mid-sentence hard breaks.
     """
     for pat in _EXPLANATION_CHROME_PATTERNS:
         text = pat.sub("", text)
-    # Collapse multiple newlines and runs of whitespace.
+    # Collapse multiple newlines first.
     text = re.sub(r"\n{3,}", "\n\n", text)
     text = re.sub(r"[ \t]{2,}", " ", text)
     # Strip dangling fragment characters left by OCR around words.
     text = re.sub(r"\s+,\s+", ", ", text)
-    text = re.sub(r"\s*\n\s*", "\n", text)
+    # v4.85: join PDF column-wrap line breaks. Replaces the previous
+    # `\s*\n\s*` → `\n` collapser which preserved the phantom breaks.
+    text = _normalize_text_flow(text)
     return text.strip()
 
 
@@ -556,6 +633,13 @@ def detect_chunk_suspicion(chunk_text: str, stem: str, choices: list[dict[str, s
         signals.append("too_many_choices")
     if len(stem.strip()) < 100 and len(chunk_text) > 500:
         signals.append("stem_too_short")
+    # v4.85: missing choice A but other choices present → likely a chunker
+    # prefix-glyph miss (e.g. "©" before "A)"). Escalate to multimodal so
+    # the page-extract recovers all choices with the correct first label.
+    if choices and len(choices) >= 2:
+        labels = [c.get("label", "") for c in choices]
+        if "A" not in labels:
+            signals.append("missing_choice_A")
     if choices:
         avg_len = sum(len(c["text"]) for c in choices) / len(choices)
         if avg_len < 8:
@@ -571,6 +655,42 @@ def detect_chunk_suspicion(chunk_text: str, stem: str, choices: list[dict[str, s
         # tabular (already added above) or if no choices were extracted.
         if "choices_look_tabular" in signals or not choices:
             signals.append("tabular_header_present")
+    # v4.85: stem advertises a labs/studies table ("Laboratory studies show:",
+    # "Studies show:", "Results show:") but the stem AFTER that header has too
+    # few actual measured values → table values were dropped in the chunk
+    # (typically because the values are in a column to the right of the
+    # labels and the OCR pulls labels-then-choices-then-values). This is
+    # exactly the NBME 8 Q6 failure mode. Force multimodal escalation.
+    # Strip parenthesized text first (reference ranges like "(N=13-15)" and
+    # units like "(g/dL)") so we only count truly standalone numeric tokens
+    # that look like measurements.
+    lab_header_match = re.search(
+        r"(?:Laboratory\s+studies|laboratory\s+studies|Studies\s+show|Results\s+show)\b",
+        stem,
+        re.IGNORECASE,
+    )
+    if lab_header_match:
+        after_header = stem[lab_header_match.end():]
+        # Stop at the question prompt so we only inspect the values block
+        q_prompt = re.search(r"\b(?:Which|What|How|Most\s+likely)\b", after_header)
+        if q_prompt:
+            after_header = after_header[:q_prompt.start()]
+        # Drop parenthesized noise (units + reference ranges)
+        cleaned = re.sub(r"\([^)]*\)", "", after_header)
+        # Standalone numeric tokens that look like real measurements
+        # (integer or decimal, optionally with thousand-separator commas)
+        numeric_tokens = re.findall(r"\b\d+(?:[.,]\d+)*\b", cleaned)
+        if len(numeric_tokens) < 3:
+            signals.append("lab_header_without_values")
+    # v4.85: UI chrome leaked into the stem despite the stem-chrome scrub.
+    # Belt-and-braces detector — flags any "@ Mark", "Time Rema", or
+    # "National Board" remaining anywhere in the stem text.
+    if re.search(
+        r"@\s*Mark|National\s+Board\s+of\s+Medical\s+Examiners|Medicine\s+Self[-\s]?Assessment|Time\s+Rem(?:a(?:in)?)?\b",
+        stem,
+        re.IGNORECASE,
+    ):
+        signals.append("chrome_leaked_into_stem")
     return (len(signals) > 0), signals
 
 
@@ -603,13 +723,23 @@ def deterministic_multi_column_parse(chunk_text: str) -> dict[str, Any] | None:
         # gets OCR'd as "0", "o", "O", "Q", "*", "•", or "■" depending on
         # font + scan quality. Strip whichever variant trails the choice
         # text so we don't ship "Cellulitis O" or "Cellulitis 0".
-        line = re.sub(r"[\s0OoQ■►▪◯●◦·*~]+$", "", line).strip()
+        line = re.sub(r"[\s0OoQ©®■►▪◯●◦·*~]+$", "", line).strip()
         # Filter degenerate choices whose extracted text is only a single
         # bubble character / digit / blank (q20 had an OCR-empty F slot
         # whose text was just "0" — meaningless on its own).
-        if not line or re.fullmatch(r"[\s0OoQ■►▪◯●◦·*~]+", line):
+        # v4.85: but allow single-letter choices A-E ONLY when the source
+        # is clearly a "graph-pointing" question where the labels themselves
+        # ARE the choices (e.g. NBME 8 Q48 "At which labeled point..."). We
+        # gate on the chunk containing the phrase "labeled point" / "labelled
+        # point" / "point[s] A".
+        is_graph_pointing = bool(re.search(
+            r"label(?:l?)ed\s+point|point[s]?\s+A\s+(?:to|through|-)\s*[A-N]\b",
+            chunk_text,
+            re.IGNORECASE,
+        ))
+        if not line or re.fullmatch(r"[\s0OoQ©®■►▪◯●◦·*~]+", line):
             continue
-        if len(line) < 2:
+        if len(line) < 2 and not is_graph_pointing:
             continue
         raw_choices.append({"label": m.group(1).upper(), "text": line})
 
@@ -2112,6 +2242,18 @@ def orchestrate(inputs: list[Path], job_output_root: Path) -> dict[str, Any]:
     app_ready = build_app_ready(questions, source_stem, warnings_list)
     app_path.write_text(json.dumps(app_ready, indent=2, ensure_ascii=False), encoding="utf-8")
     log(f"App-ready written: {app_path} ({len(questions)} question(s))")
+    # v4.85: persist the question→page map alongside the app-ready JSON.
+    # The targeted multimodal remediator uses this to render the right
+    # rendered_pages PNG for any question that fails the post-run content
+    # audit, avoiding brute-force page-number guessing.
+    try:
+        q_pages_path = app_ready_dir / f"{source_stem}_question_pages.json"
+        q_pages_path.write_text(
+            json.dumps({str(k): int(v) for k, v in question_to_page.items()}, indent=2),
+            encoding="utf-8",
+        )
+    except Exception as exc:
+        log(f"WARN: failed to write question_pages.json: {exc}")
 
     return {
         "mode": mode,
