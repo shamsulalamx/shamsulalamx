@@ -8,6 +8,8 @@
       "inputExtensions": [".pdf"],
       "workingDirectory": ".",
       "pythonExecutable": "python3",
+      "supportsAdvancedMode": true,
+      "advancedModeLabel": "Advanced Mode (v5.2 multi-stage organic pipeline — higher quality, ~4x cost)",
       "dryRunSteps": [
         {
           "stage": "normalization",
@@ -21,11 +23,12 @@
           "stage": "normalization",
           "stageLabel": "Emma Holiday shared-ingestion live generation",
           "heartbeatSeconds": 30,
-          "args": ["tools/shared-ingestion/emma_profile_runner.py", "--mode", "generate", "--input-file", "{inputFile}", "--limit", "0"]
+          "args": ["tools/shared-ingestion/emma_profile_runner.py", "--mode", "generate", "--input-file", "{inputFile}", "--limit", "0"],
+          "advancedArgs": ["--v5"]
         }
       ],
       "outputDirectories": ["tools/lecture-slide-question-generator/output_json/app_ready"],
-      "notes": "Profile-style source: emits shared normalized chunks first, then invokes the existing Emma generator unchanged."
+      "notes": "Profile-style source: emits shared normalized chunks first, then invokes the existing Emma generator (which subprocesses lecture-slide). Advanced Mode (--v5) engages the v5.2 multi-stage organic pipeline downstream. Slide-based allocation, so chunk-size/Q-per-chunk knobs do not apply."
     },
     "uworld_notes": {
       "label": "UWorld Notes",
@@ -144,6 +147,7 @@
       "pythonExecutable": "python3",
       "supportsAdvancedMode": true,
       "advancedModeLabel": "Advanced Mode (v5.2 multi-stage organic pipeline — higher quality, ~4x cost)",
+      "supportsChunkControls": true,
       "dryRunSteps": [
         {
           "stage": "normalization",
@@ -200,6 +204,8 @@
       "inputExtensions": [".pptx"],
       "workingDirectory": "tools/lecture-slide-question-generator",
       "pythonExecutable": "python3",
+      "supportsAdvancedMode": true,
+      "advancedModeLabel": "Advanced Mode (v5.2 multi-stage organic pipeline — higher quality, ~4x cost)",
       "dryRunSteps": [
         {
           "stage": "generation",
@@ -213,11 +219,12 @@
           "stage": "generation",
           "stageLabel": "Fast Facts live generation",
           "heartbeatSeconds": 20,
-          "args": ["generate_lecture_slide_questions.py", "--fast-facts-profile", "--generate", "--fast-facts-diagnostic-report", "--no-reuse-cache", "--input-file", "{inputFile}"]
+          "args": ["generate_lecture_slide_questions.py", "--fast-facts-profile", "--generate", "--fast-facts-diagnostic-report", "--no-reuse-cache", "--input-file", "{inputFile}"],
+          "advancedArgs": ["--v5"]
         }
       ],
       "outputDirectories": ["output_json/app_ready"],
-      "notes": "Uses the existing FAST_FACTS_PROFILE in the lecture-slide generator. Live generation does not apply a question or slide cap unless explicitly requested."
+      "notes": "Uses the existing FAST_FACTS_PROFILE in the lecture-slide generator. Live generation does not apply a question or slide cap unless explicitly requested. Advanced Mode (--v5) engages the v5.2 multi-stage organic pipeline directly via generate_lecture_slide_questions.py (which has had --v5 since v5.2). Slide-based allocation, so chunk-size/Q-per-chunk knobs do not apply."
     },
     "amboss_pdf": {
       "label": "AMBOSS PDF",

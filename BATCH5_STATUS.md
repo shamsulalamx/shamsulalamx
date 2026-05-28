@@ -47,6 +47,7 @@ shipped in `v4.85-batch4-stable`.
 | `v5.5-batch5-stable` | v5.5 explanation depth: longer + mechanism-grounded. Kernel rationale 1–2 → 3–5 sentences. Distractor losingReason 1 → 2–3 sentences. ~10–15% cost increase per Q. |
 | `v5.6-batch5-stable` | v5.6 cost-control + chunk knobs. Removes the fixed 15-Q-per-PDF cap. UI exposes chunk size + Q-per-chunk + live cost preview. Stem thinking 4096 → 1024, Critic 4096 → 2048, Distractors back on Flash with thinking 2048 (Lever 3 retry). Per-Q cost ~$0.21 → ~$0.14 (-33%). |
 | `v5.6.1-batch5-stable` | **v5.6.1 bugfix: retrievalTag / reviewPearl / educationalObjective were all the same string.** Pre-v5.6.1 the OME adapter routed all three through `kernel.correctAnswerConcept` because the kernel didn't emit distinct fields. v5.6.1 adds them to the kernel JSON spec and reads them directly. Bug present since v5.3; user-caught during v5.6 inspection. **User verified the full v5.3 → v5.6.1 stack on the rebuilt .app and promoted all six to `-stable`.** |
+| `v5.7-batch5-pending-validation` | **Advanced Mode for Fast Facts PPTX + Emma Holliday PDF.** Registry config for Fast Facts; registry + `--v5` flag forwarding in `emma_profile_runner.py`. UI gates chunk-size + Q-per-chunk knobs on new `supportsChunkControls` registry flag (OME-only today). Group B (UWorld, Mehlman, Anki, Divine) deferred — they need full v5 ports. Code shipped; `.app` rebuild + smoke + `-stable` promotion deferred until user's running queue completes. |
 
 ## v5.3 — OME organic generator port
 
@@ -1061,3 +1062,95 @@ three fields are now distinct and each carries its proper content.
 On ✅: promote all six pending-validation tags (`v5.3`, `v5.3.1`,
 `v5.4`, `v5.5`, `v5.6`, `v5.6.1`) to `-stable` together and push
 the tags.
+
+## v5.7 — Advanced Mode expansion to Emma + Fast Facts (no .app rebuild during user's queue)
+
+User asked to expose Advanced Mode for the other organic generators
+they study from. v5.7 ships the "Group A" tier — sources whose
+downstream already supports `--v5`, where the work is mostly
+registry config + a small flag-forwarding patch.
+
+### What v5.7 added
+
+Sources now gated on Advanced Mode opt-in (legacy single-call still
+the default when the checkbox is off):
+
+- **Fast Facts PPTX** — registry-only change. Its registry entry
+  already invokes `generate_lecture_slide_questions.py`, which has
+  had `--v5` since v5.2. Added `supportsAdvancedMode: true` +
+  `advancedArgs: ["--v5"]`. Zero new code.
+- **Emma Holliday PDF** — registry + `emma_profile_runner.py`
+  patch. The runner now accepts `--v5` / `--v5-order-mix` /
+  `--v5-difficulty-mix` / `--v5-seed` and forwards them to the
+  downstream `generate_lecture_slide_questions.py` subprocess.
+
+The OME entry gained an explicit `supportsChunkControls: true`
+flag (already-implicit behavior, now declared). UI conditionally
+shows the chunk-size + Q-per-chunk knobs based on this flag.
+
+### Why the chunk knobs hide for Emma + Fast Facts
+
+The lecture-slide pipeline uses **slide-based allocation** — each
+slide is one allocation. OME's chunk-size / Q-per-chunk knobs map to
+character-based chunking inside `generate_ome_questions.py`. The
+lecture-slide CLI doesn't accept those flags, so forwarding them
+would cause an argparse error and a hard pipeline failure.
+
+The clean solution: gate the chunk-knob row on the registry's
+`supportsChunkControls` flag. Today only OME has it. Future sources
+that need character-chunking can opt in by declaring it.
+
+### Bug-fix carry-over: every Advanced Mode path gets v5.6.1
+
+The retrievalTag / reviewPearl / educationalObjective collapse fix
+from v5.6.1 lives in `v5_pipeline.assemble_question()` and the
+kernel prompt. Both Emma and Fast Facts engage the same v5_pipeline
+and read the same `v5_2_kernel_prompt.txt`, so their Advanced Mode
+output gets the three distinct fields automatically.
+
+### Files changed in v5.7
+
+```
+tools/batch-import-center/
+└── pipeline_registry.json         # MODIFIED — supportsChunkControls on OME;
+                                    #            supportsAdvancedMode + advancedArgs
+                                    #            on Fast Facts + Emma
+tools/shared-ingestion/
+└── emma_profile_runner.py         # MODIFIED — --v5 / mix / seed flag forwarding
+electron/
+└── main.js                        # MODIFIED — advancedConfig only included when
+                                    #            source.supportsChunkControls
+index.html                          # MODIFIED — chunk-knob row gated by registry flag
+```
+
+### Group B (UWorld notes, Mehlman, Anki, Divine podcasts) — DEFERRED
+
+Each of these needs a full v5 port (per-source `*_v5_adapter.py`,
+runner `--v5` flag, downstream dispatch, smoke test). ~4–8 hours
+each + ~$0.65 smoke budget per source. v5.7 explicitly does not
+touch them.
+
+### What's NOT done in v5.7 (deferred until user's running queue completes)
+
+Per user instruction during the v5.7 ship: a queue of ~10 generation
+jobs was running through the still-loaded .app. Rebuilding the .app
+during that run could overwrite files mid-queue and cause subprocess
+failures. Deferred:
+
+- `.app` rebuild
+- MD5 source ↔ bundled verification
+- Live smoke test on Emma or Fast Facts (would also rate-limit-conflict
+  with the running queue on Vertex Pro)
+- `-stable` promotion
+
+Code edits are committed and pushed to the branch so the work is
+safe on remote. Once the user's queue completes, the workflow is:
+
+1. `npm run electron:build:mac`
+2. MD5 verify all 4 modified files source ↔ bundled
+3. Live smoke test on a small Emma or Fast Facts file with Advanced
+   Mode (~$0.50 each)
+4. Verify the three study fields are distinct, the lecture-slide
+   importer accepts the new top-level fields, every v5.2 quality
+   gate passes
+5. `-stable` promotion + tag push

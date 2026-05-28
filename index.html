@@ -2735,7 +2735,7 @@ body.quiz-fullscreen-mode #modal-lab  { z-index: 10002 !important; }
         <span id="bic-advanced-mode-label">Advanced Mode</span>
       </label>
       <div id="bic-advanced-mode-panel" style="display:none;margin-top:8px;padding-top:8px;border-top:1px dashed #d9e2ec;">
-        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+        <div data-advanced-knobs-row="chunks" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
           <div style="flex:1 1 140px;min-width:140px;">
             <label style="display:block;font-size:11px;color:#5a6a7a;margin-bottom:2px;">Chunk size (chars)</label>
             <select id="bic-chunk-size" class="form-input" onchange="App.refreshAdvancedCostPreview()" style="padding:4px 6px;font-size:12px;">
@@ -25508,12 +25508,33 @@ Errors: ${escapeHTML(errors)}</div>
   // questions-per-chunk knobs and the cost preview. Hide the knobs
   // (but keep the checkbox) when Advanced Mode is unchecked so the
   // user understands the toggle is what unlocks the controls.
+  //
+  // v5.7: the chunk knobs are OME-specific (character-based chunking).
+  // Sources whose downstream uses slide-based allocation (Fast Facts,
+  // Emma Holliday) don't have anywhere to send the chunk values, so
+  // we hide the chunk dropdowns + cost preview for those. The Advanced
+  // Mode checkbox itself still works — it just engages --v5 without
+  // any per-job knobs.
   function refreshAdvancedModePanel() {
     const panel = document.getElementById('bic-advanced-mode-panel');
     const checkbox = document.getElementById('bic-advanced-mode');
     if (!panel || !checkbox) return;
-    panel.style.display = checkbox.checked ? '' : 'none';
-    if (checkbox.checked) refreshAdvancedCostPreview();
+    if (!checkbox.checked) {
+      panel.style.display = 'none';
+      return;
+    }
+    const sourceType = (document.getElementById('bic-source-type')?.value || '').trim();
+    const registry = _batchImportState?.registry || null;
+    const source = registry?.sources?.[sourceType] || null;
+    const supportsChunks = !!source?.supportsChunkControls;
+    // Always show the panel when Advanced Mode is checked. Inside, show
+    // the chunk-knob row only for sources whose downstream supports it.
+    panel.style.display = '';
+    const chunkRow = panel.querySelector('[data-advanced-knobs-row="chunks"]');
+    const costRow = document.getElementById('bic-advanced-cost-preview');
+    if (chunkRow) chunkRow.style.display = supportsChunks ? '' : 'none';
+    if (costRow) costRow.style.display = supportsChunks ? '' : 'none';
+    if (supportsChunks) refreshAdvancedCostPreview();
   }
 
   // v5.6: compute and render the cost preview from current file

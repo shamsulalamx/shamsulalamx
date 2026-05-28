@@ -256,7 +256,13 @@ def review_draft_since(started_at: float) -> str:
     return str(REVIEW_DRAFT_PATH.resolve())
 
 
-def run_existing_emma_generator(input_file: Path, mode: str, limit: int, normalized_chunks: Path | None = None) -> tuple[int, float, list[str]]:
+def run_existing_emma_generator(
+    input_file: Path,
+    mode: str,
+    limit: int,
+    normalized_chunks: Path | None = None,
+    v5_args: list[str] | None = None,
+) -> tuple[int, float, list[str]]:
     started_at = time.time()
     command = [
         sys.executable,
@@ -267,6 +273,14 @@ def run_existing_emma_generator(input_file: Path, mode: str, limit: int, normali
         command.extend(["--normalized-chunks", str(normalized_chunks)])
     else:
         command.extend(["--input-file", str(input_file), "--limit", str(limit)])
+    # v5.7: forward Advanced Mode (--v5) flags to the downstream
+    # lecture-slide generator. Only appended in generate mode (the
+    # caller already gates this); the lecture-slide CLI has had
+    # --v5 / --v5-order-mix / --v5-difficulty-mix / --v5-seed since
+    # v5.2, so the forwarded args are exactly the same flags the
+    # OME profile runner has been using since v5.3.
+    if v5_args:
+        command.extend(v5_args)
     emit("emma_downstream_start", command=command, cwd=str(LECTURE_DIR))
     proc = subprocess.Popen(
         command,
@@ -300,6 +314,35 @@ def parse_args() -> argparse.Namespace:
         choices=["raw-source", "normalized-chunks"],
         default="normalized-chunks",
         help="Choose whether the downstream Emma generator consumes the original PDF or the normalized chunk bundle.",
+    )
+    # v5.7: Advanced Mode forwarding to the downstream lecture-slide
+    # generator. Same pattern as ome_profile_runner.py. Only takes
+    # effect in --mode generate.
+    parser.add_argument(
+        "--v5",
+        action="store_true",
+        help=(
+            "Run the downstream lecture-slide generator with the v5.2 "
+            "multi-stage organic pipeline (kernel → stem → distractors "
+            "→ critic → regen → length parity → assemble). No-op in "
+            "--mode dry-run."
+        ),
+    )
+    parser.add_argument(
+        "--v5-order-mix",
+        default="0.25,0.45,0.30",
+        help="v5 only: comma-separated targets for first_order,second_order,third_order shares.",
+    )
+    parser.add_argument(
+        "--v5-difficulty-mix",
+        default="0.30,0.45,0.25",
+        help="v5 only: comma-separated targets for easy,medium,difficult shares.",
+    )
+    parser.add_argument(
+        "--v5-seed",
+        type=int,
+        default=0,
+        help="v5 only: RNG seed for reproducible per-Q position randomization.",
     )
     return parser.parse_args()
 
@@ -386,13 +429,27 @@ def main() -> int:
         return 1
 
     normalized_input = chunk_output if args.downstream_input == "normalized-chunks" else None
+    # v5.7: Advanced Mode forwarding. Only engages in generate mode;
+    # dry-run path skips it (lecture-slide --dry-run doesn't call Gemini,
+    # so v5 has nothing to do there).
+    v5_args: list[str] = []
+    if args.mode == "generate" and getattr(args, "v5", False):
+        v5_args = [
+            "--v5",
+            "--v5-order-mix", str(args.v5_order_mix),
+            "--v5-difficulty-mix", str(args.v5_difficulty_mix),
+            "--v5-seed", str(args.v5_seed),
+        ]
+        emit("emma_v5_enabled", orderMix=args.v5_order_mix, difficultyMix=args.v5_difficulty_mix, seed=args.v5_seed)
     emit_bic_progress(
         "generating",
         "Starting downstream question generation" if args.mode == "generate" else "Starting dry-run question generation",
         file=str(input_file),
         chunkTotal=report.get("chunkCount", 0),
     )
-    code, downstream_runtime, outputs = run_existing_emma_generator(input_file, args.mode, limit, normalized_chunks=normalized_input)
+    code, downstream_runtime, outputs = run_existing_emma_generator(
+        input_file, args.mode, limit, normalized_chunks=normalized_input, v5_args=v5_args,
+    )
     total_runtime = round(time.time() - started_at, 3)
     draft_path = review_draft_since(started_at)
     needs_review = code != 0 and bool(draft_path)

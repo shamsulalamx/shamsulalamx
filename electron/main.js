@@ -801,15 +801,21 @@ function sanitizeBatchJobPayload(payload, source) {
   // engages --v5 on ome_profile_runner.py. Sources without supportsAdvancedMode
   // ignore the flag — keeps a single UI surface for forward compatibility.
   const advancedMode = payload?.advancedMode === true && !!source?.supportsAdvancedMode;
-  // v5.6: per-job knobs the user sets in the Advanced Mode UI panel. The
-  // Python runner appends --chunk-size / --questions-per-chunk to the
-  // downstream subprocess only when these are > 0 (otherwise the
-  // generator's own defaults take over). Sanitized to non-negative ints
-  // here so a junk payload can't inject arbitrary CLI args.
+  // v5.6: per-job knobs the user sets in the Advanced Mode UI panel.
+  // v5.7: only include advancedConfig when the source declares
+  // supportsChunkControls. Sources that subprocess into the
+  // lecture-slide generator (Fast Facts, Emma Holliday) use
+  // slide-based allocation, not character chunking, and their CLI
+  // doesn't recognize --chunk-size / --questions-per-chunk. Sending
+  // those flags would cause an argparse error in the downstream and
+  // a hard pipeline failure. Gating the manifest field at the
+  // sanitizer layer keeps the run_pipeline_job.py side simple
+  // (manifest_advanced_config_args returns [] for missing config).
   const advancedConfigInput = (payload?.advancedConfig && typeof payload.advancedConfig === 'object')
     ? payload.advancedConfig
     : {};
-  const advancedConfig = advancedMode
+  const supportsChunkControls = advancedMode && !!source?.supportsChunkControls;
+  const advancedConfig = supportsChunkControls
     ? {
         chunkSize: Math.max(0, Math.floor(Number(advancedConfigInput.chunkSize) || 0)),
         questionsPerChunk: Math.max(0, Math.floor(Number(advancedConfigInput.questionsPerChunk) || 0)),
