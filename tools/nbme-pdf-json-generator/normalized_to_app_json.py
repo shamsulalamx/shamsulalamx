@@ -270,6 +270,15 @@ def _convert_question(q_norm):
     """
     Convert one normalized question to NBME Gemini JSON v3 per-question format.
     Returns (question_dict, validation_errors).
+
+    v4.85.1: after building the canonical question dict we run it
+    through `post_process.post_process_question` which deterministically
+    cleans up the seven OCR-failure modes the v4.85 extractor leaves
+    on image-only NBME PDFs (footer garbage, stem prefix junk,
+    subscript-as-comma, table cells missing column labels). Items that
+    deterministic cleanup can't recover (missing stem opener, body
+    that's only OCR garbage) are flagged in extractionWarnings so a
+    follow-up Vision re-OCR pass can target them.
     """
     errors = []
 
@@ -349,6 +358,22 @@ def _convert_question(q_norm):
         "sharedGroup":         None,
         "extractionWarnings":  warnings,
     }
+
+    # v4.85.1: deterministic OCR-cleanup pass (Bugs A, C, E, G + flags D, B, F).
+    # Lazy import so the converter still runs if post_process.py is missing
+    # (the cleanup is value-add, not a hard requirement).
+    # Dedup so re-runs on already-processed data don't append duplicate notes.
+    try:
+        from post_process import post_process_question  # type: ignore
+        existing = set(question["extractionWarnings"])
+        for note in post_process_question(question):
+            if note not in existing:
+                question["extractionWarnings"].append(note)
+                existing.add(note)
+    except ImportError:
+        pass
+    except Exception as exc:
+        question["extractionWarnings"].append(f"post_process failed: {exc}")
 
     return question, errors
 
