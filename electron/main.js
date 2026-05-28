@@ -795,6 +795,12 @@ function sanitizeBatchJobPayload(payload, source) {
   const existingOutputValidation = payload?.existingOutputValidation === true;
   const dryRun = payload?.dryRun !== false;
   const executePipeline = payload?.executePipeline === true;
+  // Advanced Mode toggle (v5.3): when the UI checkbox is on AND the source
+  // declared supportsAdvancedMode in the registry, the Python runner appends
+  // each step's advancedArgs to its subprocess command. For OME today this
+  // engages --v5 on ome_profile_runner.py. Sources without supportsAdvancedMode
+  // ignore the flag — keeps a single UI surface for forward compatibility.
+  const advancedMode = payload?.advancedMode === true && !!source?.supportsAdvancedMode;
 
   if (!sourceType) throw new Error('sourceType is required.');
   if (!inputPaths.length) throw new Error('At least one input file is required.');
@@ -809,6 +815,7 @@ function sanitizeBatchJobPayload(payload, source) {
     dryRun,
     executePipeline,
     existingOutputValidation,
+    advancedMode,
     destination: { folderId, testName },
     outputRoot: batchJobOutputRoot(jobId),
     createdAt: new Date().toISOString()

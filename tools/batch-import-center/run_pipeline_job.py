@@ -374,6 +374,17 @@ def expand_args(args: list[str], input_file: Path) -> list[str]:
     return [arg.replace("{inputFile}", str(input_file)) for arg in args]
 
 
+def step_advanced_args(step: dict[str, Any]) -> list[str]:
+    """Per-step advanced-mode CLI args appended when manifest.advancedMode is true.
+    Empty list when the registry omits the field. Defined per-step (rather than
+    per-source) so a multi-step pipeline can target the advanced flags at the
+    specific generation step instead of every step in the chain."""
+    advanced = step.get("advancedArgs")
+    if isinstance(advanced, list):
+        return [str(arg) for arg in advanced if isinstance(arg, str) and arg]
+    return []
+
+
 def command_steps(source: dict[str, Any], dry_run: bool) -> list[dict[str, Any]]:
     steps_key = "dryRunSteps" if dry_run else "liveSteps"
     args_key = "dryRunArgs" if dry_run else "liveArgs"
@@ -405,7 +416,15 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
     global CURRENT_PROC
     dry_run = bool(manifest.get("dryRun"))
     cwd = (PROJECT_ROOT / source["workingDirectory"]).resolve()
-    cmd = [source.get("pythonExecutable") or "python3", *expand_args(step["args"], input_file)]
+    base_args = expand_args(step["args"], input_file)
+    # Advanced Mode: when the UI checkbox is on AND the step declared
+    # advancedArgs in the registry, append those flags to the subprocess
+    # command. For OME this appends "--v5" to engage the v5.2 multi-stage
+    # organic pipeline downstream. No-op for sources that don't declare
+    # advancedArgs, even when advancedMode=true on the manifest.
+    if bool(manifest.get("advancedMode")):
+        base_args.extend(step_advanced_args(step))
+    cmd = [source.get("pythonExecutable") or "python3", *base_args]
     stage_label = str(step.get("stageLabel") or f"Pipeline step {step_index}")
     stage = normalize_stage(step)
     stage_started_at = time.time()

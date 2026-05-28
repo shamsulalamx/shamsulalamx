@@ -142,6 +142,8 @@
       "inputExtensions": [".pdf"],
       "workingDirectory": ".",
       "pythonExecutable": "python3",
+      "supportsAdvancedMode": true,
+      "advancedModeLabel": "Advanced Mode (v5.2 multi-stage organic pipeline — higher quality, ~4x cost)",
       "dryRunSteps": [
         {
           "stage": "normalization",
@@ -155,11 +157,12 @@
           "stage": "normalization",
           "stageLabel": "OME shared-ingestion live generation",
           "heartbeatSeconds": 60,
-          "args": ["tools/shared-ingestion/ome_profile_runner.py", "--mode", "generate", "--input-file", "{inputFile}", "--limit", "0"]
+          "args": ["tools/shared-ingestion/ome_profile_runner.py", "--mode", "generate", "--input-file", "{inputFile}", "--limit", "0"],
+          "advancedArgs": ["--v5"]
         }
       ],
       "outputDirectories": ["tools/shared-ingestion/output/ome_app_ready_live", "tools/shared-ingestion/output/ome_app_ready_dry_run"],
-      "notes": "Live Gemini OME generation enabled. Dry-run produces placeholder questions; live runs Gemini to generate real clinical questions from the full PDF. Requires GEMINI_API_KEY."
+      "notes": "Live Gemini OME generation enabled. Dry-run produces placeholder questions; live runs Gemini to generate real clinical questions from the full PDF. Requires GEMINI_API_KEY. Advanced Mode (--v5) engages the v5.2 multi-stage organic pipeline (kernel-first design + 4 trap categories + adversarial verification + per-distractor scoring + length parity)."
     },
     "divine_transcript": {
       "label": "Divine (Audio + Transcript)",

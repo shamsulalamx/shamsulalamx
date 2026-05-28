@@ -2724,6 +2724,16 @@ body.quiz-fullscreen-mode #modal-lab  { z-index: 10002 !important; }
       </div>
     </div>
     <div id="bic-selected-files" class="notes-import-summary">No files selected.</div>
+    <!-- v5.3: Advanced Mode toggle. Visibility + label come from the registry's
+         supportsAdvancedMode / advancedModeLabel per source. Hidden when the
+         current source doesn't declare those fields. Today only OME PDF does
+         (engages --v5 on ome_profile_runner.py downstream). -->
+    <div id="bic-advanced-mode-row" class="form-group" style="display:none;margin:8px 0;padding:8px 10px;background:#f4f7fb;border:1px solid #d9e2ec;border-radius:4px;">
+      <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;margin:0;font-size:12px;color:#334155;">
+        <input type="checkbox" id="bic-advanced-mode" style="margin-top:2px;flex-shrink:0;">
+        <span id="bic-advanced-mode-label">Advanced Mode</span>
+      </label>
+    </div>
     <div id="bic-run-status" class="notes-import-summary">No job run yet.</div>
     <div id="bic-create-status" class="test-create-status" aria-live="polite"></div>
     <div class="notes-import-section-title bic-collapsible-toggle" style="cursor:pointer;user-select:none;font-size:11px;color:#7a8a9a;" onclick="App.toggleBicSection('bic-progress-log-body', this)" data-label="Progress log (verbose)">▶ Progress log (verbose)</div>
@@ -24159,6 +24169,10 @@ const App = (() => {
         : 'No active sources registered.';
       // v4.64: removed renderBatchImportSourceNote — the source-note div was
       // deleted from the modal (the "massive blurb" the user objected to).
+      // v5.3: once the registry is loaded we know which sources support
+      // Advanced Mode, so refresh the row visibility now (the modal opened
+      // before the registry fetch resolved).
+      refreshAdvancedModeRow();
     }).catch(function(err) {
       if (registryStatus) registryStatus.textContent = err?.message || 'Registry could not be loaded.';
     });
@@ -25431,8 +25445,32 @@ Errors: ${escapeHTML(errors)}</div>
   function onBatchImportSourceChange() {
     if (_batchImportState) _batchImportState.files = [];
     renderBatchImportSelectedFiles();
+    refreshAdvancedModeRow();
     // v4.64: removed bic-source-note rendering — the "massive blurb" was
     // pulling source.notes from the registry and cluttering the modal.
+  }
+
+  // v5.3: show/hide the Advanced Mode row based on the current source's
+  // supportsAdvancedMode flag in the registry. Resets the checkbox to off
+  // whenever it's hidden so a stale "on" state can't accidentally apply
+  // to a different source.
+  function refreshAdvancedModeRow() {
+    const row = document.getElementById('bic-advanced-mode-row');
+    const checkbox = document.getElementById('bic-advanced-mode');
+    const labelSpan = document.getElementById('bic-advanced-mode-label');
+    if (!row || !checkbox) return;
+    const sourceType = (document.getElementById('bic-source-type')?.value || '').trim();
+    const registry = _batchImportState?.registry || null;
+    const source = registry?.sources?.[sourceType] || null;
+    const supports = !!source?.supportsAdvancedMode;
+    if (supports) {
+      row.style.display = '';
+      if (labelSpan) labelSpan.textContent = String(source.advancedModeLabel || 'Advanced Mode');
+    } else {
+      row.style.display = 'none';
+      checkbox.checked = false;
+      if (labelSpan) labelSpan.textContent = 'Advanced Mode';
+    }
   }
 
   async function selectBatchImportFiles() {
@@ -25496,6 +25534,7 @@ Errors: ${escapeHTML(errors)}</div>
     // v4.65: NBME pair detection — when multiple NBME PDFs are selected, group
     // each detected Q+A pair into ONE job (single quiz) and leave standalone
     // files as their own jobs. Other source types: one job per file as before.
+    const advancedMode = !!document.getElementById('bic-advanced-mode')?.checked;
     const buildJob = function(paths) {
       return {
         sourceType,
@@ -25503,6 +25542,7 @@ Errors: ${escapeHTML(errors)}</div>
         dryRun: isDryRun,
         executePipeline: !existingOutputValidation,
         existingOutputValidation,
+        advancedMode,
         runMode,
         destination: { folderId, testName }
       };
@@ -25858,6 +25898,7 @@ Errors: ${escapeHTML(errors)}</div>
     if (runStatus) runStatus.textContent = existingOutputValidation ? 'Existing output validation in progress...' : (isDryRun ? 'Dry-run in progress...' : 'Generation in progress...');
     if (report) report.textContent = 'Waiting for completion.';
 
+    const advancedMode = !!document.getElementById('bic-advanced-mode')?.checked;
     try {
     const result = await api.launchJob({
       sourceType,
@@ -25865,6 +25906,7 @@ Errors: ${escapeHTML(errors)}</div>
       dryRun: isDryRun,
       executePipeline: !existingOutputValidation,
       existingOutputValidation,
+      advancedMode,
       destination: {
         folderId,
         testName
