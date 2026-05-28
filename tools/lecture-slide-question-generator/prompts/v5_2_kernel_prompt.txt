@@ -15,11 +15,8 @@ the distractors are designed in lockstep so the discriminator is
 provably present and provably specific.
 
 ================================================================
-TARGET ORDER (mandatory)
+ORDER DEFINITIONS (your TARGET_ORDER assignment is at the bottom)
 ================================================================
-{{TARGET_ORDER}}
-
-ORDER DEFINITIONS:
   first_order:   single-step recall (diagnose, name structure)
   second_order:  diagnose → next best step in management
   third_order:   multi-step layered reasoning (failed first-line,
@@ -27,11 +24,8 @@ ORDER DEFINITIONS:
                  management)
 
 ================================================================
-TARGET DIFFICULTY (mandatory)
+DIFFICULTY DEFINITIONS (your TARGET_DIFFICULTY assignment is at the bottom)
 ================================================================
-{{TARGET_DIFFICULTY}}
-
-DIFFICULTY:
   easy:     unambiguous discriminating clue, classic clinical picture
   medium:   subtle differentiator, at least one cognitive trap
   difficult: multiple integrated clues, failed first-line / atypical
@@ -135,7 +129,7 @@ specific question, return as many as you can and add a top-level
 over 4 weak ones.
 
 ================================================================
-SOURCE MATERIAL
+SOURCE MATERIAL (stable per allocation — cacheable prefix above)
 ================================================================
 ALLOWED_MEDICAL_TERMS:
 {{ALLOWED_TERMS_JSON}}
@@ -145,6 +139,14 @@ ALLOWED_DISTRACTOR_POOL (alternate sources for distractor items):
 
 SLIDE_CONTEXT:
 {{SLIDE_CONTEXT_JSON}}
+
+================================================================
+PER-QUESTION ASSIGNMENT (varies per question — keep at the END so the
+prefix above stays cache-stable across questions of the same allocation)
+================================================================
+TARGET_ORDER (mandatory): {{TARGET_ORDER}}
+
+TARGET_DIFFICULTY (mandatory): {{TARGET_DIFFICULTY}}
 
 ROLLING_MEMORY (avoid repeating these diagnoses/distractors):
 {{MEMORY_JSON}}

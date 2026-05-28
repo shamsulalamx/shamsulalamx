@@ -28,21 +28,13 @@ HARD CONSTRAINTS (your stem MUST satisfy ALL of these)
    pulmonary embolism. What is the diagnosis? → PE.").
 
 ================================================================
-TARGET ORDER (mandatory)
+ORDER DEFINITIONS (your TARGET_ORDER assignment is at the bottom)
 ================================================================
-{{TARGET_ORDER}}
-
-ORDER DEFINITIONS:
   first_order   5-8 sentences. Direct: "what is this / which structure"
   second_order  6-10 sentences. Diagnose then act: "next best step"
   third_order   8-12 sentences. May include a mid-vignette update
                 ("Two hours later, blood pressure remains 82/48 mm Hg
                 despite adequate fluid resuscitation").
-
-================================================================
-TARGET DIFFICULTY (mandatory)
-================================================================
-{{TARGET_DIFFICULTY}}
 
 ================================================================
 STYLE — NBME / UWORLD AUTHENTICITY
@@ -80,13 +72,21 @@ your own stem until they are all true / empty. The orchestrator
 treats false / non-empty-missing as a hard failure.
 
 ================================================================
-INPUTS
+SOURCE MATERIAL (stable per allocation — cacheable prefix above)
 ================================================================
-KERNEL:
-{{KERNEL_JSON}}
-
 ALLOWED_MEDICAL_TERMS:
 {{ALLOWED_TERMS_JSON}}
 
 SLIDE_CONTEXT:
 {{SLIDE_CONTEXT_JSON}}
+
+================================================================
+PER-QUESTION INPUTS (vary per question — keep at the END so the
+prefix above stays cache-stable across questions of the same allocation)
+================================================================
+TARGET_ORDER (mandatory): {{TARGET_ORDER}}
+
+TARGET_DIFFICULTY (mandatory): {{TARGET_DIFFICULTY}}
+
+KERNEL:
+{{KERNEL_JSON}}

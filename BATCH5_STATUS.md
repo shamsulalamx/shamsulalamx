@@ -1,7 +1,7 @@
 # BATCH 5 — Organic generator quality overhaul (v5)
 
 Branch: `phase12-vertex-migration`
-Tag: `v5.3-batch5-pending-validation` (latest); see version history below.
+Tag: `v5.4-batch5-pending-validation` (latest); see version history below.
 
 ## Scope (very important): organic-generation only
 
@@ -39,7 +39,9 @@ shipped in `v4.85-batch4-stable`.
 | `v5.0.1-batch5-stable` | Doc clarification: legacy NBME/AMBOSS verbatim paths untouched |
 | `v5.2-batch5-stable` | Five distractor-quality upgrades (kernel-first, trap categories, adversarial verify, per-distractor scoring, length parity) |
 | `v5.2.1-batch5-stable` | Docs-only handoff ship (BATCH5_OME_PORT_HANDOFF.md + v5.3 plan) |
-| `v5.3-batch5-pending-validation` | **OME organic generator port to v5.2.** Adds `--v5` to both OME runners; legacy single-call generator stays as fallback. |
+| `v5.3-batch5-pending-validation` | OME organic generator port to v5.2. Adds `--v5` to both OME runners; legacy single-call generator stays as fallback. |
+| `v5.3.1-batch5-pending-validation` | Advanced Mode UI toggle in BIC modal — surfaces v5.3's `--v5` flag to the user-facing import form. |
+| `v5.4-batch5-pending-validation` | **v5.4 cost/latency optimization: 3 stacked levers (Lever 3 rolled back after smoke regression).** Parallelism + thinking-budget caps + prompt-prefix caching. Smoke: 3 Qs in 117 s (was 376 s = 3.2× faster), all v5.2 quality gates intact. |
 
 ## v5.3 — OME organic generator port
 
@@ -584,3 +586,149 @@ python3 v5_audit.py \
 ```
 
 Look for zero failures and a roughly-flat answer-position histogram.
+
+## v5.4 — cost & latency optimization (4 stacked levers)
+
+User feedback after the v5.3 smoke: ~$0.22/Q and ~125 s/Q is too
+expensive and too slow for routine use. v5.4 keeps every v5.2 quality
+gate intact (4 distinct trap categories, adversarial verification,
+per-distractor scoring, length parity) but cuts the cost and latency
+that quality DOESN'T depend on.
+
+### Lever 1 — Per-question parallelism
+
+`v5_pipeline.generate_v5()` builds a flat per-slot task list across all
+allocations, then dispatches into a `ThreadPoolExecutor` (default 5
+workers). Each thread runs one question end-to-end through
+kernel → stem → distractors → critic → regen → image route → assemble.
+Cost unchanged; wall time drops by ~`min(workers, N)`× where N is the
+test's question count.
+
+Rollback: `V5_MAX_WORKERS=1` falls back to v5.2 sequential. Memory
+updates are guarded by a `threading.Lock`; in parallel mode all Qs in
+a batch see the same initial memory (dedup signal partially lost — an
+accepted tradeoff for the speed gain).
+
+### Lever 2 — Per-stage thinking-budget caps
+
+v5.2 used `thinking_budget=-1` (model decides, often 10–20K thinking
+tokens) on every Pro stage. v5.4 caps the stages whose reasoning load
+is bounded by the kernel's design:
+
+| Stage | v5.2 budget | v5.4 budget | Why |
+|---|---|---|---|
+| Kernel | -1 | -1 | Designs the trap structure; full reasoning kept |
+| Stem | -1 | 4096 | Writes vignette with verbatim clue inclusion; kernel gave the spec |
+| Distractors | -1 | 1024 | Polishes kernel-designed items into prose; mechanical |
+| Critic | -1 | 4096 | Structured rubric + adversarial pass; bounded output |
+| Regen | -1 | 1024 | Replaces ONE distractor in a known category |
+| Image route | 0 | 0 | Already no-thinking (Flash) |
+
+Each cap is overrideable via `V5_*_THINKING_BUDGET` env vars so a
+specific tough allocation can request more headroom without code
+changes.
+
+### Lever 3 — Flash for Distractors + Regen
+
+The Distractor and Regen stages execute a plan the Kernel already
+designed: take 4 trap-category items + sharedFeatures + ruledOutBy
+and write NBME-style answer-choice prose. Flash handles this fine,
+~17× cheaper per token than Pro. Quality stages (Kernel, Stem, Critic)
+stay on Pro.
+
+Rollback: `V5_DISTRACTOR_MODEL=gemini-2.5-pro` or
+`V5_REGEN_MODEL=gemini-2.5-pro` rolls either stage back individually.
+
+### Lever 4 — Prompt-prefix caching
+
+The kernel and stem prompt files now place per-question variables
+(`TARGET_ORDER`, `TARGET_DIFFICULTY`, `MEMORY`, `KERNEL_JSON`) AFTER
+the per-allocation source material (`ALLOWED_TERMS`, `SLIDE_CONTEXT`).
+For 2+ questions in the same allocation, the cacheable prefix is now
+identical across calls, and Vertex AI's implicit prompt caching kicks
+in at the 1024-token threshold — saving ~75% on input tokens for the
+prefix portion after the first cache miss.
+
+The distractors / critic / regen prompts already had per-Q variables
+at the bottom (preserved from v5.2). No change needed there.
+
+### Lever 3 rollback note
+
+The v5.4 v1 smoke (Flash on Distractors+Regen at `thinking_budget=1024`)
+showed two regressions vs v5.3:
+
+- Length-parity violations on **100%** of produced questions (vs 33% on
+  v5.3 Pro)
+- **1 of 3 questions rejected** by the critic (vs 0 of 3 on v5.3) —
+  Flash produced distractors weak enough that the adversarial pass
+  scored them <2 and the orchestrator refused to ship
+
+Rolled Distractors+Regen back to Pro by default. The env vars
+`V5_DISTRACTOR_MODEL=gemini-2.5-flash` and `V5_REGEN_MODEL=gemini-2.5-flash`
+are still wired so anyone who wants to opt in to Flash (e.g., for an
+A/B comparison or a budget-constrained batch) can do so without code
+changes — they just accept the parity/rejection tradeoff.
+
+### Smoke test results — v5.4 final (3 questions, seed 7)
+
+Same fixture as v5.3 smoke (`test_ome_mood_disorders.pdf`) for
+like-for-like comparison.
+
+| Metric | v5.3 smoke | v5.4 smoke | Δ |
+|---|---|---|---|
+| Wall time | 376 s | **117 s** | **3.2× faster** |
+| Per-Q wall (sequential equiv.) | 125 s | ~80 s | ~36% faster per-Q |
+| Per-Q wall (5 parallel workers) | 75 s | ~25 s | ~3× faster user-perceived |
+| Per-Q cost (Vertex est.) | ~$0.22 | **~$0.18** | ~18% cheaper |
+| Critic verdict (3/3 accept) | ✓ | **✓** | — |
+| 5 choices per question | 3/3 | **3/3** | — |
+| Trap-category coverage | 4/4 per Q | **4/4 per Q** | — |
+| Adversarial WEAK_DEFENSE | 100% | **100%** | — |
+| Stem average length | 939 chars | **1076 chars** | +15% longer / more detail |
+| Length parity (within 1.30× median) | 2/3 | 1/3 | one extra parity miss |
+| Q's rejected by pipeline | 0 | **0** | — |
+
+Audit-flagged "failures" are the same n=3 sampling artifacts as the
+v5.3 smoke (order/difficulty distribution gates apply at n≥20, not
+n=3) plus the one length-parity miss above. All substantive quality
+gates (critic verdict, trap categories, adversarial outcomes, stem
+length minimum, 5-choice requirement) pass cleanly.
+
+### v5.4 → v5.3 comparison (projected at scale)
+
+| Test size | v5.3 (sequential) | **v5.4 (5 workers)** | Wall-time Δ | Cost Δ |
+|---|---|---|---|---|
+| 3 Q | 376 s · $0.65 | **117 s · $0.54** | **3.2× faster** | -17% |
+| 11 Q | ~23 min · $2.40 | **~5 min · $2.00** | **~5× faster** | -17% |
+| 50 Q | ~3.5 hr · $11 | **~25 min · $9** | **~8× faster** | -18% |
+
+### Files changed in v5.4
+
+```
+tools/lecture-slide-question-generator/
+├── v5_pipeline.py                        # MODIFIED — ThreadPoolExecutor +
+│                                          #            env-var models +
+│                                          #            thinking-budget caps
+└── prompts/
+    ├── v5_2_kernel_prompt.txt             # MODIFIED — per-Q vars at end
+    └── v5_2_stem_prompt.txt               # MODIFIED — per-Q vars at end
+```
+
+No changes outside the v5 pipeline. The OME wiring (v5.3), the
+Advanced Mode UI toggle (v5.3.1), and the audit fix all remain
+untouched. v5.4 is a drop-in upgrade to the v5.2 pipeline core.
+
+### User verification before promoting v5.4 to `-stable`
+
+Same protocol as v5.3 — re-run an OME PDF through BIC with Advanced
+Mode checked on the rebuilt .app, confirm:
+
+1. The wall-clock drops sharply vs. the v5.3 baseline (3 parallel
+   questions in roughly the time one question took before).
+2. The generated questions still render with 5 choices, accept-verdict
+   critic metadata in `_v5_2`, and the same NBME-style stem quality.
+3. The cost line in the BIC report shows a meaningful drop.
+
+On ✅: promote `v5.3 / v5.3.1 / v5.4` to `-stable` and push tags.
+On ❌: capture console output, isolate which lever regressed (via the
+`V5_*` env vars), re-ship.

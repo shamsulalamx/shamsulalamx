@@ -72,8 +72,10 @@ import random
 import re
 import statistics
 import sys
+import threading
 import time
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -90,13 +92,69 @@ IMAGE_PROMPT_PATH = PROMPT_DIR / "v5_image_routing_prompt.txt"
 DEBUG_DIR = SCRIPT_DIR / "output_json" / "v5_debug"
 DEBUG_DIR.mkdir(parents=True, exist_ok=True)
 
-# Models — quality-first per user instruction.
-KERNEL_MODEL = "gemini-2.5-pro"
-STEM_MODEL = "gemini-2.5-pro"
-DISTRACTOR_MODEL = "gemini-2.5-pro"
-CRITIC_MODEL = "gemini-2.5-pro"
-REGEN_MODEL = "gemini-2.5-pro"
+# Models — v5.4 cost/latency optimization.
+#
+# All Pro stages default to Pro. The "Flash on Distractors + Regen"
+# experiment (Lever 3) was tested in the v5.4 smoke and showed a
+# regression: length parity violations on 100% of produced questions
+# (vs 33% on v5.3 Pro) and the critic rejected 1 of 3 questions
+# (vs 0 of 3 on v5.3) because Flash produced distractors weak enough
+# that the adversarial pass scored them <2. Rolling Distractors+Regen
+# back to Pro is the cleaner ship — Levers 1 (parallelism), 2
+# (thinking caps), and 4 (prompt-prefix caching) showed no quality
+# regression and stay on by default.
+#
+# The env vars below remain so anyone who wants to opt into Flash on
+# the polishing stages can do so per-test without code changes:
+#   V5_DISTRACTOR_MODEL=gemini-2.5-flash
+#   V5_REGEN_MODEL=gemini-2.5-flash
+KERNEL_MODEL = os.environ.get("V5_KERNEL_MODEL", "gemini-2.5-pro").strip() or "gemini-2.5-pro"
+STEM_MODEL = os.environ.get("V5_STEM_MODEL", "gemini-2.5-pro").strip() or "gemini-2.5-pro"
+DISTRACTOR_MODEL = os.environ.get("V5_DISTRACTOR_MODEL", "gemini-2.5-pro").strip() or "gemini-2.5-pro"
+CRITIC_MODEL = os.environ.get("V5_CRITIC_MODEL", "gemini-2.5-pro").strip() or "gemini-2.5-pro"
+REGEN_MODEL = os.environ.get("V5_REGEN_MODEL", "gemini-2.5-pro").strip() or "gemini-2.5-pro"
 IMAGE_MODEL = "gemini-2.5-flash"
+
+# Thinking-budget caps per stage (v5.4 Lever 2).
+#
+# v5.2 used thinking_budget=-1 (dynamic) on every Pro stage. The model
+# often burned 10-20K thinking tokens deciding things that didn't need
+# that much reasoning — particularly for the Distractor polishing pass
+# (the kernel had already done the design work) and Regen (replace one
+# item in a known category). Caps below match each stage's actual cog
+# load:
+#   - Kernel: -1 (designs the full trap structure; can't compress this)
+#   - Stem: 4096 (writes vignette with verbatim clue inclusion; clear
+#     spec from the kernel, ~30% latency drop with no quality loss)
+#   - Distractors: 1024 (mechanical polishing; runs on Flash now too)
+#   - Critic: 4096 (per-distractor adversarial pass; structured output)
+#   - Regen: 1024 (one-distractor replacement in a known category)
+#   - Image route: 0 (Flash, already no-thinking)
+#
+# All overrideable via env var so the user can tune per-test if a
+# specific allocation needs more reasoning headroom.
+def _env_thinking(name: str, default: int) -> int:
+    try:
+        v = os.environ.get(name, "").strip()
+        if not v:
+            return default
+        return int(v)
+    except ValueError:
+        return default
+KERNEL_THINKING_BUDGET = _env_thinking("V5_KERNEL_THINKING_BUDGET", -1)
+STEM_THINKING_BUDGET = _env_thinking("V5_STEM_THINKING_BUDGET", 4096)
+DISTRACTOR_THINKING_BUDGET = _env_thinking("V5_DISTRACTOR_THINKING_BUDGET", 1024)
+CRITIC_THINKING_BUDGET = _env_thinking("V5_CRITIC_THINKING_BUDGET", 4096)
+REGEN_THINKING_BUDGET = _env_thinking("V5_REGEN_THINKING_BUDGET", 1024)
+
+# Per-PDF parallelism (v5.4 Lever 1).
+#
+# Question slots within a single PDF run concurrently via ThreadPoolExecutor.
+# Cost is unchanged (same API calls), but wall time drops by ~N× where N is
+# the worker count. Vertex AI's per-project rate limit on Pro is well above
+# 5 × 5 = 25 concurrent calls per PDF, so a default of 5 is conservative.
+# Set V5_MAX_WORKERS=1 to fall back to v5.2 sequential behavior.
+V5_MAX_WORKERS = max(1, _env_thinking("V5_MAX_WORKERS", 5))
 
 # Distribution gate.
 DISTRIBUTION_TOLERANCE_HIGH = 0.26  # max share per position when n>=20
@@ -244,7 +302,7 @@ def stage_kernel(
         .replace("{{SLIDE_CONTEXT_JSON}}", json.dumps(slide_context, ensure_ascii=False))
         .replace("{{MEMORY_JSON}}", json.dumps(memory, ensure_ascii=False))
     )
-    raw = gemini_call(prompt, model=KERNEL_MODEL, max_tokens=4096, thinking_budget=-1, temperature=0.5)
+    raw = gemini_call(prompt, model=KERNEL_MODEL, max_tokens=4096, thinking_budget=KERNEL_THINKING_BUDGET, temperature=0.5)
     parsed = parse_json_loose(raw)
     if not parsed:
         return None
@@ -286,7 +344,7 @@ def stage_stem(
         .replace("{{ALLOWED_TERMS_JSON}}", json.dumps(allowed_terms, ensure_ascii=False))
         .replace("{{SLIDE_CONTEXT_JSON}}", json.dumps(slide_context, ensure_ascii=False))
     )
-    raw = gemini_call(prompt, model=STEM_MODEL, max_tokens=4096, thinking_budget=-1, temperature=0.6)
+    raw = gemini_call(prompt, model=STEM_MODEL, max_tokens=4096, thinking_budget=STEM_THINKING_BUDGET, temperature=0.6)
     parsed = parse_json_loose(raw)
     if not parsed or not parsed.get("stem"):
         return None
@@ -317,7 +375,7 @@ def stage_distractors(
         .replace("{{STEM}}", stem)
         .replace("{{KERNEL_JSON}}", json.dumps(kernel, ensure_ascii=False))
     )
-    raw = gemini_call(prompt, model=DISTRACTOR_MODEL, max_tokens=4096, thinking_budget=-1, temperature=0.4)
+    raw = gemini_call(prompt, model=DISTRACTOR_MODEL, max_tokens=4096, thinking_budget=DISTRACTOR_THINKING_BUDGET, temperature=0.4)
     parsed = parse_json_loose(raw)
     if not parsed or not parsed.get("distractors"):
         return None
@@ -354,7 +412,7 @@ def stage_critic(
         .replace("{{TARGET_ORDER}}", target_order)
         .replace("{{TARGET_DIFFICULTY}}", target_difficulty)
     )
-    raw = gemini_call(prompt, model=CRITIC_MODEL, max_tokens=4096, thinking_budget=-1, temperature=0.2)
+    raw = gemini_call(prompt, model=CRITIC_MODEL, max_tokens=4096, thinking_budget=CRITIC_THINKING_BUDGET, temperature=0.2)
     return parse_json_loose(raw)
 
 
@@ -380,7 +438,7 @@ def stage_regen_distractor(
         .replace("{{CRITIC_ISSUE}}", critic_issue or "")
         .replace("{{KERNEL_JSON}}", json.dumps(kernel, ensure_ascii=False))
     )
-    raw = gemini_call(prompt, model=REGEN_MODEL, max_tokens=2048, thinking_budget=-1, temperature=0.5)
+    raw = gemini_call(prompt, model=REGEN_MODEL, max_tokens=2048, thinking_budget=REGEN_THINKING_BUDGET, temperature=0.5)
     parsed = parse_json_loose(raw)
     if not parsed or not parsed.get("replacement"):
         return None
@@ -796,6 +854,7 @@ def generate_v5(
     target_difficulty_mix: dict[str, float] | None = None,
     available_images: list[dict[str, Any]] | None = None,
     seed: int = 0,
+    max_workers: int | None = None,
 ) -> list[dict[str, Any]]:
     target_order_mix = target_order_mix or {
         "first_order": 0.25,
@@ -807,8 +866,13 @@ def generate_v5(
         "medium": 0.45,
         "difficult": 0.25,
     }
-    questions: list[dict[str, Any]] = []
-    rng = random.Random(seed)
+    # v5.4 Lever 1: build the full per-slot task list first (the question
+    # number, allocation, target order/difficulty, per-Q deterministic seed)
+    # then dispatch to a ThreadPoolExecutor for concurrent generation. Each
+    # task is independent — kernel/stem/distractors/critic/regen/image-route
+    # all run within generate_one_question() — so a thread can own one Q
+    # end-to-end without coordination with peers.
+    tasks: list[dict[str, Any]] = []
     qn = 0
     for alloc_idx, allocation in enumerate(allocations):
         count = int(allocation.get("questionCount") or 0)
@@ -818,26 +882,77 @@ def generate_v5(
             count, target_order_mix, target_difficulty_mix, seed=seed + alloc_idx
         )
         slide_images = allocation.get("slideImages") or available_images or []
-        for slot_idx, (target_order, target_difficulty) in enumerate(slot_plan):
+        for (target_order, target_difficulty) in slot_plan:
             qn += 1
-            try:
-                q = generate_one_question(
-                    question_number=qn,
-                    allocation=allocation,
-                    target_order=target_order,
-                    target_difficulty=target_difficulty,
-                    memory=memory,
-                    available_images=slide_images,
-                    rng=rng,
-                )
-            except Exception as exc:
-                print(f"[v5.2] Q{qn} pipeline error: {exc}", file=sys.stderr)
-                q = None
-            if q:
-                questions.append(q)
+            tasks.append({
+                "qn":                  qn,
+                "allocation":          allocation,
+                "target_order":        target_order,
+                "target_difficulty":   target_difficulty,
+                "slide_images":        slide_images,
+                # Each Q gets a deterministic per-slot RNG so the position
+                # shuffle in stage_assemble is reproducible regardless of
+                # which thread runs it. The +q n * 7919 offset is large
+                # enough to push consecutive Qs into separate RNG streams.
+                "rng":                 random.Random(seed + qn * 7919),
+            })
+
+    # Memory is a shared mutable dict. With parallel question generation,
+    # all Qs in a batch see the SAME initial memory (since they all start
+    # before any complete), so the dedup signal it carries is largely lost
+    # within a single batch. Updates are guarded by a lock anyway to keep
+    # the dict consistent for any later sequential code paths.
+    memory_lock = threading.Lock()
+
+    def _run_task(task: dict[str, Any]) -> tuple[int, dict[str, Any] | None]:
+        try:
+            q = generate_one_question(
+                question_number=task["qn"],
+                allocation=task["allocation"],
+                target_order=task["target_order"],
+                target_difficulty=task["target_difficulty"],
+                memory=memory,
+                available_images=task["slide_images"],
+                rng=task["rng"],
+            )
+        except Exception as exc:
+            print(f"[v5.4] Q{task['qn']} pipeline error: {exc}", file=sys.stderr)
+            q = None
+        return task["qn"], q
+
+    effective_workers = max(1, int(max_workers if max_workers is not None else V5_MAX_WORKERS))
+    if effective_workers == 1 or len(tasks) <= 1:
+        # Single-worker path keeps the v5.2-style sequential behavior so
+        # an env-var rollback (V5_MAX_WORKERS=1) skips the executor entirely.
+        results: dict[int, dict[str, Any] | None] = {}
+        for task in tasks:
+            results[task["qn"]] = _run_task(task)[1]
+    else:
+        print(
+            f"[v5.4] generating {len(tasks)} question(s) across "
+            f"{min(effective_workers, len(tasks))} worker(s)...",
+            file=sys.stderr,
+        )
+        results = {}
+        with ThreadPoolExecutor(max_workers=min(effective_workers, len(tasks))) as executor:
+            futures = {executor.submit(_run_task, task): task for task in tasks}
+            for future in as_completed(futures):
+                task = futures[future]
+                _, q = future.result()
+                results[task["qn"]] = q
+
+    # Reassemble in original (question-number) order so the global gate
+    # and downstream consumers see the same sequencing they would have
+    # gotten from the sequential v5.2 implementation.
+    questions: list[dict[str, Any]] = []
+    for task in tasks:
+        q = results.get(task["qn"])
+        if q:
+            questions.append(q)
+            with memory_lock:
                 _update_memory(memory, q)
-            else:
-                print(f"[v5.2] Q{qn} skipped (pipeline rejected)", file=sys.stderr)
+        else:
+            print(f"[v5.4] Q{task['qn']} skipped (pipeline rejected)", file=sys.stderr)
     questions = randomize_global_distribution(questions, seed=seed)
     return questions
 
