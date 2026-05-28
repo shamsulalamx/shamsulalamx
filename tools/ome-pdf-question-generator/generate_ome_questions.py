@@ -41,7 +41,7 @@ import textwrap
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 # ── Import the stable UWorld generator ────────────────────────────────────────
 _UW_DIR = Path(__file__).parent.parent / "uworld-notes-question-generator"
@@ -49,6 +49,25 @@ if not _UW_DIR.is_dir():
     sys.exit(f"ERROR: UWorld generator not found at expected path: {_UW_DIR}")
 sys.path.insert(0, str(_UW_DIR))
 import generate_uworld_questions as _uw  # noqa: E402
+
+# ── v5.3: optional v5.2 multi-stage organic pipeline path ─────────────────────
+# When `--v5` is passed, the per-PDF pipeline replaces the legacy single-call
+# Gemini generator with the kernel→stem→distractors→critic→regen→length-parity
+# →image-routing→assemble flow defined in
+# tools/lecture-slide-question-generator/v5_pipeline.py.
+#
+# The legacy path stays intact as a fallback when v5 raises, and is the
+# default when `--v5` is not set. This preserves existing OME generation
+# behavior for any caller that hasn't opted in.
+_LECTURE_DIR = Path(__file__).parent.parent / "lecture-slide-question-generator"
+if _LECTURE_DIR.is_dir() and str(_LECTURE_DIR) not in sys.path:
+    sys.path.insert(0, str(_LECTURE_DIR))
+# Importing the adapter here means a fresh Python process picks it up
+# without each call having to re-resolve sys.path.
+from ome_v5_adapter import (  # noqa: E402
+    build_v5_allocations,
+    decorate_v5_questions_for_ome,
+)
 
 # ── Patch all path globals to point at OME workspace ──────────────────────────
 _BASE = Path(__file__).parent
@@ -364,6 +383,140 @@ def _apply_output_dir(raw_path: str) -> Path:
     return output_root
 
 
+# ── v5 dispatch (v5.3) ─────────────────────────────────────────────────────────
+
+def _parse_mix(arg: str, keys: List[str], label: str) -> Dict[str, float]:
+    """Parse a comma-separated mix like '0.25,0.45,0.30' into a dict keyed
+    by `keys`. Raises ValueError on malformed input. Tolerates a small
+    rounding band (~2%) on the sum."""
+    parts = [p.strip() for p in arg.split(",") if p.strip()]
+    if len(parts) != len(keys):
+        raise ValueError(f"--{label} must have {len(keys)} comma-separated floats, got {len(parts)}: {arg!r}")
+    values = [float(p) for p in parts]
+    if abs(sum(values) - 1.0) > 0.02:
+        raise ValueError(f"--{label} must sum to ~1.0, got {sum(values):.3f}: {arg!r}")
+    return dict(zip(keys, values))
+
+
+def _process_file_v5(
+    filepath: Path,
+    questions_per_file: int,
+    v5_cfg: Dict[str, Any],
+    report_data: Dict,
+) -> Optional[Dict]:
+    """v5 replacement for `_uw.process_file()`. Mirrors its filesystem
+    side effects (raw_text/, chunks/, app_ready/) and report shape so
+    callers downstream — including the BIC profile runner — see the
+    same artifacts they get from the legacy path."""
+    t_start = time.time()
+    _uw.log(f"Processing (v5): {filepath.name}")
+    stem = filepath.stem
+
+    # 1. Extract raw text via the OME-patched extractor.
+    raw_text = _uw.extract_text(filepath)
+    if not raw_text.strip():
+        _uw.warn(f"No text extracted from {filepath.name} — skipping (v5).")
+        report_data["files"][filepath.name] = {"status": "skipped", "reason": "empty_text"}
+        return None
+
+    raw_path = _uw.RAW_DIR / f"{stem}_raw.txt"
+    raw_path.parent.mkdir(parents=True, exist_ok=True)
+    raw_path.write_text(raw_text, encoding="utf-8")
+    _uw.log(f"  Raw text saved → {raw_path.name} ({len(raw_text):,} chars)")
+
+    # 2. Chunk.
+    chunks = _uw.split_into_chunks(raw_text)
+    chunk_path = _uw.SEGMENT_DIR / f"{stem}_chunks.json"
+    chunk_path.parent.mkdir(parents=True, exist_ok=True)
+    chunk_path.write_text(
+        json.dumps({"sourceFile": filepath.name, "chunks": chunks}, indent=2),
+        encoding="utf-8",
+    )
+    _uw.log(f"  {len(chunks)} chunk(s) → {chunk_path.name}")
+
+    # 3. Build v5 allocations.
+    allocations = build_v5_allocations(
+        source_stem=stem.replace(" ", "_"),
+        chunks=chunks,
+        questions_per_file=questions_per_file,
+    )
+    if not allocations:
+        _uw.warn(f"v5: no eligible chunks for {filepath.name} after size filter; falling back to legacy.")
+        raise RuntimeError("no_v5_allocations")
+    total_alloc_qs = sum(int(a.get("questionCount") or 0) for a in allocations)
+    _uw.log(f"  v5 allocations: {len(allocations)} chunk(s), {total_alloc_qs} question slot(s)")
+
+    # 4. Run the v5 pipeline. The import is local so the module is
+    # only loaded when v5 is actually engaged — a fresh `--v5`-less
+    # run never pays the v5_pipeline import cost.
+    import v5_pipeline as v5  # type: ignore
+    started_v5 = time.time()
+    v5_questions = v5.generate_v5(
+        normalized_payload={"sourceFile": str(filepath)},
+        allocations=allocations,
+        memory={},
+        target_order_mix=v5_cfg["order_mix"],
+        target_difficulty_mix=v5_cfg["difficulty_mix"],
+        seed=v5_cfg["seed"],
+    )
+    v5_elapsed = round(time.time() - started_v5, 1)
+    _uw.log(f"  v5 produced {len(v5_questions)} question(s) in {v5_elapsed}s")
+
+    # 5. Decorate with legacy OME-app-ready fields, write raw generated JSON.
+    decorated = decorate_v5_questions_for_ome(v5_questions)
+    gen_path = _uw.GEN_DIR / f"{stem}_generated.json"
+    gen_path.parent.mkdir(parents=True, exist_ok=True)
+    gen_path.write_text(json.dumps(decorated, indent=2, ensure_ascii=False), encoding="utf-8")
+    _uw.log(f"  Generated JSON → {gen_path.name} ({len(decorated)} questions)")
+
+    # 6. Wrap in canonical app-ready shape. The OME monkey-patch on
+    # `_uw.build_app_ready_json` sets sourceFormat to "ome-pdf".
+    file_warnings: List[str] = []
+    if total_alloc_qs and len(v5_questions) < total_alloc_qs:
+        file_warnings.append(
+            f"v5 produced {len(v5_questions)}/{total_alloc_qs} requested questions"
+            f" (some slots failed pipeline gates and were skipped)"
+        )
+    app_json = _uw.build_app_ready_json(stem, decorated, file_warnings)
+    # Tag the app-ready payload so downstream consumers can tell which
+    # pipeline produced it (legacy single-call vs. v5.2 multi-stage).
+    app_json["pipeline"] = "v5.2-organic"
+    app_path = _uw.APP_DIR / f"{stem}_app_ready.json"
+    app_path.parent.mkdir(parents=True, exist_ok=True)
+    app_path.write_text(json.dumps(app_json, indent=2, ensure_ascii=False), encoding="utf-8")
+    _uw.log(f"  App-ready JSON → {app_path.name} ({len(decorated)} questions)")
+
+    elapsed = round(time.time() - t_start, 1)
+    report_data["files"][filepath.name] = {
+        "status":             "ok",
+        "rawChars":           len(raw_text),
+        "chunksProcessed":    len(chunks),
+        "questionsGenerated": len(decorated),
+        "v5Allocations":      len(allocations),
+        "v5RequestedSlots":   total_alloc_qs,
+        "v5ElapsedSeconds":   v5_elapsed,
+        "needsReviewCount":   0,
+        "reviewDraftPath":    "",
+        "validationFailures": 0,
+        "retries":            0,
+        "repairsSucceeded":   0,
+        "repairFailures":     0,
+        "validationWarnings": [],
+        "warnings":           file_warnings,
+        "chunkStats":         [],
+        "outputPaths": {
+            "appReady":  str(app_path),
+            "generated": str(gen_path),
+            "chunks":    str(chunk_path),
+            "rawText":   str(raw_path),
+        },
+        "elapsedSeconds": elapsed,
+        "dryRun":         False,
+        "pipeline":       "v5.2-organic",
+    }
+    return app_json
+
+
 # ── CLI entry point ────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -420,6 +573,38 @@ def main() -> None:
             "Requires: pip3 install pymupdf"
         ),
     )
+    # v5.3: v5.2 multi-stage organic generation. Opt-in; default behavior
+    # (no flag) preserves the legacy single-call generator end-to-end.
+    parser.add_argument(
+        "--v5",
+        action="store_true",
+        help=(
+            "Use the v5.2 multi-stage organic generator (kernel → stem → "
+            "distractors → critic → targeted regen → length parity → image "
+            "routing → assemble). Higher cost (~4x API calls per question, "
+            "gemini-2.5-pro with thinking) but produces NBME-authentic "
+            "questions with order/difficulty stratification, 4 distinct "
+            "trap-category distractors per question, and balanced answer "
+            "position distribution. The legacy single-call path is the "
+            "default and is preserved as the fallback when v5 raises."
+        ),
+    )
+    parser.add_argument(
+        "--v5-order-mix",
+        default="0.25,0.45,0.30",
+        help="v5 only: comma-separated targets for first_order,second_order,third_order shares.",
+    )
+    parser.add_argument(
+        "--v5-difficulty-mix",
+        default="0.30,0.45,0.25",
+        help="v5 only: comma-separated targets for easy,medium,difficult shares.",
+    )
+    parser.add_argument(
+        "--v5-seed",
+        type=int,
+        default=0,
+        help="v5 only: RNG seed for reproducible per-Q position randomization.",
+    )
     args = parser.parse_args()
 
     if args.dry_run and args.generate:
@@ -470,16 +655,47 @@ def main() -> None:
 
     dry_run = args.dry_run
     if args.generate:
-        if not os.environ.get("GEMINI_API_KEY", "").strip():
+        # v5 routes through Vertex AI (the lecture-slide v5 default).
+        # GEMINI_API_KEY is only required for the legacy path; if v5 is
+        # enabled, GEMINI_BACKEND=vertex + ADC is enough.
+        if not args.v5 and not os.environ.get("GEMINI_API_KEY", "").strip():
             _uw.log("ERROR: --generate requires GEMINI_API_KEY to be set.")
             _uw.log("Set it with: export GEMINI_API_KEY=your_key_here")
             sys.exit(1)
         dry_run = False
     elif not dry_run:
-        if not os.environ.get("GEMINI_API_KEY", "").strip():
+        if not os.environ.get("GEMINI_API_KEY", "").strip() and not args.v5:
             _uw.warn("GEMINI_API_KEY not set — falling back to --dry-run mode.")
             _uw.warn("Pass --generate to treat a missing key as a hard error.")
             dry_run = True
+
+    # ── v5 config resolution ──────────────────────────────────────────────────
+    v5_cfg: Optional[Dict[str, Any]] = None
+    if args.v5:
+        if dry_run:
+            _uw.warn("--v5 has no effect in dry-run mode; ignoring v5 flag.")
+        else:
+            try:
+                v5_cfg = {
+                    "order_mix": _parse_mix(
+                        args.v5_order_mix,
+                        ["first_order", "second_order", "third_order"],
+                        "v5-order-mix",
+                    ),
+                    "difficulty_mix": _parse_mix(
+                        args.v5_difficulty_mix,
+                        ["easy", "medium", "difficult"],
+                        "v5-difficulty-mix",
+                    ),
+                    "seed": int(args.v5_seed),
+                }
+                _uw.log(
+                    "v5 pipeline configured — order_mix=%s difficulty_mix=%s seed=%d"
+                    % (args.v5_order_mix, args.v5_difficulty_mix, args.v5_seed)
+                )
+            except ValueError as exc:
+                _uw.warn(f"Invalid v5 mix arguments: {exc}; --v5 disabled.")
+                v5_cfg = None
 
     report_data: Dict = {
         "runTimestamp":     datetime.now().isoformat(),
@@ -488,13 +704,26 @@ def main() -> None:
         "extractAssets":    _extract_assets,
         "questionsPerFile": args.questions_per_file,
         "inputFiles":       [f.name for f in files],
+        "v5Enabled":        bool(v5_cfg),
+        "v5Config":         v5_cfg or {},
         "files":            {},
     }
     t_total = time.time()
 
     for filepath in files:
         try:
-            _uw.process_file(filepath, args.questions_per_file, dry_run, report_data)
+            used_v5 = False
+            if v5_cfg is not None:
+                try:
+                    _process_file_v5(filepath, args.questions_per_file, v5_cfg, report_data)
+                    used_v5 = True
+                except Exception as v5_exc:
+                    _uw.warn(
+                        f"v5 pipeline failed for {filepath.name} ({v5_exc}); "
+                        f"falling back to legacy single-call generator."
+                    )
+            if not used_v5:
+                _uw.process_file(filepath, args.questions_per_file, dry_run, report_data)
             pdf_stats = _pdf_extraction_stats.get(str(filepath), {})
             if filepath.name in report_data["files"] and pdf_stats:
                 report_data["files"][filepath.name].update({

@@ -68,10 +68,16 @@ def main() -> int:
         print(f"  {p}: {pos.get(p, 0):3d} ({share*100:5.1f}%) {flag}")
 
     # 2. Order distribution
+    # Read _v5_2 first (v5.2+ pipeline metadata key) and fall back to _v5
+    # (legacy v5.0 outputs). The audit was originally written against _v5
+    # alone; v5.2 introduced the _v5_2 key without updating these reads,
+    # which silently bucketed every v5.2+ question into "unknown" and
+    # failed the order/difficulty gates. Same pattern as the critic
+    # verdict / trap-category / adversarial reads farther down.
     print("\n[2] Question order distribution:")
     orders = Counter()
     for q in qs:
-        meta = q.get("_v5") or {}
+        meta = q.get("_v5_2") or q.get("_v5") or {}
         achieved = meta.get("orderAchieved") or meta.get("targetOrder") or "unknown"
         orders[achieved] += 1
     for k in ("first_order", "second_order", "third_order"):
@@ -86,11 +92,11 @@ def main() -> int:
     if other:
         print(f"  other / unknown: {other}")
 
-    # 3. Difficulty distribution
+    # 3. Difficulty distribution (same _v5_2-then-_v5 fallback as above)
     print("\n[3] Difficulty distribution:")
     diffs = Counter()
     for q in qs:
-        meta = q.get("_v5") or {}
+        meta = q.get("_v5_2") or q.get("_v5") or {}
         achieved = meta.get("difficultyAchieved") or meta.get("targetDifficulty") or "unknown"
         diffs[achieved] += 1
     for k in ("easy", "medium", "difficult"):

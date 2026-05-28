@@ -51,12 +51,21 @@ def parse_app_ready_json(path: Path) -> dict[str, Any]:
     return payload
 
 
-def run_ome_generator(input_path: Path, mode: str) -> dict[str, Any]:
+def run_ome_generator(
+    input_path: Path,
+    mode: str,
+    v5_args: list[str] | None = None,
+) -> dict[str, Any]:
     """
     Invoke generate_ome_questions.py in either dry-run or live mode.
 
     mode="dry-run"   -> passes --dry-run  (no Gemini calls, placeholder output)
     mode="generate"  -> passes --generate (live Gemini calls, real questions)
+
+    v5_args lets the caller forward `--v5` and the related mix/seed flags
+    so the downstream generator runs through the v5.2 multi-stage organic
+    pipeline. The legacy single-call path stays the default when v5_args
+    is empty (preserves pre-v5.3 BIC behavior).
     """
     label = "dry-run" if mode == "dry-run" else "live"
     output_root = OUTPUT_DIR / f"ome_app_ready_{label}" / input_path.stem.replace(" ", "_")
@@ -70,6 +79,8 @@ def run_ome_generator(input_path: Path, mode: str) -> dict[str, Any]:
         "--output-dir",
         str(output_root),
     ]
+    if v5_args:
+        command.extend(v5_args)
     emit("ome_downstream_start", mode=mode, command=command, outputRoot=str(output_root))
     started_at = time.time()
     proc = subprocess.run(
@@ -132,6 +143,34 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Alias for --mode dry-run (kept for backward compatibility).",
     )
+    # v5.3: forward v5 flags into the downstream OME generator. Only
+    # applies when --mode generate. When unset, the downstream runs
+    # through its legacy single-call path (pre-v5.3 BIC behavior).
+    parser.add_argument(
+        "--v5",
+        action="store_true",
+        help=(
+            "Run the downstream OME generator with the v5.2 multi-stage "
+            "organic pipeline (kernel → stem → distractors → critic → "
+            "regen → length parity → assemble). No-op in --mode dry-run."
+        ),
+    )
+    parser.add_argument(
+        "--v5-order-mix",
+        default="0.25,0.45,0.30",
+        help="v5 only: comma-separated targets for first_order,second_order,third_order shares.",
+    )
+    parser.add_argument(
+        "--v5-difficulty-mix",
+        default="0.30,0.45,0.25",
+        help="v5 only: comma-separated targets for easy,medium,difficult shares.",
+    )
+    parser.add_argument(
+        "--v5-seed",
+        type=int,
+        default=0,
+        help="v5 only: RNG seed for reproducible per-Q position randomization.",
+    )
     return parser.parse_args()
 
 
@@ -172,9 +211,22 @@ def main() -> int:
         emit("ome_profile_complete", ok=False, error="Shared normalized chunk validation failed.", report=report)
         return 1
 
+    # Forward v5 args into the downstream generator only in generate mode.
+    # v5 is a no-op for dry-run (the downstream's --dry-run path doesn't
+    # call Gemini at all, so the multi-stage pipeline can't run).
+    v5_args: list[str] = []
+    if mode == "generate" and getattr(args, "v5", False):
+        v5_args = [
+            "--v5",
+            "--v5-order-mix", str(args.v5_order_mix),
+            "--v5-difficulty-mix", str(args.v5_difficulty_mix),
+            "--v5-seed", str(args.v5_seed),
+        ]
+        emit("ome_v5_enabled", orderMix=args.v5_order_mix, difficultyMix=args.v5_difficulty_mix, seed=args.v5_seed)
+
     downstream_report: dict[str, Any] | None = None
     try:
-        downstream_report = run_ome_generator(input_file, mode)
+        downstream_report = run_ome_generator(input_file, mode, v5_args=v5_args)
     except Exception as exc:
         final_report = {
             "schemaVersion": "ome-profile-runner-report-v1",

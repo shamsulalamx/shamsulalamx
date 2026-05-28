@@ -1,7 +1,7 @@
 # BATCH 5 — Organic generator quality overhaul (v5)
 
 Branch: `phase12-vertex-migration`
-Tag: `v5.0.1-batch5-stable` (latest); see version history below.
+Tag: `v5.3-batch5-pending-validation` (latest); see version history below.
 
 ## Scope (very important): organic-generation only
 
@@ -38,27 +38,197 @@ shipped in `v4.85-batch4-stable`.
 | `v5.0-batch5-stable` | Initial v5 multi-stage organic generator |
 | `v5.0.1-batch5-stable` | Doc clarification: legacy NBME/AMBOSS verbatim paths untouched |
 | `v5.2-batch5-stable` | Five distractor-quality upgrades (kernel-first, trap categories, adversarial verify, per-distractor scoring, length parity) |
-| **NEXT: `v5.3-batch5-stable`** | **OME organic generator port to v5.2.** See `BATCH5_OME_PORT_HANDOFF.md` for the self-contained handoff. |
+| `v5.2.1-batch5-stable` | Docs-only handoff ship (BATCH5_OME_PORT_HANDOFF.md + v5.3 plan) |
+| `v5.3-batch5-pending-validation` | **OME organic generator port to v5.2.** Adds `--v5` to both OME runners; legacy single-call generator stays as fallback. |
 
-## v5.3 plan — OME-only port (pending)
+## v5.3 — OME organic generator port
 
-User confirmed scope: port the v5.2 multi-stage pipeline (kernel-first
-design + 4 trap categories + adversarial verification + per-distractor
-scoring + length parity) to the OME-PDF organic generator ONLY for now.
-The other organic generators (uWorld notes, Mehlman, Anki, Divine audio,
-Images-tables) stay on the legacy single-call generator until a later
-ship.
+Ports the v5.2 multi-stage pipeline (kernel-first design + 4 trap
+categories + adversarial verification + per-distractor scoring + length
+parity) to the OME-PDF organic generator. Both the direct CLI
+(`tools/ome-pdf-question-generator/generate_ome_questions.py`) and the
+BIC profile runner (`tools/shared-ingestion/ome_profile_runner.py`)
+gain a `--v5` flag and the related mix/seed flags
+(`--v5-order-mix`, `--v5-difficulty-mix`, `--v5-seed`).
 
-Scope explicitly excluded from v5.3:
+Scope explicitly excluded from v5.3 (unchanged from v5.2.1 plan):
 - NBME PDF verbatim extraction (unchanged since v4.85)
 - AMBOSS verbatim extraction (the lecture-slide `--amboss-profile` path)
-- All other organic generators except OME
+- uWorld notes / Mehlman / Anki / Divine audio / Images-tables (legacy
+  single-call generators stay until a later ship)
+- Multi-PDF combine-into-one-test (single PDF in → single test out)
 
-Implementation handoff lives in `BATCH5_OME_PORT_HANDOFF.md`. The new
-session should read CLAUDE.md, then BATCH5_STATUS.md, then the handoff,
-then start.
+### What v5.3 added
 
-Approximate effort: 3-4 hours focused work, ~$0.50 in API smoke tests.
+```
+tools/ome-pdf-question-generator/
+├── ome_v5_adapter.py                  # NEW — chunks→v5 allocations,
+│                                       #       term/title/fact extraction,
+│                                       #       v5→OME field decoration
+└── generate_ome_questions.py           # MODIFIED — --v5 flag + dispatch +
+                                        #            _process_file_v5() helper
+tools/shared-ingestion/
+└── ome_profile_runner.py               # MODIFIED — --v5 flag, forwards to
+                                        #            downstream generator
+```
+
+The adapter does the OME-specific work the lecture-slide
+`_enrich_allocations_for_v5()` does for slides: turns the raw chunk text
+into the v5 allocation shape (`allowedMedicalTerms`,
+`allowedDistractorPool`, `slideContext.{slideTitle, clinicalFacts,
+primaryConcepts, secondaryConcepts, highYield, fullText}`,
+`slideImages`). Chunks shorter than 200 chars (page headers, stray
+fragments) are filtered out before question budget is distributed, so
+all generated questions come from substantive content.
+
+### Dispatch & fallback
+
+When `--v5` is set on `generate_ome_questions.py`, the per-PDF loop
+calls `_process_file_v5(filepath, questions_per_file, v5_cfg,
+report_data)` instead of `_uw.process_file()`. The v5 helper:
+
+1. Extracts raw text via the OME-patched extractor (pdfplumber).
+2. Chunks via `_uw.split_into_chunks()` (same as legacy).
+3. Builds v5 allocations via `build_v5_allocations()`.
+4. Calls `v5_pipeline.generate_v5(...)` with the configured mixes/seed.
+5. Decorates v5 questions with legacy OME fields (`id`,
+   `sourceQuestionNumber`, `retrievalTag`, `reviewPearl`) so the
+   resulting app-ready JSON matches the OME schema downstream
+   consumers expect.
+6. Wraps via the existing OME-patched `_uw.build_app_ready_json()`
+   (which still sets `sourceFormat: "ome-pdf"`).
+7. Writes the same `<stem>_app_ready.json` artifact at the canonical
+   path. Adds `pipeline: "v5.2-organic"` so downstream consumers can
+   distinguish v5 output from legacy.
+
+If the v5 pipeline raises (no eligible chunks, Vertex transient
+failure, kernel rejection cascade), the wrapper logs a warning and
+falls through to the legacy `_uw.process_file()`. Default behavior
+(no `--v5`) is unchanged from v5.2.1 — the legacy single-call path runs
+exactly as it did before this ship.
+
+The BIC profile runner appends `--v5 --v5-order-mix … --v5-difficulty-mix … --v5-seed …`
+to the downstream `generate_ome_questions.py` subprocess command when
+`--v5` is set on its own CLI. In `--mode dry-run` the v5 flag is a no-op
+(no Gemini calls happen at all on the dry-run path).
+
+### How to generate an OME test with v5
+
+Direct CLI:
+```
+cd tools/ome-pdf-question-generator
+GEMINI_BACKEND=vertex python3 generate_ome_questions.py \
+  --input-file input_pdfs/Lesson.pdf \
+  --generate --v5 \
+  --questions-per-file 15 \
+  --v5-order-mix 0.25,0.45,0.30 \
+  --v5-difficulty-mix 0.30,0.45,0.25 \
+  --v5-seed 0
+```
+
+BIC path (matches what the UI invokes):
+```
+GEMINI_BACKEND=vertex python3 tools/shared-ingestion/ome_profile_runner.py \
+  --input-file tools/ome-pdf-question-generator/input_pdfs/Lesson.pdf \
+  --mode generate --v5 --limit 0
+```
+
+Audit the result with the v5.2 gate (no OME-specific changes needed —
+the audit reads `_v5_2` metadata directly from every question):
+```
+python3 tools/lecture-slide-question-generator/v5_audit.py \
+  <output_root>/app_ready/Lesson_app_ready.json
+```
+
+### Cost & latency
+
+Same as v5.2 lecture-slide: ~$0.18–0.22 per question, ~4–5 min
+sequential. A 15-question OME test ≈ $2.70–3.30 and ~60–75 min wall
+time. The legacy single-call OME path is ~10–20× cheaper but produces
+NBME-quality output only intermittently — for any test the user plans
+to keep, the v5 cost premium is justified.
+
+### Smoke test (v5.3 ship)
+
+Input: `tools/ome-pdf-question-generator/input_pdfs/test_ome_mood_disorders.pdf`
+(1565 chars extracted, 1 chunk after the 200-char filter).
+Command (direct CLI):
+```
+GEMINI_BACKEND=vertex python3 tools/ome-pdf-question-generator/generate_ome_questions.py \
+  --input-file tools/ome-pdf-question-generator/input_pdfs/test_ome_mood_disorders.pdf \
+  --generate --v5 --v5-seed 7 --questions-per-file 3 \
+  --output-dir /tmp/ome_v5_smoke
+```
+
+Smoke results (3 questions produced in 376s — ~125 s/Q, well inside the
+v5.2 envelope):
+
+| Q | Answer | Target | Achieved | Stem | Verdict | All 4 traps | Distractor scores | Parity |
+|---|---|---|---|---|---|---|---|---|
+| 1 | B | third_order/difficult | third_order/difficult | 1248 chars | accept | yes | 3/3/3/3 WEAK_DEFENSE | 1.09 (ok) |
+| 2 | E | first_order/easy | first_order/easy | 694 chars | accept | yes | 3/3/3/3 WEAK_DEFENSE | 1.32 (fails 1.30 cap by 0.02) |
+| 3 | C | second_order/medium | second_order/medium | 876 chars | accept | yes | 3/3/3/3 WEAK_DEFENSE | 1.02 (ok) |
+
+Answer positions B/E/C: no A-bias on this smoke. Order/difficulty
+coverage: 1 question per bucket across all 3 order tiers and all 3
+difficulty tiers — the v5 PLAN stage's largest-remainder allocation
+worked exactly as designed.
+
+`v5_audit.py` run on the smoke output:
+
+- ✓ stem length: avg 939, median 876, all 3 questions ≥600 chars
+- ✓ exactly 5 choices in all 3 questions
+- ✓ critic verdict: 3/3 accept
+- ✓ trap-category coverage: 4 categories per question (12 totals,
+  0 incomplete)
+- ✓ adversarial outcomes: 100% WEAK_DEFENSE (0 STRONG_DEFENSE,
+  0 NO_DEFENSE — the target band)
+- "FAIL" — order distribution (first_order 33% vs 25% target,
+  second_order 33% vs 45% target): statistical artifact of n=3, not
+  a pipeline bug. The PLAN stage produced 1 question per bucket and
+  the orderAchieved field matched targetOrder for all 3 questions.
+- "FAIL" — difficulty distribution (medium 33% vs 45% target): same
+  n=3 artifact.
+- "FAIL" — length parity 1/3 (Q2's correct-answer choice at length
+  ratio 1.32 vs 1.30 cap, missed by 0.02). v5_pipeline's
+  `length_parity_balance()` only trims parentheticals / comma-clauses;
+  Q2's "Initiate a selective serotonin reuptake inhibitor (SSRI)"
+  had no safe-trim site, and the pipeline left the text intact per
+  its design ("quality > parity-by-fabrication" — see v5_pipeline.py).
+
+Pre-existing audit bug found and fixed in v5_audit.py: the order and
+difficulty gates (`[2]` and `[3]`) read `_v5` only, while the v5.2
+pipeline writes the metadata under `_v5_2`. Without the fix, every
+v5.2+ question silently buckets into "unknown" and the gates fail
+trivially. The fix mirrors the same `_v5_2`-then-`_v5` fallback the
+later gates (critic verdict, trap categories, adversarial outcomes)
+already had. The fix would also apply retroactively to any audits
+the prior session ran on v5.2-batch5-stable output.
+
+BIC profile runner verification: structural only (arg-forwarding
+chain confirmed by simulating argparse without invoking Gemini). A
+live BIC smoke run was deferred to stay inside the v5.3 API budget —
+the BIC path subprocesses into `generate_ome_questions.py` with the
+same CLI flow that the direct smoke validated end-to-end.
+
+### User verification before promoting to `-stable`
+
+Per CLAUDE.md hard constraint #2 (no commit/tag/push without user
+verification on the .app), the v5.3 tag remains
+`v5.3-batch5-pending-validation` until the user runs an end-to-end OME
+generation through the BIC UI and confirms the resulting questions
+look correct in the renderer. The test plan:
+
+1. Quit and relaunch the rebuilt .app.
+2. From BIC, import an OME PDF (e.g. the same
+   `test_ome_mood_disorders.pdf`) with `--v5` enabled.
+3. Verify the generated questions render with 5 choices each, stems
+   read like NBME vignettes (5–10+ sentences, NBME demographics
+   opener), and the test pages through correctly.
+4. Confirm a non-OME source type (any other generator) still works
+   identically to v5.2.1 — `--v5` should only affect OME.
+5. On ✅: tag `v5.3-batch5-stable` and push. On ❌: capture console
+   output, diagnose, and reship.
 
 ## v5.2 — what changed for distractor quality
 
