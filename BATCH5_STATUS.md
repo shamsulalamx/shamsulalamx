@@ -1,7 +1,7 @@
 # BATCH 5 — Organic generator quality overhaul (v5)
 
 Branch: `phase12-vertex-migration`
-Tag: `v5.6-batch5-pending-validation` (latest); see version history below.
+Tag: `v5.6.1-batch5-pending-validation` (latest); see version history below.
 
 ## Scope (very important): organic-generation only
 
@@ -43,7 +43,8 @@ shipped in `v4.85-batch4-stable`.
 | `v5.3.1-batch5-pending-validation` | Advanced Mode UI toggle in BIC modal — surfaces v5.3's `--v5` flag to the user-facing import form. |
 | `v5.4-batch5-pending-validation` | v5.4 cost/latency optimization: 3 stacked levers (Lever 3 rolled back). Parallelism + thinking-budget caps + prompt-prefix caching. Smoke: 3 Qs in 117 s (was 376 s = 3.2× faster), all v5.2 quality gates intact. |
 | `v5.5-batch5-pending-validation` | v5.5 explanation depth: longer + mechanism-grounded. Kernel rationale 1–2 → 3–5 sentences. Distractor losingReason 1 → 2–3 sentences. ~10–15% cost increase per Q. |
-| `v5.6-batch5-pending-validation` | **v5.6 cost-control + chunk knobs.** Removes the fixed 15-Q-per-PDF cap. UI exposes chunk size + Q-per-chunk + live cost preview. Stem thinking 4096 → 1024, Critic 4096 → 2048, Distractors back on Flash with thinking 2048 (Lever 3 retry). Per-Q cost ~$0.21 → ~$0.14 (-33%). |
+| `v5.6-batch5-pending-validation` | v5.6 cost-control + chunk knobs. Removes the fixed 15-Q-per-PDF cap. UI exposes chunk size + Q-per-chunk + live cost preview. Stem thinking 4096 → 1024, Critic 4096 → 2048, Distractors back on Flash with thinking 2048 (Lever 3 retry). Per-Q cost ~$0.21 → ~$0.14 (-33%). |
+| `v5.6.1-batch5-pending-validation` | **v5.6.1 bugfix: retrievalTag / reviewPearl / educationalObjective were all the same string.** Pre-v5.6.1 the OME adapter routed all three through `kernel.correctAnswerConcept` because the kernel didn't emit distinct fields. v5.6.1 adds them to the kernel JSON spec and reads them directly. Bug present since v5.3; user-caught during v5.6 inspection. |
 
 ## v5.3 — OME organic generator port
 
@@ -967,3 +968,94 @@ Mode enabled on the rebuilt .app and confirm:
 On ✅: promote `v5.3 / v5.3.1 / v5.4 / v5.5 / v5.6` all to `-stable`
 and push the tags. On ❌: capture which lever regressed (the env
 vars make this a single-toggle bisection) and re-ship.
+
+## v5.6.1 — bugfix: 3 study-field collapse
+
+Bug present since v5.3, surfaced by user during v5.6 inspection.
+
+### What was wrong
+
+`retrievalTag`, `reviewPearl`, and `educationalObjective` ended up
+as the SAME string in every generated question. Three fields meant
+to serve three different purposes (search tag / high-yield rule /
+reasoning task) all collapsed to whatever was in
+`kernel.correctAnswerConcept`.
+
+Root cause: the v5.3 OME adapter `decorate_v5_questions_for_ome()`
+did a fallback chain through `educationalObjective` →
+`testedConcept` → `correctAnswerConcept` to populate the OME-only
+`retrievalTag` and `reviewPearl` fields. But `v5_pipeline.assemble_question()`
+itself set ALL THREE of `testedConcept`, `diagnosisOrTarget`, and
+`educationalObjective` to `kernel.get("correctAnswerConcept", "")`.
+So the fallback chain pulled the same string for all three.
+
+### The fix
+
+1. Added explicit `retrievalTag`, `reviewPearl`, and
+   `educationalObjective` fields to the kernel JSON output spec in
+   `prompts/v5_2_kernel_prompt.txt` with concrete examples and
+   length/style requirements.
+2. Updated `v5_pipeline.assemble_question()` to read each field
+   directly from the kernel output (`kernel.get("retrievalTag")`,
+   etc.) with a fallback to `correctAnswerConcept` only when the
+   kernel field is missing (preserves compatibility with cached
+   pre-v5.6.1 kernels).
+3. Updated `ome_v5_adapter.decorate_v5_questions_for_ome()` to no
+   longer override the kernel-provided values — the function now
+   only fills in the OME-only `id` + `sourceQuestionNumber` and
+   leaves the three study fields untouched.
+
+### Smoke test (test_ome_mood_disorders.pdf, seed 7, 2 Qs)
+
+Cost ~$0.26 (down from a normal 4-Q smoke since the small fixture
+only needs 2 Qs at chunk-size=1000 + Q-per-chunk=1).
+
+Sample Q1 output:
+```
+retrievalTag:         "MDD first-line treatment with bupropion for
+                       fatigue and side effect concerns"
+reviewPearl:          "Select bupropion for MDD in patients with
+                       prominent fatigue or concerns about weight gain
+                       and sexual dysfunction, but avoid it in patients
+                       with seizure or eating disorders."
+educationalObjective: "Select the most appropriate initial
+                       pharmacotherapy for major depressive disorder
+                       based on patient-specific symptoms and side
+                       effect concerns."
+testedConcept:        "Initiate bupropion"
+```
+
+Four distinct fields, each serving its proper purpose: a search tag
+for re-finding the question, a high-yield rule for highlighting, the
+reasoning task tested, and the bare correct answer.
+
+Audit verifies the rest of the v5.2 quality gates remain intact
+(2/2 critic accept, 4 trap categories per Q, 100% WEAK_DEFENSE,
+length parity 0/2 fail — actually better than v5.6 on this fixture).
+
+### Files changed
+
+```
+tools/lecture-slide-question-generator/
+├── v5_pipeline.py                              # MODIFIED — assemble_question reads
+│                                                #            3 fields directly from kernel
+└── prompts/
+    └── v5_2_kernel_prompt.txt                  # MODIFIED — added retrievalTag,
+                                                 #            reviewPearl, educationalObjective
+                                                 #            specs with examples
+tools/ome-pdf-question-generator/
+└── ome_v5_adapter.py                           # MODIFIED — decorate function stops
+                                                 #            overriding kernel-provided
+                                                 #            values; fallback only fires
+                                                 #            for pre-v5.6.1 kernels
+```
+
+### User verification
+
+Same protocol as v5.3 / v5.4 / v5.5 / v5.6. Re-run OME generation
+through BIC with Advanced Mode on the rebuilt .app, confirm the
+three fields are now distinct and each carries its proper content.
+
+On ✅: promote all six pending-validation tags (`v5.3`, `v5.3.1`,
+`v5.4`, `v5.5`, `v5.6`, `v5.6.1`) to `-stable` together and push
+the tags.

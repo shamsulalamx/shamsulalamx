@@ -580,18 +580,31 @@ def assemble_question(
             continue
         if text in distractor_lookup:
             distractor_label_map[labels[i]] = distractor_lookup[text]
+    # v5.6.1: read the three retrieval/study fields directly from the
+    # kernel. Pre-v5.6.1 these all defaulted to correctAnswerConcept,
+    # which made retrievalTag / reviewPearl / educationalObjective
+    # identical in every question. The kernel prompt now spec'd them
+    # as three distinct fields with explicit examples; this strip()-
+    # and-fallback chain preserves backward compat with cached kernels
+    # that don't have the new fields yet.
+    kernel_concept = (kernel.get("correctAnswerConcept") or "").strip()
+    kernel_edu = (kernel.get("educationalObjective") or "").strip()
+    kernel_tag = (kernel.get("retrievalTag") or "").strip()
+    kernel_pearl = (kernel.get("reviewPearl") or "").strip()
     return {
         "questionNumber": question_number,
         "slideId": allocation.get("slideId", ""),
         "questionKind": "clinical_vignette",
-        "testedConcept": kernel.get("correctAnswerConcept", ""),
-        "diagnosisOrTarget": kernel.get("correctAnswerConcept", ""),
+        "testedConcept": kernel_concept,
+        "diagnosisOrTarget": kernel_concept,
         "stem": stem,
         "hasEmbeddedFigure": bool(image_route and image_route.get("attach")),
         "figureRefs": [],
         "answerChoices": answer_choices,
         "correctAnswer": correct_label,
-        "educationalObjective": kernel.get("correctAnswerConcept", ""),
+        "educationalObjective": kernel_edu or kernel_concept,
+        "retrievalTag": kernel_tag or kernel_concept,
+        "reviewPearl": kernel_pearl,
         "explanationSections": _build_explanation_sections(
             kernel=kernel,
             distractor_label_map=distractor_label_map,

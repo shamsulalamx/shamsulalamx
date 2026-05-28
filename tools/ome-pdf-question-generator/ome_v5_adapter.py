@@ -279,14 +279,16 @@ def decorate_v5_questions_for_ome(v5_questions: List[Dict[str, Any]]) -> List[Di
     schema: `questionNumber`, `slideId`, `stem`, `answerChoices`,
     `correctAnswer`, `explanationSections`, `_v5_2`, ... The OME
     legacy schema also expects `id`, `sourceQuestionNumber`,
-    `retrievalTag`, `reviewPearl`, `clinicalPearl`. Without them,
-    the BIC importer would reject the questions on the legacy
-    sourceFormat path.
+    `retrievalTag`, `reviewPearl`, `clinicalPearl`.
 
-    We synthesize retrievalTag + reviewPearl from `_v5_2` /
-    `testedConcept` / `educationalObjective` so the validation gate
-    that requires both to be non-empty passes. These are derived from
-    the kernel's own correctAnswerConcept — they aren't fabricated.
+    v5.6.1: `retrievalTag` / `reviewPearl` / `educationalObjective`
+    are now produced as DISTINCT fields by the kernel and assembled
+    by `assemble_question`. This function just passes them through;
+    the fallback below only fires when the kernel output predates
+    v5.6.1 (e.g., re-assembling a cached old kernel). Pre-v5.6.1
+    this function was the bug site — it routed all three fields
+    through the same `correctAnswerConcept` value, making them
+    identical strings in the output.
     """
     out: List[Dict[str, Any]] = []
     for q in v5_questions:
@@ -294,12 +296,15 @@ def decorate_v5_questions_for_ome(v5_questions: List[Dict[str, Any]]) -> List[Di
         n = int(decorated.get("questionNumber") or (len(out) + 1))
         decorated["id"] = f"q{n:03d}"
         decorated["sourceQuestionNumber"] = n
-        meta = decorated.get("_v5_2") or {}
-        edu = decorated.get("educationalObjective") or meta.get("discriminatingClue") or decorated.get("testedConcept") or ""
-        concept = decorated.get("testedConcept") or edu
-        if "retrievalTag" not in decorated or not (decorated.get("retrievalTag") or "").strip():
+        concept = (decorated.get("testedConcept") or "").strip()
+        edu = (decorated.get("educationalObjective") or "").strip()
+        # Fallback chain only for pre-v5.6.1 questions where the kernel
+        # didn't emit retrievalTag / reviewPearl. New kernels populate
+        # these fields directly in assemble_question; this leaves
+        # whatever the kernel produced untouched.
+        if not (decorated.get("retrievalTag") or "").strip():
             decorated["retrievalTag"] = (concept or "OME organic v5.2")[:120]
-        if "reviewPearl" not in decorated or not (decorated.get("reviewPearl") or "").strip():
+        if not (decorated.get("reviewPearl") or "").strip():
             decorated["reviewPearl"] = (edu or concept or "")[:300]
         decorated.setdefault("clinicalPearl", None)
         out.append(decorated)
