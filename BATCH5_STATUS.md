@@ -1,7 +1,9 @@
 # BATCH 5 — Organic generator quality overhaul (v5)
 
 Branch: `phase12-vertex-migration`
-Tag: `v5.6.1-batch5-pending-validation` (latest); see version history below.
+Tag: `v5.6.1-batch5-stable` (latest); see version history below. User
+verified the full v5.3 → v5.6.1 stack on the rebuilt .app and
+explicitly approved promotion of all six tags to `-stable`.
 
 ## Scope (very important): organic-generation only
 
@@ -39,12 +41,12 @@ shipped in `v4.85-batch4-stable`.
 | `v5.0.1-batch5-stable` | Doc clarification: legacy NBME/AMBOSS verbatim paths untouched |
 | `v5.2-batch5-stable` | Five distractor-quality upgrades (kernel-first, trap categories, adversarial verify, per-distractor scoring, length parity) |
 | `v5.2.1-batch5-stable` | Docs-only handoff ship (BATCH5_OME_PORT_HANDOFF.md + v5.3 plan) |
-| `v5.3-batch5-pending-validation` | OME organic generator port to v5.2. Adds `--v5` to both OME runners; legacy single-call generator stays as fallback. |
-| `v5.3.1-batch5-pending-validation` | Advanced Mode UI toggle in BIC modal — surfaces v5.3's `--v5` flag to the user-facing import form. |
-| `v5.4-batch5-pending-validation` | v5.4 cost/latency optimization: 3 stacked levers (Lever 3 rolled back). Parallelism + thinking-budget caps + prompt-prefix caching. Smoke: 3 Qs in 117 s (was 376 s = 3.2× faster), all v5.2 quality gates intact. |
-| `v5.5-batch5-pending-validation` | v5.5 explanation depth: longer + mechanism-grounded. Kernel rationale 1–2 → 3–5 sentences. Distractor losingReason 1 → 2–3 sentences. ~10–15% cost increase per Q. |
-| `v5.6-batch5-pending-validation` | v5.6 cost-control + chunk knobs. Removes the fixed 15-Q-per-PDF cap. UI exposes chunk size + Q-per-chunk + live cost preview. Stem thinking 4096 → 1024, Critic 4096 → 2048, Distractors back on Flash with thinking 2048 (Lever 3 retry). Per-Q cost ~$0.21 → ~$0.14 (-33%). |
-| `v5.6.1-batch5-pending-validation` | **v5.6.1 bugfix: retrievalTag / reviewPearl / educationalObjective were all the same string.** Pre-v5.6.1 the OME adapter routed all three through `kernel.correctAnswerConcept` because the kernel didn't emit distinct fields. v5.6.1 adds them to the kernel JSON spec and reads them directly. Bug present since v5.3; user-caught during v5.6 inspection. |
+| `v5.3-batch5-stable` | OME organic generator port to v5.2. Adds `--v5` to both OME runners; legacy single-call generator stays as fallback. |
+| `v5.3.1-batch5-stable` | Advanced Mode UI toggle in BIC modal — surfaces v5.3's `--v5` flag to the user-facing import form. |
+| `v5.4-batch5-stable` | v5.4 cost/latency optimization: 3 stacked levers (Lever 3 rolled back). Parallelism + thinking-budget caps + prompt-prefix caching. Smoke: 3 Qs in 117 s (was 376 s = 3.2× faster), all v5.2 quality gates intact. |
+| `v5.5-batch5-stable` | v5.5 explanation depth: longer + mechanism-grounded. Kernel rationale 1–2 → 3–5 sentences. Distractor losingReason 1 → 2–3 sentences. ~10–15% cost increase per Q. |
+| `v5.6-batch5-stable` | v5.6 cost-control + chunk knobs. Removes the fixed 15-Q-per-PDF cap. UI exposes chunk size + Q-per-chunk + live cost preview. Stem thinking 4096 → 1024, Critic 4096 → 2048, Distractors back on Flash with thinking 2048 (Lever 3 retry). Per-Q cost ~$0.21 → ~$0.14 (-33%). |
+| `v5.6.1-batch5-stable` | **v5.6.1 bugfix: retrievalTag / reviewPearl / educationalObjective were all the same string.** Pre-v5.6.1 the OME adapter routed all three through `kernel.correctAnswerConcept` because the kernel didn't emit distinct fields. v5.6.1 adds them to the kernel JSON spec and reads them directly. Bug present since v5.3; user-caught during v5.6 inspection. **User verified the full v5.3 → v5.6.1 stack on the rebuilt .app and promoted all six to `-stable`.** |
 
 ## v5.3 — OME organic generator port
 
