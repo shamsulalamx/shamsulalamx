@@ -1,7 +1,7 @@
 # BATCH 5 — Organic generator quality overhaul (v5)
 
 Branch: `phase12-vertex-migration`
-Tag: `v5.4-batch5-pending-validation` (latest); see version history below.
+Tag: `v5.5-batch5-pending-validation` (latest); see version history below.
 
 ## Scope (very important): organic-generation only
 
@@ -41,7 +41,8 @@ shipped in `v4.85-batch4-stable`.
 | `v5.2.1-batch5-stable` | Docs-only handoff ship (BATCH5_OME_PORT_HANDOFF.md + v5.3 plan) |
 | `v5.3-batch5-pending-validation` | OME organic generator port to v5.2. Adds `--v5` to both OME runners; legacy single-call generator stays as fallback. |
 | `v5.3.1-batch5-pending-validation` | Advanced Mode UI toggle in BIC modal — surfaces v5.3's `--v5` flag to the user-facing import form. |
-| `v5.4-batch5-pending-validation` | **v5.4 cost/latency optimization: 3 stacked levers (Lever 3 rolled back after smoke regression).** Parallelism + thinking-budget caps + prompt-prefix caching. Smoke: 3 Qs in 117 s (was 376 s = 3.2× faster), all v5.2 quality gates intact. |
+| `v5.4-batch5-pending-validation` | v5.4 cost/latency optimization: 3 stacked levers (Lever 3 rolled back). Parallelism + thinking-budget caps + prompt-prefix caching. Smoke: 3 Qs in 117 s (was 376 s = 3.2× faster), all v5.2 quality gates intact. |
+| `v5.5-batch5-pending-validation` | **v5.5 explanation depth: longer + mechanism-grounded.** Kernel rationale 1–2 → 3–5 sentences (mechanism + discriminating clue + how clue resolves). Distractor losingReason 1 sentence → 2–3 sentences (mechanism + specific stem clue + trap mechanism). ~10–15% cost increase per Q. |
 
 ## v5.3 — OME organic generator port
 
@@ -732,3 +733,87 @@ Mode checked on the rebuilt .app, confirm:
 On ✅: promote `v5.3 / v5.3.1 / v5.4` to `-stable` and push tags.
 On ❌: capture console output, isolate which lever regressed (via the
 `V5_*` env vars), re-ship.
+
+## v5.5 — longer + mechanism-grounded explanations
+
+Pure prompt-tuning ship. Two field-spec edits — no code changes, no
+new stages, no model/wiring tweaks. v5.4 explanations were
+structurally excellent but intentionally short (single-sentence
+"why it loses" lines). v5.5 expands them so the generated content
+teaches the mechanism alongside the stem-to-answer trap pattern.
+
+### What changed
+
+`v5_2_kernel_prompt.txt` — rationale field spec
+  Before: "1-2 sentences: why this clue resolves to this answer"
+  After:  "3-5 sentences that (1) name the mechanism or
+          pathophysiology behind the correct answer, (2) restate
+          the specific discriminating clue from the stem, and
+          (3) explain how that clue mechanistically resolves to
+          this answer."
+
+`v5_2_distractors_prompt.txt` — losingReason field spec
+  Before: "one specific sentence quoting the discriminating clue
+          in the stem and the mechanism"
+  After:  "2-3 full sentences: name the mechanism / typical
+          indication this distractor implies + cite the specific
+          stem clue + close with the trap mechanism in plain
+          English"
+
+### Smoke results (test_ome_mood_disorders.pdf, seed 7, 3 Qs)
+
+| Metric | v5.4 | v5.5 |
+|---|---|---|
+| Wall time | 117 s | 134 s (+15%) |
+| Per-Q cost (est.) | ~$0.18 | ~$0.21 (+17%) |
+| Critic verdict | 3/3 accept | **3/3 accept** |
+| Trap categories per Q | 4/4 | **4/4** |
+| Adversarial WEAK_DEFENSE | 100% | **100%** |
+| Stem avg length | 1076 | 1024 |
+| Correct-answer explanation length | ~400 chars | **703 chars** |
+| Per-distractor explanation length | ~150 chars | **~456 chars** |
+| App-ready JSON size (3 Qs) | 21 KB | **24 KB** |
+
+### Sample (Q1 correct-answer explanation)
+
+> "The patient's current presentation with low mood, anhedonia, and
+> other SIGECAPS symptoms meets the criteria for a major depressive
+> episode. However, the collateral history reveals a past hypomanic
+> episode, characterized by elevated energy and activity for several
+> days without causing marked functional impairment. This combination
+> establishes a diagnosis of Bipolar II disorder, not unipolar major
+> depression. Initiating antidepressant monotherapy (e.g., an SSRI)
+> in bipolar disorder is contraindicated due to the risk of
+> precipitating a manic episode. The appropriate management is to
+> start a mood stabilizer. Lamotrigine is an effective choice for
+> the treatment and maintenance of bipolar depression."
+
+Each distractor explanation similarly names the drug's mechanism /
+indication, cites the specific stem clue that rules it out, and
+explains the trap pattern in plain English.
+
+### Files changed
+
+```
+tools/lecture-slide-question-generator/prompts/
+├── v5_2_kernel_prompt.txt        # MODIFIED — rationale 1-2 → 3-5 sentences
+└── v5_2_distractors_prompt.txt   # MODIFIED — losingReason 1 → 2-3 sentences
+```
+
+That's it. Zero code changes. Rollback = revert this commit.
+
+### User verification before promoting v5.5 to `-stable`
+
+Same protocol as v5.3/v5.4 — re-run an OME generation through BIC
+with Advanced Mode enabled on the rebuilt .app, confirm:
+
+1. Explanations are visibly longer and contain mechanism context
+   (compare a question explanation against what the BIC produced
+   on a v5.4 run, if you have one)
+2. Every v5.2 quality gate still passes (critic verdict accept,
+   4 trap categories per Q, all distractors with WEAK_DEFENSE)
+3. Cost line shows roughly +11–17% (the projected bump), not more
+
+On ✅: promote `v5.3 / v5.3.1 / v5.4 / v5.5` to `-stable` and push
+the tags. On ❌: capture the regression, the rollback is a one-line
+revert of this commit.

@@ -10,11 +10,20 @@ HARD CONSTRAINTS
    answer-choice phrasing for the kernel's distractor `item`.
 2. Each output distractor MUST preserve the kernel's `trapCategory`.
 3. Each output distractor MUST have a `losingReason` that:
+     - Is 2-3 full sentences (not a fragment) — this becomes the
+       test-taker's "Incorrect Answer Explanation" line for this
+       choice, so write it as a teaching explanation, not a one-liner.
+     - Names the mechanism / pathophysiology / typical indication
+       this distractor implies ("Lamotrigine acts as a use-dependent
+       sodium-channel blocker and is dosed by slow titration to
+       avoid Stevens-Johnson, making it appropriate for maintenance
+       rather than acute therapy.").
      - Cites the specific clue from the stem that rules it out
-       (the kernel's ruledOutBy is the seed; you may quote the actual
-       stem text now that you can see it).
-     - Names the trap mechanism in plain English ("...would be
-       appropriate for X but the stem's Y rules it out").
+       (the kernel's ruledOutBy is the seed; you should quote the
+       actual stem text now that you can see it).
+     - Closes by stating the trap mechanism in plain English ("...so
+       while the right drug class, the timing in the stem makes
+       this the wrong choice for an acute presentation").
 4. Length parity: all 4 distractor texts AND the correctAnswerText
    should be within ~30% of the median length of the set. Adjust
    distractor texts to balance length without changing meaning.

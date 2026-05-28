@@ -84,7 +84,7 @@ OUTPUT (strict JSON, no markdown fences, no prose)
 {
   "correctAnswerConcept": "<semantic concept e.g. 'inferior wall MI from right coronary artery occlusion' or 'IV ceftriaxone empirically'>",
   "discriminatingClueInStem": "<the SPECIFIC clinical detail (~10-30 words) the stem must contain — this is what resolves the question, e.g. 'ST elevations in leads II, III, and aVF' or 'right arm BP 152/94, right leg BP 108/70'>",
-  "rationale": "<1-2 sentences: why this clue resolves to this answer>",
+  "rationale": "<3-5 sentences that (1) name the mechanism or pathophysiology behind the correct answer, (2) restate the specific discriminating clue from the stem, and (3) explain how that clue mechanistically resolves to this answer. This becomes the test-taker's 'Correct Answer Explanation' — write it as you would teach a Step 2 CK student why THIS stem maps to THIS answer.>",
   "imageOpportunity": "<ECG | chest x-ray | CT | MRI | histology | derm photo | peripheral smear | fundoscopy | ultrasound | gross specimen | none>",
   "distractors": [
     {
