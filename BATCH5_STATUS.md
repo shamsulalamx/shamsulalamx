@@ -37,7 +37,28 @@ shipped in `v4.85-batch4-stable`.
 |---|---|
 | `v5.0-batch5-stable` | Initial v5 multi-stage organic generator |
 | `v5.0.1-batch5-stable` | Doc clarification: legacy NBME/AMBOSS verbatim paths untouched |
-| **`v5.2-batch5-stable`** | Five distractor-quality upgrades (kernel-first, trap categories, adversarial verify, per-distractor scoring, length parity) |
+| `v5.2-batch5-stable` | Five distractor-quality upgrades (kernel-first, trap categories, adversarial verify, per-distractor scoring, length parity) |
+| **NEXT: `v5.3-batch5-stable`** | **OME organic generator port to v5.2.** See `BATCH5_OME_PORT_HANDOFF.md` for the self-contained handoff. |
+
+## v5.3 plan — OME-only port (pending)
+
+User confirmed scope: port the v5.2 multi-stage pipeline (kernel-first
+design + 4 trap categories + adversarial verification + per-distractor
+scoring + length parity) to the OME-PDF organic generator ONLY for now.
+The other organic generators (uWorld notes, Mehlman, Anki, Divine audio,
+Images-tables) stay on the legacy single-call generator until a later
+ship.
+
+Scope explicitly excluded from v5.3:
+- NBME PDF verbatim extraction (unchanged since v4.85)
+- AMBOSS verbatim extraction (the lecture-slide `--amboss-profile` path)
+- All other organic generators except OME
+
+Implementation handoff lives in `BATCH5_OME_PORT_HANDOFF.md`. The new
+session should read CLAUDE.md, then BATCH5_STATUS.md, then the handoff,
+then start.
+
+Approximate effort: 3-4 hours focused work, ~$0.50 in API smoke tests.
 
 ## v5.2 — what changed for distractor quality
 
