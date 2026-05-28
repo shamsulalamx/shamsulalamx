@@ -2724,15 +2724,40 @@ body.quiz-fullscreen-mode #modal-lab  { z-index: 10002 !important; }
       </div>
     </div>
     <div id="bic-selected-files" class="notes-import-summary">No files selected.</div>
-    <!-- v5.3: Advanced Mode toggle. Visibility + label come from the registry's
-         supportsAdvancedMode / advancedModeLabel per source. Hidden when the
-         current source doesn't declare those fields. Today only OME PDF does
-         (engages --v5 on ome_profile_runner.py downstream). -->
+    <!-- v5.3 + v5.6: Advanced Mode toggle + per-job knobs. Visibility comes
+         from the registry's supportsAdvancedMode per source. Hidden when the
+         current source doesn't declare it. Today only OME PDF does (engages
+         --v5 on ome_profile_runner.py downstream). v5.6 adds chunk-size +
+         questions-per-chunk + a live cost preview inside the panel. -->
     <div id="bic-advanced-mode-row" class="form-group" style="display:none;margin:8px 0;padding:8px 10px;background:#f4f7fb;border:1px solid #d9e2ec;border-radius:4px;">
       <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;margin:0;font-size:12px;color:#334155;">
-        <input type="checkbox" id="bic-advanced-mode" style="margin-top:2px;flex-shrink:0;">
+        <input type="checkbox" id="bic-advanced-mode" onchange="App.refreshAdvancedModePanel()" style="margin-top:2px;flex-shrink:0;">
         <span id="bic-advanced-mode-label">Advanced Mode</span>
       </label>
+      <div id="bic-advanced-mode-panel" style="display:none;margin-top:8px;padding-top:8px;border-top:1px dashed #d9e2ec;">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+          <div style="flex:1 1 140px;min-width:140px;">
+            <label style="display:block;font-size:11px;color:#5a6a7a;margin-bottom:2px;">Chunk size (chars)</label>
+            <select id="bic-chunk-size" class="form-input" onchange="App.refreshAdvancedCostPreview()" style="padding:4px 6px;font-size:12px;">
+              <option value="500">500 — paragraph-granular</option>
+              <option value="1000">1000 — half-page</option>
+              <option value="1500" selected>1500 — page-ish (default)</option>
+              <option value="3000">3000 — broad context</option>
+            </select>
+          </div>
+          <div style="flex:1 1 140px;min-width:140px;">
+            <label style="display:block;font-size:11px;color:#5a6a7a;margin-bottom:2px;">Questions per chunk</label>
+            <select id="bic-questions-per-chunk" class="form-input" onchange="App.refreshAdvancedCostPreview()" style="padding:4px 6px;font-size:12px;">
+              <option value="1">1</option>
+              <option value="2" selected>2 (default)</option>
+              <option value="3">3</option>
+            </select>
+          </div>
+        </div>
+        <div id="bic-advanced-cost-preview" style="margin-top:8px;padding:6px 8px;background:#fff;border:1px solid #e2e8f0;border-radius:3px;font-size:11px;color:#334155;line-height:1.5;">
+          Select file(s) to see a cost &amp; question-count estimate.
+        </div>
+      </div>
     </div>
     <div id="bic-run-status" class="notes-import-summary">No job run yet.</div>
     <div id="bic-create-status" class="test-create-status" aria-live="polite"></div>
@@ -24356,6 +24381,11 @@ const App = (() => {
 
   function renderBatchImportSelectedFiles() {
     const target = document.getElementById('bic-selected-files');
+    // v5.6: keep the Advanced Mode cost preview in sync with whatever
+    // files are currently selected. Called from every code path that
+    // mutates _batchImportState.files (initial open, source change,
+    // file picker).
+    refreshAdvancedCostPreview();
     if (!target) return;
     const files = Array.isArray(_batchImportState?.files) ? _batchImportState.files : [];
     if (!files.length) {
@@ -25471,6 +25501,82 @@ Errors: ${escapeHTML(errors)}</div>
       checkbox.checked = false;
       if (labelSpan) labelSpan.textContent = 'Advanced Mode';
     }
+    refreshAdvancedModePanel();
+  }
+
+  // v5.6: when Advanced Mode is checked, expose the chunk-size +
+  // questions-per-chunk knobs and the cost preview. Hide the knobs
+  // (but keep the checkbox) when Advanced Mode is unchecked so the
+  // user understands the toggle is what unlocks the controls.
+  function refreshAdvancedModePanel() {
+    const panel = document.getElementById('bic-advanced-mode-panel');
+    const checkbox = document.getElementById('bic-advanced-mode');
+    if (!panel || !checkbox) return;
+    panel.style.display = checkbox.checked ? '' : 'none';
+    if (checkbox.checked) refreshAdvancedCostPreview();
+  }
+
+  // v5.6: compute and render the cost preview from current file
+  // selection + chunk-size + questions-per-chunk. Uses a heuristic
+  // chars-per-byte ratio for the PDF size → text length mapping so
+  // the preview is instant (no client-side extraction). The real
+  // generation reads the actual text, so the preview is just a
+  // signal of expected magnitude, not a contract.
+  function refreshAdvancedCostPreview() {
+    const out = document.getElementById('bic-advanced-cost-preview');
+    if (!out) return;
+    const chunkSize = Math.max(1, parseInt(document.getElementById('bic-chunk-size')?.value || '1500', 10));
+    const qPerChunk = Math.max(1, parseInt(document.getElementById('bic-questions-per-chunk')?.value || '2', 10));
+    const files = Array.isArray(_batchImportState?.files) ? _batchImportState.files : [];
+    if (!files.length) {
+      out.innerHTML = 'Select file(s) to see a cost &amp; question-count estimate.';
+      return;
+    }
+    // We only know the file path from the picker, not its size. Ask
+    // the main process for the byte size of each (via a thin IPC).
+    // If the API isn't available, render a chunk-size-aware fallback.
+    const api = window.nbmeDesktop && window.nbmeDesktop.batchImport;
+    if (!api || !api.fileSize) {
+      out.innerHTML = `<span style="color:#5a6a7a;">Settings: ${chunkSize}-char chunks &times; ${qPerChunk} questions per chunk.</span> <span style="color:#7a8a9a;">(file-size lookup unavailable; estimate hidden)</span>`;
+      return;
+    }
+    Promise.all(files.map(p => api.fileSize(p).catch(() => 0)))
+      .then(sizes => {
+        const totalBytes = sizes.reduce((a, b) => a + (Number(b) || 0), 0);
+        // Heuristic: vector-PDF OME files average ~50 bytes per
+        // extracted character. (Tested on test_ome_mood_disorders.pdf
+        // and Test OME.pdf, May 2026: 3 KB file → 1.5 KB extracted
+        // text, 109 KB file → 3.8 KB extracted text — vector PDFs
+        // pack a lot of binary metadata per char.)
+        const estChars = Math.max(1, Math.floor(totalBytes / 50));
+        // Filter approximation: assume ~80% of chars survive the
+        // MIN_CHUNK_CHARS_FOR_V5=200 page-header filter.
+        const eligibleChars = Math.floor(estChars * 0.8);
+        const numChunks = Math.max(1, Math.floor(eligibleChars / chunkSize));
+        const totalQ = numChunks * qPerChunk;
+        // v5.6 per-Q cost estimate: ~$0.14 (Pro Kernel + 1024 Stem,
+        // Flash Distractors, Pro 2048 Critic, longer explanations).
+        const cost = totalQ * 0.14;
+        // Wall-time estimate: ~80 s/Q sequential at v5.6 budgets,
+        // ÷5 parallel workers, clamped to 120 s minimum (one chunk
+        // through the full pipeline can't go below ~2 min wall).
+        const wallSec = Math.max(120, Math.floor(totalQ * 80 / 5));
+        const wallMin = Math.ceil(wallSec / 60);
+        const fmtFiles = files.length === 1 ? '1 file' : `${files.length} files`;
+        out.innerHTML = (
+          `<div><strong>Estimate</strong> from ${fmtFiles} (~${Math.round(totalBytes/1024)} KB raw, ~${Math.round(estChars/1000)}K chars extracted):</div>` +
+          `<div style="margin-top:4px;">` +
+          `<strong>~${totalQ} questions</strong> &middot; ` +
+          `<strong>~$${cost.toFixed(2)}</strong> &middot; ` +
+          `<strong>~${wallMin} min</strong> wall (5 workers)` +
+          `</div>` +
+          `<div style="margin-top:2px;color:#7a8a9a;">${numChunks} chunks &times; ${qPerChunk} Q/chunk. ` +
+          `Actual count varies by extracted text density.</div>`
+        );
+      })
+      .catch(() => {
+        out.innerHTML = 'Estimate unavailable.';
+      });
   }
 
   async function selectBatchImportFiles() {
@@ -25535,6 +25641,14 @@ Errors: ${escapeHTML(errors)}</div>
     // each detected Q+A pair into ONE job (single quiz) and leave standalone
     // files as their own jobs. Other source types: one job per file as before.
     const advancedMode = !!document.getElementById('bic-advanced-mode')?.checked;
+    // v5.6: read the per-job knobs from the Advanced Mode panel. Always
+    // include them in the payload — the manifest sanitizer in main.js
+    // gates them on advancedMode + source.supportsAdvancedMode, so a
+    // stale value on a non-advanced source can't leak through.
+    const advancedConfig = {
+      chunkSize: Math.max(0, parseInt(document.getElementById('bic-chunk-size')?.value || '0', 10)),
+      questionsPerChunk: Math.max(0, parseInt(document.getElementById('bic-questions-per-chunk')?.value || '0', 10)),
+    };
     const buildJob = function(paths) {
       return {
         sourceType,
@@ -25543,6 +25657,7 @@ Errors: ${escapeHTML(errors)}</div>
         executePipeline: !existingOutputValidation,
         existingOutputValidation,
         advancedMode,
+        advancedConfig,
         runMode,
         destination: { folderId, testName }
       };
@@ -25899,6 +26014,11 @@ Errors: ${escapeHTML(errors)}</div>
     if (report) report.textContent = 'Waiting for completion.';
 
     const advancedMode = !!document.getElementById('bic-advanced-mode')?.checked;
+    // v5.6: same payload shape as queueBatchImportJobs above.
+    const advancedConfig = {
+      chunkSize: Math.max(0, parseInt(document.getElementById('bic-chunk-size')?.value || '0', 10)),
+      questionsPerChunk: Math.max(0, parseInt(document.getElementById('bic-questions-per-chunk')?.value || '0', 10)),
+    };
     try {
     const result = await api.launchJob({
       sourceType,
@@ -25907,6 +26027,7 @@ Errors: ${escapeHTML(errors)}</div>
       executePipeline: !existingOutputValidation,
       existingOutputValidation,
       advancedMode,
+      advancedConfig,
       destination: {
         folderId,
         testName
@@ -30965,6 +31086,8 @@ Errors: ${escapeHTML(errors)}</div>
     openBatchImportCenter,
     closeBatchImportCenter,
     onBatchImportSourceChange,
+    refreshAdvancedModePanel,
+    refreshAdvancedCostPreview,
     selectBatchImportFiles,
     queueBatchImportJobs,
     launchBatchImportJob,

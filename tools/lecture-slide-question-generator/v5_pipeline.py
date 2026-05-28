@@ -92,27 +92,27 @@ IMAGE_PROMPT_PATH = PROMPT_DIR / "v5_image_routing_prompt.txt"
 DEBUG_DIR = SCRIPT_DIR / "output_json" / "v5_debug"
 DEBUG_DIR.mkdir(parents=True, exist_ok=True)
 
-# Models — v5.4 cost/latency optimization.
+# Models — v5.6 cost optimization (Lever 3 retry).
 #
-# All Pro stages default to Pro. The "Flash on Distractors + Regen"
-# experiment (Lever 3) was tested in the v5.4 smoke and showed a
-# regression: length parity violations on 100% of produced questions
-# (vs 33% on v5.3 Pro) and the critic rejected 1 of 3 questions
-# (vs 0 of 3 on v5.3) because Flash produced distractors weak enough
-# that the adversarial pass scored them <2. Rolling Distractors+Regen
-# back to Pro is the cleaner ship — Levers 1 (parallelism), 2
-# (thinking caps), and 4 (prompt-prefix caching) showed no quality
-# regression and stay on by default.
+# v5.4's first Lever-3 attempt put Distractors+Regen on Flash with
+# thinking_budget=1024 and showed two regressions: 100% length-parity
+# fails and 1/3 critic rejections. Hypothesis: the budget was too
+# tight to let Flash do length-parity balancing while also writing
+# the polished prose. v5.6 retries with thinking_budget=2048 (see
+# DISTRACTOR_THINKING_BUDGET below) — Flash needs more reasoning
+# room when it doesn't have Pro's pre-trained NBME prose patterns
+# to fall back on. Keep KERNEL/STEM/CRITIC on Pro — those are the
+# quality stages.
 #
-# The env vars below remain so anyone who wants to opt into Flash on
-# the polishing stages can do so per-test without code changes:
-#   V5_DISTRACTOR_MODEL=gemini-2.5-flash
-#   V5_REGEN_MODEL=gemini-2.5-flash
+# All overrideable via env var so the user can roll either polishing
+# stage back to Pro without a code change:
+#   V5_DISTRACTOR_MODEL=gemini-2.5-pro
+#   V5_REGEN_MODEL=gemini-2.5-pro
 KERNEL_MODEL = os.environ.get("V5_KERNEL_MODEL", "gemini-2.5-pro").strip() or "gemini-2.5-pro"
 STEM_MODEL = os.environ.get("V5_STEM_MODEL", "gemini-2.5-pro").strip() or "gemini-2.5-pro"
-DISTRACTOR_MODEL = os.environ.get("V5_DISTRACTOR_MODEL", "gemini-2.5-pro").strip() or "gemini-2.5-pro"
+DISTRACTOR_MODEL = os.environ.get("V5_DISTRACTOR_MODEL", "gemini-2.5-flash").strip() or "gemini-2.5-flash"
 CRITIC_MODEL = os.environ.get("V5_CRITIC_MODEL", "gemini-2.5-pro").strip() or "gemini-2.5-pro"
-REGEN_MODEL = os.environ.get("V5_REGEN_MODEL", "gemini-2.5-pro").strip() or "gemini-2.5-pro"
+REGEN_MODEL = os.environ.get("V5_REGEN_MODEL", "gemini-2.5-flash").strip() or "gemini-2.5-flash"
 IMAGE_MODEL = "gemini-2.5-flash"
 
 # Thinking-budget caps per stage (v5.4 Lever 2).
@@ -141,10 +141,25 @@ def _env_thinking(name: str, default: int) -> int:
         return int(v)
     except ValueError:
         return default
+# v5.6 budgets — chosen so the trade-off across stages matches their
+# actual cognitive load:
+#   - Kernel stays dynamic (-1): designs the trap structure; needs
+#     unlimited room to keep 4 categories distinct + sharedFeatures
+#     specific. v5.0/v5.2's quality story lives in this stage.
+#   - Stem cut to 1024 (was 4096): writing task with a clear kernel
+#     spec; ~10% rejection rate acceptable since v5.6's chunk controls
+#     scale total question count.
+#   - Distractors bumped to 2048 (was 1024): paired with the Flash
+#     move above — Flash needs more headroom to nail length parity
+#     and trap-category-appropriate phrasing.
+#   - Critic cut to 2048 (was 4096): preserves the adversarial pass
+#     on simple cases. Not 1024 — that would gut multi-correct
+#     detection (would re-introduce v5.0's failure mode).
+#   - Regen stays 1024: one-distractor swap in a known category.
 KERNEL_THINKING_BUDGET = _env_thinking("V5_KERNEL_THINKING_BUDGET", -1)
-STEM_THINKING_BUDGET = _env_thinking("V5_STEM_THINKING_BUDGET", 4096)
-DISTRACTOR_THINKING_BUDGET = _env_thinking("V5_DISTRACTOR_THINKING_BUDGET", 1024)
-CRITIC_THINKING_BUDGET = _env_thinking("V5_CRITIC_THINKING_BUDGET", 4096)
+STEM_THINKING_BUDGET = _env_thinking("V5_STEM_THINKING_BUDGET", 1024)
+DISTRACTOR_THINKING_BUDGET = _env_thinking("V5_DISTRACTOR_THINKING_BUDGET", 2048)
+CRITIC_THINKING_BUDGET = _env_thinking("V5_CRITIC_THINKING_BUDGET", 2048)
 REGEN_THINKING_BUDGET = _env_thinking("V5_REGEN_THINKING_BUDGET", 1024)
 
 # Per-PDF parallelism (v5.4 Lever 1).

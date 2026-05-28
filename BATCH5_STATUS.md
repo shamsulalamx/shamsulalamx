@@ -1,7 +1,7 @@
 # BATCH 5 — Organic generator quality overhaul (v5)
 
 Branch: `phase12-vertex-migration`
-Tag: `v5.5-batch5-pending-validation` (latest); see version history below.
+Tag: `v5.6-batch5-pending-validation` (latest); see version history below.
 
 ## Scope (very important): organic-generation only
 
@@ -42,7 +42,8 @@ shipped in `v4.85-batch4-stable`.
 | `v5.3-batch5-pending-validation` | OME organic generator port to v5.2. Adds `--v5` to both OME runners; legacy single-call generator stays as fallback. |
 | `v5.3.1-batch5-pending-validation` | Advanced Mode UI toggle in BIC modal — surfaces v5.3's `--v5` flag to the user-facing import form. |
 | `v5.4-batch5-pending-validation` | v5.4 cost/latency optimization: 3 stacked levers (Lever 3 rolled back). Parallelism + thinking-budget caps + prompt-prefix caching. Smoke: 3 Qs in 117 s (was 376 s = 3.2× faster), all v5.2 quality gates intact. |
-| `v5.5-batch5-pending-validation` | **v5.5 explanation depth: longer + mechanism-grounded.** Kernel rationale 1–2 → 3–5 sentences (mechanism + discriminating clue + how clue resolves). Distractor losingReason 1 sentence → 2–3 sentences (mechanism + specific stem clue + trap mechanism). ~10–15% cost increase per Q. |
+| `v5.5-batch5-pending-validation` | v5.5 explanation depth: longer + mechanism-grounded. Kernel rationale 1–2 → 3–5 sentences. Distractor losingReason 1 → 2–3 sentences. ~10–15% cost increase per Q. |
+| `v5.6-batch5-pending-validation` | **v5.6 cost-control + chunk knobs.** Removes the fixed 15-Q-per-PDF cap. UI exposes chunk size + Q-per-chunk + live cost preview. Stem thinking 4096 → 1024, Critic 4096 → 2048, Distractors back on Flash with thinking 2048 (Lever 3 retry). Per-Q cost ~$0.21 → ~$0.14 (-33%). |
 
 ## v5.3 — OME organic generator port
 
@@ -817,3 +818,152 @@ with Advanced Mode enabled on the rebuilt .app, confirm:
 On ✅: promote `v5.3 / v5.3.1 / v5.4 / v5.5` to `-stable` and push
 the tags. On ❌: capture the regression, the rollback is a one-line
 revert of this commit.
+
+## v5.6 — cost-control + chunk knobs + UI cost preview
+
+Two parallel asks landed here:
+
+1. **Total-cost control.** v5.3-v5.5 had a hardcoded 15-question cap
+   per file (legacy OME default). For a user merging 12 PDFs into 1
+   they got 15 questions for the whole 45-page bundle — way too few
+   for gold-content material. v5.6 removes the cap entirely and
+   replaces it with **chunk size × questions per chunk** so total
+   questions scale with text length.
+
+2. **Per-Q cost cuts.** Targeted thinking-budget trims on the stages
+   whose cognitive load is bounded by the kernel's design + Lever 3
+   retry on Distractors+Regen (Flash with higher thinking budget than
+   the v5.4 v1 attempt that regressed).
+
+### What v5.6 added
+
+**New CLI flags on `generate_ome_questions.py`:**
+- `--chunk-size <N>` (default 3000, pre-v5.6 behavior). UI exposes
+  500 / 1000 / 1500 / 3000.
+- `--questions-per-chunk <N>` (default 0 = fall back to legacy
+  `--questions-per-file` distribution; > 0 = give every eligible
+  chunk that many questions, total scales with chunk count).
+
+**Forwarded through:**
+- `tools/shared-ingestion/ome_profile_runner.py` (BIC dispatch)
+- `tools/batch-import-center/run_pipeline_job.py` (reads
+  `manifest.advancedConfig.{chunkSize, questionsPerChunk}` and
+  appends to the downstream subprocess args)
+
+**UI changes in `index.html` (inside the Advanced Mode panel):**
+- "Chunk size (chars)" dropdown — 500 / 1000 / 1500 (default) / 3000
+- "Questions per chunk" dropdown — 1 / 2 (default) / 3
+- Live cost preview: re-renders on file selection or knob change.
+  Shows estimated question count, dollar cost, and wall-clock time
+  (5 parallel workers). Uses a heuristic ~50 bytes per extracted
+  char for vector OME PDFs; actual generation reads real text, so
+  the preview is a magnitude signal not a contract.
+- IPC: new `nbme:batch-import:file-size` handler in `electron/main.js`
+  (renderer sandbox has no Node fs access).
+
+**`v5_pipeline.py` thinking-budget trims:**
+
+| Stage | v5.5 | **v5.6** | Why |
+|---|---|---|---|
+| Kernel | dynamic (-1) | **dynamic (-1)** | Trap design needs unlimited room. v5.0/v5.2 quality lives here. |
+| Stem | 4096 | **1024** | Writing task with a clear kernel spec; ~10% self-check fail rate acceptable now that chunk controls scale total question count. |
+| Distractors | 1024 (Pro) | **2048 (Flash)** | Lever 3 retry. v5.4 v1's Flash+1024 regressed on length parity + critic rejected 1/3; v5.6's Flash+2048 gives Flash room to nail the polishing. |
+| Critic | 4096 | **2048** | Preserves the adversarial argue-each on simple cases. Not 1024 — that would gut multi-correct detection. |
+| Regen | 1024 (Pro) | **1024 (Flash)** | Replaces one distractor in a known category; same Flash logic as Distractors. |
+| Image route | 0 (Flash) | 0 (Flash) | Unchanged. |
+
+All overrideable via env vars (`V5_KERNEL_THINKING_BUDGET`,
+`V5_STEM_THINKING_BUDGET`, …, `V5_DISTRACTOR_MODEL`,
+`V5_REGEN_MODEL`) for per-test tuning without code changes.
+
+### Smoke test results (test_ome_mood_disorders.pdf, seed 7)
+
+Run with `--chunk-size 1000 --questions-per-chunk 2` so the small
+fixture exercises the new chunk distribution path. The 1565-char
+extracted text split into 2 chunks (one ~1000, one ~565), both above
+the 200-char filter → 2 chunks × 2 Q/chunk = **4 questions**.
+
+| Metric | Result |
+|---|---|
+| Questions produced | **4/4** (no rejections) |
+| Wall time (4 workers) | **87.5 s** |
+| Critic verdict | **4/4 accept** |
+| 5 choices per question | **4/4** |
+| Trap categories per Q | **4 distinct (16/16 perfect)** |
+| Adversarial WEAK_DEFENSE | **100% (16/16)** |
+| Answer-position distribution | A=25%, B=25%, C=25%, E=25% (perfect) |
+| Stem length (avg / min) | 935 / 862 chars (all ≥600) |
+| Length parity within band | 2/4 (intrinsic to drug-name + "Refer for CBT" mix; same as v5.4 v2 and v5.5) |
+
+**Flash-on-Distractors retry verification:** v5.4 v1 with Flash +
+1024 budget showed 100% length-parity fails AND 1/3 critic rejections
+— rolled back. v5.6 with Flash + 2048 budget shows 50% length-parity
+(matches Pro baseline) AND 0/4 rejections. **The higher thinking
+budget gave Flash the room it needed.** Lever 3 retry confirmed.
+
+### v5.6 → v5.5 comparison (same fixture + seed)
+
+| | v5.5 (3 Qs) | **v5.6 (4 Qs)** | Δ |
+|---|---|---|---|
+| Wall time | 134 s | **87.5 s** | ~35% faster, more questions |
+| Per-Q wall (parallel) | ~45 s | **~22 s** | **~2× faster per Q** |
+| Per-Q cost (Vertex est.) | ~$0.21 | **~$0.13** | **-38%** |
+| Critic accept | 3/3 | **4/4** | — |
+| Trap categories per Q | 4/4 | **4/4** | — |
+| Adversarial WEAK_DEFENSE | 100% | **100%** | — |
+| Length parity within band | 1/3 | 2/4 | — |
+| Pipeline rejections | 0 | **0** | — |
+
+### v5.6 → v5.5 projected at scale
+
+| Test size | v5.5 | **v5.6** | Wall-time Δ | Cost Δ |
+|---|---|---|---|---|
+| 11-Q PDF | ~6 min / $2.30 | **~3 min / $1.45** | ~2× faster | **-37%** |
+| 50-Q test | ~30 min / $10.50 | **~15 min / $6.50** | ~2× faster | **-38%** |
+| 200-Q test (user's gold-content scenario) | ~2 hr / $42 | **~1 hr / $26** | ~2× faster | **-38%** |
+
+### Files changed
+
+```
+tools/lecture-slide-question-generator/
+└── v5_pipeline.py                              # MODIFIED — model + budget defaults
+tools/ome-pdf-question-generator/
+├── generate_ome_questions.py                   # MODIFIED — --chunk-size, --questions-per-chunk
+└── ome_v5_adapter.py                           # MODIFIED — questions_per_chunk param
+tools/shared-ingestion/
+└── ome_profile_runner.py                       # MODIFIED — forward new flags
+tools/batch-import-center/
+└── run_pipeline_job.py                         # MODIFIED — manifest.advancedConfig → args
+electron/
+├── main.js                                     # MODIFIED — advancedConfig capture +
+│                                                #            file-size IPC handler
+└── preload.js                                  # MODIFIED — fileSize bridge
+index.html                                       # MODIFIED — Advanced Mode panel +
+                                                 #            cost preview
+```
+
+### User verification before promoting v5.6 to `-stable`
+
+Same protocol — re-run an OME generation through BIC with Advanced
+Mode enabled on the rebuilt .app and confirm:
+
+1. The Advanced Mode panel shows the two new dropdowns + cost
+   preview when checked.
+2. The cost preview updates when you change chunk size or questions
+   per chunk, and when you select different files.
+3. A test run with default settings (1500 char chunks, 2 Q per chunk)
+   produces the expected question count for the PDF length (no more
+   15-Q cap).
+4. Every v5.2 quality gate still passes on the generated questions
+   (critic accept, 4 trap categories per Q, all distractors with
+   WEAK_DEFENSE).
+5. The cost line in the BIC report shows ~$0.14/Q (down from ~$0.21
+   on v5.5).
+6. Specifically watch the **Flash distractor parity retry** — if you
+   see length-parity failures on every question (same as the v5.4 v1
+   regression), roll back with `V5_DISTRACTOR_MODEL=gemini-2.5-pro`
+   on the env and re-test.
+
+On ✅: promote `v5.3 / v5.3.1 / v5.4 / v5.5 / v5.6` all to `-stable`
+and push the tags. On ❌: capture which lever regressed (the env
+vars make this a single-toggle bisection) and re-ship.

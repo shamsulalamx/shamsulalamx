@@ -199,19 +199,26 @@ def build_v5_allocations(
     *,
     source_stem: str,
     chunks: List[Dict[str, Any]],
-    questions_per_file: int,
+    questions_per_file: int = 0,
+    questions_per_chunk: int = 0,
     min_chunk_chars: int = MIN_CHUNK_CHARS_FOR_V5,
 ) -> List[Dict[str, Any]]:
     """Convert OME chunks into v5 allocations.
 
-    `source_stem` is used for stable slideId derivation. `chunks` is
-    the output of `_uw.split_into_chunks()`. `questions_per_file` is
-    the total question budget for this PDF, distributed across the
-    chunks via `distribute_question_count`.
+    Two budget modes:
+      - questions_per_chunk > 0: each eligible chunk gets exactly that
+        many questions. This is the v5.6 mode — the chunker controls
+        coverage density by chunk size, the user controls depth per
+        chunk. Total questions scale with the PDF's text length.
+      - questions_per_chunk == 0 (legacy): the questions_per_file
+        budget is distributed across eligible chunks via floor-split.
+        Pre-v5.6 callers keep working unchanged.
 
-    Chunks shorter than `min_chunk_chars` are dropped before
-    distribution — these tend to be page headers ("## Page 1") or
-    isolated text fragments that can't ground a clinical vignette.
+    `source_stem` is used for stable slideId derivation. `chunks` is
+    the output of `_uw.split_into_chunks()`. Chunks shorter than
+    `min_chunk_chars` are dropped before distribution — these tend to
+    be page headers ("## Page 1") or isolated text fragments that
+    can't ground a clinical vignette.
     """
     if not chunks:
         return []
@@ -227,7 +234,13 @@ def build_v5_allocations(
         # the threshold — at least we don't silently return zero
         # allocations for a small PDF.
         eligible = list(enumerate(chunks))
-    per_chunk = distribute_question_count(questions_per_file, len(eligible))
+    # v5.6: when questions_per_chunk is set, give every eligible chunk
+    # that exact count. Otherwise fall back to v5.3-style distribution
+    # of questions_per_file across the eligible chunks.
+    if questions_per_chunk and questions_per_chunk > 0:
+        per_chunk = [int(questions_per_chunk)] * len(eligible)
+    else:
+        per_chunk = distribute_question_count(questions_per_file, len(eligible))
     allocations: List[Dict[str, Any]] = []
     for slot_idx, (ci, chunk) in enumerate(eligible):
         count = per_chunk[slot_idx] if slot_idx < len(per_chunk) else 0

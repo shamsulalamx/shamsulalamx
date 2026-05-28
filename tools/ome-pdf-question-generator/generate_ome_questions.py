@@ -403,11 +403,22 @@ def _process_file_v5(
     questions_per_file: int,
     v5_cfg: Dict[str, Any],
     report_data: Dict,
+    chunk_size: int = 3000,
+    questions_per_chunk: int = 0,
 ) -> Optional[Dict]:
     """v5 replacement for `_uw.process_file()`. Mirrors its filesystem
     side effects (raw_text/, chunks/, app_ready/) and report shape so
     callers downstream — including the BIC profile runner — see the
-    same artifacts they get from the legacy path."""
+    same artifacts they get from the legacy path.
+
+    v5.6: `chunk_size` controls the per-chunk character cap that the
+    upstream chunker uses (default 3000 to preserve pre-v5.6 behavior).
+    `questions_per_chunk` controls how many questions each eligible
+    chunk gets — when > 0, the total question count scales with the
+    PDF's text length (no fixed cap). When 0, falls back to the v5.3
+    behavior of distributing `questions_per_file` across all eligible
+    chunks.
+    """
     t_start = time.time()
     _uw.log(f"Processing (v5): {filepath.name}")
     stem = filepath.stem
@@ -424,27 +435,30 @@ def _process_file_v5(
     raw_path.write_text(raw_text, encoding="utf-8")
     _uw.log(f"  Raw text saved → {raw_path.name} ({len(raw_text):,} chars)")
 
-    # 2. Chunk.
-    chunks = _uw.split_into_chunks(raw_text)
+    # 2. Chunk with the requested cap. Default 3000 mirrors the legacy
+    # `_uw.split_into_chunks(text)` default so callers that don't pass
+    # chunk_size keep getting the v5.3 chunking behavior.
+    chunks = _uw.split_into_chunks(raw_text, max_chars=int(chunk_size))
     chunk_path = _uw.SEGMENT_DIR / f"{stem}_chunks.json"
     chunk_path.parent.mkdir(parents=True, exist_ok=True)
     chunk_path.write_text(
-        json.dumps({"sourceFile": filepath.name, "chunks": chunks}, indent=2),
+        json.dumps({"sourceFile": filepath.name, "chunks": chunks, "chunkSize": int(chunk_size)}, indent=2),
         encoding="utf-8",
     )
-    _uw.log(f"  {len(chunks)} chunk(s) → {chunk_path.name}")
+    _uw.log(f"  {len(chunks)} chunk(s) (max_chars={chunk_size}) → {chunk_path.name}")
 
     # 3. Build v5 allocations.
     allocations = build_v5_allocations(
         source_stem=stem.replace(" ", "_"),
         chunks=chunks,
         questions_per_file=questions_per_file,
+        questions_per_chunk=int(questions_per_chunk),
     )
     if not allocations:
         _uw.warn(f"v5: no eligible chunks for {filepath.name} after size filter; falling back to legacy.")
         raise RuntimeError("no_v5_allocations")
     total_alloc_qs = sum(int(a.get("questionCount") or 0) for a in allocations)
-    _uw.log(f"  v5 allocations: {len(allocations)} chunk(s), {total_alloc_qs} question slot(s)")
+    _uw.log(f"  v5 allocations: {len(allocations)} chunk(s), {total_alloc_qs} question slot(s) (Q/chunk={questions_per_chunk or 'auto'})")
 
     # 4. Run the v5 pipeline. The import is local so the module is
     # only loaded when v5 is actually engaged — a fresh `--v5`-less
@@ -605,6 +619,31 @@ def main() -> None:
         default=0,
         help="v5 only: RNG seed for reproducible per-Q position randomization.",
     )
+    # v5.6: chunk-size + questions-per-chunk replace the fixed
+    # --questions-per-file cap when v5 is engaged. Total questions
+    # scale with PDF length so the user controls coverage density.
+    parser.add_argument(
+        "--chunk-size",
+        type=int,
+        default=3000,
+        help=(
+            "v5 only: max characters per chunk passed to the v5 kernel "
+            "(default 3000 = pre-v5.6 behavior). Smaller chunks (500/1000/"
+            "1500) give finer per-paragraph coverage; larger chunks pack "
+            "more concept context per question."
+        ),
+    )
+    parser.add_argument(
+        "--questions-per-chunk",
+        type=int,
+        default=0,
+        help=(
+            "v5 only: when >0, every eligible chunk gets exactly this many "
+            "questions and the total scales with the number of chunks. When "
+            "0 (default), falls back to distributing --questions-per-file "
+            "across the eligible chunks (v5.3 behavior)."
+        ),
+    )
     args = parser.parse_args()
 
     if args.dry_run and args.generate:
@@ -715,7 +754,14 @@ def main() -> None:
             used_v5 = False
             if v5_cfg is not None:
                 try:
-                    _process_file_v5(filepath, args.questions_per_file, v5_cfg, report_data)
+                    _process_file_v5(
+                        filepath,
+                        args.questions_per_file,
+                        v5_cfg,
+                        report_data,
+                        chunk_size=int(args.chunk_size),
+                        questions_per_chunk=int(args.questions_per_chunk),
+                    )
                     used_v5 = True
                 except Exception as v5_exc:
                     _uw.warn(

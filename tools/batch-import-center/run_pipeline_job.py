@@ -385,6 +385,25 @@ def step_advanced_args(step: dict[str, Any]) -> list[str]:
     return []
 
 
+def manifest_advanced_config_args(manifest: dict[str, Any]) -> list[str]:
+    """v5.6: append user-configurable knobs from manifest.advancedConfig.
+    Currently OME-specific (chunkSize, questionsPerChunk) but the dispatcher
+    is generic — each downstream runner ignores flags it doesn't recognize.
+    Only emitted when the value is a positive int so unset/zero values fall
+    back to the downstream generator's own defaults."""
+    cfg = manifest.get("advancedConfig") or {}
+    if not isinstance(cfg, dict):
+        return []
+    extra: list[str] = []
+    chunk_size = cfg.get("chunkSize")
+    if isinstance(chunk_size, int) and chunk_size > 0:
+        extra.extend(["--chunk-size", str(chunk_size)])
+    q_per_chunk = cfg.get("questionsPerChunk")
+    if isinstance(q_per_chunk, int) and q_per_chunk > 0:
+        extra.extend(["--questions-per-chunk", str(q_per_chunk)])
+    return extra
+
+
 def command_steps(source: dict[str, Any], dry_run: bool) -> list[dict[str, Any]]:
     steps_key = "dryRunSteps" if dry_run else "liveSteps"
     args_key = "dryRunArgs" if dry_run else "liveArgs"
@@ -424,6 +443,7 @@ def run_command(source: dict[str, Any], manifest: dict[str, Any], input_file: Pa
     # advancedArgs, even when advancedMode=true on the manifest.
     if bool(manifest.get("advancedMode")):
         base_args.extend(step_advanced_args(step))
+        base_args.extend(manifest_advanced_config_args(manifest))
     cmd = [source.get("pythonExecutable") or "python3", *base_args]
     stage_label = str(step.get("stageLabel") or f"Pipeline step {step_index}")
     stage = normalize_stage(step)

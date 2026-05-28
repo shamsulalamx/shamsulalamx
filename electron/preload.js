@@ -21,6 +21,11 @@ const desktopInfo = Object.freeze({
     openQueueJobArtifacts: payload => ipcRenderer.invoke('nbme:batch-import:open-queue-job-artifacts', payload),
     removeQueueJob: payload => ipcRenderer.invoke('nbme:batch-import:remove-queue-job', payload),
     selectFiles: payload => ipcRenderer.invoke('nbme:batch-import:select-files', payload),
+    // v5.6: thin byte-size lookup used by the Advanced Mode cost
+    // preview in the BIC modal. Renderer doesn't have Node fs access
+    // in this sandbox so we round-trip to the main process for a
+    // quick stat.
+    fileSize: filePath => ipcRenderer.invoke('nbme:batch-import:file-size', filePath),
     enqueueJobs: payload => ipcRenderer.invoke('nbme:batch-import:enqueue-jobs', payload),
     launchJob: payload => ipcRenderer.invoke('nbme:batch-import:launch-job', payload),
     cancelJob: payload => ipcRenderer.invoke('nbme:batch-import:cancel-job', payload),

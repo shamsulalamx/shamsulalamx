@@ -171,6 +171,22 @@ def parse_args() -> argparse.Namespace:
         default=0,
         help="v5 only: RNG seed for reproducible per-Q position randomization.",
     )
+    # v5.6: forwarded to generate_ome_questions.py so the BIC UI can
+    # control per-chunk character size and per-chunk question count.
+    # Cap on total questions is removed — total = (eligible chunks) ×
+    # (questions per chunk).
+    parser.add_argument(
+        "--chunk-size",
+        type=int,
+        default=0,
+        help="v5 only: forward chunk size cap (chars) to the downstream generator. 0 = generator default.",
+    )
+    parser.add_argument(
+        "--questions-per-chunk",
+        type=int,
+        default=0,
+        help="v5 only: forward questions-per-chunk to the downstream generator. 0 = generator default.",
+    )
     return parser.parse_args()
 
 
@@ -222,7 +238,21 @@ def main() -> int:
             "--v5-difficulty-mix", str(args.v5_difficulty_mix),
             "--v5-seed", str(args.v5_seed),
         ]
-        emit("ome_v5_enabled", orderMix=args.v5_order_mix, difficultyMix=args.v5_difficulty_mix, seed=args.v5_seed)
+        # v5.6: forward chunk-size / questions-per-chunk only when
+        # the caller actually set them (non-zero). The downstream's
+        # own defaults handle the zero case.
+        if int(getattr(args, "chunk_size", 0) or 0) > 0:
+            v5_args.extend(["--chunk-size", str(int(args.chunk_size))])
+        if int(getattr(args, "questions_per_chunk", 0) or 0) > 0:
+            v5_args.extend(["--questions-per-chunk", str(int(args.questions_per_chunk))])
+        emit(
+            "ome_v5_enabled",
+            orderMix=args.v5_order_mix,
+            difficultyMix=args.v5_difficulty_mix,
+            seed=args.v5_seed,
+            chunkSize=int(getattr(args, "chunk_size", 0) or 0),
+            questionsPerChunk=int(getattr(args, "questions_per_chunk", 0) or 0),
+        )
 
     downstream_report: dict[str, Any] | None = None
     try:

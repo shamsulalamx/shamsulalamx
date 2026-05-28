@@ -801,6 +801,20 @@ function sanitizeBatchJobPayload(payload, source) {
   // engages --v5 on ome_profile_runner.py. Sources without supportsAdvancedMode
   // ignore the flag — keeps a single UI surface for forward compatibility.
   const advancedMode = payload?.advancedMode === true && !!source?.supportsAdvancedMode;
+  // v5.6: per-job knobs the user sets in the Advanced Mode UI panel. The
+  // Python runner appends --chunk-size / --questions-per-chunk to the
+  // downstream subprocess only when these are > 0 (otherwise the
+  // generator's own defaults take over). Sanitized to non-negative ints
+  // here so a junk payload can't inject arbitrary CLI args.
+  const advancedConfigInput = (payload?.advancedConfig && typeof payload.advancedConfig === 'object')
+    ? payload.advancedConfig
+    : {};
+  const advancedConfig = advancedMode
+    ? {
+        chunkSize: Math.max(0, Math.floor(Number(advancedConfigInput.chunkSize) || 0)),
+        questionsPerChunk: Math.max(0, Math.floor(Number(advancedConfigInput.questionsPerChunk) || 0)),
+      }
+    : {};
 
   if (!sourceType) throw new Error('sourceType is required.');
   if (!inputPaths.length) throw new Error('At least one input file is required.');
@@ -816,6 +830,7 @@ function sanitizeBatchJobPayload(payload, source) {
     executePipeline,
     existingOutputValidation,
     advancedMode,
+    advancedConfig,
     destination: { folderId, testName },
     outputRoot: batchJobOutputRoot(jobId),
     createdAt: new Date().toISOString()
@@ -1376,6 +1391,24 @@ ipcMain.handle('nbme:batch-import:retry-queue-job', async (_event, payload) => {
     return { ok: true, job: updated };
   } catch (err) {
     return safeError('BATCH_RETRY_FAILED', err.message || String(err));
+  }
+});
+
+// v5.6: byte-size lookup for the Advanced Mode cost preview. The
+// renderer needs file sizes (post-picker) to project the question
+// count + cost + wall time, but doesn't have Node fs access in this
+// sandbox. Returns -1 on any error (missing file, permission denied,
+// path traversal sanity-check, etc.) so the renderer can render a
+// graceful fallback rather than throw.
+ipcMain.handle('nbme:batch-import:file-size', async (_event, filePath) => {
+  try {
+    const resolved = path.resolve(String(filePath || '').trim());
+    if (!resolved) return -1;
+    const stat = await fs.promises.stat(resolved);
+    if (!stat.isFile()) return -1;
+    return stat.size;
+  } catch (err) {
+    return -1;
   }
 });
 
