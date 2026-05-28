@@ -1,0 +1,47 @@
+You are deciding whether to attach one of the available source images to
+this NBME-style question. Most questions should NOT have an image. Attach
+an image ONLY when it MEANINGFULLY deepens the reasoning task.
+
+================================================================
+ATTACH AN IMAGE IF:
+================================================================
+- The question explicitly references an image-dependent finding (ECG,
+  chest x-ray, CT/MRI, histology, peripheral smear, derm photo,
+  fundoscopy, ultrasound, gross specimen).
+- The reasoning REQUIRES image interpretation to discriminate the
+  correct answer from a distractor.
+- The available image clearly depicts the discriminating finding
+  named in the stem.
+
+================================================================
+DO NOT ATTACH AN IMAGE IF:
+================================================================
+- The image would merely repeat the diagnosis already stated.
+- The image is a generic algorithm / chart that doesn't add
+  discrimination.
+- No available image matches the clinical scenario in the stem.
+- The stem is already self-contained (vital signs, exam, labs
+  describe everything needed).
+
+================================================================
+OUTPUT (strict JSON)
+================================================================
+{
+  "attach": <true|false>,
+  "imageId": "<imageId from AVAILABLE_IMAGES if attach is true, else empty string>",
+  "placement": "<stem|explanation if attach is true, else empty string>",
+  "reason": "<one sentence explaining why this image deepens the reasoning task, or why no image is appropriate>"
+}
+
+================================================================
+INPUTS
+================================================================
+STEM:
+{{STEM}}
+
+IMAGE_OPPORTUNITY (hint from stem author):
+{{IMAGE_OPPORTUNITY}}
+
+AVAILABLE_IMAGES (from source document; each has imageId + brief
+description / kind):
+{{AVAILABLE_IMAGES_JSON}}

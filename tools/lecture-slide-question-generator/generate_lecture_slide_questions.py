@@ -1713,12 +1713,101 @@ def compact_generation_allocation(allocation: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+class _V5ConfigSlot:
+    """Tiny thread-safe holder so CLI can flip v5 on without changing the
+    full call chain. Set via _V5_CONFIG.set({...}) before invoking
+    generate_questions; cleared by .clear()."""
+    def __init__(self) -> None:
+        self._cfg: dict[str, Any] | None = None
+    def set(self, cfg: dict[str, Any]) -> None:
+        self._cfg = cfg
+    def get(self) -> dict[str, Any] | None:
+        return self._cfg
+    def clear(self) -> None:
+        self._cfg = None
+
+
+_V5_CONFIG = _V5ConfigSlot()
+
+
+def _enrich_allocations_for_v5(allocations: list[dict[str, Any]], normalized_payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Attach slideContext / allowedMedicalTerms / allowedDistractorPool to
+    each allocation so the v5 pipeline can operate without re-loading the
+    payload. Idempotent — fields already present pass through unchanged."""
+    slide_index = {s.get("slideId"): s for s in (normalized_payload.get("slides") or [])}
+    enriched: list[dict[str, Any]] = []
+    for a in allocations:
+        copy = dict(a)
+        slide = slide_index.get(copy.get("slideId"))
+        if slide:
+            facts = []
+            for field in ("clinicalFacts", "diagnosticFacts", "managementFacts",
+                           "mechanismFacts", "differentialFacts", "trapFacts",
+                           "cleanedImageFacts", "nativeTextFacts"):
+                facts.extend(slide.get(field) or [])
+            primary = slide.get("primaryConcepts") or []
+            copy.setdefault("slideContext", {
+                "slideTitle": (primary[0] if primary else ""),
+                "clinicalFacts": facts,
+                "primaryConcepts": primary,
+                "secondaryConcepts": slide.get("secondaryConcepts") or [],
+            })
+            # Derive allowed terms from the facts when caller didn't supply
+            if "allowedMedicalTerms" not in copy:
+                terms: list[str] = []
+                seen: set[str] = set()
+                for f in facts + primary:
+                    if isinstance(f, str):
+                        s = f.strip()
+                        if s and s.lower() not in seen:
+                            terms.append(s)
+                            seen.add(s.lower())
+                copy["allowedMedicalTerms"] = terms[:80]
+            if "allowedDistractorPool" not in copy:
+                copy["allowedDistractorPool"] = (
+                    copy.get("allowedMedicalTerms") or []
+                )[:60]
+            if "slideImages" not in copy:
+                copy["slideImages"] = slide.get("slideImages") or slide.get("images") or []
+        enriched.append(copy)
+    return enriched
+
+
 def generate_questions(normalized_payload: dict[str, Any], allocations: list[dict[str, Any]], memory: dict[str, Any], generate: bool) -> list[dict[str, Any]]:
     work = [a for a in allocations if int(a.get("questionCount") or 0) > 0]
     questions: list[dict[str, Any]] = []
     if not work:
         return questions
     total_questions = sum(int(a.get("questionCount") or 0) for a in work)
+    # v5 multi-stage path — opt-in via `--v5`. The v5 pipeline runs the
+    # multi-stage authoring loop (stem → distractors → critic → image
+    # routing → randomize) per question. Higher cost (~4x API calls)
+    # but produces NBME-authentic questions with balanced answer
+    # position distribution and explicit order/difficulty
+    # stratification. See tools/.../v5_pipeline.py for details.
+    v5_cfg = _V5_CONFIG.get()
+    if v5_cfg and generate:
+        try:
+            sys.path.insert(0, str(SCRIPT_DIR))
+            import v5_pipeline as v5  # type: ignore
+            log("v5 pipeline ACTIVATED — stem→distractors→critic→image→randomize")
+            v5_questions = v5.generate_v5(
+                normalized_payload=normalized_payload,
+                allocations=_enrich_allocations_for_v5(allocations, normalized_payload),
+                memory=memory,
+                target_order_mix=v5_cfg["order_mix"],
+                target_difficulty_mix=v5_cfg["difficulty_mix"],
+                seed=v5_cfg["seed"],
+            )
+            # Persist debug + generated artifacts under the conventional paths
+            gen_path = GENERATED_DIR / f"{slugify(Path(normalized_payload['sourceFile']).stem)}_generated_questions.json"
+            write_json(gen_path, {"questions": v5_questions})
+            mem_path = MEMORY_DIR / f"{slugify(Path(normalized_payload['sourceFile']).stem)}_rolling_memory.json"
+            write_json(mem_path, memory)
+            log(f"  v5 Generated -> {display_path(gen_path)}  ({len(v5_questions)} questions)")
+            return v5_questions
+        except Exception as exc:
+            warn(f"v5 pipeline failed ({exc}); falling back to legacy single-call generator")
     if generate:
         api_key = os.environ.get("GEMINI_API_KEY", "").strip()
         if not api_key:
@@ -9280,12 +9369,65 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--input-file", default="", help="Single PDF/PPTX input file.")
     parser.add_argument("--normalized-chunks", default="", help="Shared normalized chunk bundle JSON to consume instead of reopening the source PDF.")
     parser.add_argument("--limit", type=int, default=0, help="Limit PDFs processed.")
+    parser.add_argument(
+        "--v5",
+        action="store_true",
+        help=(
+            "Use the v5 multi-stage organic generator (stem → distractors → critic → "
+            "image-route → randomize) for question authoring. Higher cost (~4x API "
+            "calls per question, uses gemini-2.5-pro) but produces NBME-authentic "
+            "questions with order/difficulty stratification and balanced answer "
+            "position distribution. Required for any new generation; the legacy "
+            "single-call path is preserved only for cache repairs."
+        ),
+    )
+    parser.add_argument(
+        "--v5-order-mix",
+        default="0.25,0.45,0.30",
+        help="v5 only: comma-separated targets for first_order,second_order,third_order shares.",
+    )
+    parser.add_argument(
+        "--v5-difficulty-mix",
+        default="0.30,0.45,0.25",
+        help="v5 only: comma-separated targets for easy,medium,difficult shares.",
+    )
+    parser.add_argument(
+        "--v5-seed",
+        type=int,
+        default=0,
+        help="v5 only: RNG seed for reproducible position randomization.",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     ensure_dirs()
     args = parse_args()
+    if getattr(args, "v5", False):
+        try:
+            order_parts = [float(x) for x in args.v5_order_mix.split(",")]
+            diff_parts = [float(x) for x in args.v5_difficulty_mix.split(",")]
+            assert len(order_parts) == 3 and abs(sum(order_parts) - 1.0) < 0.02
+            assert len(diff_parts) == 3 and abs(sum(diff_parts) - 1.0) < 0.02
+            _V5_CONFIG.set({
+                "order_mix": {
+                    "first_order": order_parts[0],
+                    "second_order": order_parts[1],
+                    "third_order": order_parts[2],
+                },
+                "difficulty_mix": {
+                    "easy": diff_parts[0],
+                    "medium": diff_parts[1],
+                    "difficult": diff_parts[2],
+                },
+                "seed": args.v5_seed,
+            })
+            log("v5 pipeline configured — order_mix=%s difficulty_mix=%s seed=%d" % (
+                args.v5_order_mix, args.v5_difficulty_mix, args.v5_seed,
+            ))
+        except (ValueError, AssertionError) as exc:
+            print(f"Invalid v5 mix arguments: {exc}", file=sys.stderr)
+            return 2
     try:
         if args.validate_only:
             validate_only(Path(args.validate_only).resolve())
