@@ -137,9 +137,81 @@ def main() -> int:
     print("\n[6] Critic verdicts:")
     verdicts = Counter()
     for q in qs:
-        verdicts[(q.get("_v5") or {}).get("criticVerdict") or "unknown"] += 1
+        meta = q.get("_v5_2") or q.get("_v5") or {}
+        verdicts[meta.get("criticVerdict") or "unknown"] += 1
     for k, v in verdicts.most_common():
         print(f"  {k}: {v}")
+
+    # 7. v5.2 — trap-category coverage (4 distinct categories per question)
+    print("\n[7] Trap-category coverage (v5.2):")
+    trap_counts = Counter()
+    incomplete = 0
+    expected = {
+        "COMPETING_DIAGNOSIS",
+        "RIGHT_IDEA_WRONG_TARGET",
+        "NEXT_STEP_WRONG_PHASE",
+        "CONTRAINDICATED_OR_COMORBID_TRAP",
+    }
+    for q in qs:
+        meta = q.get("_v5_2") or {}
+        cats = [c for c in meta.get("trapCategoriesUsed") or [] if c]
+        for c in cats:
+            trap_counts[c] += 1
+        if len(set(cats)) < 4:
+            incomplete += 1
+    if not trap_counts:
+        print("  (v5.2 metadata absent — file is from v5.0 or older)")
+    else:
+        for c in sorted(expected):
+            print(f"  {c}: {trap_counts.get(c, 0)}")
+        other = {k: v for k, v in trap_counts.items() if k not in expected}
+        if other:
+            print(f"  unrecognized: {other}")
+        print(f"  questions with fewer than 4 categories: {incomplete}/{n}")
+        if incomplete > n * 0.10:
+            failures.append("trap_category_incomplete")
+            print("  ← FAIL: >10% of questions missing one or more trap categories")
+
+    # 8. v5.2 — adversarial distractor outcomes (NO_DEFENSE = weak; STRONG_DEFENSE = bad)
+    print("\n[8] Adversarial distractor outcomes (v5.2):")
+    adv = Counter()
+    for q in qs:
+        meta = q.get("_v5_2") or {}
+        for ds in meta.get("criticDistractorScores") or []:
+            adv[ds.get("adversarialOutcome") or "unknown"] += 1
+    if not adv:
+        print("  (v5.2 metadata absent)")
+    else:
+        total = sum(adv.values())
+        for k in ("WEAK_DEFENSE", "STRONG_DEFENSE", "NO_DEFENSE", "unknown"):
+            v = adv.get(k, 0)
+            pct = (v / total * 100) if total else 0
+            print(f"  {k}: {v} ({pct:.1f}%)")
+        too_strong = adv.get("STRONG_DEFENSE", 0)
+        too_weak = adv.get("NO_DEFENSE", 0)
+        if total:
+            if too_strong / total > 0.02:
+                failures.append("adversarial_too_strong")
+                print(f"  ← FAIL: >2% of distractors yield STRONG_DEFENSE (multi-correct risk)")
+            if too_weak / total > 0.10:
+                failures.append("adversarial_too_weak")
+                print(f"  ← FAIL: >10% of distractors yield NO_DEFENSE (too easy to dismiss)")
+
+    # 9. v5.2 — length parity (longest / median <= 1.30)
+    print("\n[9] Length parity (v5.2):")
+    parity_failures = 0
+    for q in qs:
+        choices = q.get("answerChoices") or []
+        if not choices:
+            continue
+        lens = [len((c.get("text") or "")) for c in choices]
+        med = statistics.median(lens)
+        if med > 0 and max(lens) / med > 1.30:
+            parity_failures += 1
+    print(f"  questions exceeding 1.30x median length: {parity_failures}/{n}")
+    if parity_failures > n * 0.05:
+        failures.append("length_parity_violation")
+        print("  ← FAIL: >5% violate length parity")
 
     print()
     if failures:

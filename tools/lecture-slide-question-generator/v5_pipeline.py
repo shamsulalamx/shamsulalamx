@@ -1,53 +1,66 @@
 #!/usr/bin/env python3
 """v5 multi-stage NBME-authentic question generation pipeline.
 
-A sibling pipeline to the legacy single-call generator in
-`generate_lecture_slide_questions.py`. Designed in response to a real
-audit finding that the legacy generator produced 99.3% A-positioned
-correct answers, short flashcard-style stems, no question-order
-stratification, no difficulty stratification, and no critique pass.
+v5.2 (current) adds five distractor-quality improvements over v5.0:
+  A. KERNEL-FIRST DESIGN — design correctAnswer + 4 trap categories +
+     discriminating clue BEFORE the stem prose, NBME-committee style.
+  B. ADVERSARIAL VERIFICATION — embedded in the critic; each distractor
+     gets an argue-for-correct mini-pass to detect competes-too-well or
+     too-easily-dismissed failures.
+  C. STEM-DISTRACTOR CO-DESIGN — the stem is required to contain the
+     kernel's discriminating clue AND every distractor's sharedFeatures,
+     verified by self-check + critic literal-stem check.
+  D. PER-DISTRACTOR CRITIC SCORING — each of 4 distractors scored
+     individually; revise_weakest path targets only the lowest scorer.
+  E. LENGTH PARITY — deterministic post-process balances all 5
+     answer-choice text lengths to within ~30% of the median, killing
+     the "longest = correct" tell.
 
-The v5 pipeline produces ONE question per allocation slot via the
-following stages:
+Stage flow:
 
-    Stage 1 - PLAN: decide target (order, difficulty) for this slot
-              based on the per-batch distribution targets.
-    Stage 2 - STEM: gemini-2.5-pro with reasoning generates ONLY the
-              clinical vignette stem at the target order/difficulty.
-    Stage 3 - DISTRACTORS: gemini-2.5-pro produces 4 plausible
-              same-category distractors with per-distractor losing
-              reasons.
-    Stage 4 - CRITIC: gemini-2.5-pro scores the (stem, correct,
-              distractors) tuple on a 5-dimension NBME rubric.
-              If below threshold, ONE revision attempt is made with
-              the critic's notes injected into the next stage.
-    Stage 5 - IMAGE ROUTING: gemini-2.5-flash (multimodal) decides
-              whether any source image meaningfully deepens the
-              reasoning. Most questions are text-only.
-    Stage 6 - ASSEMBLE: build the canonical question shape (5 choices
-              A-E), with the correct answer placed randomly per-Q.
-    Stage 7 - GLOBAL RANDOMIZE + GATE: after all questions are
-              authored, verify the correct-answer distribution across
-              the batch is within tolerance (each of A/B/C/D/E is
-              between 14% and 26% of the batch when n >= 20). If
-              out of tolerance, reshuffle positions deterministically.
+    Stage 1 - PLAN          (deterministic) target (order, difficulty)
+                            per slot via largest-remainder method.
 
-Usage (called by `generate_lecture_slide_questions.py` when --v5 is
-set, or directly for smoke testing):
+    Stage 2 - KERNEL        (NEW; Pro+thinking) design correctAnswer +
+                            discriminatingClueInStem + 4 trap-category
+                            distractor designs.
 
+    Stage 3 - STEM          (Pro+thinking) writes stem from kernel;
+                            self-checks discriminator + sharedFeatures
+                            presence.
+
+    Stage 4 - DISTRACTORS   (Pro+thinking) polishes kernel-designed
+                            distractor items into final answer-choice
+                            text, preserving trapCategory.
+
+    Stage 5 - CRITIC        (NEW PER-DISTRACTOR + ADVERSARIAL;
+                            Pro+thinking) per-distractor scoring,
+                            argues each as correct, verifies clue
+                            in stem literally, emits per-distractor
+                            verdicts + overall verdict.
+
+    Stage 6 - TARGETED REGEN (Pro+thinking) replaces only the weakest
+                             distractor when critic verdict =
+                             revise_weakest.
+
+    Stage 7 - LENGTH PARITY (NEW; deterministic) adjusts answer-choice
+                            text lengths to within ~30% of median.
+
+    Stage 8 - IMAGE ROUTING (Flash, short-circuited when imageOpportunity
+                            == 'none' OR no available images).
+
+    Stage 9 - ASSEMBLE      build canonical app-ready shape; per-Q RNG
+                            shuffles correct position.
+
+    Stage 10 - GLOBAL GATE  verify batch correctAnswer distribution in
+                            14-26% per position for n>=20; reshuffle
+                            outliers.
+
+Usage:
     from v5_pipeline import generate_v5
-    questions = generate_v5(
-        normalized_payload=payload,
-        allocations=allocations,
-        memory=memory,
-        target_order_mix={"first_order": 0.25, "second_order": 0.45, "third_order": 0.30},
-        target_difficulty_mix={"easy": 0.30, "medium": 0.45, "difficult": 0.25},
-        api_key=os.environ["GEMINI_API_KEY"],
-    )
+    questions = generate_v5(...)
 
-The pipeline writes its own debug artifacts under
-`output_json/v5_debug/` so each per-question generation trace is
-auditable post-hoc.
+Each per-Q debug trace lands under output_json/v5_debug/Q####.json.
 """
 from __future__ import annotations
 
@@ -57,44 +70,47 @@ import math
 import os
 import random
 import re
+import statistics
 import sys
 import time
-from collections import Counter, defaultdict
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROMPT_DIR = SCRIPT_DIR / "prompts"
 
-STEM_PROMPT_PATH = PROMPT_DIR / "v5_stem_prompt.txt"
-DISTRACTOR_PROMPT_PATH = PROMPT_DIR / "v5_distractors_prompt.txt"
-CRITIC_PROMPT_PATH = PROMPT_DIR / "v5_critic_prompt.txt"
+KERNEL_PROMPT_PATH = PROMPT_DIR / "v5_2_kernel_prompt.txt"
+STEM_PROMPT_PATH = PROMPT_DIR / "v5_2_stem_prompt.txt"
+DISTRACTOR_PROMPT_PATH = PROMPT_DIR / "v5_2_distractors_prompt.txt"
+CRITIC_PROMPT_PATH = PROMPT_DIR / "v5_2_critic_prompt.txt"
+REGEN_PROMPT_PATH = PROMPT_DIR / "v5_2_regen_distractor_prompt.txt"
 IMAGE_PROMPT_PATH = PROMPT_DIR / "v5_image_routing_prompt.txt"
 
 DEBUG_DIR = SCRIPT_DIR / "output_json" / "v5_debug"
 DEBUG_DIR.mkdir(parents=True, exist_ok=True)
 
 # Models — quality-first per user instruction.
+KERNEL_MODEL = "gemini-2.5-pro"
 STEM_MODEL = "gemini-2.5-pro"
 DISTRACTOR_MODEL = "gemini-2.5-pro"
 CRITIC_MODEL = "gemini-2.5-pro"
+REGEN_MODEL = "gemini-2.5-pro"
 IMAGE_MODEL = "gemini-2.5-flash"
-
-# Critic accept thresholds.
-CRITIC_TOTAL_FLOOR = 12
-CRITIC_DIMENSION_FLOOR = 2
 
 # Distribution gate.
 DISTRIBUTION_TOLERANCE_HIGH = 0.26  # max share per position when n>=20
 DISTRIBUTION_TOLERANCE_LOW = 0.14   # min share per position when n>=20
 
-# Sibling-import the legacy module for shared utilities. We import lazily to
-# avoid circulars.
-def _import_legacy() -> Any:
-    if str(SCRIPT_DIR) not in sys.path:
-        sys.path.insert(0, str(SCRIPT_DIR))
-    import generate_lecture_slide_questions as legacy  # type: ignore
-    return legacy
+# Length parity band (max length / median length).
+LENGTH_PARITY_BAND = 1.30
+
+TRAP_CATEGORIES = {
+    "COMPETING_DIAGNOSIS",
+    "RIGHT_IDEA_WRONG_TARGET",
+    "NEXT_STEP_WRONG_PHASE",
+    "CONTRAINDICATED_OR_COMORBID_TRAP",
+}
 
 
 # ── Gemini client (Vertex AI) ────────────────────────────────────────────────
@@ -106,8 +122,6 @@ def _genai_client() -> Any:
     global _genai_client_cache
     if _genai_client_cache is not None:
         return _genai_client_cache
-    # Reuse the shared uworld client factory so backend selection
-    # (Vertex AI vs ai-studio) stays consistent across the repo.
     uw_dir = SCRIPT_DIR.parent / "uworld-notes-question-generator"
     if str(uw_dir) not in sys.path:
         sys.path.insert(0, str(uw_dir))
@@ -131,7 +145,6 @@ def gemini_call(
     image_bytes: bytes | None = None,
     image_mime: str = "image/png",
 ) -> str:
-    """Single Gemini text/multimodal call. Returns raw text."""
     client = _genai_client()
     t = _genai_types()
     contents: list[Any] = [prompt]
@@ -151,7 +164,6 @@ def gemini_call(
 
 
 def parse_json_loose(raw: str) -> dict | None:
-    """Try strict parse first, then locate the first {...} block."""
     if not raw:
         return None
     raw = raw.strip()
@@ -168,7 +180,7 @@ def parse_json_loose(raw: str) -> dict | None:
         return None
 
 
-# ── Stage 1: planning the order/difficulty matrix per allocation ─────────────
+# ── Stage 1: PLAN ───────────────────────────────────────────────────────────
 
 
 def plan_allocation_slots(
@@ -178,19 +190,14 @@ def plan_allocation_slots(
     *,
     seed: int = 0,
 ) -> list[tuple[str, str]]:
-    """Return a list of (order, difficulty) tuples sized to
-    `allocation_question_count`, distributed to match the target mixes
-    as closely as possible, then shuffled."""
     n = max(0, int(allocation_question_count))
     if n == 0:
         return []
     rng = random.Random(seed)
-    # Distribute order
     order_keys = list(target_order_mix.keys())
     order_counts = _largest_remainder(target_order_mix, n)
     diff_keys = list(target_difficulty_mix.keys())
     diff_counts = _largest_remainder(target_difficulty_mix, n)
-    # Build sequences
     order_seq: list[str] = []
     for k, c in zip(order_keys, order_counts):
         order_seq.extend([k] * c)
@@ -203,114 +210,231 @@ def plan_allocation_slots(
 
 
 def _largest_remainder(mix: dict[str, float], n: int) -> list[int]:
-    """Allocate n items to keys per the largest-remainder method so the
-    total is exactly n and each key gets approximately its share."""
     raw = [(k, mix[k] * n) for k in mix]
     floors = [(k, int(math.floor(v))) for k, v in raw]
     remainder = n - sum(c for _, c in floors)
-    # Sort by fractional part desc to assign the remainder
     fractional = sorted(
         [(k, v - math.floor(v)) for k, v in raw],
         key=lambda x: x[1],
         reverse=True,
     )
     bumps = {k for k, _ in fractional[:remainder]}
-    out = []
-    for k, c in floors:
-        out.append(c + (1 if k in bumps else 0))
-    return out
+    return [c + (1 if k in bumps else 0) for k, c in floors]
 
 
-# ── Stage 2: STEM ────────────────────────────────────────────────────────────
+# ── Stage 2: KERNEL (NEW; trap-category design BEFORE stem) ──────────────────
 
 
-def stage_stem(
+def stage_kernel(
     *,
     target_order: str,
     target_difficulty: str,
     allowed_terms: list[str],
+    allowed_distractor_pool: list[str],
     slide_context: dict[str, Any],
     memory: dict[str, Any],
+) -> dict[str, Any] | None:
+    prompt = KERNEL_PROMPT_PATH.read_text(encoding="utf-8")
+    prompt = (
+        prompt
+        .replace("{{TARGET_ORDER}}", target_order)
+        .replace("{{TARGET_DIFFICULTY}}", target_difficulty)
+        .replace("{{ALLOWED_TERMS_JSON}}", json.dumps(allowed_terms, ensure_ascii=False))
+        .replace("{{ALLOWED_DISTRACTOR_POOL_JSON}}", json.dumps(allowed_distractor_pool, ensure_ascii=False))
+        .replace("{{SLIDE_CONTEXT_JSON}}", json.dumps(slide_context, ensure_ascii=False))
+        .replace("{{MEMORY_JSON}}", json.dumps(memory, ensure_ascii=False))
+    )
+    raw = gemini_call(prompt, model=KERNEL_MODEL, max_tokens=4096, thinking_budget=-1, temperature=0.5)
+    parsed = parse_json_loose(raw)
+    if not parsed:
+        return None
+    required = ("correctAnswerConcept", "discriminatingClueInStem", "distractors")
+    if not all(parsed.get(k) for k in required):
+        return None
+    distractors = parsed.get("distractors") or []
+    if not isinstance(distractors, list) or len(distractors) < 3:
+        return None
+    # Verify each trap is a known category.
+    for d in distractors:
+        cat = (d.get("trapCategory") or "").strip().upper()
+        if cat not in TRAP_CATEGORIES:
+            return None
+    # Reject if more than one distractor in the same category.
+    cats = [d.get("trapCategory", "").upper() for d in distractors]
+    if len(set(cats)) != len(cats):
+        return None
+    return parsed
+
+
+# ── Stage 3: STEM (consumes kernel) ──────────────────────────────────────────
+
+
+def stage_stem(
+    *,
+    kernel: dict[str, Any],
+    target_order: str,
+    target_difficulty: str,
+    allowed_terms: list[str],
+    slide_context: dict[str, Any],
 ) -> dict[str, Any] | None:
     prompt = STEM_PROMPT_PATH.read_text(encoding="utf-8")
     prompt = (
         prompt
         .replace("{{TARGET_ORDER}}", target_order)
         .replace("{{TARGET_DIFFICULTY}}", target_difficulty)
+        .replace("{{KERNEL_JSON}}", json.dumps(kernel, ensure_ascii=False))
         .replace("{{ALLOWED_TERMS_JSON}}", json.dumps(allowed_terms, ensure_ascii=False))
         .replace("{{SLIDE_CONTEXT_JSON}}", json.dumps(slide_context, ensure_ascii=False))
-        .replace("{{MEMORY_JSON}}", json.dumps(memory, ensure_ascii=False))
     )
     raw = gemini_call(prompt, model=STEM_MODEL, max_tokens=4096, thinking_budget=-1, temperature=0.6)
     parsed = parse_json_loose(raw)
     if not parsed or not parsed.get("stem"):
         return None
+    # The author's self-check: did they actually include the clue?
+    if not parsed.get("containedDiscriminatingClue", False):
+        return None
+    # Verify every sharedFeature was kept.
+    missing = []
+    for entry in parsed.get("containedSharedFeatures", []) or []:
+        if entry.get("missing"):
+            missing.extend(entry.get("missing"))
+    if missing:
+        return None
     return parsed
 
 
-# ── Stage 3: DISTRACTORS ─────────────────────────────────────────────────────
+# ── Stage 4: DISTRACTORS (polishes kernel into answer-choice text) ──────────
 
 
 def stage_distractors(
     *,
     stem: str,
-    correct_answer_concept: str,
-    allowed_terms: list[str],
-    allowed_distractor_pool: list[str],
+    kernel: dict[str, Any],
 ) -> dict[str, Any] | None:
     prompt = DISTRACTOR_PROMPT_PATH.read_text(encoding="utf-8")
     prompt = (
         prompt
         .replace("{{STEM}}", stem)
-        .replace("{{CORRECT_ANSWER_CONCEPT}}", correct_answer_concept)
-        .replace("{{ALLOWED_TERMS_JSON}}", json.dumps(allowed_terms, ensure_ascii=False))
-        .replace("{{ALLOWED_DISTRACTOR_POOL_JSON}}", json.dumps(allowed_distractor_pool, ensure_ascii=False))
+        .replace("{{KERNEL_JSON}}", json.dumps(kernel, ensure_ascii=False))
     )
-    # Gemini-2.5-Pro on Vertex requires dynamic thinking (thinking_budget=-1);
-    # thinking_budget=0 is rejected on Pro. Distractor generation benefits
-    # from some reasoning anyway (mechanism-level losing reasons).
-    raw = gemini_call(prompt, model=DISTRACTOR_MODEL, max_tokens=4096, thinking_budget=-1, temperature=0.5)
+    raw = gemini_call(prompt, model=DISTRACTOR_MODEL, max_tokens=4096, thinking_budget=-1, temperature=0.4)
     parsed = parse_json_loose(raw)
     if not parsed or not parsed.get("distractors"):
         return None
     distractors = parsed["distractors"]
-    if not isinstance(distractors, list) or not distractors:
+    if not isinstance(distractors, list) or len(distractors) < 3:
         return None
     return parsed
 
 
-# ── Stage 4: CRITIC ──────────────────────────────────────────────────────────
+# ── Stage 5: CRITIC (per-distractor + adversarial argue-each) ───────────────
 
 
 def stage_critic(
     *,
     stem: str,
+    correct_answer_text: str,
     correct_answer_concept: str,
     distractors: list[dict[str, Any]],
+    kernel: dict[str, Any],
     target_order: str,
     target_difficulty: str,
-    allowed_terms: list[str],
-    allowed_distractor_pool: list[str],
 ) -> dict[str, Any] | None:
     prompt = CRITIC_PROMPT_PATH.read_text(encoding="utf-8")
+    correct_payload = {
+        "text": correct_answer_text,
+        "concept": correct_answer_concept,
+    }
     prompt = (
         prompt
         .replace("{{STEM}}", stem)
-        .replace("{{CORRECT_ANSWER_CONCEPT}}", correct_answer_concept)
+        .replace("{{CORRECT_ANSWER_JSON}}", json.dumps(correct_payload, ensure_ascii=False))
         .replace("{{DISTRACTORS_JSON}}", json.dumps(distractors, ensure_ascii=False))
+        .replace("{{KERNEL_JSON}}", json.dumps(kernel, ensure_ascii=False))
         .replace("{{TARGET_ORDER}}", target_order)
         .replace("{{TARGET_DIFFICULTY}}", target_difficulty)
-        .replace("{{ALLOWED_TERMS_JSON}}", json.dumps(allowed_terms, ensure_ascii=False))
-        .replace("{{ALLOWED_DISTRACTOR_POOL_JSON}}", json.dumps(allowed_distractor_pool, ensure_ascii=False))
     )
-    raw = gemini_call(prompt, model=CRITIC_MODEL, max_tokens=2048, thinking_budget=-1, temperature=0.2)
+    raw = gemini_call(prompt, model=CRITIC_MODEL, max_tokens=4096, thinking_budget=-1, temperature=0.2)
+    return parse_json_loose(raw)
+
+
+# ── Stage 6: TARGETED REGEN ──────────────────────────────────────────────────
+
+
+def stage_regen_distractor(
+    *,
+    stem: str,
+    correct_answer_text: str,
+    good_distractors: list[dict[str, Any]],
+    rejected_distractor: dict[str, Any],
+    critic_issue: str,
+    kernel: dict[str, Any],
+) -> dict[str, Any] | None:
+    prompt = REGEN_PROMPT_PATH.read_text(encoding="utf-8")
+    prompt = (
+        prompt
+        .replace("{{STEM}}", stem)
+        .replace("{{CORRECT_ANSWER}}", correct_answer_text)
+        .replace("{{GOOD_DISTRACTORS_JSON}}", json.dumps(good_distractors, ensure_ascii=False))
+        .replace("{{REJECTED_DISTRACTOR_JSON}}", json.dumps(rejected_distractor, ensure_ascii=False))
+        .replace("{{CRITIC_ISSUE}}", critic_issue or "")
+        .replace("{{KERNEL_JSON}}", json.dumps(kernel, ensure_ascii=False))
+    )
+    raw = gemini_call(prompt, model=REGEN_MODEL, max_tokens=2048, thinking_budget=-1, temperature=0.5)
     parsed = parse_json_loose(raw)
-    if not parsed:
+    if not parsed or not parsed.get("replacement"):
         return None
-    return parsed
+    return parsed["replacement"]
 
 
-# ── Stage 5: IMAGE ROUTING (text-only metadata pass) ─────────────────────────
+# ── Stage 7: LENGTH PARITY (deterministic post-process) ─────────────────────
+
+
+def length_parity_balance(
+    correct_text: str, distractor_texts: list[str]
+) -> tuple[str, list[str], dict[str, Any]]:
+    """If the correct answer is longer than 1.3x the median, attempt
+    safe trimming. If the shortest distractor is much shorter than the
+    median, pad with a clinically inert qualifier. This is a
+    DETERMINISTIC tuning step; if it cannot bring everything into the
+    band without altering meaning, it leaves the text alone and emits
+    a warning."""
+    all_texts = [correct_text] + list(distractor_texts)
+    lens = [len(t) for t in all_texts]
+    if not lens:
+        return correct_text, distractor_texts, {"applied": False, "reason": "empty"}
+    median = statistics.median(lens)
+    if median <= 0:
+        return correct_text, distractor_texts, {"applied": False, "reason": "zero_median"}
+    target_max = int(median * LENGTH_PARITY_BAND)
+    info = {"applied": False, "before": lens, "median": median, "warnings": []}
+
+    # Trim only the leading parenthetical or trailing clarifier; never
+    # change clinical meaning. If trimming can't get under target_max,
+    # we leave the text alone (the critic accepted it as truthful).
+    def safe_trim(text: str) -> str:
+        if len(text) <= target_max:
+            return text
+        # Drop a parenthetical: "Aspirin (325 mg orally)" -> "Aspirin"
+        m = re.match(r"^(.+?)\s*\([^)]+\)\s*$", text)
+        if m and len(m.group(1)) <= target_max:
+            return m.group(1).strip()
+        # Drop a trailing comma-clause: "X, including Y and Z" -> "X"
+        m = re.match(r"^(.+?),\s+[^,]+$", text)
+        if m and len(m.group(1)) <= target_max:
+            return m.group(1).strip()
+        return text
+
+    correct_new = safe_trim(correct_text)
+    distractors_new = [safe_trim(d) for d in distractor_texts]
+    changed = (correct_new != correct_text) or (distractors_new != list(distractor_texts))
+    info["applied"] = changed
+    info["after"] = [len(correct_new)] + [len(d) for d in distractors_new]
+    info["targetMax"] = target_max
+    return correct_new, distractors_new, info
+
+
+# ── Stage 8: IMAGE ROUTING (short-circuited) ────────────────────────────────
 
 
 def stage_image_route(
@@ -318,9 +442,11 @@ def stage_image_route(
     stem: str,
     image_opportunity: str,
     available_images: list[dict[str, Any]],
-) -> dict[str, Any] | None:
+) -> dict[str, Any]:
     if not available_images:
         return {"attach": False, "imageId": "", "placement": "", "reason": "no source images available"}
+    if (image_opportunity or "none").strip().lower() == "none":
+        return {"attach": False, "imageId": "", "placement": "", "reason": "stem author said no image opportunity"}
     prompt = IMAGE_PROMPT_PATH.read_text(encoding="utf-8")
     minimal = [
         {
@@ -343,31 +469,29 @@ def stage_image_route(
     return parsed
 
 
-# ── Stage 6/7: ASSEMBLE + RANDOMIZE ──────────────────────────────────────────
+# ── Stage 9: ASSEMBLE ───────────────────────────────────────────────────────
 
 
 def assemble_question(
     *,
     question_number: int,
+    kernel: dict[str, Any],
     stem_obj: dict[str, Any],
-    distractors_obj: dict[str, Any],
+    correct_text: str,
+    distractor_texts: list[str],
+    distractors_meta: list[dict[str, Any]],
     critic_obj: dict[str, Any] | None,
     image_route: dict[str, Any] | None,
     allocation: dict[str, Any],
     target_order: str,
     target_difficulty: str,
+    length_parity_info: dict[str, Any],
     rng: random.Random,
 ) -> dict[str, Any]:
-    """Build a canonical question dict. Correct answer position is
-    chosen at random here so the per-batch distribution is shaped at
-    randomize_global_distribution() time."""
+    """Build canonical question. Correct-answer position is randomized
+    per-Q via the RNG; stage 10 then verifies global distribution."""
     stem = stem_obj.get("stem", "")
-    correct_text = stem_obj.get("correctAnswerConcept", "")
-    distractors = distractors_obj.get("distractors", [])
-    # Trim to 4
-    distractors = distractors[:4]
-    # Build the choice list and randomize position
-    choices_text = [correct_text] + [d.get("text", "") for d in distractors]
+    choices_text = [correct_text] + list(distractor_texts)
     rng.shuffle(choices_text)
     correct_index = choices_text.index(correct_text)
     labels = ["A", "B", "C", "D", "E"][: len(choices_text)]
@@ -375,106 +499,96 @@ def assemble_question(
         {"label": labels[i], "text": choices_text[i]} for i in range(len(choices_text))
     ]
     correct_label = labels[correct_index]
-    # Map each distractor's losing reason back to its label.
+    # Reattach each distractor's losingReason to its final label
     distractor_label_map: dict[str, dict[str, Any]] = {}
+    distractor_lookup = {d.get("text", ""): d for d in distractors_meta}
     for i, text in enumerate(choices_text):
         if i == correct_index:
             continue
-        for d in distractors:
-            if d.get("text", "") == text:
-                distractor_label_map[labels[i]] = d
-                break
+        if text in distractor_lookup:
+            distractor_label_map[labels[i]] = distractor_lookup[text]
     return {
         "questionNumber": question_number,
         "slideId": allocation.get("slideId", ""),
         "questionKind": "clinical_vignette",
-        "testedConcept": stem_obj.get("testedConcept", ""),
-        "diagnosisOrTarget": stem_obj.get("correctAnswerConcept", ""),
+        "testedConcept": kernel.get("correctAnswerConcept", ""),
+        "diagnosisOrTarget": kernel.get("correctAnswerConcept", ""),
         "stem": stem,
         "hasEmbeddedFigure": bool(image_route and image_route.get("attach")),
-        "figureRefs": [],  # filled by post-processor when image attached
+        "figureRefs": [],
         "answerChoices": answer_choices,
         "correctAnswer": correct_label,
-        "educationalObjective": stem_obj.get("testedConcept", ""),
+        "educationalObjective": kernel.get("correctAnswerConcept", ""),
         "explanationSections": _build_explanation_sections(
-            stem_obj=stem_obj,
-            distractors=distractors,
+            kernel=kernel,
             distractor_label_map=distractor_label_map,
-            correct_label=correct_label,
         ),
         "tables": [],
         "sharedGroup": None,
         "extractionWarnings": [],
-        "_v5": {
+        "_v5_2": {
             "targetOrder": target_order,
             "targetDifficulty": target_difficulty,
             "orderAchieved": stem_obj.get("orderAchieved", ""),
             "difficultyAchieved": stem_obj.get("difficultyAchieved", ""),
-            "criticTotal": (critic_obj or {}).get("total"),
+            "criticOverallTotal": (critic_obj or {}).get("overallTotal"),
             "criticVerdict": (critic_obj or {}).get("verdict"),
             "criticAntiPatterns": (critic_obj or {}).get("antiPatternsFound", []),
-            "imageOpportunity": stem_obj.get("imageOpportunity", "none"),
+            "criticDistractorScores": (critic_obj or {}).get("distractorScores", []),
+            "discriminatingClueInStem": (critic_obj or {}).get("discriminatingClueInStem", None),
+            "trapCategoriesUsed": [d.get("trapCategory") for d in distractors_meta],
             "imageRoute": image_route or {},
+            "lengthParity": length_parity_info,
             "sourceFactIds": stem_obj.get("sourceFactIds", []),
+            "discriminatingClue": kernel.get("discriminatingClueInStem", ""),
         },
     }
 
 
 def _build_explanation_sections(
-    *,
-    stem_obj: dict[str, Any],
-    distractors: list[dict[str, Any]],
-    distractor_label_map: dict[str, dict[str, Any]],
-    correct_label: str,
+    *, kernel: dict[str, Any], distractor_label_map: dict[str, dict[str, Any]]
 ) -> list[dict[str, Any]]:
-    sections = []
-    rationale = (stem_obj.get("rationale") or "").strip()
+    sections: list[dict[str, Any]] = []
+    rationale = (kernel.get("rationale") or "").strip()
     if rationale:
-        sections.append(
-            {"heading": "Correct Answer Explanation", "body": [rationale]}
-        )
+        sections.append({"heading": "Correct Answer Explanation", "body": [rationale]})
     if distractor_label_map:
         lines = []
         for label in sorted(distractor_label_map.keys()):
             d = distractor_label_map[label]
+            text = (d.get("text") or "").strip()
             losing = (d.get("losingReason") or "").strip()
-            tempt = (d.get("tempt") or "").strip()
-            line = f"{label}. {(d.get('text') or '').strip()} — {losing}"
-            if tempt:
-                line += f" (Tempt: {tempt})"
+            cat = (d.get("trapCategory") or "").strip()
+            line = f"{label}. {text} — {losing}"
+            if cat:
+                line += f"  [trap: {cat.lower().replace('_', ' ')}]"
             lines.append(line)
         if lines:
             sections.append({"heading": "Incorrect Answer Explanation", "body": lines})
-    edu = (stem_obj.get("testedConcept") or "").strip()
+    edu = (kernel.get("correctAnswerConcept") or "").strip()
     if edu:
         sections.append({"heading": "Educational Objective", "body": [edu]})
     return sections
 
 
+# ── Stage 10: GLOBAL DISTRIBUTION GATE ───────────────────────────────────────
+
+
 def randomize_global_distribution(
     questions: list[dict[str, Any]], *, seed: int = 0
 ) -> list[dict[str, Any]]:
-    """Verify that the per-batch correctAnswer distribution is within
-    tolerance. If not, reshuffle each non-conforming question's choice
-    order so the global distribution lands inside the band. Per-Q
-    shuffles already happened in assemble_question; this is the
-    second-pass gate.
-    """
     if len(questions) < 20:
         return questions
     rng = random.Random(seed + 17)
     for _attempt in range(3):
         dist = Counter(q.get("correctAnswer", "") for q in questions)
         n = len(questions)
-        # Identify positions that are over or under.
         over = [k for k, v in dist.items() if v / n > DISTRIBUTION_TOLERANCE_HIGH]
         under = [k for k in "ABCDE" if dist.get(k, 0) / n < DISTRIBUTION_TOLERANCE_LOW]
         if not over and not under:
             return questions
-        # Reshuffle a random subset of the over-represented Qs.
         candidates = [q for q in questions if q.get("correctAnswer") in over]
         rng.shuffle(candidates)
-        # Reshuffle answers for these so they end up in different positions.
         for q in candidates[: max(1, len(candidates) // 2)]:
             choices = q.get("answerChoices", []) or []
             if not choices:
@@ -494,7 +608,7 @@ def randomize_global_distribution(
     return questions
 
 
-# ── Main entry point ────────────────────────────────────────────────────────
+# ── Orchestrator: one question end-to-end ───────────────────────────────────
 
 
 def generate_one_question(
@@ -507,98 +621,161 @@ def generate_one_question(
     available_images: list[dict[str, Any]],
     rng: random.Random,
 ) -> dict[str, Any] | None:
-    """Run the multi-stage pipeline for ONE question slot. Returns None
-    if the pipeline couldn't produce an acceptable question."""
     allowed_terms = allocation.get("allowedMedicalTerms") or []
     allowed_distractor_pool = allocation.get("allowedDistractorPool") or []
     slide_context = allocation.get("slideContext") or {}
 
-    # Stage 2 - STEM
+    # Stage 2: KERNEL
+    kernel = stage_kernel(
+        target_order=target_order,
+        target_difficulty=target_difficulty,
+        allowed_terms=allowed_terms,
+        allowed_distractor_pool=allowed_distractor_pool,
+        slide_context=slide_context,
+        memory=memory,
+    )
+    if not kernel:
+        return None
+
+    # Stage 3: STEM
     stem_obj = stage_stem(
+        kernel=kernel,
         target_order=target_order,
         target_difficulty=target_difficulty,
         allowed_terms=allowed_terms,
         slide_context=slide_context,
-        memory=memory,
     )
-    if not stem_obj or not stem_obj.get("stem") or not stem_obj.get("correctAnswerConcept"):
+    if not stem_obj:
         return None
 
-    # Stage 3 - DISTRACTORS
-    distractors_obj = stage_distractors(
-        stem=stem_obj["stem"],
-        correct_answer_concept=stem_obj["correctAnswerConcept"],
-        allowed_terms=allowed_terms,
-        allowed_distractor_pool=allowed_distractor_pool,
-    )
-    if not distractors_obj or not distractors_obj.get("distractors"):
+    # Stage 4: DISTRACTORS
+    distractors_obj = stage_distractors(stem=stem_obj["stem"], kernel=kernel)
+    if not distractors_obj:
+        return None
+    correct_text = (distractors_obj.get("correctAnswerText") or "").strip()
+    distractors = distractors_obj.get("distractors") or []
+    if not correct_text or not distractors:
         return None
 
-    # Stage 4 - CRITIC
-    critic_obj = stage_critic(
+    # Stage 5: CRITIC (per-distractor + adversarial)
+    critic = stage_critic(
         stem=stem_obj["stem"],
-        correct_answer_concept=stem_obj["correctAnswerConcept"],
-        distractors=distractors_obj["distractors"],
+        correct_answer_text=correct_text,
+        correct_answer_concept=kernel.get("correctAnswerConcept", ""),
+        distractors=distractors,
+        kernel=kernel,
         target_order=target_order,
         target_difficulty=target_difficulty,
-        allowed_terms=allowed_terms,
-        allowed_distractor_pool=allowed_distractor_pool,
     )
-    if critic_obj and critic_obj.get("verdict") == "revise":
-        # ONE revision attempt — distractor regen with critic notes prepended
-        revise_notes = critic_obj.get("revisionNotes", "")
-        revised_distractors = stage_distractors(
-            stem=stem_obj["stem"],
-            correct_answer_concept=stem_obj["correctAnswerConcept"],
-            allowed_terms=allowed_terms,
-            allowed_distractor_pool=allowed_distractor_pool + [f"[CRITIC REVISION NOTES] {revise_notes}"],
-        )
-        if revised_distractors:
-            distractors_obj = revised_distractors
-            critic_obj = stage_critic(
+    verdict = (critic or {}).get("verdict", "")
+
+    # Stage 6: TARGETED REGEN
+    # revise_weakest: regen just the lowest-scoring distractor.
+    # revise_full: regen EVERY distractor scoring below 2 (often 2-3 of
+    # them) — each in its kernel-defined trap category — then re-critic
+    # the whole set once. This avoids letting questions through with
+    # multiple NO_DEFENSE distractors (a real failure mode the smoke
+    # test surfaced) while preserving the kernel structure.
+    if critic and verdict in ("revise_weakest", "revise_full"):
+        scores = critic.get("distractorScores") or []
+        # Pick indices to regen
+        if verdict == "revise_weakest":
+            weakest = critic.get("weakestDistractorIndex")
+            to_regen = [int(weakest)] if isinstance(weakest, int) else []
+        else:  # revise_full
+            to_regen = [
+                int(ds.get("index"))
+                for ds in scores
+                if isinstance(ds.get("index"), int) and int(ds.get("score", 0)) < 2
+            ]
+        # Defensive: ignore out-of-range indices
+        to_regen = [i for i in to_regen if 0 <= i < len(distractors)]
+        issues_by_index = {int(ds.get("index")): ds.get("issue", "") for ds in scores if isinstance(ds.get("index"), int)}
+        for weak_idx in to_regen:
+            rejected = distractors[weak_idx]
+            issue = issues_by_index.get(weak_idx, "")
+            good = [d for i, d in enumerate(distractors) if i != weak_idx]
+            replacement = stage_regen_distractor(
                 stem=stem_obj["stem"],
-                correct_answer_concept=stem_obj["correctAnswerConcept"],
-                distractors=distractors_obj["distractors"],
+                correct_answer_text=correct_text,
+                good_distractors=good,
+                rejected_distractor=rejected,
+                critic_issue=issue,
+                kernel=kernel,
+            )
+            if replacement:
+                distractors[weak_idx] = replacement
+        if to_regen:
+            # Re-critic the patched set ONCE.
+            critic = stage_critic(
+                stem=stem_obj["stem"],
+                correct_answer_text=correct_text,
+                correct_answer_concept=kernel.get("correctAnswerConcept", ""),
+                distractors=distractors,
+                kernel=kernel,
                 target_order=target_order,
                 target_difficulty=target_difficulty,
-                allowed_terms=allowed_terms,
-                allowed_distractor_pool=allowed_distractor_pool,
             )
-    if critic_obj and critic_obj.get("verdict") == "reject":
-        # Hard reject. Return None and let the caller decide to retry
-        # with a different order/difficulty target or skip the slot.
+            verdict = (critic or {}).get("verdict", "")
+    if critic and verdict == "reject":
         return None
+    # After the optional regen pass, if ANY distractor still scores < 2
+    # OR adversarialOutcome == NO_DEFENSE OR STRONG_DEFENSE, refuse the
+    # question. We accept "accept" or "revise_weakest"/"revise_full"
+    # whose re-critic raised all distractors to >= 2 (and no critical
+    # outcomes).
+    if critic:
+        for ds in critic.get("distractorScores") or []:
+            score = int(ds.get("score", 0) or 0)
+            outcome = ds.get("adversarialOutcome") or ""
+            if score < 2 or outcome in ("NO_DEFENSE", "STRONG_DEFENSE"):
+                return None
 
-    # Stage 5 - IMAGE ROUTING
+    # Stage 7: LENGTH PARITY (deterministic)
+    distractor_texts = [d.get("text", "") for d in distractors]
+    correct_text, distractor_texts, parity_info = length_parity_balance(
+        correct_text, distractor_texts
+    )
+    # Reattach the (possibly-trimmed) texts back into distractors meta
+    for d, new_text in zip(distractors, distractor_texts):
+        d["text"] = new_text
+
+    # Stage 8: IMAGE ROUTING
     image_route = stage_image_route(
         stem=stem_obj["stem"],
-        image_opportunity=stem_obj.get("imageOpportunity", "none"),
+        image_opportunity=kernel.get("imageOpportunity", "none"),
         available_images=available_images,
     )
 
-    # Stage 6 - ASSEMBLE
+    # Stage 9: ASSEMBLE
     q = assemble_question(
         question_number=question_number,
+        kernel=kernel,
         stem_obj=stem_obj,
-        distractors_obj=distractors_obj,
-        critic_obj=critic_obj,
+        correct_text=correct_text,
+        distractor_texts=distractor_texts,
+        distractors_meta=distractors,
+        critic_obj=critic,
         image_route=image_route,
         allocation=allocation,
         target_order=target_order,
         target_difficulty=target_difficulty,
+        length_parity_info=parity_info,
         rng=rng,
     )
 
-    # Debug artifact for post-hoc inspection
-    debug_path = DEBUG_DIR / f"Q{question_number:04d}.json"
+    # Debug artifact
     try:
-        debug_path.write_text(
+        (DEBUG_DIR / f"Q{question_number:04d}.json").write_text(
             json.dumps(
                 {
+                    "kernel": kernel,
                     "stem_obj": stem_obj,
-                    "distractors_obj": distractors_obj,
-                    "critic_obj": critic_obj,
+                    "correct_text": correct_text,
+                    "distractors": distractors,
+                    "critic": critic,
                     "image_route": image_route,
+                    "length_parity": parity_info,
                     "final": q,
                 },
                 indent=2,
@@ -607,7 +784,6 @@ def generate_one_question(
         )
     except Exception:
         pass
-
     return q
 
 
@@ -621,8 +797,6 @@ def generate_v5(
     available_images: list[dict[str, Any]] | None = None,
     seed: int = 0,
 ) -> list[dict[str, Any]]:
-    """Top-level v5 pipeline entry point. Returns the list of completed
-    question dicts in the canonical app-ready schema."""
     target_order_mix = target_order_mix or {
         "first_order": 0.25,
         "second_order": 0.45,
@@ -656,16 +830,14 @@ def generate_v5(
                     available_images=slide_images,
                     rng=rng,
                 )
-            except Exception as exc:  # surface but don't crash the batch
-                print(f"[v5] Q{qn} pipeline error: {exc}", file=sys.stderr)
+            except Exception as exc:
+                print(f"[v5.2] Q{qn} pipeline error: {exc}", file=sys.stderr)
                 q = None
             if q:
                 questions.append(q)
                 _update_memory(memory, q)
             else:
-                print(f"[v5] Q{qn} skipped (pipeline rejected)", file=sys.stderr)
-
-    # Stage 7 - GLOBAL DISTRIBUTION GATE
+                print(f"[v5.2] Q{qn} skipped (pipeline rejected)", file=sys.stderr)
     questions = randomize_global_distribution(questions, seed=seed)
     return questions
 
@@ -686,23 +858,15 @@ def _update_memory(memory: dict[str, Any], q: dict[str, Any]) -> None:
 
 
 def _smoke_test_cli() -> int:
-    parser = argparse.ArgumentParser(description="v5 pipeline smoke test")
-    parser.add_argument(
-        "--allocation-file",
-        required=True,
-        help="JSON file containing a list[Allocation] for smoke test",
-    )
-    parser.add_argument(
-        "--out", required=True, help="Where to write the generated questions JSON"
-    )
-    parser.add_argument(
-        "--seed", type=int, default=0, help="RNG seed for reproducibility"
-    )
+    parser = argparse.ArgumentParser(description="v5.2 pipeline smoke test")
+    parser.add_argument("--allocation-file", required=True)
+    parser.add_argument("--out", required=True)
+    parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
     allocations = json.loads(Path(args.allocation_file).read_text(encoding="utf-8"))
     if not isinstance(allocations, list):
         allocations = allocations.get("allocations") or []
-    normalized_payload = {"sourceFile": "smoke_test_v5"}
+    normalized_payload = {"sourceFile": "smoke_test_v5_2"}
     memory: dict[str, Any] = {}
     started = time.time()
     questions = generate_v5(
@@ -717,9 +881,9 @@ def _smoke_test_cli() -> int:
     out_path.write_text(
         json.dumps(
             {
-                "schemaVersion": "v5-organic",
-                "sourceFormat": "lecture-slide-v5",
-                "testTitle": "v5 smoke test",
+                "schemaVersion": "v5_2-organic",
+                "sourceFormat": "lecture-slide-v5_2",
+                "testTitle": "v5.2 smoke test",
                 "expectedQuestionCount": sum(int(a.get("questionCount") or 0) for a in allocations),
                 "actualExtractedQuestionCount": len(questions),
                 "extractionWarnings": [],
@@ -729,7 +893,7 @@ def _smoke_test_cli() -> int:
             ensure_ascii=False,
         )
     )
-    print(f"v5 smoke test: produced {len(questions)} questions in {elapsed:.1f}s")
+    print(f"v5.2 smoke test: produced {len(questions)} questions in {elapsed:.1f}s")
     print(f"  Output: {out_path}")
     print(f"  Debug per-Q traces under: {DEBUG_DIR}")
     return 0

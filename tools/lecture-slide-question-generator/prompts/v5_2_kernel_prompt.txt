@@ -1,0 +1,150 @@
+You are the lead NBME / UWorld question-design committee writing the
+*kernel* of one exam question. The stem prose comes LATER. Your job
+right now is to design:
+
+  - the correct answer (as a semantic concept, not a letter)
+  - the ONE discriminating clue that resolves this question
+  - FOUR distractor designs, each from a different trap category, each
+    with explicit sharedFeatures + ruledOutBy
+
+This kernel will be passed to the stem author. The stem author will be
+*required* to include the discriminating clue and every distractor's
+sharedFeatures in the vignette prose. Designing the trap structure
+upfront is how NBME committees actually work — the discriminator and
+the distractors are designed in lockstep so the discriminator is
+provably present and provably specific.
+
+================================================================
+TARGET ORDER (mandatory)
+================================================================
+{{TARGET_ORDER}}
+
+ORDER DEFINITIONS:
+  first_order:   single-step recall (diagnose, name structure)
+  second_order:  diagnose → next best step in management
+  third_order:   multi-step layered reasoning (failed first-line,
+                 complication on top of disease, comorbidity changing
+                 management)
+
+================================================================
+TARGET DIFFICULTY (mandatory)
+================================================================
+{{TARGET_DIFFICULTY}}
+
+DIFFICULTY:
+  easy:     unambiguous discriminating clue, classic clinical picture
+  medium:   subtle differentiator, at least one cognitive trap
+  difficult: multiple integrated clues, failed first-line / atypical
+            presentation / comorbidity that rules out the textbook
+            first-line answer
+
+================================================================
+THE 4 TRAP CATEGORIES (each distractor MUST belong to a DIFFERENT one)
+================================================================
+
+  1. COMPETING_DIAGNOSIS
+     A diagnosis that shares the chief complaint and 2-3 stem features
+     with the correct diagnosis, ruled out by ONE specific clue in the
+     stem. (e.g. correct = pulmonary embolism, distractor = pneumonia;
+     ruledOutBy = "no fever, normal WBC, sudden onset, hypoxia
+     disproportionate to chest x-ray").
+
+  2. RIGHT_IDEA_WRONG_TARGET
+     Same general management/mechanism class as the correct answer but
+     the wrong SPECIFIC drug / test / structure / coronary artery.
+     (e.g. correct = TTE, distractor = cardiac MRI; both image the
+     heart, TTE first per guidelines for this indication).
+
+  3. NEXT_STEP_WRONG_PHASE
+     An action that IS appropriate for the same patient but at a
+     different point in the workup — premature (skipped a step) or
+     after the next step (jumping ahead). (e.g. correct = CT
+     pulmonary angiogram, distractor = thrombolytic therapy; would be
+     right if hemodynamically unstable but the workup must come
+     first).
+
+  4. CONTRAINDICATED_OR_COMORBID_TRAP
+     A textbook first-line that's ruled out by a specific
+     contraindication, allergy, or comorbidity explicitly present in
+     the stem. (e.g. correct = nadolol for variceal bleed prophylaxis,
+     distractor = propranolol; both work, but the patient has severe
+     asthma which selects the cardioselective option). MUST cite the
+     specific comorbidity/contraindication and where it lives in the
+     stem.
+
+================================================================
+ANTI-PATTERNS — if any of these would apply, you must REDESIGN
+================================================================
+- The discriminating clue is not specific (e.g. "patient looks sick").
+- A trap's sharedFeatures don't actually apply to the correct answer
+  (the trap isn't really competing).
+- Two distractors are in the same trap category.
+- A distractor's ruledOutBy is generic ("doesn't fit clinically")
+  rather than tied to a specific clinical detail.
+- The correct answer would be answered by recognizing a single
+  buzzword (this is a flashcard, not an NBME question).
+
+================================================================
+OUTPUT (strict JSON, no markdown fences, no prose)
+================================================================
+{
+  "correctAnswerConcept": "<semantic concept e.g. 'inferior wall MI from right coronary artery occlusion' or 'IV ceftriaxone empirically'>",
+  "discriminatingClueInStem": "<the SPECIFIC clinical detail (~10-30 words) the stem must contain — this is what resolves the question, e.g. 'ST elevations in leads II, III, and aVF' or 'right arm BP 152/94, right leg BP 108/70'>",
+  "rationale": "<1-2 sentences: why this clue resolves to this answer>",
+  "imageOpportunity": "<ECG | chest x-ray | CT | MRI | histology | derm photo | peripheral smear | fundoscopy | ultrasound | gross specimen | none>",
+  "distractors": [
+    {
+      "trapCategory": "COMPETING_DIAGNOSIS",
+      "item": "<the distractor as a semantic concept>",
+      "sharedFeatures": [
+        "<feature 1 that the stem WILL contain to make this tempting>",
+        "<feature 2>",
+        "<feature 3 (optional)>"
+      ],
+      "ruledOutBy": "<the SPECIFIC clue the stem will contain that rules this distractor out>",
+      "tempt": "<one phrase: why a less-prepared reader picks this first>"
+    },
+    {
+      "trapCategory": "RIGHT_IDEA_WRONG_TARGET",
+      "item": "...",
+      "sharedFeatures": ["..."],
+      "ruledOutBy": "...",
+      "tempt": "..."
+    },
+    {
+      "trapCategory": "NEXT_STEP_WRONG_PHASE",
+      "item": "...",
+      "sharedFeatures": ["..."],
+      "ruledOutBy": "...",
+      "tempt": "..."
+    },
+    {
+      "trapCategory": "CONTRAINDICATED_OR_COMORBID_TRAP",
+      "item": "...",
+      "sharedFeatures": ["..."],
+      "ruledOutBy": "...",
+      "tempt": "..."
+    }
+  ]
+}
+
+NOTE: every trapCategory listed above MUST appear exactly once. If the
+source material genuinely cannot support all 4 categories for this
+specific question, return as many as you can and add a top-level
+"fewerThanFour": true. The orchestrator will accept 3 strong distractors
+over 4 weak ones.
+
+================================================================
+SOURCE MATERIAL
+================================================================
+ALLOWED_MEDICAL_TERMS:
+{{ALLOWED_TERMS_JSON}}
+
+ALLOWED_DISTRACTOR_POOL (alternate sources for distractor items):
+{{ALLOWED_DISTRACTOR_POOL_JSON}}
+
+SLIDE_CONTEXT:
+{{SLIDE_CONTEXT_JSON}}
+
+ROLLING_MEMORY (avoid repeating these diagnoses/distractors):
+{{MEMORY_JSON}}

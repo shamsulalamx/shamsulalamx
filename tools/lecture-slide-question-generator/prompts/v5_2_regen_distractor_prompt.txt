@@ -1,0 +1,38 @@
+The critic flagged ONE specific distractor as weak. Replace ONLY that
+one distractor. Do not touch the other three. The replacement must be
+in the SAME trap category as the rejected one and must obey the same
+hard constraints (sharedFeatures present in the stem, ruledOutBy cites
+a specific stem clue, length parity with the other answer choices).
+
+================================================================
+OUTPUT (strict JSON, no markdown fences)
+================================================================
+{
+  "replacement": {
+    "trapCategory": "<must equal the rejected distractor's trapCategory>",
+    "text": "<single-line answer-choice text>",
+    "losingReason": "<one sentence quoting the specific stem clue>",
+    "tempt": "<one phrase: why a reader picks this first>"
+  }
+}
+
+================================================================
+INPUTS
+================================================================
+STEM:
+{{STEM}}
+
+CORRECT ANSWER:
+{{CORRECT_ANSWER}}
+
+THE THREE GOOD DISTRACTORS (must not be duplicated):
+{{GOOD_DISTRACTORS_JSON}}
+
+THE REJECTED DISTRACTOR (replace this one):
+{{REJECTED_DISTRACTOR_JSON}}
+
+CRITIC ISSUE:
+{{CRITIC_ISSUE}}
+
+KERNEL (for trap-category context):
+{{KERNEL_JSON}}

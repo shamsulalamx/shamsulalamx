@@ -1,7 +1,207 @@
 # BATCH 5 — Organic generator quality overhaul (v5)
 
 Branch: `phase12-vertex-migration`
-Tag: `v5.0-batch5-stable` (when committed)
+Tag: `v5.0.1-batch5-stable` (latest); see version history below.
+
+## Scope (very important): organic-generation only
+
+**v5 changes ONLY the lecture-slide "organic" Gemini-authorship path.
+The legacy verbatim-extraction pipelines for NBME PDFs and AMBOSS are
+untouched.**
+
+| Path | Code | v5 touches it? |
+|---|---|---|
+| NBME PDF extraction (verbatim Q + A + explanation from the source PDF) | `tools/nbme-pdf-json-generator/nbme_dual_pdf_runner.py` + `verbatim_patcher.py` | **No.** Verbatim guarantees from Batch 4 (v4.85) remain. |
+| AMBOSS extraction (`--amboss-profile`) | branches earlier inside `generate_lecture_slide_questions.py` | **No.** v5 dispatch is gated on `--v5`, which does not engage in amboss mode. |
+| uWorld notes (text-only) | `tools/uworld-notes-question-generator/` | **No.** |
+| Lecture-slide ORGANIC generation (Gemini authors the stem + distractors from grounded slide concepts) | `tools/lecture-slide-question-generator/` | **Yes.** This is the only path that activates v5 when `--v5` is set. |
+
+How to be sure for any given run:
+- Running NBME extraction (e.g. `nbme_dual_pdf_runner.py`): the `--v5`
+  flag does not even exist in that script's argparse. Always verbatim.
+- Running AMBOSS extraction (`--amboss-profile`): the amboss code path
+  branches before the v5 dispatch point, so v5 never activates in that
+  mode. Verbatim AMBOSS guarantees preserved.
+- Running lecture / Fast Facts / "organic" Gemini generation: v5
+  activates only when `--v5` is set; without that flag the legacy
+  single-call generator runs.
+
+The verbatim extraction guarantees you have for NBME (every stem,
+choice, correctAnswer, and multi-paragraph explanation extracted
+directly from the source PDF) and AMBOSS remain in force exactly as
+shipped in `v4.85-batch4-stable`.
+
+## Version history (this batch)
+
+| Tag | What |
+|---|---|
+| `v5.0-batch5-stable` | Initial v5 multi-stage organic generator |
+| `v5.0.1-batch5-stable` | Doc clarification: legacy NBME/AMBOSS verbatim paths untouched |
+| **`v5.2-batch5-stable`** | Five distractor-quality upgrades (kernel-first, trap categories, adversarial verify, per-distractor scoring, length parity) |
+
+## v5.2 — what changed for distractor quality
+
+Real failure mode the user observed in v5.0: distractors were too weak
+and the correct answer was identifiable without engaging the reasoning
+task. Three root causes:
+
+1. **Distractor pool was too loose.** `ALLOWED_DISTRACTOR_POOL` was just
+   "other terms from the slide" — no curated set of strong competitors
+   for the specific correct answer.
+2. **Distractors written AFTER the stem.** Real NBME committees design
+   the discriminating clue and the trap structure TOGETHER, then write
+   a stem that contains exactly the clues needed. We were retrofitting
+   distractors against a stem that already gave the game away.
+3. **No adversarial pass.** Nothing ever tried to argue "this distractor
+   could ALSO be correct, here's why." The critic scored distractor
+   *quality* generically (0-3) but didn't stress-test each one.
+
+v5.2 introduces five interlocking fixes:
+
+### A. KERNEL-FIRST DESIGN (architectural)
+New `stage_kernel()` runs BEFORE the stem. It outputs:
+
+- `correctAnswerConcept`
+- `discriminatingClueInStem` (the SPECIFIC clinical detail the stem must contain)
+- 4 distractors, each with: `trapCategory`, `item`, `sharedFeatures[]`,
+  `ruledOutBy`, `tempt`
+
+The kernel is the contract for the rest of the pipeline. The stem author
+is now *required* to include the discriminating clue and every
+distractor's `sharedFeatures` in the prose. Designing the trap structure
+upfront mirrors how NBME committees actually work — discriminator and
+distractors are designed in lockstep.
+
+### B. TRAP-CATEGORY ENFORCEMENT (4 distinct categories per question)
+
+The kernel must produce 4 distractors from 4 DIFFERENT trap categories:
+
+1. `COMPETING_DIAGNOSIS` — shares chief complaint and 2-3 stem features,
+   ruled out by ONE specific clue.
+2. `RIGHT_IDEA_WRONG_TARGET` — same management/mechanism class but wrong
+   specific drug / test / structure.
+3. `NEXT_STEP_WRONG_PHASE` — appropriate action at the wrong point in the
+   workup (premature or jumping ahead).
+4. `CONTRAINDICATED_OR_COMORBID_TRAP` — textbook first-line that's ruled
+   out by an explicit contraindication / comorbidity in the stem.
+
+Hard-rejected if two distractors share a category. This forces structural
+diversity rather than 4 vaguely-plausible same-kind items.
+
+### C. STEM-DISTRACTOR CO-DESIGN (stem must satisfy the kernel contract)
+
+The stem prompt now requires:
+
+- The kernel's `discriminatingClueInStem` is literally in the prose.
+- Every distractor's `sharedFeatures[]` is literally in the prose
+  (otherwise the distractor isn't really tempting).
+- No "decorative" data — no labs, imaging, exam findings, or
+  comorbidities that aren't either the discriminator, a sharedFeature,
+  or standard NBME demographic scaffolding.
+
+The stem JSON output includes `containedDiscriminatingClue` and
+`containedSharedFeatures.missing[]`. Any false / non-empty-missing is a
+hard pipeline failure — the slot is rejected and a new question is
+attempted.
+
+### D. ADVERSARIAL VERIFICATION (embedded in critic)
+
+The critic now performs, for EACH distractor independently, an attempt
+to argue THIS distractor is the correct answer:
+
+- `STRONG_DEFENSE` — a clinically valid argument exists. Two correct
+  answers. **Critical failure**. Question rejected.
+- `WEAK_DEFENSE` — sketchable argument but a specific stem clue rules
+  it out. **Target zone**.
+- `NO_DEFENSE` — too obviously wrong. **Too weak distractor**.
+  Targeted regen.
+
+This catches both failure modes the user noticed: the "obviously wrong"
+distractor AND the multi-correct distractor.
+
+### E. PER-DISTRACTOR CRITIC SCORING + LITERAL-CLUE VERIFICATION
+
+The critic now scores each of 4 distractors individually (0-3), and
+separately verifies that each `losingReason`'s claimed discriminating
+clue is literally present in the stem text. Verdicts now include
+`revise_weakest`: regen ONLY the lowest-scoring distractor (one focused
+API call) rather than the whole set.
+
+If verdict = `revise_weakest`, `stage_regen_distractor()` produces ONE
+replacement distractor in the same `trapCategory` as the rejected one,
+prompted with the critic's specific issue. The patched set is then
+re-critiqued ONCE. If still failing, the question is rejected.
+
+### F. LENGTH PARITY (deterministic post-process)
+
+A documented test-taking heuristic: the longest answer is often correct.
+NBME explicitly counters this. `length_parity_balance()` checks that no
+answer choice's text length exceeds 1.30× the median. If the correct
+answer or a distractor is too long, it attempts a safe trim (drop a
+trailing parenthetical or comma-clause) without changing clinical
+meaning. If trimming can't reach the band, the text is left alone and a
+warning is recorded — quality > parity-by-fabrication.
+
+## Updated stage flow (v5.2)
+
+```
+1.  PLAN         (deterministic)        — target (order, difficulty) per slot
+2.  KERNEL       (Pro + thinking)       — correctAnswer + clue + 4 trap designs  [NEW]
+3.  STEM         (Pro + thinking)       — write stem; verify clue+features in prose
+4.  DISTRACTORS  (Pro + thinking)       — polish kernel items into answer-choice text
+5.  CRITIC       (Pro + thinking)       — per-distractor scores + adversarial argue + clue-in-stem check  [NEW]
+6.  TARGETED REGEN (Pro + thinking)     — replace ONLY the weakest distractor  [NEW]
+7.  LENGTH PARITY (deterministic)       — balance answer-choice lengths to <=1.30x median  [NEW]
+8.  IMAGE ROUTING (Flash)               — short-circuit when imageOpportunity=='none' OR no images
+9.  ASSEMBLE     (deterministic)        — canonical shape, per-Q correctAnswer shuffle
+10. GLOBAL GATE  (deterministic)        — batch-level A-E distribution gate (>=20 Qs)
+```
+
+## Files added in v5.2
+
+```
+tools/lecture-slide-question-generator/prompts/
+├── v5_2_kernel_prompt.txt
+├── v5_2_stem_prompt.txt
+├── v5_2_distractors_prompt.txt
+├── v5_2_critic_prompt.txt
+└── v5_2_regen_distractor_prompt.txt
+```
+
+`v5_pipeline.py` rewritten to orchestrate the 10-stage flow. `v5_audit.py`
+gained three new checks: trap-category coverage, adversarial outcome
+distribution (too many STRONG_DEFENSE = multi-correct; too many
+NO_DEFENSE = weak distractors), and length parity violation rate.
+
+## Cost / latency
+
+Per question, sequential:
+
+| Stage | Model | Time | Cost (approx) |
+|---|---|---|---|
+| Kernel | Pro + thinking | ~50 sec | $0.05 |
+| Stem | Pro + thinking | ~70 sec | $0.06 |
+| Distractors | Pro + thinking | ~50 sec | $0.04 |
+| Critic | Pro + thinking | ~60 sec | $0.05 |
+| Targeted regen (sometimes) | Pro + thinking | ~30 sec | $0.03 |
+| Image route | Flash | ~5 sec | $0.002 |
+| **Per Q** | | **~4-5 min** | **~$0.18-0.22** |
+
+50-Q test: ≈ $10 and ≈ 3.5-4 hr sequential. Higher cost than v5.0 but
+the quality bump comes from kernel + adversarial; parallelism (the v5.1
+cost/speed package we discussed) is the orthogonal lever to bring wall-
+clock back down without sacrificing the v5.2 quality gains.
+
+## Backward compatibility
+
+- Files generated by v5.0 carry `_v5` metadata. The audit handles both
+  `_v5` (legacy) and `_v5_2` (current) by falling back gracefully.
+- The CLI flags (`--v5`, `--v5-order-mix`, `--v5-difficulty-mix`,
+  `--v5-seed`) are unchanged. Existing scripts work without
+  modification; they now get the v5.2 pipeline.
+- The legacy single-call generator path is still intact for cache
+  repairs and as a fallback. No code path for NBME/AMBOSS verbatim
+  extraction was touched.
 
 ## Why this exists
 
