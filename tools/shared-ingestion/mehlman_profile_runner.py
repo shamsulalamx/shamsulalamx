@@ -60,7 +60,12 @@ def app_ready_question_count(outputs: list[str]) -> int:
     return count
 
 
-def run_existing_mehlman_generator(input_file: Path, mode: str, page_limit: int) -> tuple[int, float, list[str]]:
+def run_existing_mehlman_generator(
+    input_file: Path,
+    mode: str,
+    page_limit: int,
+    v5_args: list[str] | None = None,
+) -> tuple[int, float, list[str]]:
     started_at = time.time()
     # v4.58: chunk size retargeted to ~1.5K chars and questions-per-chunk
     # default lowered to 1 for one-fact-per-question tight focus. The profile
@@ -82,6 +87,11 @@ def run_existing_mehlman_generator(input_file: Path, mode: str, page_limit: int)
         command.extend(["--max-pages", str(page_limit)])
     if DOWNSTREAM_OUTPUT_ROOT:
         command.extend(["--output-dir", str(DOWNSTREAM_OUTPUT_ROOT)])
+    # v5.8: Advanced Mode flag-forwarding to the downstream Mehlman
+    # generator. Note Mehlman uses `--v5-chunk-size` (not `--chunk-size`)
+    # because its legacy CLI already owns `--questions-per-chunk`.
+    if v5_args:
+        command.extend(v5_args)
     emit("mehlman_downstream_start", command=command, cwd=str(MEHLMAN_DIR))
     proc = subprocess.Popen(
         command,
@@ -199,6 +209,19 @@ def parse_args() -> argparse.Namespace:
         help="First-page limit. 0 (default, v4.58) = process every page; >0 = cap for validation runs.",
     )
     parser.add_argument("--chunk-output", default="")
+    # v5.8: Advanced Mode forwarding. --v5-chunk-size (not --chunk-size)
+    # because Mehlman's existing CLI already owns --questions-per-chunk.
+    parser.add_argument(
+        "--v5",
+        action="store_true",
+        help="Run the downstream Mehlman generator with the v5.2 multi-stage organic pipeline. No-op in --mode dry-run.",
+    )
+    parser.add_argument("--v5-order-mix", default="0.25,0.45,0.30")
+    parser.add_argument("--v5-difficulty-mix", default="0.30,0.45,0.25")
+    parser.add_argument("--v5-seed", type=int, default=0)
+    parser.add_argument("--v5-chunk-size", type=int, default=0)
+    parser.add_argument("--questions-per-chunk", type=int, default=0,
+                        help="Reused by both Mehlman's legacy path (1-fact-per-chunk) and v5 (Q-per-chunk).")
     return parser.parse_args()
 
 
@@ -237,7 +260,24 @@ def main() -> int:
         emit("mehlman_profile_complete", ok=False, error="Shared normalized chunk validation failed.", report=report)
         return 1
 
-    code, downstream_runtime, outputs = run_existing_mehlman_generator(input_file, args.mode, page_limit)
+    # v5.8: build forwarded --v5 args when caller set --v5. Mehlman reuses
+    # --questions-per-chunk for both legacy and v5; --v5-chunk-size is
+    # v5-only (legacy Mehlman doesn't take a chunk-size flag).
+    v5_args: list[str] = []
+    if args.mode == "generate" and getattr(args, "v5", False):
+        v5_args = [
+            "--v5",
+            "--v5-order-mix", str(args.v5_order_mix),
+            "--v5-difficulty-mix", str(args.v5_difficulty_mix),
+            "--v5-seed", str(args.v5_seed),
+        ]
+        if int(getattr(args, "v5_chunk_size", 0) or 0) > 0:
+            v5_args.extend(["--v5-chunk-size", str(int(args.v5_chunk_size))])
+        if int(getattr(args, "questions_per_chunk", 0) or 0) > 0:
+            v5_args.extend(["--questions-per-chunk", str(int(args.questions_per_chunk))])
+        emit("mehlman_v5_enabled", orderMix=args.v5_order_mix, difficultyMix=args.v5_difficulty_mix, seed=args.v5_seed)
+
+    code, downstream_runtime, outputs = run_existing_mehlman_generator(input_file, args.mode, page_limit, v5_args=v5_args)
     final_report = {
         "schemaVersion": "mehlman-profile-runner-report-v1",
         "sourceType": "mehlman_pdf",

@@ -18,7 +18,7 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple  # noqa: F401  Optional reserved for v5.8 dispatch
 
 # v4.79: google-genai SDK — unified client for both AI Studio and Vertex AI
 # backends. Selected at runtime via the GEMINI_BACKEND env var. Falls back to
@@ -1357,6 +1357,21 @@ def main() -> None:
         default="",
         help="Optional output root. Writes raw_text/, chunks/, generated/, app_ready/, and reports/ under this directory.",
     )
+    # v5.8: Advanced Mode (v5.2 multi-stage organic pipeline). Optional
+    # import — uworld is the base every other source extends, so we
+    # only attach the v5 CLI flags when the shared adapter is actually
+    # importable. This keeps generate_uworld_questions.py runnable in
+    # isolation (e.g., a stripped checkout that doesn't ship
+    # shared-ingestion/).
+    _v5_shared = None
+    try:
+        _shared_dir = Path(__file__).parent.parent / "shared-ingestion"
+        if _shared_dir.is_dir() and str(_shared_dir) not in sys.path:
+            sys.path.insert(0, str(_shared_dir))
+        import v5_uworld_family_adapter as _v5_shared  # type: ignore
+        _v5_shared.add_v5_cli_args(parser)
+    except ImportError:
+        _v5_shared = None
     args = parser.parse_args()
 
     try:
@@ -1406,6 +1421,22 @@ def main() -> None:
             warn("Pass --generate to treat a missing key as a hard error.")
             dry_run = True
 
+    # v5.8: resolve v5 config when --v5 was passed at parse time.
+    v5_cfg: Optional[Dict[str, Any]] = None
+    if _v5_shared is not None and getattr(args, "v5", False):
+        if dry_run:
+            warn("--v5 has no effect in dry-run mode; ignoring v5 flag.")
+        else:
+            try:
+                v5_cfg = _v5_shared.resolve_v5_cfg(args)
+                log(
+                    "v5 pipeline configured — order_mix=%s difficulty_mix=%s seed=%d"
+                    % (args.v5_order_mix, args.v5_difficulty_mix, args.v5_seed)
+                )
+            except ValueError as exc:
+                warn(f"Invalid v5 mix arguments: {exc}; --v5 disabled.")
+                v5_cfg = None
+
     report_data: Dict = {
         "runTimestamp":     datetime.now().isoformat(),
         "model":            GEMINI_MODEL,
@@ -1418,7 +1449,27 @@ def main() -> None:
 
     for filepath in files:
         try:
-            process_file(filepath, args.questions_per_file, dry_run, report_data)
+            used_v5 = False
+            if v5_cfg is not None:
+                try:
+                    _v5_shared.process_file_v5_uworld_family(
+                        uw_module=sys.modules[__name__],
+                        filepath=filepath,
+                        questions_per_file=args.questions_per_file,
+                        v5_cfg=v5_cfg,
+                        report_data=report_data,
+                        pipeline_label="v5.2-organic",
+                        chunk_size=int(args.chunk_size),
+                        questions_per_chunk=int(args.questions_per_chunk),
+                    )
+                    used_v5 = True
+                except Exception as v5_exc:
+                    warn(
+                        f"v5 pipeline failed for {filepath.name} ({v5_exc}); "
+                        f"falling back to legacy single-call generator."
+                    )
+            if not used_v5:
+                process_file(filepath, args.questions_per_file, dry_run, report_data)
         except Exception as exc:
             warn(f"Fatal error processing {filepath.name}: {exc}")
             report_data["files"][filepath.name] = {"status": "error", "error": str(exc)}

@@ -33,6 +33,17 @@ from typing import Dict, List, Optional, Tuple
 sys.path.insert(0, str(Path(__file__).parent.parent / "uworld-notes-question-generator"))
 import generate_uworld_questions as _uw
 
+# ── v5.8: shared Advanced Mode (v5.2 multi-stage organic) adapter ─────────────
+_SHARED_DIR = Path(__file__).parent.parent / "shared-ingestion"
+if _SHARED_DIR.is_dir() and str(_SHARED_DIR) not in sys.path:
+    sys.path.insert(0, str(_SHARED_DIR))
+from v5_uworld_family_adapter import (  # noqa: E402
+    add_v5_cli_args,
+    process_file_v5_uworld_family,
+    resolve_v5_cfg,
+)
+from typing import Any  # noqa: E402  Optional already imported above
+
 # ── Optional imports (graceful degradation) ───────────────────────────────────
 try:
     import pdfplumber as _pdfplumber
@@ -915,6 +926,21 @@ def main() -> None:
         action="store_true",
         help="Ignore existing files and reprocess from scratch.",
     )
+    # v5.8: Advanced Mode v5.2 pipeline. Mehlman already has its own
+    # `--questions-per-chunk` flag (for the legacy 1-fact-per-question
+    # path), so we skip the v5 shared adapter's chunk-arg group and
+    # add `--v5-chunk-size` manually to avoid name collisions.
+    add_v5_cli_args(parser, include_chunk_args=False)
+    parser.add_argument(
+        "--v5-chunk-size",
+        type=int,
+        default=3000,
+        help=(
+            "v5 only: max characters per chunk passed to the v5 kernel "
+            "(default 3000). Mehlman's existing --questions-per-chunk is "
+            "reused as v5's per-chunk Q count when --v5 is set."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -1006,6 +1032,22 @@ def main() -> None:
             f"Found {len(input_files)} PDF(s): {[f.name for f in input_files]}"
         )
 
+    # v5.8: resolve v5 config once when --v5 is passed in live mode.
+    v5_cfg: Optional[Dict[str, Any]] = None
+    if getattr(args, "v5", False):
+        if mode != "generate":
+            _uw.warn("--v5 has no effect outside --generate mode; ignoring v5 flag.")
+        else:
+            try:
+                v5_cfg = resolve_v5_cfg(args)
+                _uw.log(
+                    "v5 pipeline configured — order_mix=%s difficulty_mix=%s seed=%d"
+                    % (args.v5_order_mix, args.v5_difficulty_mix, args.v5_seed)
+                )
+            except ValueError as exc:
+                _uw.warn(f"Invalid v5 mix arguments: {exc}; --v5 disabled.")
+                v5_cfg = None
+
     report_data: Dict = {
         "runTimestamp":      datetime.now().isoformat(),
         "model":             _uw.GEMINI_MODEL,
@@ -1018,19 +1060,47 @@ def main() -> None:
         "files":             {},
     }
 
+    # Mehlman's existing --questions-per-chunk default is 1 (paired with
+    # 1.5K chunks). For v5 we treat that number as v5's per-chunk Q count
+    # — same semantics, different downstream.
+    # A questions_per_file budget is required by process_file_v5; estimate
+    # it as ~15 × number-of-files for compatibility with the legacy
+    # questions-per-file default elsewhere in the uworld family.
+    legacy_qpf_estimate = 15 * max(1, len(input_files))
+
     t_total = time.time()
     for filepath in input_files:
         try:
-            process_pdf(
-                filepath,
-                mode=mode,
-                extract_assets=args.extract_assets,
-                max_pages=args.max_pages,
-                max_chunks=args.max_chunks,
-                questions_per_chunk=args.questions_per_chunk,
-                resume=args.resume,
-                report_data=report_data,
-            )
+            used_v5 = False
+            if v5_cfg is not None:
+                try:
+                    process_file_v5_uworld_family(
+                        uw_module=_uw,
+                        filepath=filepath,
+                        questions_per_file=legacy_qpf_estimate,
+                        v5_cfg=v5_cfg,
+                        report_data=report_data,
+                        pipeline_label="v5.2-organic",
+                        chunk_size=int(args.v5_chunk_size),
+                        questions_per_chunk=int(args.questions_per_chunk),
+                    )
+                    used_v5 = True
+                except Exception as v5_exc:
+                    _uw.warn(
+                        f"v5 pipeline failed for {filepath.name} ({v5_exc}); "
+                        f"falling back to legacy Mehlman pipeline."
+                    )
+            if not used_v5:
+                process_pdf(
+                    filepath,
+                    mode=mode,
+                    extract_assets=args.extract_assets,
+                    max_pages=args.max_pages,
+                    max_chunks=args.max_chunks,
+                    questions_per_chunk=args.questions_per_chunk,
+                    resume=args.resume,
+                    report_data=report_data,
+                )
         except Exception as exc:
             _uw.warn(f"Fatal error on {filepath.name}: {exc}")
             report_data["files"][filepath.name] = {

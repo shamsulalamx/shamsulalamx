@@ -1,9 +1,9 @@
 # BATCH 5 — Organic generator quality overhaul (v5)
 
 Branch: `phase12-vertex-migration`
-Tag: `v5.6.1-batch5-stable` (latest); see version history below. User
-verified the full v5.3 → v5.6.1 stack on the rebuilt .app and
-explicitly approved promotion of all six tags to `-stable`.
+Tag: `v5.8-batch5-pending-validation` (latest). v5.6.1 is the most
+recent `-stable`; v5.7 + v5.8 await the user's running queue
+completing before `.app` rebuild + smoke + `-stable` promotion.
 
 ## Scope (very important): organic-generation only
 
@@ -47,7 +47,8 @@ shipped in `v4.85-batch4-stable`.
 | `v5.5-batch5-stable` | v5.5 explanation depth: longer + mechanism-grounded. Kernel rationale 1–2 → 3–5 sentences. Distractor losingReason 1 → 2–3 sentences. ~10–15% cost increase per Q. |
 | `v5.6-batch5-stable` | v5.6 cost-control + chunk knobs. Removes the fixed 15-Q-per-PDF cap. UI exposes chunk size + Q-per-chunk + live cost preview. Stem thinking 4096 → 1024, Critic 4096 → 2048, Distractors back on Flash with thinking 2048 (Lever 3 retry). Per-Q cost ~$0.21 → ~$0.14 (-33%). |
 | `v5.6.1-batch5-stable` | **v5.6.1 bugfix: retrievalTag / reviewPearl / educationalObjective were all the same string.** Pre-v5.6.1 the OME adapter routed all three through `kernel.correctAnswerConcept` because the kernel didn't emit distinct fields. v5.6.1 adds them to the kernel JSON spec and reads them directly. Bug present since v5.3; user-caught during v5.6 inspection. **User verified the full v5.3 → v5.6.1 stack on the rebuilt .app and promoted all six to `-stable`.** |
-| `v5.7-batch5-pending-validation` | **Advanced Mode for Fast Facts PPTX + Emma Holliday PDF.** Registry config for Fast Facts; registry + `--v5` flag forwarding in `emma_profile_runner.py`. UI gates chunk-size + Q-per-chunk knobs on new `supportsChunkControls` registry flag (OME-only today). Group B (UWorld, Mehlman, Anki, Divine) deferred — they need full v5 ports. Code shipped; `.app` rebuild + smoke + `-stable` promotion deferred until user's running queue completes. |
+| `v5.7-batch5-pending-validation` | Advanced Mode for Fast Facts PPTX + Emma Holliday PDF. Registry config for Fast Facts; registry + `--v5` flag forwarding in `emma_profile_runner.py`. UI gates chunk-size + Q-per-chunk knobs on new `supportsChunkControls` registry flag (OME-only today). Group B deferred. Code shipped; `.app` rebuild + smoke + `-stable` deferred until user's running queue completes. |
+| `v5.8-batch5-pending-validation` | **Advanced Mode for all of Group B (UWorld notes + Mehlman PDF + Anki notes + Divine podcasts).** OME's v5.3 adapter promoted to shared `tools/shared-ingestion/v5_uworld_family_adapter.py` with a `process_file_v5_uworld_family()` helper. Each Group B generator + profile runner now accepts `--v5` flags. Registry: supportsAdvancedMode + advancedArgs for all 4 sources; supportsChunkControls for UWorld/Anki/Divine (Mehlman hides chunk knobs because its legacy CLI already owns `--questions-per-chunk`). Code shipped; same deferral as v5.7. |
 
 ## v5.3 — OME organic generator port
 
@@ -1154,3 +1155,120 @@ safe on remote. Once the user's queue completes, the workflow is:
    importer accepts the new top-level fields, every v5.2 quality
    gate passes
 5. `-stable` promotion + tag push
+
+## v5.8 — Advanced Mode for Group B (UWorld, Mehlman, Anki, Divine)
+
+Same opt-in protocol as v5.7. All four Group B sources gain
+Advanced Mode toggle support — when the checkbox is on, their
+runners forward `--v5` to their downstream generators, which now
+dispatch into `v5_pipeline.generate_v5()` via a shared adapter.
+When the checkbox is off, every source's legacy single-call
+behavior is byte-for-byte preserved.
+
+### Shared adapter
+
+The v5.3 OME-only adapter was promoted to
+`tools/shared-ingestion/v5_uworld_family_adapter.py` with a new
+`process_file_v5_uworld_family()` helper that any source extending
+the uworld base can call. New helpers:
+
+- `process_file_v5_uworld_family(...)` — full v5 dispatch
+  (extract → chunk → allocate → kernel→stem→distractors→critic→
+  regen→length-parity→assemble → decorate → write app-ready).
+  Accepts `pre_extracted_text` so Divine can pass its
+  already-cleaned transcript without re-reading from disk.
+- `add_v5_cli_args(parser, include_chunk_args=...)` — attaches the
+  six v5 flags to any argparse parser. Optional chunk-arg group
+  can be skipped (Mehlman already has its own `--questions-per-chunk`).
+- `resolve_v5_cfg(args)` — parses mix strings into the dict
+  `v5_pipeline` expects.
+- `parse_mix_arg(arg, keys, label)` — mix-string parser shared
+  across every generator's v5 wiring.
+
+`tools/ome-pdf-question-generator/ome_v5_adapter.py` is now a thin
+shim that re-exports the shared API under the original OME-specific
+function names (`decorate_v5_questions_for_ome`) so the v5.3 OME
+port keeps working unchanged.
+
+### What ported in v5.8
+
+| Source | Generator changes | Profile runner changes | UI surface |
+|---|---|---|---|
+| **UWorld notes** | `--v5` + chunk flags + dispatch in `main()` | `--v5` flag forwarding | Advanced Mode + chunk knobs |
+| **Mehlman PDF** | `--v5` + `--v5-chunk-size` (reuses existing `--questions-per-chunk`) + dispatch | `--v5` forwarding (mehlman-specific knobs) | Advanced Mode (chunk knobs hidden — Mehlman uses its own) |
+| **Anki notes** | `--v5` + chunk flags + dispatch in `main()` | `--v5` flag forwarding | Advanced Mode + chunk knobs |
+| **Divine podcasts** | `--v5` + chunk flags + `_dispatch_cleaned_transcript` wrapper that picks v5 vs legacy at each of 4 call sites | `--v5` flag forwarding (live mode only) | Advanced Mode + chunk knobs |
+
+### Why Mehlman skips `supportsChunkControls`
+
+Mehlman's legacy CLI already owns `--questions-per-chunk`
+(paired with its 1.5K-char tight-focus chunking). To avoid an
+argparse collision when v5 is engaged, the shared
+`add_v5_cli_args(include_chunk_args=False)` path is used and a new
+`--v5-chunk-size` flag is added separately. The UI chunk knobs map
+to `--chunk-size` (not `--v5-chunk-size`), so the cleanest
+behavior is to hide them for Mehlman — users tune Mehlman's
+chunking via its existing `--questions-per-chunk` flag on the
+runner instead.
+
+### Bug-fix carry-over: every Advanced Mode path gets v5.6.1
+
+All four Group B paths import the same `v5_pipeline.py` and read
+the same `v5_2_kernel_prompt.txt` as OME / Emma / Fast Facts —
+which means the v5.6.1 retrievalTag / reviewPearl /
+educationalObjective distinct-fields fix applies automatically to
+every source the moment its Advanced Mode is engaged.
+
+### Files changed in v5.8
+
+```
+tools/shared-ingestion/
+├── v5_uworld_family_adapter.py             # NEW — shared adapter with
+│                                            #       process_file_v5_uworld_family,
+│                                            #       add_v5_cli_args, resolve_v5_cfg
+├── uworld_profile_runner.py                # MODIFIED — --v5 flag forwarding
+├── mehlman_profile_runner.py               # MODIFIED — --v5 forwarding (v5-chunk-size)
+├── anki_profile_runner.py                  # MODIFIED — --v5 flag forwarding
+└── divine_transcript_profile_runner.py     # MODIFIED — --v5 flag forwarding (live mode)
+tools/ome-pdf-question-generator/
+└── ome_v5_adapter.py                       # MODIFIED — thin shim re-exporting shared
+tools/uworld-notes-question-generator/
+└── generate_uworld_questions.py            # MODIFIED — --v5 + dispatch in main()
+tools/mehlman-pdf-question-generator/
+└── generate_mehlman_questions.py           # MODIFIED — --v5 + dispatch (reuses
+                                             #            existing --questions-per-chunk)
+tools/anki-question-generator/
+└── generate_anki_questions.py              # MODIFIED — --v5 + dispatch in main()
+tools/divine-audio-question-generator/
+└── generate_divine_questions.py            # MODIFIED — --v5 + _dispatch_cleaned_transcript
+                                             #            wrapper at 4 call sites
+tools/batch-import-center/
+└── pipeline_registry.json                  # MODIFIED — supportsAdvancedMode +
+                                             #            advancedArgs for all 4 Group B
+                                             #            + supportsChunkControls on
+                                             #            UWorld/Anki/Divine
+```
+
+### What's NOT done in v5.8 (same as v5.7 deferral)
+
+Per user instruction: `.app` rebuild + smoke + `-stable`
+promotion all deferred until the user's running queue completes.
+
+Code edits are committed and pushed to the branch so the work is
+safe on remote. Once the queue completes, the workflow is:
+
+1. `npm run electron:build:mac`
+2. MD5 verify all 11 modified runtime files source ↔ bundled
+3. Live smoke test on a small Anki/UWorld/Mehlman/Divine file with
+   Advanced Mode (~$0.50 each, ~$2 total)
+4. Verify the three study fields are distinct, the app importer
+   accepts each source's v5 output, every v5.2 quality gate passes
+5. `-stable` promotion + tag push
+
+### Group C — explicitly out of scope for v5.8
+
+Images & Tables (screenshots / clinical images) — the v5.2 pipeline
+assumes text grounding (`fullText`, `clinicalFacts`,
+`primaryConcepts`). Image grounding needs a redesign of the kernel
++ stem prompts to accept image-derived facts as the source signal.
+Closer to a v6 design than a port. Stays out until that's spec'd.

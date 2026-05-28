@@ -37,6 +37,9 @@
       "inputExtensions": [".txt", ".md", ".rtf", ".docx"],
       "workingDirectory": ".",
       "pythonExecutable": "python3",
+      "supportsAdvancedMode": true,
+      "advancedModeLabel": "Advanced Mode (v5.2 multi-stage organic pipeline — higher quality, ~4x cost)",
+      "supportsChunkControls": true,
       "dryRunSteps": [
         {
           "stage": "normalization",
@@ -50,7 +53,8 @@
           "stage": "normalization",
           "stageLabel": "UWorld shared-ingestion live generation",
           "heartbeatSeconds": 60,
-          "args": ["tools/shared-ingestion/uworld_profile_runner.py", "--mode", "generate", "--input-file", "{inputFile}"]
+          "args": ["tools/shared-ingestion/uworld_profile_runner.py", "--mode", "generate", "--input-file", "{inputFile}"],
+          "advancedArgs": ["--v5"]
         }
       ],
       "outputDirectories": [
@@ -66,6 +70,8 @@
       "inputExtensions": [".pdf"],
       "workingDirectory": ".",
       "pythonExecutable": "python3",
+      "supportsAdvancedMode": true,
+      "advancedModeLabel": "Advanced Mode (v5.2 multi-stage organic pipeline — higher quality, ~4x cost)",
       "dryRunSteps": [
         {
           "stage": "normalization",
@@ -79,7 +85,8 @@
           "stage": "normalization",
           "stageLabel": "Mehlman shared-ingestion live generation",
           "heartbeatSeconds": 20,
-          "args": ["tools/shared-ingestion/mehlman_profile_runner.py", "--mode", "generate", "--input-file", "{inputFile}"]
+          "args": ["tools/shared-ingestion/mehlman_profile_runner.py", "--mode", "generate", "--input-file", "{inputFile}"],
+          "advancedArgs": ["--v5"]
         }
       ],
       "outputDirectories": ["tools/mehlman-pdf-question-generator/output_json/app_ready"],
@@ -119,6 +126,9 @@
       "inputExtensions": [".txt"],
       "workingDirectory": ".",
       "pythonExecutable": "python3",
+      "supportsAdvancedMode": true,
+      "advancedModeLabel": "Advanced Mode (v5.2 multi-stage organic pipeline — higher quality, ~4x cost)",
+      "supportsChunkControls": true,
       "dryRunSteps": [
         {
           "stage": "normalization",
@@ -132,7 +142,8 @@
           "stage": "normalization",
           "stageLabel": "Anki shared-ingestion live generation",
           "heartbeatSeconds": 60,
-          "args": ["tools/shared-ingestion/anki_profile_runner.py", "--mode", "generate", "--input-file", "{inputFile}", "--limit", "0"]
+          "args": ["tools/shared-ingestion/anki_profile_runner.py", "--mode", "generate", "--input-file", "{inputFile}", "--limit", "0"],
+          "advancedArgs": ["--v5"]
         }
       ],
       "outputDirectories": ["tools/shared-ingestion/output/anki_app_ready_live", "tools/shared-ingestion/output/anki_app_ready_dry_run"],
@@ -175,6 +186,9 @@
       "inputExtensions": [".txt", ".md", ".mp3", ".m4a", ".wav"],
       "workingDirectory": ".",
       "pythonExecutable": "python3",
+      "supportsAdvancedMode": true,
+      "advancedModeLabel": "Advanced Mode (v5.2 multi-stage organic pipeline — higher quality, ~4x cost)",
+      "supportsChunkControls": true,
       "dryRunSteps": [
         {
           "stage": "normalization",
@@ -188,7 +202,8 @@
           "stage": "generation",
           "stageLabel": "Divine live generation (audio → transcribe → clean → questions)",
           "heartbeatSeconds": 30,
-          "args": ["tools/shared-ingestion/divine_transcript_profile_runner.py", "--input-file", "{inputFile}", "--emit-app-ready-live"]
+          "args": ["tools/shared-ingestion/divine_transcript_profile_runner.py", "--input-file", "{inputFile}", "--emit-app-ready-live"],
+          "advancedArgs": ["--v5"]
         }
       ],
       "outputDirectories": [

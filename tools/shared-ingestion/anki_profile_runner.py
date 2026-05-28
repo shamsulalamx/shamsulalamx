@@ -53,12 +53,17 @@ def parse_app_ready_json(path: Path) -> dict[str, Any]:
     return payload
 
 
-def run_anki_wrapper(input_path: Path, mode: str) -> dict[str, Any]:
+def run_anki_wrapper(
+    input_path: Path,
+    mode: str,
+    v5_args: list[str] | None = None,
+) -> dict[str, Any]:
     """
     Invoke generate_anki_questions.py in either dry-run or live mode.
 
     mode="dry-run"   -> passes --dry-run  (no Gemini calls, placeholder output)
     mode="generate"  -> passes --generate (live Gemini calls, real questions)
+    v5_args            -> v5.8 Advanced Mode flags forwarded to downstream
     """
     label = "dry-run" if mode == "dry-run" else "live"
     output_root = OUTPUT_DIR / f"anki_app_ready_{label}" / input_path.stem.replace(" ", "_")
@@ -72,6 +77,8 @@ def run_anki_wrapper(input_path: Path, mode: str) -> dict[str, Any]:
         "--output-dir",
         str(output_root),
     ]
+    if v5_args:
+        command.extend(v5_args)
     emit("anki_downstream_start", mode=mode, command=command, outputRoot=str(output_root))
     started_at = time.time()
     proc = subprocess.run(
@@ -135,6 +142,17 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Alias for --mode dry-run (kept for backward compatibility).",
     )
+    # v5.8: Advanced Mode forwarding. Only takes effect with --mode generate.
+    parser.add_argument(
+        "--v5",
+        action="store_true",
+        help="Run the downstream Anki generator with the v5.2 multi-stage organic pipeline. No-op in --mode dry-run.",
+    )
+    parser.add_argument("--v5-order-mix", default="0.25,0.45,0.30")
+    parser.add_argument("--v5-difficulty-mix", default="0.30,0.45,0.25")
+    parser.add_argument("--v5-seed", type=int, default=0)
+    parser.add_argument("--chunk-size", type=int, default=0)
+    parser.add_argument("--questions-per-chunk", type=int, default=0)
     return parser.parse_args()
 
 
@@ -175,9 +193,24 @@ def main() -> int:
         emit("anki_profile_complete", ok=False, error="Shared normalized chunk validation failed.", report=report)
         return 1
 
+    # v5.8: build forwarded --v5 args when caller set --v5 on this runner.
+    v5_args: list[str] = []
+    if mode == "generate" and getattr(args, "v5", False):
+        v5_args = [
+            "--v5",
+            "--v5-order-mix", str(args.v5_order_mix),
+            "--v5-difficulty-mix", str(args.v5_difficulty_mix),
+            "--v5-seed", str(args.v5_seed),
+        ]
+        if int(getattr(args, "chunk_size", 0) or 0) > 0:
+            v5_args.extend(["--chunk-size", str(int(args.chunk_size))])
+        if int(getattr(args, "questions_per_chunk", 0) or 0) > 0:
+            v5_args.extend(["--questions-per-chunk", str(int(args.questions_per_chunk))])
+        emit("anki_v5_enabled", orderMix=args.v5_order_mix, difficultyMix=args.v5_difficulty_mix, seed=args.v5_seed)
+
     downstream_report: dict[str, Any] | None = None
     try:
-        downstream_report = run_anki_wrapper(input_path, mode)
+        downstream_report = run_anki_wrapper(input_path, mode, v5_args=v5_args)
     except Exception as exc:
         final_report = {
             "schemaVersion": "anki-profile-runner-report-v1",

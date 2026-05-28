@@ -55,6 +55,17 @@ if not _UW_DIR.is_dir():
 sys.path.insert(0, str(_UW_DIR))
 import generate_uworld_questions as _uw  # noqa: E402
 
+# ── v5.8: shared Advanced Mode (v5.2 multi-stage organic) adapter ─────────────
+_SHARED_DIR = Path(__file__).parent.parent / "shared-ingestion"
+if _SHARED_DIR.is_dir() and str(_SHARED_DIR) not in sys.path:
+    sys.path.insert(0, str(_SHARED_DIR))
+from v5_uworld_family_adapter import (  # noqa: E402
+    add_v5_cli_args,
+    process_file_v5_uworld_family,
+    resolve_v5_cfg,
+)
+from typing import Any  # noqa: E402,F811
+
 # v4.79: Vertex migration — google-genai SDK types for the multimodal calls
 # (transcription via fileData/fileUri). When GEMINI_BACKEND=vertex, audio
 # uploads land in GCS (gs:// URI) and the SDK consumes that URI directly;
@@ -865,6 +876,8 @@ def main() -> None:
         default="",
         help="Optional output root. Writes chunks/, generated/, app_ready/, and reports/ under this directory.",
     )
+    # v5.8: Advanced Mode (v5.2 multi-stage organic pipeline)
+    add_v5_cli_args(parser)
     args = parser.parse_args()
 
     try:
@@ -939,6 +952,49 @@ def main() -> None:
     }
     t_total = time.time()
 
+    # v5.8: resolve v5 config once when --v5 is passed in --generate mode.
+    v5_cfg: Optional[Dict[str, Any]] = None
+    if getattr(args, "v5", False):
+        if not args.generate:
+            _uw.warn("--v5 has no effect outside --generate mode; ignoring v5 flag.")
+        else:
+            try:
+                v5_cfg = resolve_v5_cfg(args)
+                _uw.log(
+                    "v5 pipeline configured — order_mix=%s difficulty_mix=%s seed=%d"
+                    % (args.v5_order_mix, args.v5_difficulty_mix, args.v5_seed)
+                )
+            except ValueError as exc:
+                _uw.warn(f"Invalid v5 mix arguments: {exc}; --v5 disabled.")
+                v5_cfg = None
+
+    def _dispatch_cleaned_transcript(stem: str, cleaned_text: str, dry_run: bool) -> None:
+        """v5.8 routing: when --v5 is set and this is a live run, use the
+        shared v5.2 multi-stage organic pipeline. On any v5 failure, fall
+        back to the legacy single-call _process_cleaned_transcript."""
+        if v5_cfg is not None and not dry_run:
+            cleaned_path = CLEANED_DIR / f"{stem}_cleaned.txt"
+            try:
+                process_file_v5_uworld_family(
+                    uw_module=_uw,
+                    filepath=cleaned_path,
+                    questions_per_file=args.questions_per_file,
+                    v5_cfg=v5_cfg,
+                    report_data=report_data,
+                    pipeline_label="v5.2-organic",
+                    chunk_size=int(args.chunk_size),
+                    questions_per_chunk=int(args.questions_per_chunk),
+                    pre_extracted_text=cleaned_text,
+                    output_stem=stem,
+                )
+                return
+            except Exception as v5_exc:
+                _uw.warn(
+                    f"v5 pipeline failed for {stem} ({v5_exc}); "
+                    f"falling back to legacy Divine pipeline."
+                )
+        _process_cleaned_transcript(stem, cleaned_text, args.questions_per_file, dry_run, report_data)
+
     # ══════════════════════════════════════════════════════════════════════════
     # Mode: --dry-run
     # ══════════════════════════════════════════════════════════════════════════
@@ -966,9 +1022,8 @@ def main() -> None:
             stem = cf.stem if selected_input else _stem_from_cleaned(cf)
             try:
                 cleaned_text = cf.read_text(encoding="utf-8")
-                _process_cleaned_transcript(
-                    stem, cleaned_text, args.questions_per_file, True, report_data
-                )
+                # v5.8: dispatcher chooses v5 vs legacy based on --v5 flag
+                _dispatch_cleaned_transcript(stem, cleaned_text, True)
             except Exception as exc:
                 _uw.warn(f"Error processing {cf.name}: {exc}")
                 report_data["files"][stem] = {"status": "error", "error": str(exc)}
@@ -1138,13 +1193,8 @@ def main() -> None:
                 else:
                     cleaned_text = selected_input.read_text(encoding="utf-8")
 
-                _process_cleaned_transcript(
-                    stem,
-                    cleaned_text,
-                    args.questions_per_file,
-                    False,
-                    report_data,
-                )
+                # v5.8: dispatcher chooses v5 vs legacy based on --v5 flag
+                _dispatch_cleaned_transcript(stem, cleaned_text, False)
             except Exception as exc:
                 _uw.warn(f"Error processing {selected_input.name}: {exc}")
                 report_data["files"][stem] = {"status": "error", "error": str(exc)}
@@ -1195,9 +1245,8 @@ def main() -> None:
                     )
 
                 # Stages 4-5: Chunk + Generate
-                _process_cleaned_transcript(
-                    stem, cleaned_text, args.questions_per_file, False, report_data
-                )
+                # v5.8: dispatcher chooses v5 vs legacy based on --v5 flag
+                _dispatch_cleaned_transcript(stem, cleaned_text, False)
 
             except Exception as exc:
                 _uw.warn(f"Error processing {af.name}: {exc}")
@@ -1217,9 +1266,8 @@ def main() -> None:
                 stem = _stem_from_cleaned(cf)
                 try:
                     cleaned_text = cf.read_text(encoding="utf-8")
-                    _process_cleaned_transcript(
-                        stem, cleaned_text, args.questions_per_file, False, report_data
-                    )
+                    # v5.8: dispatcher chooses v5 vs legacy based on --v5 flag
+                    _dispatch_cleaned_transcript(stem, cleaned_text, False)
                 except Exception as exc:
                     _uw.warn(f"Error processing {cf.name}: {exc}")
                     report_data["files"][stem] = {"status": "error", "error": str(exc)}

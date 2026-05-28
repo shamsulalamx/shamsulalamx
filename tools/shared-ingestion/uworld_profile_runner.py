@@ -146,7 +146,12 @@ def auto_questions_per_file(text_chars: int) -> int:
     return max(MIN_AUTO_QUESTIONS_PER_FILE, text_chars // DEFAULT_CHARS_PER_QUESTION)
 
 
-def run_uworld_generator(input_path: Path, mode: str, questions_per_file: int) -> dict[str, Any]:
+def run_uworld_generator(
+    input_path: Path,
+    mode: str,
+    questions_per_file: int,
+    v5_args: list[str] | None = None,
+) -> dict[str, Any]:
     """Invoke generate_uworld_questions.py in either dry-run or live mode."""
     label = "dry-run" if mode == "dry-run" else "live"
     output_root = OUTPUT_DIR / f"uworld_app_ready_{label}" / input_path.stem.replace(" ", "_")
@@ -162,6 +167,11 @@ def run_uworld_generator(input_path: Path, mode: str, questions_per_file: int) -
         "--output-dir",
         str(output_root),
     ]
+    # v5.8: append Advanced Mode (--v5) flags when supplied. Only the
+    # caller's main() decides whether to populate this list, so this
+    # function stays a no-op for legacy invocations.
+    if v5_args:
+        command.extend(v5_args)
     emit(
         "uworld_downstream_start",
         mode=mode,
@@ -244,6 +254,22 @@ def parse_args() -> argparse.Namespace:
             f"{DEFAULT_CHARS_PER_QUESTION} chars for high-yield UWorld density."
         ),
     )
+    # v5.8: Advanced Mode forwarding. Only takes effect with --mode generate.
+    parser.add_argument(
+        "--v5",
+        action="store_true",
+        help=(
+            "Run the downstream UWorld generator with the v5.2 multi-stage "
+            "organic pipeline. No-op in --mode dry-run."
+        ),
+    )
+    parser.add_argument("--v5-order-mix", default="0.25,0.45,0.30")
+    parser.add_argument("--v5-difficulty-mix", default="0.30,0.45,0.25")
+    parser.add_argument("--v5-seed", type=int, default=0)
+    parser.add_argument("--chunk-size", type=int, default=0,
+                        help="v5 only: forward chunk size cap (chars). 0 = downstream default.")
+    parser.add_argument("--questions-per-chunk", type=int, default=0,
+                        help="v5 only: forward Q-per-chunk. 0 = downstream default.")
     return parser.parse_args()
 
 
@@ -326,9 +352,24 @@ def main() -> int:
         )
         return 1
 
+    # v5.8: build forwarded --v5 args when caller set --v5 on this runner.
+    v5_args: list[str] = []
+    if mode == "generate" and getattr(args, "v5", False):
+        v5_args = [
+            "--v5",
+            "--v5-order-mix", str(args.v5_order_mix),
+            "--v5-difficulty-mix", str(args.v5_difficulty_mix),
+            "--v5-seed", str(args.v5_seed),
+        ]
+        if int(getattr(args, "chunk_size", 0) or 0) > 0:
+            v5_args.extend(["--chunk-size", str(int(args.chunk_size))])
+        if int(getattr(args, "questions_per_chunk", 0) or 0) > 0:
+            v5_args.extend(["--questions-per-chunk", str(int(args.questions_per_chunk))])
+        emit("uworld_v5_enabled", orderMix=args.v5_order_mix, difficultyMix=args.v5_difficulty_mix, seed=args.v5_seed)
+
     downstream_report: dict[str, Any] | None = None
     try:
-        downstream_report = run_uworld_generator(input_path, mode, questions_per_file)
+        downstream_report = run_uworld_generator(input_path, mode, questions_per_file, v5_args=v5_args)
     except Exception as exc:
         final_report = {
             "schemaVersion": "uworld-profile-runner-report-v1",

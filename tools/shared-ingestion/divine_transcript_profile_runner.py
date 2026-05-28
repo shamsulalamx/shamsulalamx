@@ -65,7 +65,11 @@ def parse_app_ready_json(path: Path) -> dict[str, Any]:
     return payload
 
 
-def run_divine_generator(input_path: Path, live: bool) -> dict[str, Any]:
+def run_divine_generator(
+    input_path: Path,
+    live: bool,
+    v5_args: list[str] | None = None,
+) -> dict[str, Any]:
     mode_subdir = "divine_app_ready_live" if live else "divine_app_ready_dry_run"
     output_root = OUTPUT_DIR / mode_subdir / input_path.stem.replace(" ", "_")
     mode_flag = "--generate" if live else "--dry-run"
@@ -78,6 +82,9 @@ def run_divine_generator(input_path: Path, live: bool) -> dict[str, Any]:
         "--output-dir",
         str(output_root),
     ]
+    # v5.8: Advanced Mode flag forwarding (live only).
+    if v5_args and live:
+        command.extend(v5_args)
     emit("divine_downstream_start", command=command, outputRoot=str(output_root), live=live)
     started_at = time.time()
     proc = subprocess.run(
@@ -130,6 +137,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--chunk-output", default="")
     parser.add_argument("--emit-app-ready-dry-run", action="store_true", help="After normalized chunk validation, invoke the Divine generator in dry-run mode. Text inputs only.")
     parser.add_argument("--emit-app-ready-live", action="store_true", help="Invoke the Divine generator in live mode (full transcribe + clean + question generation for audio; full generation for text). Requires GEMINI_API_KEY.")
+    # v5.8: Advanced Mode forwarding. Only takes effect with --emit-app-ready-live.
+    parser.add_argument(
+        "--v5",
+        action="store_true",
+        help="Run the downstream Divine generator with the v5.2 multi-stage organic pipeline. No-op in dry-run.",
+    )
+    parser.add_argument("--v5-order-mix", default="0.25,0.45,0.30")
+    parser.add_argument("--v5-difficulty-mix", default="0.30,0.45,0.25")
+    parser.add_argument("--v5-seed", type=int, default=0)
+    parser.add_argument("--chunk-size", type=int, default=0)
+    parser.add_argument("--questions-per-chunk", type=int, default=0)
     return parser.parse_args()
 
 
@@ -189,17 +207,32 @@ def main() -> int:
             inputFile=str(input_path),
         )
 
+    # v5.8: build forwarded --v5 args when caller set --v5 + live mode.
+    v5_args: list[str] = []
+    if args.emit_app_ready_live and getattr(args, "v5", False):
+        v5_args = [
+            "--v5",
+            "--v5-order-mix", str(args.v5_order_mix),
+            "--v5-difficulty-mix", str(args.v5_difficulty_mix),
+            "--v5-seed", str(args.v5_seed),
+        ]
+        if int(getattr(args, "chunk_size", 0) or 0) > 0:
+            v5_args.extend(["--chunk-size", str(int(args.chunk_size))])
+        if int(getattr(args, "questions_per_chunk", 0) or 0) > 0:
+            v5_args.extend(["--questions-per-chunk", str(int(args.questions_per_chunk))])
+        emit("divine_v5_enabled", orderMix=args.v5_order_mix, difficultyMix=args.v5_difficulty_mix, seed=args.v5_seed)
+
     downstream_report: dict[str, Any] | None = None
     live_requested = args.emit_app_ready_live
     if ok and live_requested:
         try:
-            downstream_report = run_divine_generator(input_path, live=True)
+            downstream_report = run_divine_generator(input_path, live=True, v5_args=v5_args)
         except Exception as exc:
             errors.append(str(exc))
             ok = False
     elif ok and args.emit_app_ready_dry_run:
         try:
-            downstream_report = run_divine_generator(input_path, live=False)
+            downstream_report = run_divine_generator(input_path, live=False, v5_args=v5_args)
         except Exception as exc:
             errors.append(str(exc))
             ok = False
