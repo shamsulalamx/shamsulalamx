@@ -607,7 +607,7 @@ body.sidebar-collapsed { --sidebar-w: 36px; }
   flex-wrap: wrap; gap: 6px; flex-shrink: 0; min-width: 0;
 }
 .quiz-topbar-left  { display: flex; align-items: center; gap: clamp(6px, 1vw, 14px); flex: 1; min-width: 0; }
-.quiz-topbar-center { display: flex; align-items: center; justify-content: flex-start; flex-shrink: 0; padding-left: clamp(8px, 2vw, 32px); }
+.quiz-topbar-center { display: flex; align-items: center; justify-content: center; flex-shrink: 0; gap: clamp(8px, 1.5vw, 18px); }
 .quiz-topbar-right { display: flex; align-items: center; gap: clamp(4px, 0.6vw, 8px); flex: 1; justify-content: flex-end; min-width: 0; flex-wrap: wrap; }
 .quiz-test-name  { font-size: clamp(12px, 1vw + 9px, 15px); font-weight: 700; color: white; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 30vw; }
 .quiz-q-counter  { font-size: 13px; color: #9ab0c8; }
@@ -1534,7 +1534,7 @@ body.quiz-fullscreen-mode #modal-lab  { z-index: 10002 !important; }
   </div>
 
   <div id="topbar">
-    <div class="topbar-brand">
+    <div class="topbar-brand" onclick="App.showHome()" style="cursor:pointer;" title="Return to dashboard">
       <div class="topbar-brand-logo">SA</div>
       <div class="topbar-brand-text">
         <strong>shamsulalamx</strong>
@@ -1686,12 +1686,15 @@ body.quiz-fullscreen-mode #modal-lab  { z-index: 10002 !important; }
             <div class="quiz-topbar-left">
               <span class="quiz-test-name" id="quiz-test-name">—</span>
               <span class="quiz-q-counter" id="quiz-q-num">Item 1</span>
-              <span class="quiz-score-live" id="score-live">0/0 (0%)</span>
             </div>
             <div class="quiz-topbar-center">
+              <!-- v4.85.2 #2: Prev/Next moved here from the bottom bar; timer sits between them. -->
+              <button class="quiz-btn" id="btn-prev" onclick="Quiz.prevQ()" disabled>◀ Prev</button>
               <div class="timer-block">
                 <span class="timer-val" id="timer-q">0:00</span>
               </div>
+              <button class="quiz-btn primary" id="btn-next" onclick="Quiz.nextQ()">Next ▶</button>
+              <button class="quiz-btn btn-finish" id="btn-finish" style="display:none;" onclick="App.confirmFinish()">Finish ✓</button>
             </div>
             <div class="quiz-topbar-right">
               <button class="quiz-btn" id="btn-flag" onclick="Quiz.toggleFlag(Quiz.getState()?.qIdx)">🏳 Flag</button>
@@ -1751,7 +1754,6 @@ body.quiz-fullscreen-mode #modal-lab  { z-index: 10002 !important; }
           <!-- Bottom nav bar -->
           <div class="quiz-bottom-bar no-sidebar">
             <div style="display:flex;align-items:center;gap:12px;flex:1;">
-              <div class="score-info" id="bottom-score">Score: 0 / 0</div>
               <button class="quiz-btn" id="btn-calc-toggle" onclick="toggleCalc()" title="Calculator">🖩 Calc</button>
               <button class="quiz-btn" onclick="openLabValues()" title="Lab Values">🧪 Lab</button>
               <button class="quiz-btn btn-mode" id="btn-mode-toggle" onclick="App.toggleMode()">📖 Tutor</button>
@@ -1759,10 +1761,9 @@ body.quiz-fullscreen-mode #modal-lab  { z-index: 10002 !important; }
             <div style="flex:1;display:flex;justify-content:center;align-items:center;">
               <div class="block-timer-display" id="block-timer">00:00</div>
             </div>
-            <div style="display:flex;gap:8px;flex:1;justify-content:flex-end;">
-              <button class="quiz-btn" id="btn-prev" onclick="Quiz.prevQ()" disabled>◀ Prev</button>
-              <button class="quiz-btn primary" id="btn-next" onclick="Quiz.nextQ()">Next ▶</button>
-              <button class="quiz-btn btn-finish" id="btn-finish" style="display:none;" onclick="App.confirmFinish()">Finish ✓</button>
+            <div style="display:flex;gap:8px;flex:1;justify-content:flex-end;align-items:center;">
+              <!-- v4.85.2 #3: live score moved here from top bar. #4: removed redundant "Score 0/0". -->
+              <span class="quiz-score-live" id="score-live">0/0 (0%)</span>
             </div>
           </div>
         </div>
@@ -7310,7 +7311,13 @@ function renderExplanationTablesInto(q, container) {
   // trace/normal/etc.), charge markers (1+/2+/3+/4+), value ranges (10-20/hpf), and
   // /hpf, /lpf, sec units so HBsAg, Anti-HBs, urine RBC/WBC, Prothrombin time, Ketones,
   // etc. all stay inside the lab table instead of breaking the streak.
-  const _EMBED_LAB_LINE_RE = /^([A-Za-z][A-Za-z0-9\s\+\-²³⁻\/.,]{0,50}?)\s+(?:[\d.,]+(?:\-[\d.,]+)?\s*(?:mEq\/L|mg\/dL|mg\/dl|mmol\/L|µg\/dL|µg\/dl|ng\/dL|ng\/dl|%|U\/L|IU\/L|mm\s?Hg|g\/dL|g\/dl|\/mm[²³]?|\/µm[²³]?|\/hpf|\/lpf|sec)|[\d.]+\+|trace|negative|positive|normal|abnormal|elevated|absent|present|reactive|nonreactive|non-reactive|increased|decreased|unchanged|none|nonreactive)(\s+.*)?$/i;
+  // v4.85.2 #9: the value+unit alternation is now a CAPTURING group so m[2]
+  // holds the value and m[3] holds the optional trailing text. Previously the
+  // outer group was non-capturing (?:...), which made m[2] the trailing text
+  // (often undefined) — the consumer at _extractEmbeddedLabBlock then crashed
+  // on `m[2].trim()` for any lab line with no trailing text. Only the OUTERMOST
+  // value group changed to capturing; the nested (?:...) stay non-capturing.
+  const _EMBED_LAB_LINE_RE = /^([A-Za-z][A-Za-z0-9\s\+\-²³⁻\/.,]{0,50}?)\s+([\d.,]+(?:\-[\d.,]+)?\s*(?:mEq\/L|mg\/dL|mg\/dl|mmol\/L|µg\/dL|µg\/dl|ng\/dL|ng\/dl|%|U\/L|IU\/L|mm\s?Hg|g\/dL|g\/dl|\/mm[²³]?|\/µm[²³]?|\/hpf|\/lpf|sec)|[\d.]+\+|trace|negative|positive|normal|abnormal|elevated|absent|present|reactive|nonreactive|non-reactive|increased|decreased|unchanged|none|nonreactive)(\s+.*)?$/i;
   function _extractEmbeddedLabBlock(paragraph) {
     if (!paragraph) return null;
     const lines = paragraph.split('\n');
@@ -7332,7 +7339,9 @@ function renderExplanationTablesInto(q, container) {
       const m = trimmed.match(_EMBED_LAB_LINE_RE);
       if (!m) return { name: trimmed, val: '' };
       const name = m[1].trim();
-      let val = m[2].trim();
+      // v4.85.2 #9: m[2] = value+unit (now captured), m[3] = optional trailing.
+      // Guard against undefined so a future regex tweak can't reintroduce the crash.
+      let val = m[2] ? m[2].trim() : '';
       if (m[3]) val += ' ' + m[3].trim();
       return { name, val };
     });
@@ -7928,7 +7937,14 @@ const Quiz = (() => {
     if (!el) return;
     const s = state.qSecs || 0;
     el.textContent = fmtQTime(s);
-    const warn = s > 90;
+    // v4.85.2 #1: only blink while the per-Q timer is actively running.
+    // submitAnswer() sets state.qStart=null and marks results[qIdx].answered,
+    // so once a question is submitted the blink stops even though qSecs stays
+    // frozen above 90. Previously `warn = s > 90` kept the blink animation
+    // running forever after submit because the frozen value was still > 90.
+    const _timerRunning = !!(state && state.qStart != null
+      && !(state.results && state.results[state.qIdx] && state.results[state.qIdx].answered));
+    const warn = s > 90 && _timerRunning;
     el.classList.toggle('q-timer-warning', warn);
     if (warn && !_qTimerWarnActive) {
       _qTimerWarnActive = true;
@@ -24559,7 +24575,21 @@ const App = (() => {
       const inputName = inputPath
         ? String(inputPath).split(/[\\/]/).pop()
         : (runningJob.jobId || 'job');
-      currentEl.textContent = '▶ ' + inputName;
+      let _label = '▶ ' + inputName;
+      // v4.85.2 #8: append elapsed minutes if the job carries a startedAt.
+      // startedAt may be epoch-ms (Number) or an ISO string depending on the
+      // code path that created the job, so handle both. Fully guarded — if the
+      // timestamp is missing/unparseable we fall back to just the PDF name so
+      // the widget can never throw and break the queue display.
+      try {
+        const _sa = runningJob.startedAt;
+        const _startedMs = (typeof _sa === 'number') ? _sa : (_sa ? Date.parse(_sa) : NaN);
+        if (Number.isFinite(_startedMs) && _startedMs > 0) {
+          const _mins = Math.max(0, Math.floor((Date.now() - _startedMs) / 60000));
+          _label += ' · ' + _mins + 'm elapsed';
+        }
+      } catch (_e) { /* non-fatal: keep just the PDF name */ }
+      currentEl.textContent = _label;
       currentEl.style.display = '';
     } else if (currentEl) {
       currentEl.textContent = '';

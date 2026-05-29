@@ -1,10 +1,35 @@
 # Git Tag History
 
-Last updated: 2026-05-25
+Last updated: 2026-05-28
 
 This file documents stable v4 tags from v4.0 through the current head tag `v4.80.2-nbme-pair-detection-fix-stable`. Each entry records the commit, what was added or stabilized, what evidence supports it, and what architectural significance it carries.
 
 Note on the recent v4.62–v4.80 batch: many of these tags shipped with source-level proof only (`node --check` clean + `.app` rebuilt + bundled-marker count). That is NOT verification of behavior, and several of those tags introduced regressions caught only when the user exercised the scenarios live. v4.80.1 codified this as a binding rule via the new `CLAUDE.md` working-agreement file: no `-stable` suffix without user click-through verification. v4.80.2 follows that rule — tag earned via real "Detected 1 NBME pair" UI confirmation by the user after re-selecting files in the rebuilt .app.
+
+## v4.85.2-renderer-ui-labtables-pending-validation
+
+Commit: bundled `index.html` + `tools/nbme-pdf-json-generator/stem_lab_transformer.py` + `V4852_STATUS.md` + this entry, single v4.85.2 commit on `phase12-vertex-migration`.
+
+Meaning: Two groups — (B) a renderer crash fix for NBME lab tables, and (A) a 5-item quiz UI restructure, plus (C) a partial BIC status-bar enhancement.
+
+(B) **Lab-table crash fix.** `_extractEmbeddedLabBlock` (index.html ~7330) read `m[2].trim()` as the lab value, but `_EMBED_LAB_LINE_RE`'s value+unit group was non-capturing `(?:...)`, making `m[2]` the optional trailing text — `undefined` for any lab line with no trailing text → `TypeError: Cannot read properties of undefined (reading 'trim')`. The throw aborted `renderQuestion()` after the item-number updated but before the stem rendered, producing the "shows the previous question's content, navigator won't highlight the item" symptom the user hit across NBME 8 items 5/6/17/25/26/30/33/34/37/38/40/42/45/47. Fix: made the value+unit alternation a capturing group (removed `?:`) so `m[2]`=value, `m[3]`=trailing; added `m[2] ? ... : ''` guard. All 6 NBME app-ready JSONs re-run through the new `stem_lab_transformer.py` to restore line-per-lab formatting; NBME 8 Q6 multi-timepoint values hand-restored from source PDF.
+
+(A) **Quiz UI restructure.** (1) Timer stops blinking on submit — `renderQTimer` blink gated on `_timerRunning` not just `qSecs>90`. (2) Prev/Next moved to top bar with the timer between them. (3) Live score moved to bottom-right. (4) Redundant bottom-left "Score 0/0" removed. (5) SA logo/name → `App.showHome()`. All confined to `.quiz-topbar`/`.quiz-bottom-bar`, which render in both normal and focus mode.
+
+(C) **BIC status bar.** Defensive elapsed-minutes display added to `renderJobsWidget` from job `startedAt`. % / ETA deferred (needs pipeline IPC for chunk counts).
+
+Validated (source + simulation only — NOT user click-through yet, hence `-pending-validation`):
+1. `node --check` clean on all 11 inline `<script>` blocks.
+2. Python port of the fixed `_EMBED_LAB_LINE_RE` confirms `m[2]`=value, `m[3]`=trailing across every previously-crashing format (no-trailing labs, `2+`, qualifier-only, `/µm³`, comma values, multi-timepoint).
+3. Full renderer simulation (both `_isLabPara` and `_extractEmbeddedLabBlock` paths) across all 300 questions in NBME 3-8: 68 lab tables render, 0 crashes, all numeric data preserved.
+4. `npm run electron:build:mac` succeeded; source ↔ packaged-bundle `index.html` MD5 match (`684bfe2f583c00df7f58e83d391643f3`).
+
+Not validated by this milestone (deferred to user click-through on return):
+- Live in-app render of lab tables after re-import (the 6 JSONs live outside the repo and must be re-imported — old broken data is still in IndexedDB).
+- The 5 UI changes in the actual running app, normal + focus mode.
+- BIC status-bar elapsed display (queue was idle at ship time; needs a live generation run).
+
+Architecture significance: Reinforces the **capture-group-count audit** rule — a regex consumer that reads `m[2]`/`m[3]` must be checked against the regex's actual capturing groups, not the author's intent. This bug was latent for many versions and only surfaced once stems were reformatted into per-line labs that forced the buggy `_extractEmbeddedLabBlock` path instead of the crash-safe `_extractLabRows` path. Also: the lab-reformatting logic now lives as a reusable, repo-tracked tool (`stem_lab_transformer.py`) rather than a throwaway `/tmp` script.
 
 ## v4.80.2-nbme-pair-detection-fix-stable
 
